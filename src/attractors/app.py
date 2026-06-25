@@ -335,12 +335,3 @@ class Window(QtWidgets.QMainWindow):
         self.status_system.setText(f"System: {config.name}")
         self.status_params.setText(f"Params: {formatted_params}")
         self.status_ic.setText(f"IC: {config.initial_conditions}")
-
-
-if __name__ == "__main__":
-    app = pg.mkQApp()
-    app.setStyle("Fusion")
-    w = Window()
-    w.resize(1100, 800)
-    w.show()
-    pg.exec()
