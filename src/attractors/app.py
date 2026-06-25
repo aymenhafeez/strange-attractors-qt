@@ -140,7 +140,7 @@ class Window(QtWidgets.QMainWindow):
             }
             QSlider::handle:horizontal {
                 background: #aaa;
-                width: 6px;
+                width: 10px;
                 min-height: 30px;
                 max-height: 30px;
                 margin: 0;
