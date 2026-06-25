@@ -21,6 +21,9 @@ from .style import (
     SLIDER_VALS,
 )
 
+WINDOW_SIZE = 1100
+N_BINS = 64
+
 
 class Window(QtWidgets.QMainWindow):
     def __init__(self):
@@ -66,16 +69,8 @@ class Window(QtWidgets.QMainWindow):
 
         status_container.setFixedHeight(22)
         container_layout.addWidget(status_container, 1, 0)
-        self.status_system.setStyleSheet("""
-            color: #aaa;
-            font-size: 12px;
-            border-left: 0px;
-        """)
-        self.status_ic.setStyleSheet("""
-            color: #aaa;
-            font-size: 12px;
-            border-right: 0px;
-        """)
+        self.status_system.setStyleSheet(STATUS_SYSTEM)
+        self.status_ic.setStyleSheet(STATUS_IC)
 
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
 
@@ -83,45 +78,23 @@ class Window(QtWidgets.QMainWindow):
 
         layout.addWidget(splitter)
 
-        grid_xy = gl.GLGridItem()
-        grid_xy.setSize(x=200, y=200, z=1)
-        grid_xy.setSpacing(x=20, y=20, z=1)
-        grid_xy.translate(dx=0, dy=0, dz=-100)
-        self.view.addItem(grid_xy)
+        grid_faces = [
+            ("XY", [], (0, 0, -100)),
+            ("YZ", [(90, 1, 0, 0)], (0, -100, 0)),
+            ("XZ", [(90, 0, 1, 0)], (-100, 0, 0)),
+            ("YX", [], (0, 0, 100)),
+            ("ZY", [(90, 1, 0, 0)], (0, 100, 0)),
+            ("ZX", [(90, 0, 1, 0)], (100, 0, 0)),
+        ]
 
-        grid_yz = gl.GLGridItem()
-        grid_yz.setSize(x=200, y=200, z=1)
-        grid_yz.setSpacing(x=20, y=20, z=1)
-        grid_yz.rotate(90, 1, 0, 0)
-        grid_yz.translate(0, -100, 0)
-        self.view.addItem(grid_yz)
-
-        grid_xz = gl.GLGridItem()
-        grid_xz.setSize(x=200, y=200, z=1)
-        grid_xz.setSpacing(x=20, y=20, z=1)
-        grid_xz.rotate(90, 0, 1, 0)
-        grid_xz.translate(-100, 0, 0)
-        self.view.addItem(grid_xz)
-
-        grid_yx = gl.GLGridItem()
-        grid_yx.setSize(x=200, y=200, z=1)
-        grid_yx.setSpacing(x=20, y=20, z=1)
-        grid_yx.translate(dx=0, dy=0, dz=100)
-        self.view.addItem(grid_yx)
-
-        grid_zy = gl.GLGridItem()
-        grid_zy.setSize(x=200, y=200, z=1)
-        grid_zy.setSpacing(x=20, y=20, z=1)
-        grid_zy.rotate(90, 1, 0, 0)
-        grid_zy.translate(dx=0, dy=100, dz=0)
-        self.view.addItem(grid_zy)
-
-        grid_zx = gl.GLGridItem()
-        grid_zx.setSize(x=200, y=200, z=1)
-        grid_zx.setSpacing(x=20, y=20, z=1)
-        grid_zx.rotate(90, 0, 1, 0)
-        grid_zx.translate(dx=100, dy=0, dz=0)
-        self.view.addItem(grid_zx)
+        for _, rotations, (dx, dy, dz) in grid_faces:
+            g = gl.GLGridItem()
+            g.setSize(x=200, y=200, z=1)
+            g.setSpacing(x=20, y=20, z=1)
+            for angle, *axis in rotations:
+                g.rotate(angle, *axis)
+            g.translate(dx, dy, dz)
+            self.view.addItem(g)
 
         self.line = gl.GLScatterPlotItem(
             pos=np.zeros((1, 3)), color=(1, 1, 1, 1), size=1.0, pxMode=True
@@ -149,7 +122,7 @@ class Window(QtWidgets.QMainWindow):
         self.panel_layout.addWidget(self.dropdown)
 
         splitter.addWidget(self.panel)
-        splitter.setSizes([int(1100 * 0.7), int(1100 * 0.3)])
+        splitter.setSizes([int(WINDOW_SIZE * 0.7), int(WINDOW_SIZE * 0.3)])
 
         self.current_name = list(ATTRACTORS.keys())[0]
         self.slider_rows = []
@@ -191,11 +164,11 @@ class Window(QtWidgets.QMainWindow):
             )
             proj_layout.addWidget(pw)
 
-        self.rebuild_sliders(self.current_name)
+        self.rebuild_view(self.current_name)
 
         self.panel_layout.addWidget(self.info_label)
 
-    def rebuild_sliders(self, name):
+    def rebuild_view(self, name):
         self.panel_layout.removeWidget(self.info_label)
         self.panel_layout.removeWidget(self.projection_container)
 
@@ -264,7 +237,7 @@ class Window(QtWidgets.QMainWindow):
     def on_attractor_change(self, name):
         self.current_name = name
         self.dropdown.setText(name)
-        self.rebuild_sliders(name)
+        self.rebuild_view(name)
 
     def update_plot(self):
         config = ATTRACTORS[self.current_name]
@@ -275,7 +248,7 @@ class Window(QtWidgets.QMainWindow):
 
         projection_data = {"XY": (x, y), "XZ": (x, z), "YZ": (y, z)}
 
-        bins_resolution = 64
+        bins_resolution = N_BINS
 
         for key, (data_h, data_v) in projection_data.items():
             img, pw = self.image_items[key]
