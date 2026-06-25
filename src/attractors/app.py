@@ -4,19 +4,9 @@ import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
-from scipy.integrate import odeint
 
-from models import AttractorConfig
-from registry import ATTRACTORS
-
-
-def solve_attractor(
-    config: AttractorConfig, param_values: dict[str, float]
-) -> np.ndarray:
-    t_def = config.time_defaults
-    t = np.linspace(t_def["t_min"], t_def["t_max"], t_def["n"])
-    args = tuple(param_values[p.name] for p in config.params)
-    return odeint(config.equation, config.initial_conditions, t, args=args)
+from .solver import solve_attractor
+from .registry import ATTRACTORS
 
 
 class Window(QtWidgets.QMainWindow):
