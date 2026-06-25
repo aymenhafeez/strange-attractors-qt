@@ -1,6 +1,6 @@
 from typing import Any
 
-from models import AttractorConfig, AttractorParam
+from .models import AttractorConfig, AttractorParam
 
 
 def _dadras(

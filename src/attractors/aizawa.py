@@ -2,7 +2,7 @@ from typing import Any
 
 import numba
 
-from models import AttractorConfig, AttractorParam
+from .models import AttractorConfig, AttractorParam
 
 
 @numba.njit

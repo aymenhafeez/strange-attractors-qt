@@ -2,7 +2,7 @@ from typing import Any
 
 import numba
 
-from models import AttractorConfig, AttractorParam
+from .models import AttractorConfig, AttractorParam
 
 
 @numba.njit
@@ -36,11 +36,7 @@ _lorenz_attractor = AttractorConfig(
     camera_elevation=20,
     camera_azimuth=10,
     pan=10,
-    equation_text=(
-        "dx/dt = a(y - x)\n"
-        "dy/dt = x(b - z) - y\n"
-        "dz/dt = xy - cz"
-    ),
+    equation_text=("dx/dt = a(y - x)\ndy/dt = x(b - z) - y\ndz/dt = xy - cz"),
     description=(
         "The Lorenz attractor is a set of chaotic solutions to a 3D system of "
         "equations modelling simplified atmospheric convection. It is famous "
