@@ -2,7 +2,7 @@ from typing import Any
 
 import numba
 
-from models import AttractorConfig, AttractorParam
+from .models import AttractorConfig, AttractorParam
 
 
 @numba.njit
@@ -33,11 +33,7 @@ _loop_chaotic_attractor = AttractorConfig(
     camera_elevation=10,
     camera_azimuth=50,
     pan=-14.5,
-    equation_text=(
-        "dx/dt = b·y\n"
-        "dy/dt = -x - y·z\n"
-        "dz/dt = y² - a"
-    ),
+    equation_text=("dx/dt = b·y\ndy/dt = -x - y·z\ndz/dt = y² - a"),
     description=(
         "This is a variant of the Nosé-Hoover attractor, which was designed to "
         "simulate fixed temperature molecular dynamics. It can take a wide "
