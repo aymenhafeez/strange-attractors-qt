@@ -38,15 +38,10 @@ _dadras_attractor = AttractorConfig(
     camera_elevation=20,
     camera_azimuth=25,
     pan=-15,
-    # $\\\dot{x}=y-ax+byz,\\\dot{y}=cy-xz+z,\\\dot{z}=dxy-ez$
     equation_text=("dx/dt = a·x+b·y·z\ndy/dt = c·y - x·z + z\ndz/dt = d·x·y - e·z"),
     description=(
-        "The Lorenz attractor is a set of chaotic solutions to a 3D system of "
-        "equations modelling simplified atmospheric convection. It is famous "
-        "for its 'butterfly' shape, where trajectories loop infinitely around "
-        "two symmetric wings without ever repeating or intersecting. The Lorenz "
-        "attractor is the classic example of a chaotic system used to "
-        "demonstrate how small changes in model parameters can lead to "
-        "drastically different trajectories."
+        "The Dadras system is known for it's multiwing shape. Unlike the Lorenz \
+                attractor, the Dadras attractor forms a more compact volume, spiraling \
+                around a central core with the wings spreading out around it."
     ),
 )
