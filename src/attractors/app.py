@@ -7,6 +7,19 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .solver import solve_attractor
 from .registry import ATTRACTORS
+from .style import (
+    EQUATION_LABEL,
+    STATUS_BAR,
+    STATUS_SYSTEM,
+    STATUS_PARAMS,
+    STATUS_IC,
+    SLIDERS,
+    DROPDOWN_BOX,
+    DROPDOWN_SELECTION,
+    ATTRACTOR_INFO,
+    SLIDER_PARAMS,
+    SLIDER_VALS,
+)
 
 
 class Window(QtWidgets.QMainWindow):
@@ -30,15 +43,7 @@ class Window(QtWidgets.QMainWindow):
         container_layout.setColumnStretch(0, 1)
 
         self.equation_label = QtWidgets.QLabel("")
-        self.equation_label.setStyleSheet("""
-            color: #ddd;
-            font-size: 13px;
-            padding: 2px 6px;
-            background: rgba(0, 0, 0, 0);
-            border-radius: 0px;
-            border-left: 0px;
-            border-top: 0px;
-        """)
+        self.equation_label.setStyleSheet(EQUATION_LABEL)
         container_layout.addWidget(
             self.equation_label,
             0,
@@ -47,7 +52,7 @@ class Window(QtWidgets.QMainWindow):
         )
 
         status_container = QtWidgets.QWidget()
-        status_container.setStyleSheet("background-color: #000000;")
+        status_container.setStyleSheet(STATUS_BAR)
         status_layout = QtWidgets.QHBoxLayout(status_container)
         status_layout.setContentsMargins(8, 0, 8, 0)
         status_layout.setSpacing(0)
@@ -56,7 +61,7 @@ class Window(QtWidgets.QMainWindow):
         self.status_params = QtWidgets.QLabel("")
         self.status_ic = QtWidgets.QLabel("")
         for lbl in [self.status_system, self.status_params, self.status_ic]:
-            lbl.setStyleSheet("color: #aaa; font-size: 11px;")
+            lbl.setStyleSheet(STATUS_PARAMS)
             status_layout.addWidget(lbl, stretch=1)
 
         status_container.setFixedHeight(22)
@@ -125,60 +130,17 @@ class Window(QtWidgets.QMainWindow):
         self.view.addItem(self.line)
 
         self.panel = QtWidgets.QWidget()
-        self.panel.setStyleSheet("""
-            QWidget#controlPanel {
-                background-color: #000000;
-                border: 1px solid #555;
-            }
-            QSlider:horizontal {
-                min-height: 30px;
-                max-height: 30px;
-            }
-            QSlider::groove:horizontal {
-                background: #555;
-                border-radius: 0px;
-            }
-            QSlider::handle:horizontal {
-                background: #aaa;
-                width: 10px;
-                min-height: 30px;
-                max-height: 30px;
-                margin: 0;
-            }
-        """)
+        self.panel.setStyleSheet(SLIDERS)
         self.panel.setObjectName("controlPanel")
         self.panel_layout = QtWidgets.QVBoxLayout(self.panel)
         self.panel_layout.setContentsMargins(8, 8, 8, 8)
         self.panel_layout.setSpacing(15)
 
         self.dropdown = QtWidgets.QPushButton(list(ATTRACTORS.keys())[0])
-        self.dropdown.setStyleSheet("""
-            QPushButton {
-                background-color: #000000;
-                color: white;
-                border: 1px solid #555;
-                border-radius: 0px;
-                padding: 4px 8px;
-                text-align: left;
-            }
-        """)
+        self.dropdown.setStyleSheet(DROPDOWN_BOX)
 
         menu = QtWidgets.QMenu(self.dropdown)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #000000;
-                border: 1px solid #555;
-            }
-            QMenu::item {
-                background-color: #000000;
-                color: white;
-                padding: 4px 20px;
-            }
-            QMenu::item:selected {
-                background-color: #dddddd;
-                color: #000000;
-            }
-        """)
+        menu.setStyleSheet(DROPDOWN_SELECTION)
 
         for name in ATTRACTORS:
             action = menu.addAction(name)
@@ -193,7 +155,7 @@ class Window(QtWidgets.QMainWindow):
         self.slider_rows = []
 
         self.info_label = QtWidgets.QLabel("")
-        self.info_label.setStyleSheet("color: #ddd; font-size: 12px")
+        self.info_label.setStyleSheet(ATTRACTOR_INFO)
         self.info_label.setWordWrap(True)
 
         self.projection_container = QtWidgets.QWidget()
@@ -274,7 +236,7 @@ class Window(QtWidgets.QMainWindow):
         for p in config.params:
             row = QtWidgets.QHBoxLayout()
             label = QtWidgets.QLabel(p.name)
-            label.setStyleSheet("color: white; font-weight: bold;")
+            label.setStyleSheet(SLIDER_PARAMS)
             row.addWidget(label)
             s = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
             s.setRange(int(p.min_val / p.step), int(p.max_val / p.step))
@@ -282,7 +244,7 @@ class Window(QtWidgets.QMainWindow):
             s.setMinimumHeight(50)
             s.setMaximumHeight(50)
             val_label = QtWidgets.QLabel(f"{p.default:.2f}")
-            val_label.setStyleSheet("color: white; font-weight: bold;")
+            val_label.setStyleSheet(SLIDER_VALS)
             s.valueChanged.connect(
                 lambda val, vlable=val_label, step=p.step: vlable.setText(
                     f"{val * step:.2f}"
