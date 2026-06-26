@@ -1,3 +1,5 @@
+import sys
+
 from .app import Window
 import pyqtgraph as pg
 
@@ -7,7 +9,7 @@ def main():
     app.setStyle("Fusion")
     w = Window()
     w.resize(1100, 800)
-    w.show()
+    w.showFullScreen() if "--fullscreen" in sys.argv else w.show()
     pg.exec()
 
 

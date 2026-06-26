@@ -27,3 +27,6 @@ With pip:
 pip install -e .
 python -m src.attractors
 ```
+
+
+Optionally use the `--fullscreen` flag to launch the app in fullscreen mode.
