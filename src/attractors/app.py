@@ -22,7 +22,7 @@ from .style import (
 )
 
 WINDOW_SIZE = 1100
-N_BINS = 64
+N_BINS = 96
 
 
 class Window(QtWidgets.QMainWindow):
@@ -34,6 +34,13 @@ class Window(QtWidgets.QMainWindow):
         self.setCentralWidget(central)
         layout = QtWidgets.QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
+
+        self.anim_frame = 0
+        self.anim_step = 250
+        self.full_solution = None
+        self.timer = QtCore.QTimer()
+        self.anim_button = QtWidgets.QPushButton("Play")
+        self.timer.timeout.connect(self.animate_frame)
 
         self.view = gl.GLViewWidget()
         container = QtWidgets.QWidget()
@@ -96,8 +103,9 @@ class Window(QtWidgets.QMainWindow):
             g.translate(dx, dy, dz)
             self.view.addItem(g)
 
+        # self.line = gl.GLScatterPlotItem(
         self.line = gl.GLScatterPlotItem(
-            pos=np.zeros((1, 3)), color=(1, 1, 1, 1), size=1.0, pxMode=True
+            pos=np.zeros((1, 3)), color=(1, 1, 1, 1), size=1.5, pxMode=True
         )
         self.view.addItem(self.line)
 
@@ -119,6 +127,9 @@ class Window(QtWidgets.QMainWindow):
             action.triggered.connect(partial(self.on_attractor_change, name))
         self.dropdown.setMenu(menu)
         self.panel_layout.addWidget(self.dropdown)
+
+        self.anim_button.clicked.connect(self.toggle_animation)
+        self.panel_layout.addWidget(self.anim_button)
 
         splitter.addWidget(self.panel)
         splitter.setSizes([int(WINDOW_SIZE * 0.7), int(WINDOW_SIZE * 0.3)])
@@ -167,7 +178,35 @@ class Window(QtWidgets.QMainWindow):
 
         self.panel_layout.addWidget(self.info_label)
 
+    def toggle_animation(self):
+        if self.timer.isActive():
+            self.timer.stop()
+            self.anim_button.setText("Play")
+        else:
+            self.anim_frame = 0
+            self.timer.start(16)
+            self.anim_button.setText("Pause")
+
+    def animate_frame(self):
+        sol = self.full_solution
+        if sol is None:
+            return
+
+        frame = min(self.anim_frame + self.anim_step, len(sol))
+        self.anim_frame = frame
+        partial = sol[:frame]
+        x, y, z = partial.T
+        self.line.setData(pos=partial)
+        self.update_projections(x, y, z)
+
+        if frame >= len(sol):
+            self.timer.stop()
+            self.anim_button.setText("Play")
+
     def rebuild_view(self, name):
+        self.timer.stop()
+        self.anim_button.setText("Play")
+
         self.panel_layout.removeWidget(self.info_label)
         self.panel_layout.removeWidget(self.projection_container)
 
@@ -239,11 +278,14 @@ class Window(QtWidgets.QMainWindow):
         self.rebuild_view(name)
 
     def update_plot(self):
+        self.timer.stop()
+        self.anim_button.setText("Play")
+
         config = ATTRACTORS[self.current_name]
         values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
-        solution = solve_attractor(config, values)
-        x, y, z = solution.T
-        self.line.setData(pos=solution)
+        self.full_solution = solve_attractor(config, values)
+        x, y, z = self.full_solution.T
+        self.line.setData(pos=self.full_solution)
 
         self.update_projections(x, y, z)
 
