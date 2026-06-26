@@ -284,7 +284,7 @@ class Window(QtWidgets.QMainWindow):
             spin = QtWidgets.QDoubleSpinBox()
             spin.setRange(p.min_val, p.max_val)
             spin.setSingleStep(p.step)
-            spin.setDecimals(max(2, -int(np.log10(p.step)) + 1))
+            # spin.setDecimals(max(2, -int(np.log10(p.step)) + 1))
             spin.setValue(p.default)
             spin.param_step = p.step
             s.spin = spin
