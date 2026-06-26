@@ -10,12 +10,14 @@ from .solver import solve_attractor
 from .style import (
     ALPHA_SLIDER,
     ATTRACTOR_INFO,
+    CONTAINER,
     DROPDOWN_BOX,
     DROPDOWN_SELECTION,
     EQUATION_LABEL,
     LINE_MODE_CHECKBOX,
     SLIDER_PARAMS,
     SLIDERS,
+    SPLITTER,
     STATUS_BAR,
     STATUS_IC,
     STATUS_PARAMS,
@@ -46,10 +48,10 @@ class Window(QtWidgets.QMainWindow):
 
         self.view = gl.GLViewWidget()
         container = QtWidgets.QWidget()
-        container.setStyleSheet("border: 1px solid #555;")
+        container.setStyleSheet(CONTAINER)
         container_layout = QtWidgets.QGridLayout(container)
-        container_layout.setContentsMargins(1, 1, 1, 1)
-        container_layout.setSpacing(3)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
         container_layout.addWidget(self.view, 0, 0)
         container_layout.setRowStretch(0, 1)
         container_layout.setColumnStretch(0, 1)
@@ -82,6 +84,7 @@ class Window(QtWidgets.QMainWindow):
         self.status_ic.setStyleSheet(STATUS_IC)
 
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        splitter.setStyleSheet(SPLITTER)
 
         splitter.addWidget(container)
 
@@ -285,7 +288,6 @@ class Window(QtWidgets.QMainWindow):
             spin.setKeyboardTracking(False)
             spin.setRange(p.min_val, p.max_val)
             spin.setSingleStep(p.step)
-            # spin.setDecimals(max(2, -int(np.log10(p.step)) + 1))
             spin.setValue(p.default)
             spin.param_step = p.step
             s.spin = spin

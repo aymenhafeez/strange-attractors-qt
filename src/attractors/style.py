@@ -44,7 +44,7 @@ SLIDERS = """
         background: #ddd;
     }
     QSlider::add-page:horizontal {
-        background: #ddd;
+        background: #888;
     }
 """
 
@@ -84,3 +84,7 @@ SLIDER_VALS = "color: white; font-weight: bold;"
 ALPHA_SLIDER = "color: white; font-weight: bold;"
 
 LINE_MODE_CHECKBOX = "color: white;"
+
+SPLITTER = "QSplitter::handle { width: 1px; background: #555; }"
+
+CONTAINER = "border: 1px solid #555;"
