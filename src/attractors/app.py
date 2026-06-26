@@ -245,27 +245,20 @@ class Window(QtWidgets.QMainWindow):
         x, y, z = solution.T
         self.line.setData(pos=solution)
 
-        projection_data = {"XY": (x, y), "XZ": (x, z), "YZ": (y, z)}
-
-        bins_resolution = N_BINS
-
-        for key, (data_h, data_v) in projection_data.items():
-            img, pw = self.image_items[key]
-
-            heatmap, xedges, yedges = np.histogram2d(
-                data_h, data_v, bins=bins_resolution
-            )
-            heatmap_log = np.log1p(heatmap)
-
-            img.setImage(heatmap_log)
-
-            x_min, x_max = xedges[0], xedges[-1]
-            y_min, y_max = yedges[0], yedges[-1]
-            img.setRect(pg.QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min))
-
-            pw.autoRange()
+        self.update_projections(x, y, z)
 
         formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
         self.status_system.setText(f"System: {config.name}")
         self.status_params.setText(f"Params: {formatted_params}")
         self.status_ic.setText(f"IC: {config.initial_conditions}")
+
+    def update_projections(self, x, y, z):
+        for key, (data_h, data_v) in {"XY": (x, y), "XZ": (x, z), "YZ": (y, z)}.items():
+            img, pw = self.image_items[key]
+            heatmap, xedges, yedges = np.histogram2d(data_h, data_v, bins=N_BINS)
+            img.setImage(np.log1p(heatmap))
+
+            x_min, x_max = xedges[0], xedges[-1]
+            y_min, y_max = yedges[0], yedges[-1]
+            img.setRect(pg.QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min))
+            pw.autoRange()
