@@ -5,20 +5,22 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from .solver import solve_attractor
 from .registry import ATTRACTORS
+from .solver import solve_attractor
 from .style import (
-    EQUATION_LABEL,
-    STATUS_BAR,
-    STATUS_SYSTEM,
-    STATUS_PARAMS,
-    STATUS_IC,
-    SLIDERS,
+    ALPHA_SLIDER,
+    ATTRACTOR_INFO,
     DROPDOWN_BOX,
     DROPDOWN_SELECTION,
-    ATTRACTOR_INFO,
+    EQUATION_LABEL,
+    LINE_MODE_CHECKBOX,
     SLIDER_PARAMS,
     SLIDER_VALS,
+    SLIDERS,
+    STATUS_BAR,
+    STATUS_IC,
+    STATUS_PARAMS,
+    STATUS_SYSTEM,
 )
 
 WINDOW_SIZE = 1100
@@ -103,12 +105,6 @@ class Window(QtWidgets.QMainWindow):
             g.translate(dx, dy, dz)
             self.view.addItem(g)
 
-        # self.line = gl.GLScatterPlotItem(
-        self.line = gl.GLScatterPlotItem(
-            pos=np.zeros((1, 3)), color=(1, 1, 1, 1), size=1.5, pxMode=True
-        )
-        self.view.addItem(self.line)
-
         self.panel = QtWidgets.QWidget()
         self.panel.setStyleSheet(SLIDERS)
         self.panel.setObjectName("controlPanel")
@@ -116,6 +112,7 @@ class Window(QtWidgets.QMainWindow):
         self.panel_layout.setContentsMargins(8, 8, 8, 8)
         self.panel_layout.setSpacing(15)
 
+        self.base_colour = (1.0, 1.0, 1.0)
         self.scatter = gl.GLScatterPlotItem(
             pos=np.zeros((1, 3)), color=(*self.base_colour, 1.0), size=1.0, pxMode=True
         )
@@ -126,6 +123,7 @@ class Window(QtWidgets.QMainWindow):
         self.line.setVisible(False)
         self.view.addItem(self.scatter)
         self.view.addItem(self.line)
+
         self.dropdown = QtWidgets.QPushButton(list(ATTRACTORS.keys())[0])
         self.dropdown.setStyleSheet(DROPDOWN_BOX)
 
@@ -141,10 +139,23 @@ class Window(QtWidgets.QMainWindow):
         self.anim_button.clicked.connect(self.toggle_animation)
         self.panel_layout.addWidget(self.anim_button)
 
+        alpha_row = QtWidgets.QHBoxLayout()
+        alpha_label = QtWidgets.QLabel("α ")
+        alpha_label.setStyleSheet(ALPHA_SLIDER)
+        alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        alpha_slider.setRange(0, 100)
+        alpha_slider.setValue(100)
+        alpha_slider.valueChanged.connect(self.update_alpha)
+        alpha_row.addWidget(alpha_label)
+        alpha_row.addWidget(alpha_slider)
+        self.panel_layout.addLayout(alpha_row)
+
         self.line_mode = QtWidgets.QCheckBox("Line")
         self.line_mode.setChecked(False)
         self.line_mode.setStyleSheet(LINE_MODE_CHECKBOX)
         self.line_mode.toggled.connect(self.toggle_line_mode)
+        alpha_row.addWidget(self.line_mode)
+
         splitter.addWidget(self.panel)
         splitter.setSizes([int(WINDOW_SIZE * 0.7), int(WINDOW_SIZE * 0.3)])
 
@@ -320,6 +331,12 @@ class Window(QtWidgets.QMainWindow):
             y_min, y_max = yedges[0], yedges[-1]
             img.setRect(pg.QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min))
             pw.autoRange()
+
+    def update_alpha(self, val):
+        alpha = val / 100.0
+        self.scatter.setData(color=(*self.base_colour, alpha))
+        self.line.setData(color=(*self.base_colour, alpha))
+
     def toggle_line_mode(self, checked):
         self.line.setVisible(checked)
         self.scatter.setVisible(not checked)

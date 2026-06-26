@@ -78,3 +78,7 @@ ATTRACTOR_INFO = "color: #ddd; font-size: 12px"
 SLIDER_PARAMS = "color: white; font-weight: bold;"
 
 SLIDER_VALS = "color: white; font-weight: bold;"
+
+ALPHA_SLIDER = "color: white; font-weight: bold;"
+
+LINE_MODE_CHECKBOX = "color: white;"
