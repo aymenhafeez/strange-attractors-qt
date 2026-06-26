@@ -282,6 +282,7 @@ class Window(QtWidgets.QMainWindow):
             s.setMaximumHeight(50)
             s.param_step = p.step
             spin = QtWidgets.QDoubleSpinBox()
+            spin.setKeyboardTracking(False)
             spin.setRange(p.min_val, p.max_val)
             spin.setSingleStep(p.step)
             # spin.setDecimals(max(2, -int(np.log10(p.step)) + 1))
