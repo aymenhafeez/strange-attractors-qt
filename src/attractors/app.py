@@ -15,7 +15,6 @@ from .style import (
     EQUATION_LABEL,
     LINE_MODE_CHECKBOX,
     SLIDER_PARAMS,
-    SLIDER_VALS,
     SLIDERS,
     STATUS_BAR,
     STATUS_IC,
@@ -281,19 +280,21 @@ class Window(QtWidgets.QMainWindow):
             s.setValue(int(p.default / p.step))
             s.setMinimumHeight(50)
             s.setMaximumHeight(50)
-            val_label = QtWidgets.QLabel(f"{p.default:.2f}")
-            val_label.setStyleSheet(SLIDER_VALS)
-            s.valueChanged.connect(
-                lambda val, vlable=val_label, step=p.step: vlable.setText(
-                    f"{val * step:.2f}"
-                )
-            )
-            # s.valueChanged.connect(self.update_plot)
-            s.valueChanged.connect(self.pratial_update)
+            s.param_step = p.step
+            spin = QtWidgets.QDoubleSpinBox()
+            spin.setRange(p.min_val, p.max_val)
+            spin.setSingleStep(p.step)
+            spin.setDecimals(max(2, -int(np.log10(p.step)) + 1))
+            spin.setValue(p.default)
+            spin.param_step = p.step
+            s.spin = spin
+            spin.slider = s
+            s.valueChanged.connect(self._on_slider_moved)
             s.valueChanged.connect(self.partial_update)
             s.sliderReleased.connect(self.update_plot)
+            spin.valueChanged.connect(self._on_spin_changed)
             row.addWidget(s)
-            row.addWidget(val_label)
+            row.addWidget(spin)
             self.slider_rows.append((p, s, row))
             self.panel_layout.addLayout(row)
 
@@ -357,3 +358,11 @@ class Window(QtWidgets.QMainWindow):
         self.scatter.setData(pos=self.full_solution)
         self.line.setData(pos=self.full_solution)
         self.update_projections(x, y, z)
+
+    def _on_slider_moved(self, val):
+        s = self.sender()
+        s.spin.setValue(val * s.param_step)
+
+    def _on_spin_changed(self, val):
+        spin = self.sender()
+        spin.slider.setValue(int(val / spin.param_step))
