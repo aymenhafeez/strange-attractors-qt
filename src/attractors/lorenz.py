@@ -26,9 +26,9 @@ _lorenz_attractor = AttractorConfig(
     name="lorenz",
     equation=lorenz,
     params=[
-        AttractorParam("a", 10.0, 0, 50, 0.001),
-        AttractorParam("b", 28.0, 0, 150, 0.001),
-        AttractorParam("c", 8 / 7, 0, 10, 0.001),
+        AttractorParam("a", 10.0, 0, 50, 0.01),
+        AttractorParam("b", 28.0, 0, 150, 0.01),
+        AttractorParam("c", 8 / 7, 0, 10, 0.01),
     ],
     initial_conditions=[0.0, 1.5, 15.0],
     time_defaults={"t_min": 0, "t_max": 50, "n": 100000},
