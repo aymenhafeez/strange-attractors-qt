@@ -21,8 +21,8 @@ _burke_shaw_attractor = AttractorConfig(
     "burke_shaw",
     _burke_shaw,
     params=[
-        AttractorParam("$a$", 5.09, 0.0, 30.0, 0.01),
-        AttractorParam("$b$", 6.28, 0.0, 100.0, 0.01),
+        AttractorParam("a", 5.09, 0.0, 30.0, 0.01),
+        AttractorParam("b", 6.28, 0.0, 100.0, 0.01),
     ],
     initial_conditions=[0.1, 0.1, 0.1],
     time_defaults={"t_min": 0, "t_max": 100, "n": 100000},
