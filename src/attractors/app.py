@@ -116,6 +116,16 @@ class Window(QtWidgets.QMainWindow):
         self.panel_layout.setContentsMargins(8, 8, 8, 8)
         self.panel_layout.setSpacing(15)
 
+        self.scatter = gl.GLScatterPlotItem(
+            pos=np.zeros((1, 3)), color=(*self.base_colour, 1.0), size=1.0, pxMode=True
+        )
+        self.line = gl.GLLinePlotItem(
+            pos=np.zeros((1, 3)), color=(*self.base_colour, 1.0), width=1.0
+        )
+        self.scatter.setVisible(True)
+        self.line.setVisible(False)
+        self.view.addItem(self.scatter)
+        self.view.addItem(self.line)
         self.dropdown = QtWidgets.QPushButton(list(ATTRACTORS.keys())[0])
         self.dropdown.setStyleSheet(DROPDOWN_BOX)
 
@@ -131,6 +141,10 @@ class Window(QtWidgets.QMainWindow):
         self.anim_button.clicked.connect(self.toggle_animation)
         self.panel_layout.addWidget(self.anim_button)
 
+        self.line_mode = QtWidgets.QCheckBox("Line")
+        self.line_mode.setChecked(False)
+        self.line_mode.setStyleSheet(LINE_MODE_CHECKBOX)
+        self.line_mode.toggled.connect(self.toggle_line_mode)
         splitter.addWidget(self.panel)
         splitter.setSizes([int(WINDOW_SIZE * 0.7), int(WINDOW_SIZE * 0.3)])
 
@@ -196,6 +210,7 @@ class Window(QtWidgets.QMainWindow):
         self.anim_frame = frame
         partial = sol[:frame]
         x, y, z = partial.T
+        self.scatter.setData(pos=partial)
         self.line.setData(pos=partial)
         self.update_projections(x, y, z)
 
@@ -285,6 +300,7 @@ class Window(QtWidgets.QMainWindow):
         values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
         self.full_solution = solve_attractor(config, values)
         x, y, z = self.full_solution.T
+        self.scatter.setData(pos=self.full_solution)
         self.line.setData(pos=self.full_solution)
 
         self.update_projections(x, y, z)
@@ -304,3 +320,6 @@ class Window(QtWidgets.QMainWindow):
             y_min, y_max = yedges[0], yedges[-1]
             img.setRect(pg.QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min))
             pw.autoRange()
+    def toggle_line_mode(self, checked):
+        self.line.setVisible(checked)
+        self.scatter.setVisible(not checked)
