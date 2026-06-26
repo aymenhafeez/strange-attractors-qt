@@ -29,7 +29,7 @@ _burke_shaw_attractor = AttractorConfig(
     camera_distance=6,
     camera_elevation=10,
     camera_azimuth=50,
-    pan=-15,
+    pan=0,
     equation_text=("dx/dt = -a(x + y)\ndy/dt = -y - a·x·z\ndz/dt = a·x·y + b"),
     description=(
         "The Burke-Shaw attractor is a variant of the Lorenz system. It's highly "

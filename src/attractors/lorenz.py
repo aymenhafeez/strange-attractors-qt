@@ -35,7 +35,7 @@ _lorenz_attractor = AttractorConfig(
     camera_distance=50,
     camera_elevation=20,
     camera_azimuth=10,
-    pan=10,
+    pan=25,
     equation_text=("dx/dt = a(y - x)\ndy/dt = x(b - z) - y\ndz/dt = xy - cz"),
     description=(
         "The Lorenz attractor is a set of chaotic solutions to a 3D system of "

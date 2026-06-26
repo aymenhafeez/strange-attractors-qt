@@ -99,7 +99,6 @@ class Window(QtWidgets.QMainWindow):
         self.line = gl.GLScatterPlotItem(
             pos=np.zeros((1, 3)), color=(1, 1, 1, 1), size=1.0, pxMode=True
         )
-        self.line.translate(dx=0, dy=0, dz=-15)
         self.view.addItem(self.line)
 
         self.panel = QtWidgets.QWidget()

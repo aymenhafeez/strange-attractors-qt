@@ -32,7 +32,7 @@ _loop_chaotic_attractor = AttractorConfig(
     camera_distance=7,
     camera_elevation=10,
     camera_azimuth=50,
-    pan=-14.5,
+    pan=0.5,
     equation_text=("dx/dt = b·y\ndy/dt = -x - y·z\ndz/dt = y² - a"),
     description=(
         "This is a variant of the Nosé-Hoover attractor, which was designed to "

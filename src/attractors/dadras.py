@@ -37,7 +37,7 @@ _dadras_attractor = AttractorConfig(
     camera_distance=30,
     camera_elevation=20,
     camera_azimuth=25,
-    pan=-15,
+    pan=0,
     equation_text=("dx/dt = a·x+b·y·z\ndy/dt = c·y - x·z + z\ndz/dt = d·x·y - e·z"),
     description=(
         "The Dadras system is known for it's multiwing shape. Unlike the Lorenz \
