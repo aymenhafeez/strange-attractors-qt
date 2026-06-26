@@ -25,6 +25,7 @@ from .style import (
 
 WINDOW_SIZE = 1100
 N_BINS = 96
+PARTIAL_N = 50000
 
 
 class Window(QtWidgets.QMainWindow):
@@ -287,7 +288,9 @@ class Window(QtWidgets.QMainWindow):
                     f"{val * step:.2f}"
                 )
             )
-            s.valueChanged.connect(self.update_plot)
+            # s.valueChanged.connect(self.update_plot)
+            s.valueChanged.connect(self.pratial_update)
+            s.sliderReleased.connect(self.update_plot)
             row.addWidget(s)
             row.addWidget(val_label)
             self.slider_rows.append((p, s, row))
@@ -340,3 +343,16 @@ class Window(QtWidgets.QMainWindow):
     def toggle_line_mode(self, checked):
         self.line.setVisible(checked)
         self.scatter.setVisible(not checked)
+
+    def pratial_update(self):
+        self.timer.stop()
+        self.anim_button.setText("Play")
+
+        config = ATTRACTORS[self.current_name]
+        values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
+        n = min(config.time_defaults["n"], PARTIAL_N)
+        self.full_solution = solve_attractor(config, values, n=n)
+        x, y, z = self.full_solution.T
+        self.scatter.setData(pos=self.full_solution)
+        self.line.setData(pos=self.full_solution)
+        self.update_projections(x, y, z)
