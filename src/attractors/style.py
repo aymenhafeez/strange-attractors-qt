@@ -33,16 +33,18 @@ SLIDERS = """
         min-height: 30px;
         max-height: 30px;
     }
-    QSlider::groove:horizontal {
-        background: #555;
-        border-radius: 0px;
-    }
     QSlider::handle:horizontal {
-        background: #aaa;
-        width: 10px;
+        background: #ddd;
+        width: 5px;
         min-height: 30px;
         max-height: 30px;
         margin: 0;
+    }
+    QSlider::sub-page:horizontal {
+        background: #ddd;
+    }
+    QSlider::add-page:horizontal {
+        background: #ddd;
     }
 """
 
