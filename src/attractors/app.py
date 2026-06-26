@@ -290,6 +290,7 @@ class Window(QtWidgets.QMainWindow):
             )
             # s.valueChanged.connect(self.update_plot)
             s.valueChanged.connect(self.pratial_update)
+            s.valueChanged.connect(self.partial_update)
             s.sliderReleased.connect(self.update_plot)
             row.addWidget(s)
             row.addWidget(val_label)
@@ -344,7 +345,7 @@ class Window(QtWidgets.QMainWindow):
         self.line.setVisible(checked)
         self.scatter.setVisible(not checked)
 
-    def pratial_update(self):
+    def partial_update(self):
         self.timer.stop()
         self.anim_button.setText("Play")
 
