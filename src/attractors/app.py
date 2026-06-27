@@ -98,6 +98,7 @@ class Window(QtWidgets.QMainWindow):
             ("ZY", [(90, 1, 0, 0)], (0, 100, 0)),
             ("ZX", [(90, 0, 1, 0)], (100, 0, 0)),
         ]
+        tick_values = list(range(-100, 100, 20))
 
         for _, rotations, (dx, dy, dz) in grid_faces:
             g = gl.GLGridItem()
@@ -107,6 +108,33 @@ class Window(QtWidgets.QMainWindow):
                 g.rotate(angle, *axis)
             g.translate(dx, dy, dz)
             self.view.addItem(g)
+
+            for val in tick_values:
+                if val == 0:
+                    continue
+
+                t1 = gl.GLTextItem(
+                    pos=[val, -10, 0],
+                    text=str(val),
+                    color=(255, 255, 255, 100),
+                    font=QtGui.QFont("Sans", 10),
+                )
+                t2 = gl.GLTextItem(
+                    pos=[-10, val, 0],
+                    text=str(val),
+                    color=(255, 255, 255, 100),
+                    font=QtGui.QFont("Sans", 10),
+                )
+
+                for angle, *axis in rotations:
+                    t1.rotate(angle, *axis)
+                    t2.rotate(angle, *axis)
+
+                t1.translate(dx, dy, dz)
+                t2.translate(dx, dy, dz)
+
+                self.view.addItem(t1)
+                self.view.addItem(t2)
 
         self.panel = QtWidgets.QWidget()
         self.panel.setStyleSheet(SLIDERS)
