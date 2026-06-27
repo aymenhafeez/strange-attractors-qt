@@ -26,9 +26,9 @@ _burke_shaw_attractor = AttractorConfig(
     ],
     initial_conditions=[0.1, 0.1, 0.1],
     time_defaults={"t_min": 0, "t_max": 100, "n": 100000},
-    camera_distance=6,
+    camera_distance=12,
     camera_elevation=10,
-    camera_azimuth=50,
+    camera_azimuth=30,
     pan=0,
     equation_text=("dx/dt = -a(x + y)\ndy/dt = -y - a·x·z\ndz/dt = a·x·y + b"),
     description=(
