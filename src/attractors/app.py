@@ -144,6 +144,7 @@ class Window(QtWidgets.QMainWindow):
         self.panel_layout.setSpacing(15)
 
         self.base_colour = (1.0, 1.0, 1.0)
+        self.current_alpha = 1.0
         self.scatter = gl.GLScatterPlotItem(
             pos=np.zeros((1, 3)), color=(*self.base_colour, 1.0), size=1.0, pxMode=True
         )
@@ -186,6 +187,12 @@ class Window(QtWidgets.QMainWindow):
         self.line_mode.setStyleSheet(LINE_MODE_CHECKBOX)
         self.line_mode.toggled.connect(self.toggle_line_mode)
         alpha_row.addWidget(self.line_mode)
+
+        self.trail_mode = QtWidgets.QCheckBox("Trail")
+        self.trail_mode.setChecked(False)
+        self.trail_mode.setStyleSheet(LINE_MODE_CHECKBOX)
+        self.trail_mode.toggled.connect(self._refresh_colors)
+        alpha_row.addWidget(self.trail_mode)
 
         splitter.addWidget(self.panel)
         splitter.setSizes([int(WINDOW_SIZE * 0.7), int(WINDOW_SIZE * 0.3)])
@@ -252,8 +259,14 @@ class Window(QtWidgets.QMainWindow):
         self.anim_frame = frame
         partial = sol[:frame]
         x, y, z = partial.T
-        self.scatter.setData(pos=partial)
-        self.line.setData(pos=partial)
+
+        if self.trail_mode.isChecked():
+            c = self._plot_trail(len(partial), self.current_alpha)
+        else:
+            c = (*self.base_colour, self.current_alpha)
+
+        self.scatter.setData(pos=partial, color=c)
+        self.line.setData(pos=partial, color=c)
         self.update_projections(x, y, z)
 
         if frame >= len(sol):
@@ -349,6 +362,7 @@ class Window(QtWidgets.QMainWindow):
         self.line.setData(pos=self.full_solution)
 
         self.update_projections(x, y, z)
+        self._refresh_colors()
 
         formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
         self.status_system.setText(f"<b>SYSTEM</b>: {config.name}")
@@ -367,9 +381,8 @@ class Window(QtWidgets.QMainWindow):
             pw.autoRange()
 
     def update_alpha(self, val):
-        alpha = val / 100.0
-        self.scatter.setData(color=(*self.base_colour, alpha))
-        self.line.setData(color=(*self.base_colour, alpha))
+        self.current_alpha = val / 100.0
+        self._refresh_colors()
 
     def toggle_line_mode(self, checked):
         self.line.setVisible(checked)
@@ -387,6 +400,7 @@ class Window(QtWidgets.QMainWindow):
         self.scatter.setData(pos=self.full_solution)
         self.line.setData(pos=self.full_solution)
         self.update_projections(x, y, z)
+        self._refresh_colors()
 
     def _on_slider_moved(self, val):
         s = self.sender()
@@ -395,3 +409,27 @@ class Window(QtWidgets.QMainWindow):
     def _on_spin_changed(self, val):
         spin = self.sender()
         spin.slider.setValue(int(val / spin.param_step))
+
+    def _plot_trail(self, n, alpha=1.0):
+        colour = np.zeros((n, 4))
+
+        colour[:, 0] = np.linspace(0.2, self.base_colour[0], n)
+        colour[:, 1] = np.linspace(0.2, self.base_colour[1], n)
+        colour[:, 2] = np.linspace(0.5, self.base_colour[2], n)
+        colour[:, 3] = np.linspace(0.0, alpha, n)
+
+        return colour
+
+    def _refresh_colors(self):
+        solution = self.full_solution
+
+        if solution is None:
+            return
+
+        if self.trail_mode.isChecked():
+            c = self._plot_trail(len(solution), self.current_alpha)
+        else:
+            c = (*self.base_colour, self.current_alpha)
+
+        self.scatter.setData(pos=solution, color=c)
+        self.line.setData(pos=solution, color=c)
