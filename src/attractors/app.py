@@ -40,7 +40,7 @@ class Window(QtWidgets.QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
 
         self.anim_frame = 0
-        self.anim_step = 250
+        self.anim_step = 200
         self.full_solution = None
         self.timer = QtCore.QTimer()
         self.anim_button = QtWidgets.QPushButton("Play")
@@ -68,7 +68,7 @@ class Window(QtWidgets.QMainWindow):
         status_container = QtWidgets.QWidget()
         status_container.setStyleSheet(STATUS_BAR)
         status_layout = QtWidgets.QHBoxLayout(status_container)
-        status_layout.setContentsMargins(8, 0, 8, 0)
+        status_layout.setContentsMargins(1, 0, 8, 0)
         status_layout.setSpacing(0)
 
         self.status_system = QtWidgets.QLabel("")
@@ -76,7 +76,7 @@ class Window(QtWidgets.QMainWindow):
         self.status_ic = QtWidgets.QLabel("")
         for lbl in [self.status_system, self.status_params, self.status_ic]:
             lbl.setStyleSheet(STATUS_PARAMS)
-            status_layout.addWidget(lbl, stretch=1)
+            status_layout.addWidget(lbl)
 
         status_container.setFixedHeight(22)
         container_layout.addWidget(status_container, 1, 0)
@@ -281,8 +281,6 @@ class Window(QtWidgets.QMainWindow):
             s = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
             s.setRange(int(p.min_val / p.step), int(p.max_val / p.step))
             s.setValue(int(p.default / p.step))
-            s.setMinimumHeight(50)
-            s.setMaximumHeight(50)
             s.param_step = p.step
             spin = QtWidgets.QDoubleSpinBox()
             spin.setKeyboardTracking(False)
@@ -325,9 +323,9 @@ class Window(QtWidgets.QMainWindow):
         self.update_projections(x, y, z)
 
         formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
-        self.status_system.setText(f"System: {config.name}")
-        self.status_params.setText(f"Params: {formatted_params}")
-        self.status_ic.setText(f"IC: {config.initial_conditions}")
+        self.status_system.setText(f"<b>SYSTEM</b>: {config.name}")
+        self.status_params.setText(f"<b>PARAMS</b>: {formatted_params}")
+        self.status_ic.setText(f"<b>IC</b>: {config.initial_conditions}")
 
     def update_projections(self, x, y, z):
         for key, (data_h, data_v) in {"XY": (x, y), "XZ": (x, z), "YZ": (y, z)}.items():
