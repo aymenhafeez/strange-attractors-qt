@@ -427,7 +427,10 @@ class Window(QtWidgets.QMainWindow):
         x, y, z = sol.T
         self.scatter.setData(pos=sol)
         self.line.setData(pos=sol)
-        self.update_projections(x, y, z)
+
+        if not is_partial:
+            self.update_projections(x, y, z)
+
         self._refresh_colours()
 
         if self._solve_needed:
