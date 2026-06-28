@@ -477,3 +477,10 @@ class Window(QtWidgets.QMainWindow):
 
         self.scatter.setData(pos=solution, color=c)
         self.line.setData(pos=solution, color=c)
+
+    def closeEvent(self, event):
+        self.timer.stop()
+        self._solver_worker._cancel = True
+        self._solver_thread.quit()
+        self._solver_thread.wait()
+        super().closeEvent(event)
