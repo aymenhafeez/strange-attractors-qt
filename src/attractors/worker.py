@@ -13,7 +13,7 @@ class SolveWorker(QObject):
         self._cancel = False
 
         try:
-            sol = solve_attractor(config, values, n)
+            sol = solve_attractor(config, values, n or config.time_defaults["n"])
             if not self._cancel:
                 self.result_ready.emit(sol, n is not None)
         except Exception:
