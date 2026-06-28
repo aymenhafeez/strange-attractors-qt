@@ -429,7 +429,7 @@ class Window(QtWidgets.QMainWindow):
         if self.trail_mode.isChecked():
             c = self._plot_trail(len(solution), self.current_alpha)
         else:
-            c = (*self.base_colour, self.current_alpha)
+            c = np.full((len(solution), 4), (*self.base_colour, self.current_alpha))
 
         self.scatter.setData(pos=solution, color=c)
         self.line.setData(pos=solution, color=c)
