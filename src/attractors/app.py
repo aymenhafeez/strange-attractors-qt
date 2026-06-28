@@ -343,10 +343,10 @@ class Window(QtWidgets.QMainWindow):
             spin.param_step = p.step
             s.spin = spin
             spin.slider = s
-            s.valueChanged.connect(self._on_slider_moved)
+            s.valueChanged.connect(partial(self._on_slider_moved, s, spin))
             s.valueChanged.connect(self._on_slider_tick)
             s.sliderReleased.connect(self._on_slider_released)
-            spin.valueChanged.connect(self._on_spin_changed)
+            spin.valueChanged.connect(partial(self._on_spin_changed, spin, s))
             row.addWidget(s)
             row.addWidget(spin)
             self.slider_rows.append((p, s, row))
@@ -433,13 +433,11 @@ class Window(QtWidgets.QMainWindow):
         if self._solve_needed:
             self._dispatch_solve()
 
-    def _on_slider_moved(self, val):
-        s = self.sender()
-        s.spin.setValue(val * s.param_step)
+    def _on_slider_moved(self, s, spin, val):
+        spin.setValue(val * s.param_step)
 
-    def _on_spin_changed(self, val):
-        spin = self.sender()
-        spin.slider.setValue(int(val / spin.param_step))
+    def _on_spin_changed(self, spin, s, val):
+        s.setValue(int(val / spin.param_step))
 
     def _plot_trail(self, n, alpha=1.0):
         colour = np.zeros((n, 4))
