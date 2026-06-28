@@ -370,13 +370,6 @@ class Window(QtWidgets.QMainWindow):
 
         config = ATTRACTORS[self.current_name]
         values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
-        self.full_solution = solve_attractor(config, values)
-        x, y, z = self.full_solution.T
-        self.scatter.setData(pos=self.full_solution)
-        self.line.setData(pos=self.full_solution)
-
-        self.update_projections(x, y, z)
-        self._refresh_colours()
 
         formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
         self.status_system.setText(f"<b>SYSTEM</b>: {config.name}")
