@@ -1,8 +1,11 @@
 from typing import Any
 
+import numba
+
 from .models import AttractorConfig, AttractorParam
 
 
+@numba.njit
 def _lorenz84(
     x_var: list[Any],
     t: int | float,
@@ -29,7 +32,7 @@ _lorenz84_attractor = AttractorConfig(
         AttractorParam("d", 1.0, 0.0, 20.0, 0.01),
     ],
     initial_conditions=[0.1, 0.0, 0.0],
-    time_defaults={"t_min": 0, "t_max": 150, "n": 50000},
+    time_defaults={"t_min": 0, "t_max": 150, "n": 30000},
     camera_distance=7,
     camera_elevation=10,
     camera_azimuth=5,

@@ -1,8 +1,11 @@
 from typing import Any
 
+import numba
+
 from .models import AttractorConfig, AttractorParam
 
 
+@numba.njit
 def _burke_shaw(
     x_var: list[Any],
     t: int | float,

@@ -5,7 +5,7 @@ import numba
 from .models import AttractorConfig, AttractorParam
 
 
-@numba.njit(cache=True)
+@numba.njit
 def _aizawa(
     x_var: list[Any],
     t: int | float,
