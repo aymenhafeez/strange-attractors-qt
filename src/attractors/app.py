@@ -369,6 +369,9 @@ class Window(QtWidgets.QMainWindow):
     def update_plot(self):
         self.timer.stop()
         self.anim_button.setText("Play")
+        self._debounce.stop()
+        self._solve_needed = True
+        self._dispatch_solve(full=True)
 
         config = ATTRACTORS[self.current_name]
         values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
