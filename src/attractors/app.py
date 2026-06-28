@@ -176,6 +176,7 @@ class Window(QtWidgets.QMainWindow):
 
         for name in ATTRACTORS:
             action = menu.addAction(name)
+            assert action is not None
             action.triggered.connect(partial(self.on_attractor_change, name))
         self.dropdown.setMenu(menu)
         self.panel_layout.addWidget(self.dropdown)
@@ -304,7 +305,7 @@ class Window(QtWidgets.QMainWindow):
 
         while self.panel_layout.count():
             item = self.panel_layout.itemAt(self.panel_layout.count() - 1)
-            if item.spacerItem():
+            if item is not None and item.spacerItem():
                 self.panel_layout.takeAt(self.panel_layout.count() - 1)
             else:
                 break
