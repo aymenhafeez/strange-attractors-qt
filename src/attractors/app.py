@@ -464,8 +464,8 @@ class Window(QtWidgets.QMainWindow):
         else:
             c = np.full((len(solution), 4), (*self.base_colour, self.current_alpha))
 
-        self.scatter.setData(pos=solution, color=c)
-        self.line.setData(pos=solution, color=c)
+        self.scatter.setData(color=c)
+        self.line.setData(color=c)
 
     def closeEvent(self, event):
         self.timer.stop()
