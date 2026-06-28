@@ -207,7 +207,7 @@ class Window(QtWidgets.QMainWindow):
         self.trail_mode = QtWidgets.QCheckBox("Trail")
         self.trail_mode.setChecked(False)
         self.trail_mode.setStyleSheet(LINE_MODE_CHECKBOX)
-        self.trail_mode.toggled.connect(self._refresh_colors)
+        self.trail_mode.toggled.connect(self._refresh_colours)
         alpha_row.addWidget(self.trail_mode)
 
         splitter.addWidget(self.panel)
@@ -381,7 +381,7 @@ class Window(QtWidgets.QMainWindow):
         self.line.setData(pos=self.full_solution)
 
         self.update_projections(x, y, z)
-        self._refresh_colors()
+        self._refresh_colours()
 
         formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
         self.status_system.setText(f"<b>SYSTEM</b>: {config.name}")
@@ -401,7 +401,7 @@ class Window(QtWidgets.QMainWindow):
 
     def update_alpha(self, val):
         self.current_alpha = val / 100.0
-        self._refresh_colors()
+        self._refresh_colours()
 
     def toggle_line_mode(self, checked):
         self.line.setVisible(checked)
@@ -464,7 +464,7 @@ class Window(QtWidgets.QMainWindow):
 
         return colour
 
-    def _refresh_colors(self):
+    def _refresh_colours(self):
         solution = self.full_solution
 
         if solution is None:
