@@ -58,10 +58,6 @@ class Window(QtWidgets.QMainWindow):
         self.solve_requested.connect(self._solver_worker.solve)
         self._solver_worker.result_ready.connect(self._on_solve_result)
 
-        self._debounce = QtCore.QTimer()
-        self._debounce.setSingleShot(True)
-        self._debounce.timeout.connect(self._dispatch_solve)
-
         self.view = gl.GLViewWidget()
         container = QtWidgets.QWidget()
         container.setStyleSheet(CONTAINER)
@@ -369,7 +365,6 @@ class Window(QtWidgets.QMainWindow):
     def update_plot(self):
         self.timer.stop()
         self.anim_button.setText("Play")
-        self._debounce.stop()
         self._solve_needed = True
         self._dispatch_solve(full=True)
 
@@ -409,10 +404,9 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_slider_tick(self):
         self._solve_needed = True
-        self._debounce.start(50)
+        self._dispatch_solve()
 
     def _on_slider_released(self):
-        self._debounce.stop()
         self._solve_needed = True
         self._dispatch_solve(full=True)
 
