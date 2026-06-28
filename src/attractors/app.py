@@ -438,9 +438,13 @@ class Window(QtWidgets.QMainWindow):
             self._dispatch_solve()
 
     def _on_slider_moved(self, s, spin, val):
+        self.timer.stop()
+        self.anim_button.setText("Play")
         spin.setValue(val * s.param_step)
 
     def _on_spin_changed(self, spin, s, val):
+        self.timer.stop()
+        self.anim_button.setText("Play")
         s.setValue(int(val / spin.param_step))
 
     def _plot_trail(self, n, alpha=1.0):
