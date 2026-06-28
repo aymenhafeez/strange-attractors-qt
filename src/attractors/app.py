@@ -23,6 +23,7 @@ from .style import (
     STATUS_PARAMS,
     STATUS_SYSTEM,
 )
+from .worker import SolveWorker
 
 WINDOW_SIZE = 1100
 N_BINS = 96
@@ -30,6 +31,8 @@ PARTIAL_N = 50000
 
 
 class Window(QtWidgets.QMainWindow):
+    solve_requested = QtCore.pyqtSignal(object, dict, object)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Strange Attractors")
@@ -45,6 +48,19 @@ class Window(QtWidgets.QMainWindow):
         self.timer = QtCore.QTimer()
         self.anim_button = QtWidgets.QPushButton("Play")
         self.timer.timeout.connect(self.animate_frame)
+
+        self._solve_pending = False
+        self._solve_needed = False
+        self._solver_worker = SolveWorker()
+        self._solver_thread = QtCore.QThread()
+        self._solver_worker.moveToThread(self._solver_thread)
+        self._solver_thread.start()
+        self.solve_requested.connect(self._solver_worker.solve)
+        self._solver_worker.result_ready.connect(self._on_solve_result)
+
+        self._debounce = QtCore.QTimer()
+        self._debounce.setSingleShot(True)
+        self._debounce.timeout.connect(self._dispatch_solve)
 
         self.view = gl.GLViewWidget()
         container = QtWidgets.QWidget()
@@ -332,8 +348,8 @@ class Window(QtWidgets.QMainWindow):
             s.spin = spin
             spin.slider = s
             s.valueChanged.connect(self._on_slider_moved)
-            s.valueChanged.connect(self.partial_update)
-            s.sliderReleased.connect(self.update_plot)
+            s.valueChanged.connect(self._on_slider_tick)
+            s.sliderReleased.connect(self._on_slider_released)
             spin.valueChanged.connect(self._on_spin_changed)
             row.addWidget(s)
             row.addWidget(spin)
@@ -388,19 +404,44 @@ class Window(QtWidgets.QMainWindow):
         self.line.setVisible(checked)
         self.scatter.setVisible(not checked)
 
-    def partial_update(self):
-        self.timer.stop()
-        self.anim_button.setText("Play")
+    def _on_slider_tick(self):
+        self._solve_needed = True
+        self._debounce.start(50)
 
+    def _on_slider_released(self):
+        self._debounce.stop()
+        self._solve_needed = True
+        self._dispatch_solve(full=True)
+
+    def _dispatch_solve(self, full=False):
+        if self._solve_pending:
+            return
+
+        if not self._solve_needed:
+            return
+
+        self._solve_pending = True
+        self._solve_needed = False
         config = ATTRACTORS[self.current_name]
         values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
-        n = min(config.time_defaults["n"], PARTIAL_N)
-        self.full_solution = solve_attractor(config, values, n=n)
-        x, y, z = self.full_solution.T
-        self.scatter.setData(pos=self.full_solution)
-        self.line.setData(pos=self.full_solution)
+        n = None if full else min(config.time_defaults["n"], PARTIAL_N)
+        self.solve_requested.emit(config, values, n)
+
+    def _on_solve_result(self, sol, is_partial):
+        self._solve_pending = False
+
+        if sol is None:
+            return
+
+        self.full_solution = sol
+        x, y, z = sol.T
+        self.scatter.setData(pos=sol)
+        self.line.setData(pos=sol)
         self.update_projections(x, y, z)
-        self._refresh_colors()
+        self._refresh_colours()
+
+        if self._solve_needed:
+            self._dispatch_solve()
 
     def _on_slider_moved(self, val):
         s = self.sender()
