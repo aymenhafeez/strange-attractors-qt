@@ -46,7 +46,7 @@ class Window(QtWidgets.QMainWindow):
         self.full_solution = None
         self.timer = QtCore.QTimer()
         self.anim_button = QtWidgets.QPushButton("Play")
-        self.timer.timeout.connect(self.animate_frame)
+        self.timer.timeout.connect(self._animate_frame)
 
         self._solve_pending = False
         self._solve_needed = False
@@ -189,7 +189,7 @@ class Window(QtWidgets.QMainWindow):
         alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         alpha_slider.setRange(0, 100)
         alpha_slider.setValue(100)
-        alpha_slider.valueChanged.connect(self.update_alpha)
+        alpha_slider.valueChanged.connect(self._update_alpha)
         alpha_row.addWidget(alpha_label)
         alpha_row.addWidget(alpha_slider)
         self.panel_layout.addLayout(alpha_row)
@@ -197,7 +197,7 @@ class Window(QtWidgets.QMainWindow):
         self.line_mode = QtWidgets.QCheckBox("Line")
         self.line_mode.setChecked(False)
         self.line_mode.setStyleSheet(LINE_MODE_CHECKBOX)
-        self.line_mode.toggled.connect(self.toggle_line_mode)
+        self.line_mode.toggled.connect(self._toggle_line_mode)
         alpha_row.addWidget(self.line_mode)
 
         self.trail_mode = QtWidgets.QCheckBox("Trail")
@@ -249,7 +249,7 @@ class Window(QtWidgets.QMainWindow):
             )
             proj_layout.addWidget(pw)
 
-        self.rebuild_view(self.current_name)
+        self._rebuild_view(self.current_name)
 
         self.panel_layout.addWidget(self.info_label)
 
@@ -262,7 +262,7 @@ class Window(QtWidgets.QMainWindow):
             self.timer.start(16)
             self.anim_button.setText("Pause")
 
-    def animate_frame(self):
+    def _animate_frame(self):
         sol = self.full_solution
         if sol is None:
             return
@@ -279,13 +279,13 @@ class Window(QtWidgets.QMainWindow):
 
         self.scatter.setData(pos=partial, color=c)
         self.line.setData(pos=partial, color=c)
-        self.update_projections(x, y, z)
+        self._update_projections(x, y, z)
 
         if frame >= len(sol):
             self.timer.stop()
             self.anim_button.setText("Play")
 
-    def rebuild_view(self, name):
+    def _rebuild_view(self, name):
         self.timer.stop()
         self.anim_button.setText("Play")
 
@@ -355,14 +355,14 @@ class Window(QtWidgets.QMainWindow):
         self.panel_layout.addStretch()
         self.panel_layout.addWidget(self.projection_container)
         self.panel_layout.addWidget(self.info_label)
-        self.update_plot()
+        self._update_plot()
 
     def on_attractor_change(self, name):
         self.current_name = name
         self.dropdown.setText(name)
-        self.rebuild_view(name)
+        self._rebuild_view(name)
 
-    def update_plot(self):
+    def _update_plot(self):
         self.timer.stop()
         self.anim_button.setText("Play")
         self._solve_needed = True
@@ -376,7 +376,7 @@ class Window(QtWidgets.QMainWindow):
         self.status_params.setText(f"<b>PARAMS</b>: {formatted_params}")
         self.status_ic.setText(f"<b>IC</b>: {config.initial_conditions}")
 
-    def update_projections(self, x, y, z):
+    def _update_projections(self, x, y, z):
         for key, (data_h, data_v) in {"XY": (x, y), "XZ": (x, z), "YZ": (y, z)}.items():
             img, pw = self.image_items[key]
             heatmap, xedges, yedges = np.histogram2d(data_h, data_v, bins=N_BINS)
@@ -387,11 +387,11 @@ class Window(QtWidgets.QMainWindow):
             img.setRect(pg.QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min))
             pw.autoRange()
 
-    def update_alpha(self, val):
+    def _update_alpha(self, val):
         self.current_alpha = val / 100.0
         self._refresh_colours()
 
-    def toggle_line_mode(self, checked):
+    def _toggle_line_mode(self, checked):
         self.line.setVisible(checked)
         self.scatter.setVisible(not checked)
 
@@ -429,7 +429,7 @@ class Window(QtWidgets.QMainWindow):
         self.line.setData(pos=sol)
 
         if not is_partial:
-            self.update_projections(x, y, z)
+            self._update_projections(x, y, z)
 
         self._refresh_colours()
 
