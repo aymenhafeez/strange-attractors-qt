@@ -6,7 +6,6 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .registry import ATTRACTORS
-from .solver import solve_attractor
 from .style import (
     ALPHA_SLIDER,
     ATTRACTOR_INFO,
