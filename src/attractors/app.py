@@ -6,7 +6,6 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .registry import ATTRACTORS
-from .solver import solve_attractor
 from .style import (
     ALPHA_SLIDER,
     ATTRACTOR_INFO,
@@ -23,6 +22,7 @@ from .style import (
     STATUS_PARAMS,
     STATUS_SYSTEM,
 )
+from .worker import SolveWorker
 
 WINDOW_SIZE = 1100
 N_BINS = 96
@@ -30,6 +30,8 @@ PARTIAL_N = 50000
 
 
 class Window(QtWidgets.QMainWindow):
+    solve_requested = QtCore.pyqtSignal(object, dict, object)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Strange Attractors")
@@ -44,7 +46,16 @@ class Window(QtWidgets.QMainWindow):
         self.full_solution = None
         self.timer = QtCore.QTimer()
         self.anim_button = QtWidgets.QPushButton("Play")
-        self.timer.timeout.connect(self.animate_frame)
+        self.timer.timeout.connect(self._animate_frame)
+
+        self._solve_pending = False
+        self._solve_needed = False
+        self._solver_worker = SolveWorker()
+        self._solver_thread = QtCore.QThread()
+        self._solver_worker.moveToThread(self._solver_thread)
+        self._solver_thread.start()
+        self.solve_requested.connect(self._solver_worker.solve)
+        self._solver_worker.result_ready.connect(self._on_solve_result)
 
         self.view = gl.GLViewWidget()
         container = QtWidgets.QWidget()
@@ -164,6 +175,7 @@ class Window(QtWidgets.QMainWindow):
 
         for name in ATTRACTORS:
             action = menu.addAction(name)
+            assert action is not None
             action.triggered.connect(partial(self.on_attractor_change, name))
         self.dropdown.setMenu(menu)
         self.panel_layout.addWidget(self.dropdown)
@@ -177,7 +189,7 @@ class Window(QtWidgets.QMainWindow):
         alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         alpha_slider.setRange(0, 100)
         alpha_slider.setValue(100)
-        alpha_slider.valueChanged.connect(self.update_alpha)
+        alpha_slider.valueChanged.connect(self._update_alpha)
         alpha_row.addWidget(alpha_label)
         alpha_row.addWidget(alpha_slider)
         self.panel_layout.addLayout(alpha_row)
@@ -185,13 +197,13 @@ class Window(QtWidgets.QMainWindow):
         self.line_mode = QtWidgets.QCheckBox("Line")
         self.line_mode.setChecked(False)
         self.line_mode.setStyleSheet(LINE_MODE_CHECKBOX)
-        self.line_mode.toggled.connect(self.toggle_line_mode)
+        self.line_mode.toggled.connect(self._toggle_line_mode)
         alpha_row.addWidget(self.line_mode)
 
         self.trail_mode = QtWidgets.QCheckBox("Trail")
         self.trail_mode.setChecked(False)
         self.trail_mode.setStyleSheet(LINE_MODE_CHECKBOX)
-        self.trail_mode.toggled.connect(self._refresh_colors)
+        self.trail_mode.toggled.connect(self._refresh_colours)
         alpha_row.addWidget(self.trail_mode)
 
         splitter.addWidget(self.panel)
@@ -237,7 +249,7 @@ class Window(QtWidgets.QMainWindow):
             )
             proj_layout.addWidget(pw)
 
-        self.rebuild_view(self.current_name)
+        self._rebuild_view(self.current_name)
 
         self.panel_layout.addWidget(self.info_label)
 
@@ -250,7 +262,7 @@ class Window(QtWidgets.QMainWindow):
             self.timer.start(16)
             self.anim_button.setText("Pause")
 
-    def animate_frame(self):
+    def _animate_frame(self):
         sol = self.full_solution
         if sol is None:
             return
@@ -263,17 +275,17 @@ class Window(QtWidgets.QMainWindow):
         if self.trail_mode.isChecked():
             c = self._plot_trail(len(partial), self.current_alpha)
         else:
-            c = (*self.base_colour, self.current_alpha)
+            c = np.full((len(partial), 4), (*self.base_colour, self.current_alpha))
 
         self.scatter.setData(pos=partial, color=c)
         self.line.setData(pos=partial, color=c)
-        self.update_projections(x, y, z)
+        self._update_projections(x, y, z)
 
         if frame >= len(sol):
             self.timer.stop()
             self.anim_button.setText("Play")
 
-    def rebuild_view(self, name):
+    def _rebuild_view(self, name):
         self.timer.stop()
         self.anim_button.setText("Play")
 
@@ -292,7 +304,7 @@ class Window(QtWidgets.QMainWindow):
 
         while self.panel_layout.count():
             item = self.panel_layout.itemAt(self.panel_layout.count() - 1)
-            if item.spacerItem():
+            if item is not None and item.spacerItem():
                 self.panel_layout.takeAt(self.panel_layout.count() - 1)
             else:
                 break
@@ -331,10 +343,10 @@ class Window(QtWidgets.QMainWindow):
             spin.param_step = p.step
             s.spin = spin
             spin.slider = s
-            s.valueChanged.connect(self._on_slider_moved)
-            s.valueChanged.connect(self.partial_update)
-            s.sliderReleased.connect(self.update_plot)
-            spin.valueChanged.connect(self._on_spin_changed)
+            s.valueChanged.connect(partial(self._on_slider_moved, s, spin))
+            s.valueChanged.connect(self._on_slider_tick)
+            s.sliderReleased.connect(self._on_slider_released)
+            spin.valueChanged.connect(partial(self._on_spin_changed, spin, s))
             row.addWidget(s)
             row.addWidget(spin)
             self.slider_rows.append((p, s, row))
@@ -343,33 +355,28 @@ class Window(QtWidgets.QMainWindow):
         self.panel_layout.addStretch()
         self.panel_layout.addWidget(self.projection_container)
         self.panel_layout.addWidget(self.info_label)
-        self.update_plot()
+        self._update_plot()
 
     def on_attractor_change(self, name):
         self.current_name = name
         self.dropdown.setText(name)
-        self.rebuild_view(name)
+        self._rebuild_view(name)
 
-    def update_plot(self):
+    def _update_plot(self):
         self.timer.stop()
         self.anim_button.setText("Play")
+        self._solve_needed = True
+        self._dispatch_solve(full=True)
 
         config = ATTRACTORS[self.current_name]
         values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
-        self.full_solution = solve_attractor(config, values)
-        x, y, z = self.full_solution.T
-        self.scatter.setData(pos=self.full_solution)
-        self.line.setData(pos=self.full_solution)
-
-        self.update_projections(x, y, z)
-        self._refresh_colors()
 
         formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
         self.status_system.setText(f"<b>SYSTEM</b>: {config.name}")
         self.status_params.setText(f"<b>PARAMS</b>: {formatted_params}")
         self.status_ic.setText(f"<b>IC</b>: {config.initial_conditions}")
 
-    def update_projections(self, x, y, z):
+    def _update_projections(self, x, y, z):
         for key, (data_h, data_v) in {"XY": (x, y), "XZ": (x, z), "YZ": (y, z)}.items():
             img, pw = self.image_items[key]
             heatmap, xedges, yedges = np.histogram2d(data_h, data_v, bins=N_BINS)
@@ -380,35 +387,64 @@ class Window(QtWidgets.QMainWindow):
             img.setRect(pg.QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min))
             pw.autoRange()
 
-    def update_alpha(self, val):
+    def _update_alpha(self, val):
         self.current_alpha = val / 100.0
-        self._refresh_colors()
+        self._refresh_colours()
 
-    def toggle_line_mode(self, checked):
+    def _toggle_line_mode(self, checked):
         self.line.setVisible(checked)
         self.scatter.setVisible(not checked)
 
-    def partial_update(self):
-        self.timer.stop()
-        self.anim_button.setText("Play")
+    def _on_slider_tick(self):
+        self._solve_needed = True
+        self._dispatch_solve()
 
+    def _on_slider_released(self):
+        self._solve_needed = True
+        self._dispatch_solve(full=True)
+
+    def _dispatch_solve(self, full=False):
+        if self._solve_pending:
+            return
+
+        if not self._solve_needed:
+            return
+
+        self._solve_pending = True
+        self._solve_needed = False
         config = ATTRACTORS[self.current_name]
         values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
-        n = min(config.time_defaults["n"], PARTIAL_N)
-        self.full_solution = solve_attractor(config, values, n=n)
-        x, y, z = self.full_solution.T
-        self.scatter.setData(pos=self.full_solution)
-        self.line.setData(pos=self.full_solution)
-        self.update_projections(x, y, z)
-        self._refresh_colors()
+        n = None if full else min(config.time_defaults["n"], PARTIAL_N)
+        self.solve_requested.emit(config, values, n)
 
-    def _on_slider_moved(self, val):
-        s = self.sender()
-        s.spin.setValue(val * s.param_step)
+    def _on_solve_result(self, sol, is_partial):
+        self._solve_pending = False
 
-    def _on_spin_changed(self, val):
-        spin = self.sender()
-        spin.slider.setValue(int(val / spin.param_step))
+        if sol is None:
+            return
+
+        self.full_solution = sol
+        x, y, z = sol.T
+        self.scatter.setData(pos=sol)
+        self.line.setData(pos=sol)
+
+        if not is_partial:
+            self._update_projections(x, y, z)
+
+        self._refresh_colours()
+
+        if self._solve_needed:
+            self._dispatch_solve()
+
+    def _on_slider_moved(self, s, spin, val):
+        self.timer.stop()
+        self.anim_button.setText("Play")
+        spin.setValue(val * s.param_step)
+
+    def _on_spin_changed(self, spin, s, val):
+        self.timer.stop()
+        self.anim_button.setText("Play")
+        s.setValue(int(val / spin.param_step))
 
     def _plot_trail(self, n, alpha=1.0):
         colour = np.zeros((n, 4))
@@ -420,7 +456,7 @@ class Window(QtWidgets.QMainWindow):
 
         return colour
 
-    def _refresh_colors(self):
+    def _refresh_colours(self):
         solution = self.full_solution
 
         if solution is None:
@@ -431,5 +467,12 @@ class Window(QtWidgets.QMainWindow):
         else:
             c = np.full((len(solution), 4), (*self.base_colour, self.current_alpha))
 
-        self.scatter.setData(pos=solution, color=c)
-        self.line.setData(pos=solution, color=c)
+        self.scatter.setData(color=c)
+        self.line.setData(color=c)
+
+    def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:
+        self.timer.stop()
+        self._solver_worker._cancel = True
+        self._solver_thread.quit()
+        self._solver_thread.wait()
+        super().closeEvent(a0)
