@@ -471,9 +471,9 @@ class Window(QtWidgets.QMainWindow):
         self.scatter.setData(color=c)
         self.line.setData(color=c)
 
-    def closeEvent(self, event):
+    def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:
         self.timer.stop()
         self._solver_worker._cancel = True
         self._solver_thread.quit()
         self._solver_thread.wait()
-        super().closeEvent(event)
+        super().closeEvent(a0)
