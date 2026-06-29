@@ -2,7 +2,7 @@
 
 PyQtGraph app for visualising strange attractors.
 
-![](media/image_1.png)
+![](media/image_3.png)
 
 This is a local, more performant version of
 [strange-attractor-visualiser](https://github.com/aymenhafeez/strange-attractor-visualiser)
