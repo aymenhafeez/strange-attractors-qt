@@ -19,6 +19,7 @@ class BifurcationWorker(QRunnable):
         n_total,
         transient_frac,
         axis,
+        t_max,
     ):
         super().__init__()
         self.config = config
@@ -28,6 +29,7 @@ class BifurcationWorker(QRunnable):
         self.n_total = n_total
         self.transient_frac = transient_frac
         self.axis = axis
+        self.t_max = t_max
         self.signals = _BifurcationSignals()
         self._cancel = False
 
@@ -40,14 +42,25 @@ class BifurcationWorker(QRunnable):
                 break
 
             params = {**self.base_params, self.sweep_param: float(val)}
-            sol = solve_attractor(self.config, params, self.n_total)
+            sol = solve_attractor(self.config, params, self.n_total, t_max=self.t_max)
 
             start = int(len(sol) * self.transient_frac)
-            data = sol[start:, self.axis]
-            peaks = data[1:-1][(data[1:-1] > data[:-2]) & (data[1:-1] > data[2:])]
+            data = sol[start:]
+            z = data[:, 2]
+            z_mid = (z.max() + z.min()) / 2
+
+            crossings = np.where((z[:-1] < z_mid) & (z[1:] >= z_mid))[0]
 
             results_vals.append(val)
-            results_peaks.append(peaks)
+
+            if len(crossings) == 0:
+                results_peaks.append(np.array([]))
+            else:
+                frac = (z_mid - z[crossings]) / (z[crossings + 1] - z[crossings])
+                peaks = data[crossings, self.axis] + frac * (
+                    data[crossings + 1, self.axis] - data[crossings, self.axis]
+                )
+                results_peaks.append(peaks)
 
         self.signals.chunk_ready.emit(np.array(results_vals), results_peaks)
         self.signals.finished.emit()

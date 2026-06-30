@@ -24,15 +24,16 @@ from .style import (
     STATUS_PARAMS,
     STATUS_SYSTEM,
 )
-from .worker import SolveWorker
+from .worker import LyapunovWorker, SolveWorker
 
 WINDOW_SIZE = 1100
 N_BINS = 96
-PARTIAL_N = 50000
+PARTIAL_N = 40000
 
 
 class Window(QtWidgets.QMainWindow):
     solve_requested = QtCore.pyqtSignal(object, dict, object)
+    lyapunov_requested = QtCore.pyqtSignal(object, dict)
 
     def __init__(self):
         super().__init__()
@@ -58,7 +59,13 @@ class Window(QtWidgets.QMainWindow):
         self._solver_thread.start()
         self.solve_requested.connect(self._solver_worker.solve)
         self._solver_worker.result_ready.connect(self._on_solve_result)
-        self._solver_worker.lyapunov_ready.connect(self._on_lyapunov_result)
+
+        self._lyapunov_worker = LyapunovWorker()
+        self._lyapunov_thread = QtCore.QThread()
+        self._lyapunov_worker.moveToThread(self._lyapunov_thread)
+        self._lyapunov_thread.start()
+        self.lyapunov_requested.connect(self._lyapunov_worker.compute)
+        self._lyapunov_worker.lyapunov_ready.connect(self._on_lyapunov_result)
 
         self.view = gl.GLViewWidget()
         container = QtWidgets.QWidget()
@@ -81,6 +88,7 @@ class Window(QtWidgets.QMainWindow):
 
         self.lyapunov_label = QtWidgets.QLabel("")
         self.lyapunov_label.setStyleSheet(LYAPUNOV_LABEL)
+        self.lyapunov_label.setVisible(False)
         container_layout.addWidget(
             self.lyapunov_label,
             0,
@@ -374,6 +382,7 @@ class Window(QtWidgets.QMainWindow):
             self.panel_layout.addLayout(row)
 
         self.lyapunov_label.setText("")
+        self.lyapunov_label.setVisible(False)
 
         self.panel_layout.addStretch()
         self.panel_layout.addWidget(self.projection_container)
@@ -453,6 +462,9 @@ class Window(QtWidgets.QMainWindow):
 
         if not is_partial:
             self._update_projections(x, y, z)
+            config = ATTRACTORS[self.current_name]
+            values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
+            self.lyapunov_requested.emit(config, values)
 
         self._refresh_colours()
 
@@ -497,6 +509,7 @@ class Window(QtWidgets.QMainWindow):
         self.lyapunov_label.setText(
             f"λ = ({lyap[0]:+.2f}, {lyap[1]:+.2f}, {lyap[2]:+.2f})  D_KY = {ky_dim:.2f}"
         )
+        self.lyapunov_label.setVisible(True)
 
     def _open_bifurcation(self):
         config = ATTRACTORS[self.current_name]
@@ -509,4 +522,7 @@ class Window(QtWidgets.QMainWindow):
         self._solver_worker._cancel = True
         self._solver_thread.quit()
         self._solver_thread.wait()
+        self._lyapunov_worker._cancel = True
+        self._lyapunov_thread.quit()
+        self._lyapunov_thread.wait()
         super().closeEvent(a0)

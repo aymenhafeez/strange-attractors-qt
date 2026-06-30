@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QVBoxLayout,
 )
+from pyqtgraph.exporters import ImageExporter
 
 from .bifurcation_worker import BifurcationWorker
 
@@ -188,8 +189,6 @@ class BifurcationDialog(QDialog):
         self.cancel_btn.setEnabled(False)
 
     def _export_plot(self):
-        from pyqtgraph.exporters import ImageExporter
-
         path, _ = QFileDialog.getSaveFileName(
             self,
             "Export bifurcation diagram",
