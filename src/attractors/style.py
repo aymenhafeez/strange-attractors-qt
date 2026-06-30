@@ -89,3 +89,11 @@ LINE_MODE_CHECKBOX = "color: white;"
 SPLITTER = "QSplitter::handle { width: 1px; background: #555; }"
 
 CONTAINER = "border: 1px solid #aaa;"
+
+LYAPUNOV_LABEL = """
+    color: #0f0;
+    font-size: 13px;
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, 120);
+    border-radius: 0px;
+"""
