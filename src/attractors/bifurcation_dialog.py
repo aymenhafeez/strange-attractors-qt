@@ -115,7 +115,6 @@ class BifurcationDialog(QDialog):
         self.plot_widget.setLabel("left", self.var_combo.currentText())
 
     def _run_sweep(self):
-        self._workers_finished = 0
         param_name = self.param_combo.currentText()
         min_val = self.min_spin.value()
         max_val = self.max_spin.value()
@@ -126,7 +125,6 @@ class BifurcationDialog(QDialog):
         param_values = np.linspace(min_val, max_val, steps)
         base_params = {k: v for k, v in self.current_values.items() if k != param_name}
 
-        self._workers = []
         self.run_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
         self.progress.setVisible(True)
@@ -154,14 +152,12 @@ class BifurcationDialog(QDialog):
     def _on_chunk_ready(self, vals, peaks_list):
         lens = [len(p) for p in peaks_list]
         self.plot_data.setData(np.repeat(vals, lens), np.concatenate(peaks_list))
-        self.progress.setVisible(100)
+        self.progress.setValue(100)
 
     def _on_worker_finished(self):
-        self._workers_finished += 1
-        if self._workers_finished >= len(self._workers):
-            self.run_btn.setEnabled(True)
-            self.cancel_btn.setEnabled(False)
-            self.progress.setValue(100)
+        self.run_btn.setEnabled(True)
+        self.cancel_btn.setEnabled(True)
+        self.progress.setValue(100)
 
     def _cancel_sweep(self):
         if self._worker:
