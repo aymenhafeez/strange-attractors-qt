@@ -1,18 +1,11 @@
-from typing import Any
-
 import numba
+import numpy as np
 
 from .models import AttractorConfig, AttractorParam
 
 
 @numba.njit
-def lorenz(
-    x_var: list[Any],
-    t: int | float,
-    a: int | float,
-    b: int | float,
-    c: int | float,
-) -> list[int | float]:
+def lorenz(x_var, t, a, b, c):
     x, y, z = x_var
 
     dx_dt = a * (y - x)
@@ -22,9 +15,22 @@ def lorenz(
     return [dx_dt, dy_dt, dz_dt]
 
 
+@numba.njit(nogil=True)
+def _lorenz_lyapunov(x_var, t, params):
+    x, y, z = x_var[0], x_var[1], x_var[2]
+    a, b, c = params[0], params[1], params[2]
+
+    dx_dt = a * (y - x)
+    dy_dt = x * (b - z) - y
+    dz_dt = x * y - c * z
+
+    return np.array([dx_dt, dy_dt, dz_dt])
+
+
 _lorenz_attractor = AttractorConfig(
     name="lorenz",
     equation=lorenz,
+    lyapunov_equation=_lorenz_lyapunov,
     params=[
         AttractorParam("a", 10.0, 0, 50, 0.01),
         AttractorParam("b", 28.0, 0, 150, 0.01),

@@ -2,21 +2,26 @@ import numba
 import numpy as np
 
 
-@numba.njit
+@numba.njit(nogil=True)
 def _numerical_jacobian(x, y, z, eq, params, eps=1e-6):
-    f0 = np.array(eq([x, y, z], 0.0, *params))
+    xyz = np.array([x, y, z])
+    f0 = eq(xyz, 0.0, params)
     J = np.zeros((3, 3))
-    J[:, 0] = (np.array(eq([x + eps, y, z], 0.0, *params)) - f0) / eps
-    J[:, 1] = (np.array(eq([x, y + eps, z], 0.0, *params)) - f0) / eps
-    J[:, 2] = (np.array(eq([x, y, z + eps], 0.0, *params)) - f0) / eps
+    xyz0 = np.array([x + eps, y, z])
+    xyz1 = np.array([x, y + eps, z])
+    xyz2 = np.array([x, y, z + eps])
+    J[:, 0] = (eq(xyz0, 0.0, params) - f0) / eps
+    J[:, 1] = (eq(xyz1, 0.0, params) - f0) / eps
+    J[:, 2] = (eq(xyz2, 0.0, params) - f0) / eps
 
     return J
 
 
-@numba.njit
+@numba.njit(nogil=True)
 def _augmented_rhs(state, params, eq):
     x, y, z = state[0], state[1], state[2]
-    dxdydz = eq([x, y, z], 0.0, *params)
+    xyz = np.array([x, y, z])
+    dxdydz = eq(xyz, 0.0, params)
     J = _numerical_jacobian(x, y, z, eq, params)
     theta = state[3:].reshape(3, 3)
     d_theta = J @ theta
@@ -27,7 +32,7 @@ def _augmented_rhs(state, params, eq):
     return out
 
 
-@numba.njit
+@numba.njit(nogil=True)
 def _rk4_step(state, dt, params, eq):
     k1 = _augmented_rhs(state, params, eq)
     k2 = _augmented_rhs(state + 0.5 * dt * k1, params, eq)
@@ -37,8 +42,8 @@ def _rk4_step(state, dt, params, eq):
     return state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
 
-@numba.njit
-def _gram_scmidt(theta_flat):
+@numba.njit(nogil=True)
+def _gram_schmidt(theta_flat):
     lyap_sums = np.zeros(3)
     theta = theta_flat.reshape(3, 3)
 
@@ -75,7 +80,7 @@ def compute_lyapunov(
         state = _rk4_step(state, dt, p, equation)
 
         if (i + 1) % gs_interval == 0:
-            state[3:], sums = _gram_scmidt(state[3:])
+            state[3:], sums = _gram_schmidt(state[3:])
             lyap_sums += sums
 
     total_time = t_max - t_min

@@ -1,17 +1,11 @@
-from typing import Any
-
 import numba
+import numpy as np
 
 from .models import AttractorConfig, AttractorParam
 
 
 @numba.njit
-def loop_chaotic(
-    x_var: list[Any],
-    t: int | float,
-    a: int | float,
-    b: int | float,
-) -> list[int | float]:
+def loop_chaotic(x_var, t, a, b):
     x, y, z = x_var
     dxdt = y * b
     dydt = -x - y * z
@@ -20,9 +14,22 @@ def loop_chaotic(
     return [dxdt, dydt, dzdt]
 
 
+@numba.njit(nogil=True)
+def _loop_chaotic_lyapunov(x_var, t, params):
+    x, y, z = x_var[0], x_var[1], x_var[2]
+    a, b = params[0], params[1]
+
+    dxdt = y * b
+    dydt = -x - y * z
+    dzdt = y**2 - a
+
+    return np.array([dxdt, dydt, dzdt])
+
+
 _loop_chaotic_attractor = AttractorConfig(
     "loop_chaotic",
     loop_chaotic,
+    lyapunov_equation=_loop_chaotic_lyapunov,
     params=[
         AttractorParam("a", 1.0, 0.0, 20.0, 0.01),
         AttractorParam("b", 1.796, 0.0, 10.0, 0.01),
