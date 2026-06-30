@@ -23,13 +23,9 @@ class BifurcationDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Bifurcation Diagram")
         self.resize(800, 600)
-        self._workers_finished = 0
 
         self.config = config
         self.current_values = current_values
-        self._all_vals = []
-        self._all_peaks = []
-        self._workers = []
         self._threadpool = QThreadPool.globalInstance()
 
         layout = QVBoxLayout(self)
@@ -130,8 +126,6 @@ class BifurcationDialog(QDialog):
         param_values = np.linspace(min_val, max_val, steps)
         base_params = {k: v for k, v in self.current_values.items() if k != param_name}
 
-        self._all_vals = []
-        self._all_peaks = []
         self._workers = []
         self.run_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
@@ -154,27 +148,13 @@ class BifurcationDialog(QDialog):
         worker.signals.chunk_ready.connect(self._on_chunk_ready)
         worker.signals.finished.connect(self._on_worker_finished)
         worker.signals.error.connect(self._on_worker_error)
-        self._workers = [worker]
+        self._worker = worker
         self._threadpool.start(worker)
 
     def _on_chunk_ready(self, vals, peaks_list):
-        self._all_vals.append(vals)
-        self._all_peaks.append(peaks_list)
-
-        total = self.steps_spin.value()
-        done = sum(len(v) for v in self._all_vals)
-        self.progress.setValue(int(done / total * 100))
-
-        x_parts = []
-        y_parts = []
-        for v, pl in zip(self._all_vals, self._all_peaks):
-            lens = [len(p) for p in pl]
-            x_parts.append(np.repeat(v, lens))
-            y_parts.append(np.concatenate(pl))
-        x_all = np.concatenate(x_parts) if x_parts else np.array([])
-        y_all = np.concatenate(y_parts) if y_parts else np.array([])
-
-        self.plot_data.setData(x_all, y_all)
+        lens = [len(p) for p in peaks_list]
+        self.plot_data.setData(np.repeat(vals, lens), np.concatenate(peaks_list))
+        self.progress.setVisible(100)
 
     def _on_worker_finished(self):
         self._workers_finished += 1
@@ -184,8 +164,8 @@ class BifurcationDialog(QDialog):
             self.progress.setValue(100)
 
     def _cancel_sweep(self):
-        for w in self._workers:
-            w._cancel = True
+        if self._worker:
+            self._worker._cancel = True
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
 
