@@ -1,5 +1,8 @@
 import numpy as np
 from scipy.integrate import odeint
+import threading
+
+_odeint_lock = threading.Lock()
 
 
 def solve_attractor(config, param_values, n=None, t_max=None):
@@ -8,4 +11,5 @@ def solve_attractor(config, param_values, n=None, t_max=None):
     t = np.linspace(t_def["t_min"], _t_max, n or t_def["n"])
     params = np.array([param_values[p.name] for p in config.params])
 
-    return odeint(config.equation, config.initial_conditions, t, args=(params,))
+    with _odeint_lock:
+        return odeint(config.equation, config.initial_conditions, t, args=(params,))
