@@ -298,16 +298,16 @@ class Window(QtWidgets.QMainWindow):
 
         frame = min(self.anim_frame + self.anim_step, len(sol))
         self.anim_frame = frame
-        partial = sol[:frame]
-        x, y, z = partial.T
+        segment = sol[:frame]
+        x, y, z = segment.T
 
         if self.trail_mode.isChecked():
-            c = self._plot_trail(len(partial), self.current_alpha)
+            c = self._plot_trail(len(segment), self.current_alpha)
         else:
-            c = np.full((len(partial), 4), (*self.base_colour, self.current_alpha))
+            c = np.full((len(segment), 4), (*self.base_colour, self.current_alpha))
 
-        self.scatter.setData(pos=partial, color=c)
-        self.line.setData(pos=partial, color=c)
+        self.scatter.setData(pos=segment, color=c)
+        self.line.setData(pos=segment, color=c)
         self._update_projections(x, y, z)
 
         if frame >= len(sol):
