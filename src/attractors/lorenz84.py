@@ -4,20 +4,10 @@ import numpy as np
 from .models import AttractorConfig, AttractorParam
 
 
-@numba.njit
-def _lorenz84(x_var, t, a, b, c, d):
-    x, y, z = x_var
-    dxdt = -a * x - y**2 - z**2 + a * c
-    dydt = -y + x * y - b * x * z + d
-    dzdt = -z + b * x * y + x * z
-
-    return [dxdt, dydt, dzdt]
-
-
 @numba.njit(nogil=True)
-def _lorenz84_lyapunov(x_var, t, params):
-    x, y, z = x_var[0], x_var[1], x_var[2]
-    a, b, c, d = params[0], params[1], params[2], params[3]
+def _lorenz84(x_var, t, params):
+    x, y, z = x_var
+    a, b, c, d = params
 
     dxdt = -a * x - y**2 - z**2 + a * c
     dydt = -y + x * y - b * x * z + d
@@ -27,9 +17,8 @@ def _lorenz84_lyapunov(x_var, t, params):
 
 
 _lorenz84_attractor = AttractorConfig(
-    "lorenz84",
-    _lorenz84,
-    lyapunov_equation=_lorenz84_lyapunov,
+    name="lorenz84",
+    equation=_lorenz84,
     params=[
         AttractorParam("a", 0.25, 0.0, 75.0, 0.01),
         AttractorParam("b", 4.0, 0.0, 150.0, 0.01),
@@ -37,7 +26,7 @@ _lorenz84_attractor = AttractorConfig(
         AttractorParam("d", 1.0, 0.0, 20.0, 0.01),
     ],
     initial_conditions=[0.1, 0.0, 0.0],
-    time_defaults={"t_min": 0, "t_max": 150, "n": 30000},
+    time_defaults={"t_min": 0, "t_max": 150, "n": 100000},
     camera_distance=7,
     camera_elevation=10,
     camera_azimuth=5,

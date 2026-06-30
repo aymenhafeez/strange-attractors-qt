@@ -24,4 +24,3 @@ class AttractorConfig:
     pan: int | float = 0
     description: str = ""
     equation_text: str = ""
-    lyapunov_equation: Callable | None = None

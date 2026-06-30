@@ -35,12 +35,9 @@ class LyapunovWorker(QObject):
     def compute(self, config, values):
         self._cancel = False
 
-        if config.lyapunov_equation is None:
-            return
-
         pvals = [values[p.name] for p in config.params]
         lyap, ky_dim = compute_lyapunov(
-            config.lyapunov_equation,
+            config.equation,
             config.initial_conditions,
             pvals,
             config.time_defaults["t_min"],

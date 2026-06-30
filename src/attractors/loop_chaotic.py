@@ -4,20 +4,10 @@ import numpy as np
 from .models import AttractorConfig, AttractorParam
 
 
-@numba.njit
-def loop_chaotic(x_var, t, a, b):
-    x, y, z = x_var
-    dxdt = y * b
-    dydt = -x - y * z
-    dzdt = y**2 - a
-
-    return [dxdt, dydt, dzdt]
-
-
 @numba.njit(nogil=True)
-def _loop_chaotic_lyapunov(x_var, t, params):
-    x, y, z = x_var[0], x_var[1], x_var[2]
-    a, b = params[0], params[1]
+def _loop_chaotic(x_var, t, params):
+    x, y, z = x_var
+    a, b = params
 
     dxdt = y * b
     dydt = -x - y * z
@@ -27,9 +17,8 @@ def _loop_chaotic_lyapunov(x_var, t, params):
 
 
 _loop_chaotic_attractor = AttractorConfig(
-    "loop_chaotic",
-    loop_chaotic,
-    lyapunov_equation=_loop_chaotic_lyapunov,
+    name="loop_chaotic",
+    equation=_loop_chaotic,
     params=[
         AttractorParam("a", 1.0, 0.0, 20.0, 0.01),
         AttractorParam("b", 1.796, 0.0, 10.0, 0.01),

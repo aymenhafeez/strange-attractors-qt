@@ -4,21 +4,10 @@ import numpy as np
 from .models import AttractorConfig, AttractorParam
 
 
-@numba.njit
-def _burke_shaw(x_var, t, a, b):
-    x, y, z = x_var
-    dxdt = -a * (x + y)
-    dydt = -y - a * x * z
-    dzdt = a * x * y + b
-
-    return [dxdt, dydt, dzdt]
-
-
 @numba.njit(nogil=True)
-def _burke_shaw_lyapunov(x_var, t, params):
-    x, y, z = x_var[0], x_var[1], x_var[2]
-    a, b = params[0], params[1]
-
+def _burke_shaw(x_var, t, params):
+    x, y, z = x_var
+    a, b = params
     dxdt = -a * (x + y)
     dydt = -y - a * x * z
     dzdt = a * x * y + b
@@ -27,9 +16,8 @@ def _burke_shaw_lyapunov(x_var, t, params):
 
 
 _burke_shaw_attractor = AttractorConfig(
-    "burke_shaw",
-    _burke_shaw,
-    lyapunov_equation=_burke_shaw_lyapunov,
+    name="burke_shaw",
+    equation=_burke_shaw,
     params=[
         AttractorParam("a", 5.09, 0.0, 30.0, 0.01),
         AttractorParam("b", 6.28, 0.0, 100.0, 0.01),

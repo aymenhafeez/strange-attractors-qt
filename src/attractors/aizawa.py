@@ -4,21 +4,10 @@ import numpy as np
 from .models import AttractorConfig, AttractorParam
 
 
-@numba.njit
-def _aizawa(x_var, t, a, b, c, d, e, f):
-    x, y, z = x_var
-
-    dxdt = (z - b) * x - d * y
-    dydt = d * x + (z - b) * y
-    dzdt = c + a * z - (z**3 / 3) - (x**2 + y**2) * (1 + e * z) + (f * z * x**3)
-
-    return [dxdt, dydt, dzdt]
-
-
 @numba.njit(nogil=True)
-def _aizawa_lyapunov(x_var, t, params):
-    x, y, z = x_var[0], x_var[1], x_var[2]
-    a, b, c, d, e, f = params[0], params[1], params[2], params[3], params[4], params[5]
+def _aizawa(x_var, t, params):
+    x, y, z = x_var
+    a, b, c, d, e, f = params
 
     dxdt = (z - b) * x - d * y
     dydt = d * x + (z - b) * y
@@ -28,9 +17,8 @@ def _aizawa_lyapunov(x_var, t, params):
 
 
 _aizawa_attractor = AttractorConfig(
-    "aizawa",
-    _aizawa,
-    lyapunov_equation=_aizawa_lyapunov,
+    name="aizawa",
+    equation=_aizawa,
     params=[
         AttractorParam("a", 0.95, -0.55, 40.0, 0.01),
         AttractorParam("b", 0.7, -2.0, 25.0, 0.01),

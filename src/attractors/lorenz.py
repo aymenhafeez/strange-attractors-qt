@@ -4,21 +4,10 @@ import numpy as np
 from .models import AttractorConfig, AttractorParam
 
 
-@numba.njit
-def lorenz(x_var, t, a, b, c):
-    x, y, z = x_var
-
-    dx_dt = a * (y - x)
-    dy_dt = x * (b - z) - y
-    dz_dt = x * y - c * z
-
-    return [dx_dt, dy_dt, dz_dt]
-
-
 @numba.njit(nogil=True)
-def _lorenz_lyapunov(x_var, t, params):
-    x, y, z = x_var[0], x_var[1], x_var[2]
-    a, b, c = params[0], params[1], params[2]
+def _lorenz(x_var, t, params):
+    x, y, z = x_var
+    a, b, c = params
 
     dx_dt = a * (y - x)
     dy_dt = x * (b - z) - y
@@ -29,8 +18,7 @@ def _lorenz_lyapunov(x_var, t, params):
 
 _lorenz_attractor = AttractorConfig(
     name="lorenz",
-    equation=lorenz,
-    lyapunov_equation=_lorenz_lyapunov,
+    equation=_lorenz,
     params=[
         AttractorParam("a", 10.0, 0, 50, 0.01),
         AttractorParam("b", 28.0, 0, 150, 0.01),
@@ -38,9 +26,9 @@ _lorenz_attractor = AttractorConfig(
     ],
     initial_conditions=[0.0, 1.5, 15.0],
     time_defaults={"t_min": 0, "t_max": 50, "n": 100000},
-    camera_distance=50,
+    camera_distance=60,
     camera_elevation=20,
-    camera_azimuth=10,
+    camera_azimuth=-20,
     pan=25,
     equation_text=("dx/dt = a(y - x)\ndy/dt = x(b - z) - y\ndz/dt = xy - cz"),
     description=(

@@ -4,20 +4,10 @@ import numpy as np
 from .models import AttractorConfig, AttractorParam
 
 
-@numba.njit
-def _dadras(x_var, t, a, b, c, d, e):
-    x, y, z = x_var
-    dxdt = y - a * x + b * y * z
-    dydt = c * y - x * z + z
-    dzdt = d * x * y - e * z
-
-    return [dxdt, dydt, dzdt]
-
-
 @numba.njit(nogil=True)
-def _dadras_lyapunov(x_var, t, params):
-    x, y, z = x_var[0], x_var[1], x_var[2]
-    a, b, c, d, e = params[0], params[1], params[2], params[3], params[4]
+def _dadras(x_var, t, params):
+    x, y, z = x_var
+    a, b, c, d, e = params
 
     dxdt = y - a * x + b * y * z
     dydt = c * y - x * z + z
@@ -27,9 +17,8 @@ def _dadras_lyapunov(x_var, t, params):
 
 
 _dadras_attractor = AttractorConfig(
-    "Dadras",
-    _dadras,
-    lyapunov_equation=_dadras_lyapunov,
+    name="Dadras",
+    equation=_dadras,
     params=[
         AttractorParam("a", 3.0, 0.0, 10.0, 0.01),
         AttractorParam("b", 2.7, 0.0, 30.0, 0.01),
