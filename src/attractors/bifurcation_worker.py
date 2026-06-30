@@ -8,6 +8,7 @@ class _BifurcationSignals(QObject):
     chunk_ready = pyqtSignal(object, object)
     finished = pyqtSignal()
     error = pyqtSignal(str)
+    progress = pyqtSignal(int)
 
 
 class BifurcationWorker(QRunnable):
@@ -37,10 +38,14 @@ class BifurcationWorker(QRunnable):
     def run(self):
         results_vals = []
         results_peaks = []
+        n_params = len(self.param_values)
 
-        for val in self.param_values:
+        for i, val in enumerate(self.param_values):
             if self._cancel:
                 break
+
+            if i % max(1, n_params // 20) == 0:
+                self.signals.progress.emit(int(i / n_params * 100))
 
             try:
                 params = {**self.base_params, self.sweep_param: float(val)}

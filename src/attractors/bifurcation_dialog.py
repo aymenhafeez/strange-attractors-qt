@@ -146,17 +146,17 @@ class BifurcationDialog(QDialog):
         worker.signals.chunk_ready.connect(self._on_chunk_ready)
         worker.signals.finished.connect(self._on_worker_finished)
         worker.signals.error.connect(self._on_worker_error)
+        worker.signals.progress.connect(self.progress.setValue)
         self._worker = worker
         self._threadpool.start(worker)
 
     def _on_chunk_ready(self, vals, peaks_list):
         lens = [len(p) for p in peaks_list]
         self.plot_data.setData(np.repeat(vals, lens), np.concatenate(peaks_list))
-        self.progress.setValue(100)
 
     def _on_worker_finished(self):
         self.run_btn.setEnabled(True)
-        self.cancel_btn.setEnabled(True)
+        self.cancel_btn.setEnabled(False)
         self.progress.setValue(100)
 
     def _cancel_sweep(self):
