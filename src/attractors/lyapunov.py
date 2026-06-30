@@ -7,7 +7,7 @@ def _numerical_jacobian(x, y, z, eq, params, eps=1e-6):
     f0 = np.array(eq([x, y, z], 0.0, *params))
     J = np.zeros((3, 3))
     J[:, 0] = (np.array(eq([x + eps, y, z], 0.0, *params)) - f0) / eps
-    J[:, 1] = (np.array(eq([x, y + eps, y, z], 0.0, *params)) - f0) / eps
+    J[:, 1] = (np.array(eq([x, y + eps, z], 0.0, *params)) - f0) / eps
     J[:, 2] = (np.array(eq([x, y, z + eps], 0.0, *params)) - f0) / eps
 
     return J
@@ -22,7 +22,7 @@ def _augmented_rhs(state, params, eq):
     d_theta = J @ theta
     out = np.zeros(12)
     out[0], out[1], out[2] = dxdydz[0], dxdydz[1], dxdydz[2]
-    out[3] = d_theta.ravel()
+    out[3:] = d_theta.ravel()
 
     return out
 
@@ -34,7 +34,7 @@ def _rk4_step(state, dt, params, eq):
     k3 = _augmented_rhs(state + 0.5 * dt * k2, params, eq)
     k4 = _augmented_rhs(state + dt * k3, params, eq)
 
-    return state + (dt / 6.0) * (k1 + 2 * k2 + 3 * k3 + k4)
+    return state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
 
 @numba.njit
