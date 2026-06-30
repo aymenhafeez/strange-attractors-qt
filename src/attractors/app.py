@@ -5,6 +5,7 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
+from .bifurcation_dialog import BifurcationDialog
 from .registry import ATTRACTORS
 from .style import (
     ALPHA_SLIDER,
@@ -14,6 +15,7 @@ from .style import (
     DROPDOWN_SELECTION,
     EQUATION_LABEL,
     LINE_MODE_CHECKBOX,
+    LYAPUNOV_LABEL,
     SLIDER_PARAMS,
     SLIDERS,
     SPLITTER,
@@ -56,6 +58,7 @@ class Window(QtWidgets.QMainWindow):
         self._solver_thread.start()
         self.solve_requested.connect(self._solver_worker.solve)
         self._solver_worker.result_ready.connect(self._on_solve_result)
+        self._solver_worker.lyapunov_ready.connect(self._on_lyapunov_result)
 
         self.view = gl.GLViewWidget()
         container = QtWidgets.QWidget()
@@ -74,6 +77,15 @@ class Window(QtWidgets.QMainWindow):
             0,
             0,
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop,
+        )
+
+        self.lyapunov_label = QtWidgets.QLabel("")
+        self.lyapunov_label.setStyleSheet(LYAPUNOV_LABEL)
+        container_layout.addWidget(
+            self.lyapunov_label,
+            0,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignTop,
         )
 
         status_container = QtWidgets.QWidget()
@@ -169,6 +181,15 @@ class Window(QtWidgets.QMainWindow):
 
         self.dropdown = QtWidgets.QPushButton(list(ATTRACTORS.keys())[0])
         self.dropdown.setStyleSheet(DROPDOWN_BOX)
+
+        self.tools_button = QtWidgets.QPushButton("Tools")
+        self.tools_button.setStyleSheet(DROPDOWN_BOX)
+        tools_menu = QtWidgets.QMenu(self.tools_button)
+        tools_menu.setStyleSheet(DROPDOWN_SELECTION)
+        bifurcation_action = tools_menu.addAction("Bifurcation diagram")
+        bifurcation_action.triggered.connect(self._open_bifurcation)
+        self.tools_button.setMenu(tools_menu)
+        self.panel_layout.addWidget(self.tools_button)
 
         menu = QtWidgets.QMenu(self.dropdown)
         menu.setStyleSheet(DROPDOWN_SELECTION)
@@ -352,6 +373,8 @@ class Window(QtWidgets.QMainWindow):
             self.slider_rows.append((p, s, row))
             self.panel_layout.addLayout(row)
 
+        self.lyapunov_label.setText("")
+
         self.panel_layout.addStretch()
         self.panel_layout.addWidget(self.projection_container)
         self.panel_layout.addWidget(self.info_label)
@@ -469,6 +492,17 @@ class Window(QtWidgets.QMainWindow):
 
         self.scatter.setData(color=c)
         self.line.setData(color=c)
+
+    def _on_lyapunov_result(self, lyap, ky_dim):
+        self.lyapunov_label.setText(
+            f"λ = ({lyap[0]:+.2f}, {lyap[1]:+.2f}, {lyap[2]:+.2f})  D_KY = {ky_dim:.2f}"
+        )
+
+    def _open_bifurcation(self):
+        config = ATTRACTORS[self.current_name]
+        values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
+        dialog = BifurcationDialog(config, values, self)
+        dialog.show()
 
     def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:
         self.timer.stop()
