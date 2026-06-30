@@ -7,6 +7,7 @@ from .solver import solve_attractor
 class _BifurcationSignals(QObject):
     chunk_ready = pyqtSignal(object, object)
     finished = pyqtSignal()
+    error = pyqtSignal(str)
 
 
 class BifurcationWorker(QRunnable):
@@ -41,17 +42,23 @@ class BifurcationWorker(QRunnable):
             if self._cancel:
                 break
 
-            params = {**self.base_params, self.sweep_param: float(val)}
-            sol = solve_attractor(self.config, params, self.n_total, t_max=self.t_max)
+            try:
+                params = {**self.base_params, self.sweep_param: float(val)}
+                sol = solve_attractor(
+                    self.config, params, self.n_total, t_max=self.t_max
+                )
 
-            start = int(len(sol) * self.transient_frac)
-            data = sol[start:]
-            z = data[:, 2]
-            z_mid = (z.max() + z.min()) / 2
+                start = int(len(sol) * self.transient_frac)
+                data = sol[start:]
+                z = data[:, 2]
+                z_mid = (z.max() + z.min()) / 2
 
-            crossings = np.where((z[:-1] < z_mid) & (z[1:] >= z_mid))[0]
+                crossings = np.where((z[:-1] < z_mid) & (z[1:] >= z_mid))[0]
 
-            results_vals.append(val)
+                results_vals.append(val)
+            except Exception as e:
+                self.signals.error.emit(f"Failed at {self.sweep_param}={val}: {e}")
+                break
 
             if len(crossings) == 0:
                 results_peaks.append(np.array([]))

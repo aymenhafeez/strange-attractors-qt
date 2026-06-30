@@ -153,6 +153,7 @@ class BifurcationDialog(QDialog):
         )
         worker.signals.chunk_ready.connect(self._on_chunk_ready)
         worker.signals.finished.connect(self._on_worker_finished)
+        worker.signals.error.connect(self._on_worker_error)
         self._workers = [worker]
         self._threadpool.start(worker)
 
@@ -187,6 +188,12 @@ class BifurcationDialog(QDialog):
             w._cancel = True
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
+
+    def _on_worker_error(self, msg):
+        self.run_btn.setEnabled(True)
+        self.cancel_btn.setEnabled(False)
+        self.progress.setVisible(False)
+        self.run_btn.setText(f"Error: {msg}")
 
     def _export_plot(self):
         path, _ = QFileDialog.getSaveFileName(
