@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtCore import QThreadPool
@@ -35,7 +33,6 @@ class BifurcationDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # Row 1 — parameter and variable selection
         row1 = QHBoxLayout()
         row1.addWidget(QLabel("Sweep param:"))
         self.param_combo = QComboBox()
@@ -49,7 +46,6 @@ class BifurcationDialog(QDialog):
         row1.addWidget(self.var_combo)
         layout.addLayout(row1)
 
-        # Row 2 — range and resolution
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("From:"))
         self.min_spin = QDoubleSpinBox()
@@ -73,11 +69,10 @@ class BifurcationDialog(QDialog):
         self.transient_spin = QDoubleSpinBox()
         self.transient_spin.setRange(0.0, 0.99)
         self.transient_spin.setSingleStep(0.05)
-        self.transient_spin.setValue(0.5)
+        self.transient_spin.setValue(0.7)
         row2.addWidget(self.transient_spin)
         layout.addLayout(row2)
 
-        # Row 3 — buttons
         row3 = QHBoxLayout()
         self.run_btn = QPushButton("▶ Run")
         self.run_btn.clicked.connect(self._run_sweep)
@@ -93,12 +88,10 @@ class BifurcationDialog(QDialog):
         row3.addWidget(self.export_btn)
         layout.addLayout(row3)
 
-        # Progress
         self.progress = QProgressBar()
         self.progress.setVisible(False)
         layout.addWidget(self.progress)
 
-        # Plot
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground("k")
         self.plot_widget.setLabel("bottom", "Parameter value")
@@ -144,7 +137,8 @@ class BifurcationDialog(QDialog):
         self.progress.setVisible(True)
         self.progress.setValue(0)
 
-        n = self.config.time_defaults["n"] * 2
+        t_max = self.config.time_defaults["t_max"] * 4
+        n = self.config.time_defaults["n"]
 
         worker = BifurcationWorker(
             self.config,
@@ -154,6 +148,7 @@ class BifurcationDialog(QDialog):
             n,
             transient,
             axis,
+            t_max,
         )
         worker.signals.chunk_ready.connect(self._on_chunk_ready)
         worker.signals.finished.connect(self._on_worker_finished)
@@ -168,7 +163,6 @@ class BifurcationDialog(QDialog):
         done = sum(len(v) for v in self._all_vals)
         self.progress.setValue(int(done / total * 100))
 
-        # Rebuild all data: repeat each param val once per peak
         x_parts = []
         y_parts = []
         for v, pl in zip(self._all_vals, self._all_peaks):
