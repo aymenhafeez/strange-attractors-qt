@@ -397,7 +397,6 @@ class Window(QtWidgets.QMainWindow):
     def _update_plot(self):
         self.timer.stop()
         self.anim_button.setText("Play")
-        self._solve_needed = True
         self._dispatch_solve(full=True)
 
         config = ATTRACTORS[self.current_name]
@@ -439,9 +438,6 @@ class Window(QtWidgets.QMainWindow):
         if self._solve_pending:
             return
 
-        if not self._solve_needed:
-            return
-
         self._solve_pending = True
         self._solve_needed = False
         config = ATTRACTORS[self.current_name]
@@ -469,6 +465,7 @@ class Window(QtWidgets.QMainWindow):
         self._refresh_colours()
 
         if self._solve_needed:
+            self._solve_needed = False
             self._dispatch_solve()
 
     def _on_slider_moved(self, s, spin, val):
