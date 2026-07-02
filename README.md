@@ -5,6 +5,8 @@ PyQtGraph app for visualising strange attractors.
 <table>
   <tr>
     <td><img src="media/image_3.png" /></td>
+  </tr>
+  <tr>
     <td><img src="media/image_4.png" /></td>
   </tr>
 </table>
