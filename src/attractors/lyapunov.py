@@ -67,14 +67,26 @@ def _gram_schmidt(theta_flat):
 
 
 def compute_lyapunov(
-    equation, initial_conditions, params, t_min, t_max, n, gs_interval=10
+    equation,
+    initial_conditions,
+    params,
+    t_min,
+    t_max,
+    n,
+    gs_interval=10,
+    return_history=False,
 ):
     state = np.zeros(12, dtype=np.float64)
     state[:3] = initial_conditions
     state[3:] = np.eye(3).ravel()
-    dt = (t_max - t_min) / n
+    total_time = t_max - t_min
+    dt = total_time / n
     p = np.array(params, dtype=np.float64)
     lyap_sums = np.zeros(3)
+
+    if return_history:
+        t_hist = []
+        lyap_hist = []
 
     for i in range(n):
         state = _rk4_step(state, dt, p, equation)
@@ -83,8 +95,15 @@ def compute_lyapunov(
             state[3:], sums = _gram_schmidt(state[3:])
             lyap_sums += sums
 
-    total_time = t_max - t_min
+            if return_history:
+                t_current = (i + 1) * dt
+                t_hist.append(t_current)
+                lyap_hist.append((lyap_sums / t_current))
+
     lyap = lyap_sums / total_time
     ky = 2.0 + (lyap[0] + lyap[1]) / abs(lyap[2]) if lyap[2] < 0 else 3.0
+
+    if return_history:
+        return lyap, ky, np.array(t_hist), np.array(lyap_hist)
 
     return lyap, ky

@@ -15,7 +15,7 @@ from .style import (
     DROPDOWN_SELECTION,
     EQUATION_LABEL,
     LINE_MODE_CHECKBOX,
-    LYAPUNOV_LABEL,
+    LYAPUNOV_PLOT,
     SLIDER_PARAMS,
     SLIDERS,
     SPLITTER,
@@ -83,18 +83,42 @@ class Window(QtWidgets.QMainWindow):
             self.equation_label,
             0,
             0,
-            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop,
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignBottom,
         )
 
         self.lyapunov_label = QtWidgets.QLabel("")
-        self.lyapunov_label.setStyleSheet(LYAPUNOV_LABEL)
-        self.lyapunov_label.setVisible(False)
-        container_layout.addWidget(
-            self.lyapunov_label,
-            0,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignTop,
+        self.lyapunov_label.setStyleSheet(EQUATION_LABEL)
+
+        self.lyapunov_plot = pg.PlotWidget()
+        self.lyapunov_plot.setFixedSize(300, 150)
+        self.lyapunov_plot.setBackground(None)
+        self.lyapunov_plot.hideAxis("bottom")
+        self.lyapunov_plot.hideAxis("left")
+        self.lyapunov_plot.setStyleSheet(LYAPUNOV_PLOT)
+        self.curve_l1 = self.lyapunov_plot.plot([], [], pen=(255, 100, 100))
+        self.curve_l2 = self.lyapunov_plot.plot([], [], pen=(100, 255, 100))
+        self.curve_l3 = self.lyapunov_plot.plot([], [], pen=(100, 100, 255))
+
+        self.lyapunov_container = QtWidgets.QWidget()
+        self.lyapunov_container.setStyleSheet(LYAPUNOV_PLOT)
+        lyap_layout = QtWidgets.QVBoxLayout(self.lyapunov_container)
+        lyap_layout.setContentsMargins(0, 0, 0, 0)
+        lyap_layout.setSpacing(2)
+
+        lyap_layout.addWidget(
+            self.lyapunov_plot, alignment=QtCore.Qt.AlignmentFlag.AlignBottom
         )
+        lyap_layout.addWidget(
+            self.lyapunov_label, alignment=QtCore.Qt.AlignmentFlag.AlignRight
+        )
+
+        container_layout.addWidget(
+            self.lyapunov_container,
+            0,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignBottom,
+        )
+        self.lyapunov_container.setVisible(False)
 
         status_container = QtWidgets.QWidget()
         status_container.setStyleSheet(STATUS_BAR)
@@ -382,7 +406,7 @@ class Window(QtWidgets.QMainWindow):
             self.panel_layout.addLayout(row)
 
         self.lyapunov_label.setText("")
-        self.lyapunov_label.setVisible(False)
+        self.lyapunov_container.setVisible(False)
 
         self.panel_layout.addStretch()
         self.panel_layout.addWidget(self.projection_container)
@@ -502,11 +526,15 @@ class Window(QtWidgets.QMainWindow):
         self.scatter.setData(color=c)
         self.line.setData(color=c)
 
-    def _on_lyapunov_result(self, lyap, ky_dim):
+    def _on_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
         self.lyapunov_label.setText(
             f"λ = ({lyap[0]:+.2f}, {lyap[1]:+.2f}, {lyap[2]:+.2f})  D_KY = {ky_dim:.2f}"
         )
-        self.lyapunov_label.setVisible(True)
+
+        self.lyapunov_container.setVisible(True)
+        self.curve_l1.setData(t_hist, lyap_hist[:, 0])
+        self.curve_l2.setData(t_hist, lyap_hist[:, 1])
+        self.curve_l3.setData(t_hist, lyap_hist[:, 2])
 
     def _open_bifurcation(self):
         config = ATTRACTORS[self.current_name]

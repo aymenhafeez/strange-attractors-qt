@@ -25,7 +25,7 @@ class SolveWorker(QObject):
 
 
 class LyapunovWorker(QObject):
-    lyapunov_ready = pyqtSignal(object, float)
+    lyapunov_ready = pyqtSignal(object, float, object, object)
 
     def __init__(self):
         super().__init__()
@@ -36,14 +36,15 @@ class LyapunovWorker(QObject):
         self._cancel = False
 
         pvals = [values[p.name] for p in config.params]
-        lyap, ky_dim = compute_lyapunov(
+        lyap, ky_dim, t_hist, lyap_hist = compute_lyapunov(
             config.equation,
             config.initial_conditions,
             pvals,
             config.time_defaults["t_min"],
             config.time_defaults["t_max"],
             config.time_defaults["n"],
+            return_history=True,
         )
 
         if not self._cancel:
-            self.lyapunov_ready.emit(lyap, ky_dim)
+            self.lyapunov_ready.emit(lyap, ky_dim, t_hist, lyap_hist)
