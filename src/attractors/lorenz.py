@@ -28,7 +28,7 @@ _lorenz_attractor = AttractorConfig(
     time_defaults={"t_min": 0, "t_max": 50, "n": 100000},
     camera_distance=60,
     camera_elevation=20,
-    camera_azimuth=-20,
+    camera_azimuth=-40,
     pan=25,
     equation_text=("dx/dt = a(y - x)\ndy/dt = x(b - z) - y\ndz/dt = xy - cz"),
     description=(
