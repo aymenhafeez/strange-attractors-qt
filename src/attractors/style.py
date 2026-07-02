@@ -29,23 +29,6 @@ SLIDERS = """
         border: 1px solid #aaa;
         border-left: 2px solid #999;
     }
-    QSlider:horizontal {
-        min-height: 10px;
-        max-height: 10px;
-    }
-    QSlider::handle:horizontal {
-        background: #ddd;
-        width: 5px;
-        min-height: 14px;    /* slightly taller than groove */
-        max-height: 14px;
-        margin: -2px 0;      /* let the handle overlap the groove */
-    }
-    QSlider::sub-page:horizontal {
-        background: #ddd;
-    }
-    QSlider::add-page:horizontal {
-        background: #888;
-    }
 """
 
 DROPDOWN_BOX = """
