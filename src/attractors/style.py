@@ -2,10 +2,9 @@ EQUATION_LABEL = """
     color: #ddd;
     font-size: 13px;
     padding: 2px 6px;
-    background: rgba(0, 0, 0, 120);
+    background: rgba(0, 0, 0, 0);
+    border: 0px;
     border-radius: 0px;
-    border-left: 0px;
-    border-top: 0px;
 """
 
 STATUS_BAR = "background-color: #000000;"
@@ -88,10 +87,4 @@ SPLITTER = "QSplitter::handle { width: 1px; background: #555; }"
 
 CONTAINER = "border: 1px solid #aaa;"
 
-LYAPUNOV_LABEL = """
-    color: #ddd;
-    font-size: 13px;
-    padding: 2px 6px;
-    background: rgba(0, 0, 0, 120);
-    border-radius: 0px;
-"""
+LYAPUNOV_PLOT = "background-color: rgba(0, 0, 0, 0); border: 0px"
