@@ -5,6 +5,7 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
+from .bifurcation_dialog import BifurcationDialog
 from .registry import ATTRACTORS
 from .style import (
     ALPHA_SLIDER,
@@ -14,6 +15,7 @@ from .style import (
     DROPDOWN_SELECTION,
     EQUATION_LABEL,
     LINE_MODE_CHECKBOX,
+    LYAPUNOV_PLOT,
     SLIDER_PARAMS,
     SLIDERS,
     SPLITTER,
@@ -22,15 +24,16 @@ from .style import (
     STATUS_PARAMS,
     STATUS_SYSTEM,
 )
-from .worker import SolveWorker
+from .worker import LyapunovWorker, SolveWorker
 
 WINDOW_SIZE = 1100
 N_BINS = 96
-PARTIAL_N = 50000
+PARTIAL_N = 40000
 
 
 class Window(QtWidgets.QMainWindow):
     solve_requested = QtCore.pyqtSignal(object, dict, object)
+    lyapunov_requested = QtCore.pyqtSignal(object, dict)
 
     def __init__(self):
         super().__init__()
@@ -50,12 +53,20 @@ class Window(QtWidgets.QMainWindow):
 
         self._solve_pending = False
         self._solve_needed = False
+        self._full_needed = False
         self._solver_worker = SolveWorker()
         self._solver_thread = QtCore.QThread()
         self._solver_worker.moveToThread(self._solver_thread)
         self._solver_thread.start()
         self.solve_requested.connect(self._solver_worker.solve)
         self._solver_worker.result_ready.connect(self._on_solve_result)
+
+        self._lyapunov_worker = LyapunovWorker()
+        self._lyapunov_thread = QtCore.QThread()
+        self._lyapunov_worker.moveToThread(self._lyapunov_thread)
+        self._lyapunov_thread.start()
+        self.lyapunov_requested.connect(self._lyapunov_worker.compute)
+        self._lyapunov_worker.lyapunov_ready.connect(self._on_lyapunov_result)
 
         self.view = gl.GLViewWidget()
         container = QtWidgets.QWidget()
@@ -73,8 +84,42 @@ class Window(QtWidgets.QMainWindow):
             self.equation_label,
             0,
             0,
-            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop,
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignBottom,
         )
+
+        self.lyapunov_label = QtWidgets.QLabel("")
+        self.lyapunov_label.setStyleSheet(EQUATION_LABEL)
+
+        self.lyapunov_plot = pg.PlotWidget()
+        self.lyapunov_plot.setFixedSize(300, 150)
+        self.lyapunov_plot.setBackground(None)
+        self.lyapunov_plot.hideAxis("bottom")
+        self.lyapunov_plot.hideAxis("left")
+        self.lyapunov_plot.setStyleSheet(LYAPUNOV_PLOT)
+        self.curve_l1 = self.lyapunov_plot.plot([], [], pen=(255, 100, 100))
+        self.curve_l2 = self.lyapunov_plot.plot([], [], pen=(100, 255, 100))
+        self.curve_l3 = self.lyapunov_plot.plot([], [], pen=(100, 100, 255))
+
+        self.lyapunov_container = QtWidgets.QWidget()
+        self.lyapunov_container.setStyleSheet(LYAPUNOV_PLOT)
+        lyap_layout = QtWidgets.QVBoxLayout(self.lyapunov_container)
+        lyap_layout.setContentsMargins(0, 0, 0, 0)
+        lyap_layout.setSpacing(2)
+
+        lyap_layout.addWidget(
+            self.lyapunov_plot, alignment=QtCore.Qt.AlignmentFlag.AlignBottom
+        )
+        lyap_layout.addWidget(
+            self.lyapunov_label, alignment=QtCore.Qt.AlignmentFlag.AlignRight
+        )
+
+        container_layout.addWidget(
+            self.lyapunov_container,
+            0,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignBottom,
+        )
+        self.lyapunov_container.setVisible(False)
 
         status_container = QtWidgets.QWidget()
         status_container.setStyleSheet(STATUS_BAR)
@@ -169,6 +214,15 @@ class Window(QtWidgets.QMainWindow):
 
         self.dropdown = QtWidgets.QPushButton(list(ATTRACTORS.keys())[0])
         self.dropdown.setStyleSheet(DROPDOWN_BOX)
+
+        self.tools_button = QtWidgets.QPushButton("Tools")
+        self.tools_button.setStyleSheet(DROPDOWN_BOX)
+        tools_menu = QtWidgets.QMenu(self.tools_button)
+        tools_menu.setStyleSheet(DROPDOWN_SELECTION)
+        bifurcation_action = tools_menu.addAction("Bifurcation diagram")
+        bifurcation_action.triggered.connect(self._open_bifurcation)
+        self.tools_button.setMenu(tools_menu)
+        self.panel_layout.addWidget(self.tools_button)
 
         menu = QtWidgets.QMenu(self.dropdown)
         menu.setStyleSheet(DROPDOWN_SELECTION)
@@ -269,16 +323,16 @@ class Window(QtWidgets.QMainWindow):
 
         frame = min(self.anim_frame + self.anim_step, len(sol))
         self.anim_frame = frame
-        partial = sol[:frame]
-        x, y, z = partial.T
+        segment = sol[:frame]
+        x, y, z = segment.T
 
         if self.trail_mode.isChecked():
-            c = self._plot_trail(len(partial), self.current_alpha)
+            c = self._plot_trail(len(segment), self.current_alpha)
         else:
-            c = np.full((len(partial), 4), (*self.base_colour, self.current_alpha))
+            c = np.full((len(segment), 4), (*self.base_colour, self.current_alpha))
 
-        self.scatter.setData(pos=partial, color=c)
-        self.line.setData(pos=partial, color=c)
+        self.scatter.setData(pos=segment, color=c)
+        self.line.setData(pos=segment, color=c)
         self._update_projections(x, y, z)
 
         if frame >= len(sol):
@@ -352,6 +406,9 @@ class Window(QtWidgets.QMainWindow):
             self.slider_rows.append((p, s, row))
             self.panel_layout.addLayout(row)
 
+        self.lyapunov_label.setText("")
+        self.lyapunov_container.setVisible(False)
+
         self.panel_layout.addStretch()
         self.panel_layout.addWidget(self.projection_container)
         self.panel_layout.addWidget(self.info_label)
@@ -365,7 +422,6 @@ class Window(QtWidgets.QMainWindow):
     def _update_plot(self):
         self.timer.stop()
         self.anim_button.setText("Play")
-        self._solve_needed = True
         self._dispatch_solve(full=True)
 
         config = ATTRACTORS[self.current_name]
@@ -401,13 +457,11 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_slider_released(self):
         self._solve_needed = True
+        self._full_needed = True
         self._dispatch_solve(full=True)
 
     def _dispatch_solve(self, full=False):
         if self._solve_pending:
-            return
-
-        if not self._solve_needed:
             return
 
         self._solve_pending = True
@@ -430,11 +484,17 @@ class Window(QtWidgets.QMainWindow):
 
         if not is_partial:
             self._update_projections(x, y, z)
+            config = ATTRACTORS[self.current_name]
+            values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
+            self.lyapunov_requested.emit(config, values)
 
         self._refresh_colours()
 
         if self._solve_needed:
-            self._dispatch_solve()
+            self._solve_needed = False
+            full = self._full_needed
+            self._full_needed = False
+            self._dispatch_solve(full=full)
 
     def _on_slider_moved(self, s, spin, val):
         self.timer.stop()
@@ -470,9 +530,28 @@ class Window(QtWidgets.QMainWindow):
         self.scatter.setData(color=c)
         self.line.setData(color=c)
 
+    def _on_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
+        self.lyapunov_label.setText(
+            f"λ = ({lyap[0]:+.2f}, {lyap[1]:+.2f}, {lyap[2]:+.2f})  D_KY = {ky_dim:.2f}"
+        )
+
+        self.lyapunov_container.setVisible(True)
+        self.curve_l1.setData(t_hist, lyap_hist[:, 0])
+        self.curve_l2.setData(t_hist, lyap_hist[:, 1])
+        self.curve_l3.setData(t_hist, lyap_hist[:, 2])
+
+    def _open_bifurcation(self):
+        config = ATTRACTORS[self.current_name]
+        values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
+        dialog = BifurcationDialog(config, values, self)
+        dialog.show()
+
     def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:
         self.timer.stop()
         self._solver_worker._cancel = True
         self._solver_thread.quit()
         self._solver_thread.wait()
+        self._lyapunov_worker._cancel = True
+        self._lyapunov_thread.quit()
+        self._lyapunov_thread.wait()
         super().closeEvent(a0)

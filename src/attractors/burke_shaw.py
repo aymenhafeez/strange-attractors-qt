@@ -1,28 +1,23 @@
-from typing import Any
-
 import numba
+import numpy as np
 
 from .models import AttractorConfig, AttractorParam
 
 
-@numba.njit
-def _burke_shaw(
-    x_var: list[Any],
-    t: int | float,
-    a: int | float,
-    b: int | float,
-) -> list[int | float]:
+@numba.njit(nogil=True)
+def _burke_shaw(x_var, t, params):
     x, y, z = x_var
+    a, b = params
     dxdt = -a * (x + y)
     dydt = -y - a * x * z
     dzdt = a * x * y + b
 
-    return [dxdt, dydt, dzdt]
+    return np.array([dxdt, dydt, dzdt])
 
 
 _burke_shaw_attractor = AttractorConfig(
-    "burke_shaw",
-    _burke_shaw,
+    name="burke_shaw",
+    equation=_burke_shaw,
     params=[
         AttractorParam("a", 5.09, 0.0, 30.0, 0.01),
         AttractorParam("b", 6.28, 0.0, 100.0, 0.01),
