@@ -177,7 +177,7 @@ class BifurcationDialog(QDialog):
             self,
             "Export bifurcation diagram",
             "",
-            "PNG (*.png);;SVG (*.svg)",
+            "PNG (*.png)",
         )
         if path:
             exporter = ImageExporter(self.plot_widget.plotItem)
