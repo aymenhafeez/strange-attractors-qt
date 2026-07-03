@@ -53,6 +53,7 @@ class Window(QtWidgets.QMainWindow):
 
         self._solve_pending = False
         self._solve_needed = False
+        self._full_needed = False
         self._solver_worker = SolveWorker()
         self._solver_thread = QtCore.QThread()
         self._solver_worker.moveToThread(self._solver_thread)
@@ -456,6 +457,7 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_slider_released(self):
         self._solve_needed = True
+        self._full_needed = True
         self._dispatch_solve(full=True)
 
     def _dispatch_solve(self, full=False):
@@ -490,7 +492,9 @@ class Window(QtWidgets.QMainWindow):
 
         if self._solve_needed:
             self._solve_needed = False
-            self._dispatch_solve()
+            full = self._full_needed
+            self._full_needed = False
+            self._dispatch_solve(full=full)
 
     def _on_slider_moved(self, s, spin, val):
         self.timer.stop()
