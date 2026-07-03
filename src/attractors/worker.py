@@ -35,16 +35,19 @@ class LyapunovWorker(QObject):
     def compute(self, config, values):
         self._cancel = False
 
-        pvals = [values[p.name] for p in config.params]
-        lyap, ky_dim, t_hist, lyap_hist = compute_lyapunov(
-            config.equation,
-            config.initial_conditions,
-            pvals,
-            config.time_defaults["t_min"],
-            config.time_defaults["t_max"],
-            config.time_defaults["n"],
-            return_history=True,
-        )
+        try:
+            pvals = [values[p.name] for p in config.params]
+            lyap, ky_dim, t_hist, lyap_hist = compute_lyapunov(
+                config.equation,
+                config.initial_conditions,
+                pvals,
+                config.time_defaults["t_min"],
+                config.time_defaults["t_max"],
+                config.time_defaults["n"],
+                return_history=True,
+            )
 
-        if not self._cancel:
-            self.lyapunov_ready.emit(lyap, ky_dim, t_hist, lyap_hist)
+            if not self._cancel:
+                self.lyapunov_ready.emit(lyap, ky_dim, t_hist, lyap_hist)
+        except Exception:
+            pass
