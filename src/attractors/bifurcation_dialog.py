@@ -23,6 +23,7 @@ class BifurcationDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Bifurcation Diagram")
         self.resize(800, 600)
+        self._worker = None
 
         self.config = config
         self.current_values = current_values
