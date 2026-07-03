@@ -36,43 +36,60 @@ class BifurcationWorker(QRunnable):
         self._cancel = False
 
     def run(self):
-        results_vals = []
-        results_peaks = []
+        all_vals = []
+        all_peaks = []
         n_params = len(self.param_values)
+        turnround_ic = None
 
-        for i, val in enumerate(self.param_values):
-            if self._cancel:
+        for sweep_idx, param_seq in enumerate(
+            [
+                self.param_values,
+                self.param_values[::-1],
+            ]
+        ):
+            ic = turnround_ic
+            cancelled = False
+            for i, val in enumerate(param_seq):
+                if self._cancel:
+                    cancelled = True
+                    break
+
+                if i % max(1, n_params // 20) == 0:
+                    progress = (sweep_idx * n_params + i) / (2 * n_params) * 100
+                    self.signals.progress.emit(int(progress))
+
+                try:
+                    params = {**self.base_params, self.sweep_param: float(val)}
+                    sol = solve_attractor(
+                        self.config, params, self.n_total, t_max=self.t_max, ic=ic
+                    )
+                    ic = sol[-1]
+
+                    start = int(len(sol) * self.transient_frac)
+                    data = sol[start:]
+                    z = data[:, 2]
+                    z_mid = (z.max() + z.min()) / 2
+                    crossings = np.where((z[:-1] < z_mid) & (z[1:] >= z_mid))[0]
+
+                    all_vals.append(val)
+                except Exception as e:
+                    self.signals.error.emit(f"Failed at {self.sweep_param}={val}: {e}")
+                    cancelled = True
+                    break
+
+                if len(crossings) == 0:
+                    all_peaks.append(np.array([]))
+                else:
+                    frac = (z_mid - z[crossings]) / (z[crossings + 1] - z[crossings])
+                    peaks = data[crossings, self.axis] + frac * (
+                        data[crossings + 1, self.axis] - data[crossings, self.axis]
+                    )
+                    all_peaks.append(peaks)
+
+            if cancelled:
                 break
+            if sweep_idx == 0:
+                turnround_ic = ic
 
-            if i % max(1, n_params // 20) == 0:
-                self.signals.progress.emit(int(i / n_params * 100))
-
-            try:
-                params = {**self.base_params, self.sweep_param: float(val)}
-                sol = solve_attractor(
-                    self.config, params, self.n_total, t_max=self.t_max
-                )
-
-                start = int(len(sol) * self.transient_frac)
-                data = sol[start:]
-                z = data[:, 2]
-                z_mid = (z.max() + z.min()) / 2
-
-                crossings = np.where((z[:-1] < z_mid) & (z[1:] >= z_mid))[0]
-
-                results_vals.append(val)
-            except Exception as e:
-                self.signals.error.emit(f"Failed at {self.sweep_param}={val}: {e}")
-                break
-
-            if len(crossings) == 0:
-                results_peaks.append(np.array([]))
-            else:
-                frac = (z_mid - z[crossings]) / (z[crossings + 1] - z[crossings])
-                peaks = data[crossings, self.axis] + frac * (
-                    data[crossings + 1, self.axis] - data[crossings, self.axis]
-                )
-                results_peaks.append(peaks)
-
-        self.signals.chunk_ready.emit(np.array(results_vals), results_peaks)
+        self.signals.chunk_ready.emit(np.array(all_vals), all_peaks)
         self.signals.finished.emit()
