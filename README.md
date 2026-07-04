@@ -16,6 +16,17 @@ PyQtGraph app for visualising strange attractors.
 This is a local, more performant version of
 [strange-attractor-visualiser](https://github.com/aymenhafeez/strange-attractor-visualiser)
 
+## Current features
+
+* Selection of attractors with real time slider updates for parameters
+* Scatter and line rendering modes
+* Trajectory animation
+* Trail mode showing solution's time step evolution
+* 2D heatmap projections
+* Lyapunov exponent spectrum, convergence plots and Kaplan-Yorke dimension
+* Bifuraction plot from Poincaré sweep
+* Poincaré section view with configurable section plane
+
 ## Running the app
 
 ```
@@ -39,3 +50,10 @@ python -m src.attractors
 
 
 Optionally use the `--fullscreen` flag to launch the app in fullscreen mode.
+
+## TODO
+
+* Improve Bifuraction performance
+* Sync Poincaré section with main window parameter and attractor changes in real time
+* Parse user defined systems
+* Allow comparison of multiple trajectories with varied initial conditions
