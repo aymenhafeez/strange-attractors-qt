@@ -45,7 +45,7 @@ def _rk4_step(state, dt, params, eq):
 @numba.njit(nogil=True)
 def _gram_schmidt(theta_flat):
     lyap_sums = np.zeros(3)
-    theta = theta_flat.reshape(3, 3)
+    theta = theta_flat.reshape(3, 3).copy()
 
     for i in range(3):
         for j in range(i):
@@ -84,6 +84,8 @@ def compute_lyapunov(
     p = np.array(params, dtype=np.float64)
     lyap_sums = np.zeros(3)
 
+    gs_counter = 0
+
     if return_history:
         t_hist = []
         lyap_hist = []
@@ -94,14 +96,22 @@ def compute_lyapunov(
         if (i + 1) % gs_interval == 0:
             state[3:], sums = _gram_schmidt(state[3:])
             lyap_sums += sums
+            gs_counter += 1
 
             if return_history:
-                t_current = (i + 1) * dt
+                t_current = gs_counter * gs_interval * dt
                 t_hist.append(t_current)
-                lyap_hist.append((lyap_sums / t_current))
+                lyap_hist.append(lyap_sums / t_current)
 
-    lyap = lyap_sums / total_time
-    ky = 2.0 + (lyap[0] + lyap[1]) / abs(lyap[2]) if lyap[2] < 0 else 3.0
+    total_gs_time = gs_counter * gs_interval * dt
+    lyap = lyap_sums / total_gs_time
+
+    if lyap[0] + lyap[1] >= 0 and lyap[2] < 0:
+        ky = 2.0 + (lyap[0] + lyap[1]) / abs(lyap[2])
+    elif lyap[0] < 0:
+        ky = 0.0
+    else:
+        ky = 3.0
 
     if return_history:
         return lyap, ky, np.array(t_hist), np.array(lyap_hist)
