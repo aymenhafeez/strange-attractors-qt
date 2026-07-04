@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 )
 from pyqtgraph.exporters import ImageExporter
 
+from .registry import ATTRACTORS
 from .solver import solve_attractor
 
 
@@ -55,17 +56,17 @@ class _PoincareWorker(QRunnable):
 
 
 class PoincareSectionDialog(QDialog):
-    def __init__(self, config, values, sol, parent=None):
+    def __init__(self, main_window, sol, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Poincaré Section")
         self.resize(600, 650)
-        self._config = config
-        self._values = values
+        self._main_window = main_window
         self._sol = sol
         self._worker = None
 
         layout = QVBoxLayout(self)
 
+        config = ATTRACTORS[main_window.current_name]
         solve_row = QHBoxLayout()
         solve_row.addWidget(QLabel("t_max:"))
         self.tmax_spin = QDoubleSpinBox()
@@ -128,7 +129,8 @@ class PoincareSectionDialog(QDialog):
         layout.addWidget(self.plot_widget)
 
         self._scatter = self.plot_widget.plot(
-            [], [],
+            [],
+            [],
             pen=None,
             symbol="o",
             symbolSize=1,
@@ -152,9 +154,13 @@ class PoincareSectionDialog(QDialog):
         self.cancel_btn.setEnabled(True)
         self.progress.setVisible(True)
 
+        config = ATTRACTORS[self._main_window.current_name]
+        values = {
+            p.name: p.step * s.value() for p, s, _ in self._main_window.slider_rows
+        }
         worker = _PoincareWorker(
-            self._config,
-            self._values,
+            config,
+            values,
             self.n_spin.value(),
             self.tmax_spin.value(),
         )
@@ -166,7 +172,7 @@ class PoincareSectionDialog(QDialog):
 
     def _on_solve_result(self, sol):
         self._sol = sol
-        self._on_plane_changed(self.plane_combo.currentText())
+        self._recompute()
 
     def _on_solve_finished(self):
         self.run_btn.setEnabled(True)
@@ -227,18 +233,25 @@ class PoincareSectionDialog(QDialog):
 
         idx.sort()
         frac = (value - pv[idx]) / (pv[idx + 1] - pv[idx])
-        h = self._sol[idx, col_h] + frac * (self._sol[idx + 1, col_h] - self._sol[idx, col_h])
-        v = self._sol[idx, col_v] + frac * (self._sol[idx + 1, col_v] - self._sol[idx, col_v])
+        h = self._sol[idx, col_h] + frac * (
+            self._sol[idx + 1, col_h] - self._sol[idx, col_h]
+        )
+        v = self._sol[idx, col_v] + frac * (
+            self._sol[idx + 1, col_v] - self._sol[idx, col_v]
+        )
 
         if self.heatmap_check.isChecked():
             self._scatter.setData([], [])
             heatmap, xedges, yedges = np.histogram2d(h, v, bins=N_BINS)
             self._img.setImage(np.log1p(heatmap))
-            self._img.setRect(pg.QtCore.QRectF(
-                xedges[0], yedges[0],
-                xedges[-1] - xedges[0],
-                yedges[-1] - yedges[0],
-            ))
+            self._img.setRect(
+                pg.QtCore.QRectF(
+                    xedges[0],
+                    yedges[0],
+                    xedges[-1] - xedges[0],
+                    yedges[-1] - yedges[0],
+                )
+            )
             self._img.setVisible(True)
             self.plot_widget.autoRange()
         else:

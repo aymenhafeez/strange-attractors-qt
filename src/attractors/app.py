@@ -544,10 +544,8 @@ class Window(QtWidgets.QMainWindow):
         self.curve_l3.setData(t_hist, lyap_hist[:, 2])
 
     def _open_poincare(self):
-        config = ATTRACTORS[self.current_name]
-        values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
         sol = self.full_solution.copy() if self.full_solution is not None else None
-        dialog = PoincareSectionDialog(config, values, sol, self)
+        dialog = PoincareSectionDialog(self, sol, self)
         dialog.show()
 
     def _open_bifurcation(self):
