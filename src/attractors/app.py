@@ -6,6 +6,7 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .bifurcation_dialog import BifurcationDialog
+from .poincare_dialog import PoincareSectionDialog
 from .registry import ATTRACTORS
 from .style import (
     ALPHA_SLIDER,
@@ -221,6 +222,8 @@ class Window(QtWidgets.QMainWindow):
         tools_menu.setStyleSheet(DROPDOWN_SELECTION)
         bifurcation_action = tools_menu.addAction("Bifurcation diagram")
         bifurcation_action.triggered.connect(self._open_bifurcation)
+        poincare_action = tools_menu.addAction("Poincaré section")
+        poincare_action.triggered.connect(self._open_poincare)
         self.tools_button.setMenu(tools_menu)
         self.panel_layout.addWidget(self.tools_button)
 
@@ -539,6 +542,13 @@ class Window(QtWidgets.QMainWindow):
         self.curve_l1.setData(t_hist, lyap_hist[:, 0])
         self.curve_l2.setData(t_hist, lyap_hist[:, 1])
         self.curve_l3.setData(t_hist, lyap_hist[:, 2])
+
+    def _open_poincare(self):
+        config = ATTRACTORS[self.current_name]
+        values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
+        sol = self.full_solution.copy() if self.full_solution is not None else None
+        dialog = PoincareSectionDialog(config, values, sol, self)
+        dialog.show()
 
     def _open_bifurcation(self):
         config = ATTRACTORS[self.current_name]
