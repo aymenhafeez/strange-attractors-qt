@@ -295,7 +295,7 @@ class Window(QtWidgets.QMainWindow):
             ("ZX", [(90, 0, 1, 0)], (half_size, 0, 0)),
         ]
         tick_positions = np.linspace(-half_size, half_size, num_divisions + 1)
-        tick_values = [round(v, 2) for v in tick_positions]
+        tick_values = [round(v, 0) for v in tick_positions]
 
         self.grid_items = []
         for i, (_, rotations, (dx, dy, dz)) in enumerate(grid_faces):
