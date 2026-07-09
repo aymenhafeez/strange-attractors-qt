@@ -158,8 +158,6 @@ class Window(QtWidgets.QMainWindow):
         tick_values = list(range(-100, 100, 20))
 
         self.grid_items = []
-        self.grid_label_t1 = []
-        self.grid_label_t2 = []
         for _, rotations, (dx, dy, dz) in grid_faces:
             g = gl.GLGridItem()
             g.setSize(x=200, y=200, z=1)
@@ -196,8 +194,8 @@ class Window(QtWidgets.QMainWindow):
 
                 self.view.addItem(t1)
                 self.view.addItem(t2)
-                self.grid_label_t1.append(t1)
-                self.grid_label_t2.append(t2)
+                self.grid_items.append(t1)
+                self.grid_items.append(t2)
 
         self.panel = QtWidgets.QWidget()
         self.panel.setStyleSheet(SLIDERS)
@@ -471,10 +469,6 @@ class Window(QtWidgets.QMainWindow):
 
         for items in self.grid_items:
             items.setVisible(is_visible)
-        for labels in self.grid_label_t1:
-            labels.setVisible(is_visible)
-        for labels in self.grid_label_t2:
-            labels.setVisible(is_visible)
 
     def _on_slider_tick(self):
         self._solve_needed = True
