@@ -152,56 +152,6 @@ class Window(QtWidgets.QMainWindow):
 
         layout.addWidget(splitter)
 
-        grid_faces = [
-            ("XY", [], (0, 0, -100)),
-            ("YZ", [(90, 1, 0, 0)], (0, -100, 0)),
-            ("XZ", [(90, 0, 1, 0)], (-100, 0, 0)),
-            ("YX", [], (0, 0, 100)),
-            ("ZY", [(90, 1, 0, 0)], (0, 100, 0)),
-            ("ZX", [(90, 0, 1, 0)], (100, 0, 0)),
-        ]
-        tick_values = list(range(-100, 100, 20))
-
-        self.grid_items = []
-        for _, rotations, (dx, dy, dz) in grid_faces:
-            g = gl.GLGridItem()
-            g.setSize(x=200, y=200, z=1)
-            g.setSpacing(x=20, y=20, z=1)
-            for angle, *axis in rotations:
-                g.rotate(angle, *axis)
-            g.translate(dx, dy, dz)
-            self.view.addItem(g)
-            self.grid_items.append(g)
-
-            for val in tick_values:
-                if val == 0:
-                    continue
-
-                t1 = gl.GLTextItem(
-                    pos=[val, -10, 0],
-                    text=str(val),
-                    color=(255, 255, 255, 100),
-                    font=QtGui.QFont("Sans", 10),
-                )
-                t2 = gl.GLTextItem(
-                    pos=[-10, val, 0],
-                    text=str(val),
-                    color=(255, 255, 255, 100),
-                    font=QtGui.QFont("Sans", 10),
-                )
-
-                for angle, *axis in rotations:
-                    t1.rotate(angle, *axis)
-                    t2.rotate(angle, *axis)
-
-                t1.translate(dx, dy, dz)
-                t2.translate(dx, dy, dz)
-
-                self.view.addItem(t1)
-                self.view.addItem(t2)
-                self.grid_items.append(t1)
-                self.grid_items.append(t2)
-
         self.panel = QtWidgets.QWidget()
         self.panel.setStyleSheet(SLIDERS)
         self.panel.setObjectName("controlPanel")
@@ -323,7 +273,76 @@ class Window(QtWidgets.QMainWindow):
 
         self._rebuild_view(self.current_name)
 
-        self.panel_layout.addWidget(self.info_label)
+        self.grid_half_size = 30.0
+        self.grid_items = []
+        self._build_grid(self.grid_half_size)
+
+    def _build_grid(self, half_size):
+        for item in self.grid_items:
+            self.view.removeItem(item)
+        self.grid_items.clear()
+
+        self.grid_half_size = half_size
+        ideal_spacing = half_size / 4
+        spacing = max(
+            1.0, round(ideal_spacing, -int(np.floor(np.log10(ideal_spacing))))
+        )
+        num_divisions = max(4, int(round(half_size * 2 / spacing)))
+        spacing = half_size * 2 / num_divisions
+
+        grid_faces = [
+            ("XY", [], (0, 0, -half_size)),
+            ("YZ", [(90, 1, 0, 0)], (0, -half_size, 0)),
+            ("XZ", [(90, 0, 1, 0)], (-half_size, 0, 0)),
+            ("YX", [], (0, 0, half_size)),
+            ("ZY", [(90, 1, 0, 0)], (0, half_size, 0)),
+            ("ZX", [(90, 0, 1, 0)], (half_size, 0, 0)),
+        ]
+        tick_positions = np.linspace(-half_size, half_size, num_divisions + 1)
+        tick_values = [round(v, 2) for v in tick_positions]
+
+        self.grid_items = []
+        for i, (_, rotations, (dx, dy, dz)) in enumerate(grid_faces):
+            g = gl.GLGridItem()
+            g.setSize(x=half_size * 2, y=half_size * 2, z=1)
+            g.setSpacing(x=spacing, y=spacing, z=1)
+            for angle, *axis in rotations:
+                g.rotate(angle, *axis)
+            g.translate(dx, dy, dz)
+            self.view.addItem(g)
+            self.grid_items.append(g)
+
+            if i < 3:
+                for val in tick_values:
+                    if abs(val) < 1e-5:
+                        continue
+
+                    offset = spacing * 0.3
+
+                    t1 = gl.GLTextItem(
+                        pos=[val, -offset, 0],
+                        text=str(val),
+                        color=(255, 255, 255, 100),
+                        font=QtGui.QFont("Sans", 10),
+                    )
+                    t2 = gl.GLTextItem(
+                        pos=[-offset, val, 0],
+                        text=str(val),
+                        color=(255, 255, 255, 100),
+                        font=QtGui.QFont("Sans", 10),
+                    )
+
+                    for angle, *axis in rotations:
+                        t1.rotate(angle, *axis)
+                        t2.rotate(angle, *axis)
+
+                    t1.translate(dx, dy, dz)
+                    t2.translate(dx, dy, dz)
+
+                    self.view.addItem(t1)
+                    self.view.addItem(t2)
+                    self.grid_items.append(t1)
+                    self.grid_items.append(t2)
 
     def toggle_animation(self):
         if self.timer.isActive():
@@ -553,6 +572,13 @@ class Window(QtWidgets.QMainWindow):
             if self._initial_full_solves == 0:
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
+
+            new_half = float(np.max(np.abs(sol))) * 3
+            if (
+                abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6)
+                > 0.1
+            ):
+                self._build_grid(new_half)
 
         self._refresh_colours()
 
