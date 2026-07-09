@@ -40,6 +40,8 @@ class Window(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("Strange Attractors")
 
+        self._initial_full_solves = 0
+
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
         layout = QtWidgets.QHBoxLayout(central)
@@ -456,6 +458,11 @@ class Window(QtWidgets.QMainWindow):
             img.setRect(pg.QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min))
             pw.autoRange()
 
+    def _reapply_projections(self):
+        if self.full_solution is not None:
+            x, y, z = self.full_solution.T
+            self._update_projections(x, y, z)
+
     def _update_alpha(self, val):
         self.current_alpha = val / 100.0
         self._refresh_colours()
@@ -504,6 +511,9 @@ class Window(QtWidgets.QMainWindow):
             config = ATTRACTORS[self.current_name]
             values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
             self.lyapunov_requested.emit(config, values)
+            if self._initial_full_solves == 0:
+                QtCore.QTimer.singleShot(0, self._reapply_projections)
+                self._initial_full_solves += 1
 
         self._refresh_colours()
 
