@@ -471,6 +471,32 @@ class Window(QtWidgets.QMainWindow):
         self.panel_layout.addLayout(n_row)
         self.current_n = config.time_defaults["n"]
 
+        for p in config.params:
+            row = QtWidgets.QHBoxLayout()
+            label = QtWidgets.QLabel(p.name)
+            label.setStyleSheet(SLIDER_PARAMS)
+            row.addWidget(label)
+            s = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+            s.setRange(int(p.min_val / p.step), int(p.max_val / p.step))
+            s.setValue(int(p.default / p.step))
+            s.param_step = p.step
+            spin = QtWidgets.QDoubleSpinBox()
+            spin.setKeyboardTracking(False)
+            spin.setRange(p.min_val, p.max_val)
+            spin.setSingleStep(p.step)
+            spin.setValue(p.default)
+            spin.param_step = p.step
+            s.spin = spin
+            spin.slider = s
+            s.valueChanged.connect(partial(self._on_slider_moved, s, spin))
+            s.valueChanged.connect(self._on_slider_tick)
+            s.sliderReleased.connect(self._on_slider_released)
+            spin.valueChanged.connect(partial(self._on_spin_changed, spin, s))
+            row.addWidget(s)
+            row.addWidget(spin)
+            self.slider_rows.append((p, s, row))
+            self.panel_layout.addLayout(row)
+
         self.lyapunov_label.setText("")
         self.lyapunov_container.setVisible(False)
 
