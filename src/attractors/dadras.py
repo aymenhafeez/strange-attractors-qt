@@ -36,8 +36,8 @@ _dadras_attractor = AttractorConfig(
         "dx/dt = y - a·x + b·y·z\ndy/dt = c·y - x·z + z\ndz/dt = d·x·y - e·z"
     ),
     description=(
-        "The Dadras system is known for it's multiwing shape. Unlike the Lorenz \
-                attractor, the Dadras attractor forms a more compact volume, spiraling \
-                around a central core with the wings spreading out around it."
+        "The Dadras system is known for it's multiwing shape. Unlike the Lorenz "
+        "attractor, the Dadras attractor forms a more compact volume, spiraling "
+        "around a central core with the wings spreading out around it."
     ),
 )

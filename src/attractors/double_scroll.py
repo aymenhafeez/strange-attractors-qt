@@ -31,10 +31,10 @@ _double_scroll_attractor = AttractorConfig(
     pan=0,
     equation_text=("dx/dt = a(y - x)\ndy/dt = x(b - z)\ndz/dt = x·y - c z"),
     description=(
-        "Qiu et al. derived this attractor as a variant of the Sprott A system, with \
-                the addition of cubic nonlinear term in order to construct a novel 3D \
-                chaotic circuit method. While the system has the classic two wings \
-                shown by other attractors, what's unique is that the wings intertwine \
-                and loop into two other downward facing lobes, before looping back up."
+        "Qiu et al. derived this attractor as a variant of the Sprott A system, with "
+        "the addition of cubic nonlinear term in order to construct a novel 3D "
+        "chaotic circuit method. While the system has the classic two wings "
+        "shown by other attractors, what's unique is that the wings intertwine "
+        "and loop into two other downward facing lobes, before looping back up."
     ),
 )
