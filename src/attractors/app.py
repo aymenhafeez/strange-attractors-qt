@@ -306,7 +306,7 @@ class Window(QtWidgets.QMainWindow):
             pw.showAxis("right", False)
             pw.setLabel("bottom", lh)
             pw.setLabel("left", lv)
-            pw.getViewBox().setContentsMargins(0, 0, 0, 0)
+            pw.getPlotItem().setContentsMargins(0, 10, 0, 0)
             pw.getViewBox().setAspectLocked(True)
             img = pg.ImageItem()
             cmap = pg.colormap.get("CET-L1")
