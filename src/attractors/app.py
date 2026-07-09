@@ -448,7 +448,7 @@ class Window(QtWidgets.QMainWindow):
     def _update_projections(self, x, y, z):
         for key, (data_h, data_v) in {"XY": (x, y), "XZ": (x, z), "YZ": (y, z)}.items():
             img, pw = self.image_items[key]
-            heatmap, xedges, yedges = np.histogram2d(data_h, data_v, bins=N_BINS)
+            heatmap, xedges, yedges = np.histogram2d(data_h, data_v, bins=N_BINS, density=True)
             img.setImage(np.log1p(heatmap))
 
             x_min, x_max = xedges[0], xedges[-1]
