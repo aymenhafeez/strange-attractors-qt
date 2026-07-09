@@ -234,10 +234,6 @@ class Window(QtWidgets.QMainWindow):
         self.current_name = list(ATTRACTORS.keys())[0]
         self.slider_rows = []
 
-        self.info_label = QtWidgets.QLabel("")
-        self.info_label.setStyleSheet(ATTRACTOR_INFO)
-        self.info_label.setWordWrap(True)
-
         self.projection_container = QtWidgets.QWidget()
         proj_layout = QtWidgets.QVBoxLayout(self.projection_container)
         proj_layout.setContentsMargins(0, 0, 0, 0)
@@ -380,7 +376,6 @@ class Window(QtWidgets.QMainWindow):
         self.timer.stop()
         self.anim_button.setText("Play")
 
-        self.panel_layout.removeWidget(self.info_label)
         self.panel_layout.removeWidget(self.projection_container)
 
         for _, _, row_layout in self.slider_rows:
@@ -401,8 +396,6 @@ class Window(QtWidgets.QMainWindow):
                 break
 
         config = ATTRACTORS[name]
-        self.info_label.setText(config.description)
-        self.info_label.setVisible(bool(config.description))
         self.equation_label.setText(config.equation_text)
         self.equation_label.setVisible(bool(config.equation_text))
         self.view.setCameraPosition(
@@ -483,7 +476,6 @@ class Window(QtWidgets.QMainWindow):
 
         self.panel_layout.addStretch()
         self.panel_layout.addWidget(self.projection_container)
-        self.panel_layout.addWidget(self.info_label)
         self._update_plot()
 
     def on_attractor_change(self, name):
@@ -501,13 +493,16 @@ class Window(QtWidgets.QMainWindow):
 
         formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
         self.status_system.setText(f"<b>SYSTEM</b>: {config.name}")
+        self.status_system.setToolTip(f"{config.description}")
         self.status_params.setText(f"<b>PARAMS</b>: {formatted_params}")
         self.status_ic.setText(f"<b>IC</b>: {config.initial_conditions}")
 
     def _update_projections(self, x, y, z):
         for key, (data_h, data_v) in {"XY": (x, y), "XZ": (x, z), "YZ": (y, z)}.items():
             img, pw = self.image_items[key]
-            heatmap, xedges, yedges = np.histogram2d(data_h, data_v, bins=N_BINS, density=True)
+            heatmap, xedges, yedges = np.histogram2d(
+                data_h, data_v, bins=N_BINS, density=True
+            )
             img.setImage(np.log1p(heatmap))
 
             x_min, x_max = xedges[0], xedges[-1]
