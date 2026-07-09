@@ -464,11 +464,9 @@ class Window(QtWidgets.QMainWindow):
         self.line.setVisible(checked)
         self.scatter.setVisible(not checked)
 
-    def _toggle_grid(self):
-        is_visible = self.show_grid.isChecked()
-
-        for items in self.grid_items:
-            items.setVisible(is_visible)
+    def _toggle_grid(self, checked):
+        for item in self.grid_items:
+            item.setVisible(checked)
 
     def _on_slider_tick(self):
         self._solve_needed = True
