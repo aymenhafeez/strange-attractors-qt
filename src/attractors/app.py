@@ -438,7 +438,7 @@ class Window(QtWidgets.QMainWindow):
         n_label.setStyleSheet("color: white;")
         n_row.addWidget(n_label)
         n_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        n_slider.setRange(5, 2000)
+        n_slider.setRange(1, 500)
         n_slider.setValue(int(config.time_defaults["n"] / STEP))
         n_slider.param_step = STEP
         n_spin = QtWidgets.QSpinBox()
