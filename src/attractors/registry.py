@@ -6,6 +6,8 @@ from .dadras import _dadras_attractor
 from .lorenz84 import _lorenz84_attractor
 
 ATTRACTORS = {
+    "Three-scroll": _three_scroll_attractor,
+    "Double-scroll": _double_scroll_attractor,
     "Lorenz": _lorenz_attractor,
     "Lorenz84": _lorenz84_attractor,
     "Aizawa": _aizawa_attractor,
