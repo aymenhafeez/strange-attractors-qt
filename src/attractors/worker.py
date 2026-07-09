@@ -11,14 +11,14 @@ class SolveWorker(QObject):
         super().__init__()
         self._cancel = False
 
-    @pyqtSlot(object, dict, object)
-    def solve(self, config, values, n):
+    @pyqtSlot(object, dict, object, bool)
+    def solve(self, config, values, n, is_partial):
         self._cancel = False
 
         try:
-            sol = solve_attractor(config, values, n or config.time_defaults["n"])
+            sol = solve_attractor(config, values, n)
             if not self._cancel:
-                self.result_ready.emit(sol, n is not None)
+                self.result_ready.emit(sol, is_partial)
         except Exception:
             if not self._cancel:
                 self.result_ready.emit(None, False)

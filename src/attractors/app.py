@@ -30,10 +30,11 @@ from .worker import LyapunovWorker, SolveWorker
 WINDOW_SIZE = 1100
 N_BINS = 96
 PARTIAL_N = 40000
+STEP = 1000
 
 
 class Window(QtWidgets.QMainWindow):
-    solve_requested = QtCore.pyqtSignal(object, dict, object)
+    solve_requested = QtCore.pyqtSignal(object, dict, object, bool)
     lyapunov_requested = QtCore.pyqtSignal(object, dict)
 
     def __init__(self):
@@ -41,6 +42,8 @@ class Window(QtWidgets.QMainWindow):
         self.setWindowTitle("Strange Attractors")
 
         self._initial_full_solves = 0
+        self.current_n = 100000
+        self.n_slider_row = None
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
@@ -421,6 +424,41 @@ class Window(QtWidgets.QMainWindow):
             self.slider_rows.append((p, s, row))
             self.panel_layout.addLayout(row)
 
+        if self.n_slider_row is not None:
+            while self.n_slider_row.count():
+                item = self.n_slider_row.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.setParent(None)
+                    widget.deleteLater()
+
+        n_row = QtWidgets.QHBoxLayout()
+        self.n_slider_row = n_row
+        n_label = QtWidgets.QLabel("N")
+        n_label.setStyleSheet("color: white;")
+        n_row.addWidget(n_label)
+        n_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        n_slider.setRange(5, 2000)
+        n_slider.setValue(int(config.time_defaults["n"] / STEP))
+        n_slider.param_step = STEP
+        n_spin = QtWidgets.QSpinBox()
+        n_spin.setKeyboardTracking(False)
+        n_spin.setRange(1000, 500000)
+        n_spin.setSingleStep(STEP)
+        n_spin.setValue(config.time_defaults["n"])
+        n_spin.param_step = STEP
+        n_slider.spin = n_spin
+        n_spin.slider = n_slider
+        n_slider.valueChanged.connect(partial(self._on_slider_moved, n_slider, n_spin))
+        n_slider.valueChanged.connect(self._on_slider_tick)
+        n_slider.sliderReleased.connect(self._on_slider_released)
+        n_spin.valueChanged.connect(partial(self._on_spin_changed, n_spin, n_slider))
+        n_spin.valueChanged.connect(self._on_n_changed)
+        n_row.addWidget(n_slider)
+        n_row.addWidget(n_spin)
+        self.panel_layout.addLayout(n_row)
+        self.current_n = config.time_defaults["n"]
+
         self.lyapunov_label.setText("")
         self.lyapunov_container.setVisible(False)
 
@@ -492,8 +530,9 @@ class Window(QtWidgets.QMainWindow):
         self._solve_needed = False
         config = ATTRACTORS[self.current_name]
         values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
-        n = None if full else min(config.time_defaults["n"], PARTIAL_N)
-        self.solve_requested.emit(config, values, n)
+        user_n = self.current_n or config.time_defaults["n"]
+        dispatch_n = user_n if full else min(user_n, PARTIAL_N)
+        self.solve_requested.emit(config, values, dispatch_n, not full)
 
     def _on_solve_result(self, sol, is_partial):
         self._solve_pending = False
@@ -532,6 +571,9 @@ class Window(QtWidgets.QMainWindow):
         self.timer.stop()
         self.anim_button.setText("Play")
         s.setValue(int(val / spin.param_step))
+
+    def _on_n_changed(self, val):
+        self.current_n = val
 
     def _plot_trail(self, n, alpha=1.0):
         colour = np.zeros((n, 4))
