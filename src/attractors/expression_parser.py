@@ -179,3 +179,72 @@ class Parser:
             )
 
         return self.advance()
+
+    def parse_expr(self) -> Node:
+        node = self.parse_term()
+        while self.peek()[0] == "OP" and self.peek()[1] in ("+", "-"):
+            op = self.advance()[1]
+            right = self.parse_term()
+            node = BinOp(op, node, right)
+
+        return node
+
+    def parse_term(self) -> Node:
+        node = self.parse_unary()
+        while self.peek()[0] == "OP" and self.peek()[1] in ("*", "/"):
+            op = self.advance()[1]
+            right = self.parse_unary()
+            node = BinOp(op, node, right)
+
+        return node
+
+    def parse_unary(self) -> Node:
+        if self.peek()[0] == "OP" and self.peek()[1] in ("+", "-"):
+            op = self.advance()[1]
+            operand = self.parse_unary()
+            return UnaryOp(op, operand)
+
+        return self.parse_power()
+
+    def parse_power(self) -> Node:
+        node = self.parse_atom()
+        if self.peek()[0] == "OP" and self.peek()[1] == "**":
+            op = self.advance()[1]
+            right = self.parse_unary()
+            node = BinOp(op, node, right)
+
+        return node
+
+    def parse_atom(self) -> Node:
+        tok_type, tok_val, pos = self.peek()
+
+        if tok_type == "NUMBER":
+            self.advance()
+            return Num(tok_val)
+
+        if tok_type == "LPAREN":
+            self.advance()
+            node = self.parse_expr()
+            self.expect("RPAREN")
+            return node
+
+        if tok_type == "NAME":
+            name = tok_val
+            self.advance()
+
+            if self.peek()[0] == "LPAREN":
+                self.advance()
+                arg = self.parse_expr()
+                self.expect("RPAREN")
+                return Call(name, arg)
+
+            if name == "pi":
+                return Num(math.pi)
+            if name == "e":
+                return Num(math.e)
+
+            return Var(name)
+
+        raise ParseError(
+            f"Unexpected token '{tok_type}' ('{tok_val}') at position {pos}", pos
+        )
