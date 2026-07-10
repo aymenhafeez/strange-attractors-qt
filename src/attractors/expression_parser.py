@@ -1,6 +1,8 @@
-from typing import Union
+import math
 
 from dataclasses import dataclass
+import numba
+import numpy as np
 
 Token = list[tuple[str, str | float, int]]
 
@@ -248,3 +250,146 @@ class Parser:
         raise ParseError(
             f"Unexpected token '{tok_type}' ('{tok_val}') at position {pos}", pos
         )
+
+
+def parse_expression(exp_str: str) -> Node:
+    """
+    Parse a single mathematical expression string into its AST
+    """
+    tokens = tokenise(exp_str)
+    parser = Parser(tokens, exp_str)
+    node = parser.parse_expr()
+
+    # shouldn't have anything left after parsing so ParseError it there is
+    if parser.peek()[0] != "END":
+        pos = parser.peek()[2]
+        raise ParseError(
+            f"Unexpected token '{parser.peek()[1]}' at position {pos}",
+            pos,
+        )
+
+    return node
+
+
+FUNC_MAP = {
+    "sin": "np.sin",
+    "cos": "np.cos",
+    "tan": "np.tan",
+    "exp": "np.exp",
+    "log": "np.log",
+    "sqrt": "np.sqrt",
+    "abs": "np.abs",
+}
+
+
+def _emit(node: Node) -> str:
+    """
+    Translate AST to python code for Numba to JIT compile
+    """
+    if isinstance(node, Num):
+        # use repr for higher precision
+        return repr(node.value)
+
+    if isinstance(node, Var):
+        return node.name
+
+    if isinstance(node, BinOp):
+        left = _emit(node.left)
+        right = _emit(node.right)
+        return f"({left} {node.op} {right})"
+
+    if isinstance(node, UnaryOp):
+        # put - in parentheses to preserve order of operations
+        return f"({_emit(node.operand)})" if node.op == "-" else _emit(node.operand)
+
+    if isinstance(node, Call):
+        func = FUNC_MAP.get(node.func)
+        if func is None:
+            raise ParseError(f"Unknown function '{node.func}'", 0)
+
+        arg = _emit(node.arg)
+        return f"{func}({arg})"
+
+    raise ParseError(f"Unknown node type: {type(node).__name__}", 0)
+
+
+def _collect_names(node: Node) -> set[str]:
+    """
+    Collect all variable names used in the AST
+    """
+    if isinstance(node, Var):
+        return {node.name}
+    if isinstance(node, BinOp):
+        return _collect_names(node.left) | _collect_names(node.right)
+    if isinstance(node, UnaryOp):
+        return _collect_names(node.operand)
+    if isinstance(node, Call):
+        return _collect_names(node.arg)
+
+    return set()
+
+
+def detect_parameters(equations: tuple[str, str, str]) -> list[str]:
+    """
+    Scan equation strings and detect what's a state variable and what's a user
+    defined parameter
+    """
+    all_names: set[str] = set()
+
+    for eq_str in equations:
+        ast = parse_expression(eq_str)
+        all_names |= _collect_names(ast)
+
+    params = sorted(all_names - STATE_VARS - BUILTINS)
+
+    return params
+
+
+_FUNC_TEMPLATE = """\
+def _custom(x_var, t, params):
+    x, y, z = x_var
+    {param_unpack}
+    dx_dt = {eq0}
+    dy_dt = {eq1}
+    dz_dt = {eq2}
+    return np.array([dx_dt, dy_dt, dz_dt])
+"""
+
+
+def compile_system(equations: tuple[str, str, str]) -> tuple[callable, list[str]]:
+    """
+    Parse the ODE's and compile them to Numba JIT'd functions
+    """
+    asts = [parse_expression(eq) for eq in equations]
+    params = detect_parameters(equations)
+
+    emitted = [_emit(ast) for ast in asts]
+
+    if params:
+        param_unpack = ", ".join(params) + " = params"
+    else:
+        param_unpack = "# no parameters"
+
+    source = _FUNC_TEMPLATE.format(
+        param_unpack=param_unpack,
+        eq0=emitted[0],
+        eq1=emitted[1],
+        eq2=emitted[2],
+    )
+
+    namespace = {"np": np, "__builtins__": {}}
+    exec(compile(source, "<custom_atractor>", "exec"), namespace)
+
+    func = namespace["_custom"]
+
+    func = numba.njit(func, nogil=True)
+
+    return func, params
+
+
+def format_equations(equations: tuple[str, str, str]) -> str:
+    """
+    Format equations for display in the viewport
+    """
+    labels = ["dx/dt", "dy/dt", "dz/dt"]
+    return "\n".join(f"{label} = {eq}" for label, eq in zip(labels, equations))
