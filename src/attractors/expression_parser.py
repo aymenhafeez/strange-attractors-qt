@@ -16,6 +16,9 @@ class ParseError(Exception):
 
 
 def tokenise(expr: str) -> Token:
+    """
+    Scan an expression and return a flat list of tokens
+    """
     tokens: Token = []
 
     i = 0
@@ -91,16 +94,22 @@ def tokenise(expr: str) -> Token:
 
 @dataclass
 class Num:
+    """Numeric literal"""
+
     value: float
 
 
 @dataclass
 class Var:
+    """Variable reference"""
+
     name: str
 
 
 @dataclass
 class BinOp:
+    """Binary operation, left op right e.g. 2 + 3"""
+
     op: str
     left: "Node"
     right: "Node"
@@ -108,17 +117,21 @@ class BinOp:
 
 @dataclass
 class UnaryOp:
+    """Unary operation, e.g. -x"""
+
     op: str
     operand: "Node"
 
 
 @dataclass
 class Call:
+    """Function call, e.g. sin(x)"""
+
     func: str
     arg: "Node"
 
 
-Node = Union[Num, Var, BinOp, UnaryOp, Call]
+Node = Num | Var | BinOp | UnaryOp | Call
 
 BUILTINS = frozenset({"sin", "cos", "tan", "exp", "log", "sqrt", "abs", "pi", "e"})
 
