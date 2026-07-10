@@ -136,3 +136,46 @@ Node = Num | Var | BinOp | UnaryOp | Call
 BUILTINS = frozenset({"sin", "cos", "tan", "exp", "log", "sqrt", "abs", "pi", "e"})
 
 STATE_VARS = frozenset({"x", "y", "z", "t"})
+
+
+class Parser:
+    def __init__(self, tokens: Token, expr_str: str):
+        self.tokens = tokens
+        self.pos = 0
+        self.expr_str = expr_str
+
+    def peek(self) -> tuple[str, str | float, int]:
+        """
+        Look at the current token without consuming it and decide which grammar
+        rule to apply
+        """
+        return self.tokens[self.pos]
+
+    def advance(self) -> tuple[str, str | float, int]:
+        """
+        Consume the current token, return it and move to the next one
+        """
+        tok = self.tokens[self.pos]
+        if self.pos < len(self.tokens) - 1:
+            self.pos += 1
+
+        return tok
+
+    def expect(self, tok_type: str, tok_value: str | None = None):
+        """
+        Assert the current token if of the expected type and value, consume it
+        and return it. Raise ParseError if the assertion fails
+        """
+        tok_type_got, tok_val, pos = self.peek()
+        if tok_type_got != tok_type:
+            raise ParseError(
+                f"Expected {tok_type} got {tok_type_got} ('{tok_val}') a position {pos}",
+                pos,
+            )
+        if tok_value is not None and tok_val != tok_value:
+            raise ParseError(
+                f"Expected {tok_value} got '{tok_val}' at position {pos}",
+                pos,
+            )
+
+        return self.advance()
