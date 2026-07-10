@@ -135,7 +135,7 @@ class Call:
 
 Node = Num | Var | BinOp | UnaryOp | Call
 
-BUILTINS = frozenset({"sin", "cos", "tan", "exp", "log", "sqrt", "abs", "pi", "e"})
+BUILTINS = frozenset({"sin", "cos", "tan", "exp", "log", "sqrt", "abs", "pi", "E"})
 
 STATE_VARS = frozenset({"x", "y", "z", "t"})
 
