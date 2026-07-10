@@ -313,34 +313,45 @@ def _emit(node: Node) -> str:
     raise ParseError(f"Unknown node type: {type(node).__name__}", 0)
 
 
-def _collect_names(node: Node) -> set[str]:
+def _collect_names(
+    node: Node, seen: "dict[str, None] | None" = None
+) -> "dict[str, None]":
     """
-    Collect all variable names used in the AST
+    Collect all variable names used in the AST, preserving the insertion
+    order based on the first seen param. Use a shared dict so callers can
+    accumulate across multiple ASTs without having to use a set
     """
-    if isinstance(node, Var):
-        return {node.name}
-    if isinstance(node, BinOp):
-        return _collect_names(node.left) | _collect_names(node.right)
-    if isinstance(node, UnaryOp):
-        return _collect_names(node.operand)
-    if isinstance(node, Call):
-        return _collect_names(node.arg)
+    if seen is None:
+        seen = {}
 
-    return set()
+    if isinstance(node, Var):
+        seen[node.name] = None
+    elif isinstance(node, BinOp):
+        _collect_names(node.left, seen)
+        _collect_names(node.right, seen)
+    elif isinstance(node, UnaryOp):
+        _collect_names(node.operand, seen)
+    elif isinstance(node, Call):
+        _collect_names(node.arg, seen)
+
+    return seen
 
 
 def detect_parameters(equations: tuple[str, str, str]) -> list[str]:
     """
     Scan equation strings and detect what's a state variable and what's a user
-    defined parameter
+    defined parameter. Returns params in first seen order (eq0 -> eq1 -> eq2) so
+    the order is always consistent between unpacking the string and creating the
+    sliders
     """
-    all_names: set[str] = set()
+    seen: dict[str, None] = {}
 
     for eq_str in equations:
-        ast = parse_expression(eq_str)
-        all_names |= _collect_names(ast)
+        node = parse_expression(eq_str)
+        _collect_names(node, seen)
 
-    params = sorted(all_names - STATE_VARS - BUILTINS)
+    # remove state vars and builtins without ever converting to an unordered set
+    params = [name for name in seen if name not in STATE_VARS and name not in BUILTINS]
 
     return params
 
