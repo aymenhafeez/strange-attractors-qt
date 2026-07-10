@@ -44,6 +44,7 @@ class Window(QtWidgets.QMainWindow):
         self._initial_full_solves = 0
         self.current_n = 100000
         self.n_slider_row = None
+        self.grid_items = []
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
@@ -278,6 +279,8 @@ class Window(QtWidgets.QMainWindow):
             self.view.removeItem(item)
         self.grid_items.clear()
 
+        is_visible = self.show_grid.isChecked()
+
         self.grid_half_size = half_size
         ideal_spacing = half_size / 4
         spacing = max(
@@ -297,7 +300,6 @@ class Window(QtWidgets.QMainWindow):
         tick_positions = np.linspace(-half_size, half_size, num_divisions + 1)
         tick_values = [round(v, 0) for v in tick_positions]
 
-        self.grid_items = []
         for i, (_, rotations, (dx, dy, dz)) in enumerate(grid_faces):
             g = gl.GLGridItem()
             g.setSize(x=half_size * 2, y=half_size * 2, z=1)
@@ -307,6 +309,7 @@ class Window(QtWidgets.QMainWindow):
             g.translate(dx, dy, dz)
             self.view.addItem(g)
             self.grid_items.append(g)
+            g.setVisible(is_visible)
 
             if i < 3:
                 for val in tick_values:
@@ -334,6 +337,9 @@ class Window(QtWidgets.QMainWindow):
 
                     t1.translate(dx, dy, dz)
                     t2.translate(dx, dy, dz)
+
+                    t1.setVisible(is_visible)
+                    t2.setVisible(is_visible)
 
                     self.view.addItem(t1)
                     self.view.addItem(t2)
