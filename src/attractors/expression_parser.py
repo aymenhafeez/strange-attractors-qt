@@ -1,3 +1,8 @@
+from typing import Union
+
+from dataclasses import dataclass
+
+
 class ParseError(Exception):
     """
     Exception raised when parser gets invalid syntax at a given position in the input
@@ -80,3 +85,39 @@ def tokenise(expr: str) -> list[tuple[str, str | float, int]]:
     tokens.append(("END", "", len(expr)))
 
     return tokens
+
+
+@dataclass
+class Num:
+    value: float
+
+
+@dataclass
+class Var:
+    name: str
+
+
+@dataclass
+class BinOp:
+    op: str
+    left: "Node"
+    right: "Node"
+
+
+@dataclass
+class UnaryOp:
+    op: str
+    operand: "Node"
+
+
+@dataclass
+class Call:
+    func: str
+    arg: "Node"
+
+
+Node = Union[Num, Var, BinOp, UnaryOp, Call]
+
+BUILTINS = frozenset({"sin", "cos", "tan", "exp", "log", "sqrt", "abs", "pi", "e"})
+
+STATE_VARS = frozenset({"x", "y", "z", "t"})
