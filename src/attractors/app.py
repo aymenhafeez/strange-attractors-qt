@@ -43,7 +43,11 @@ class Window(QtWidgets.QMainWindow):
 
         self._initial_full_solves = 0
         self.current_n = 100000
+        self.current_t_max = 50
         self.n_slider_row = None
+        self.n_slider_wrapper = None
+        self.t_max_slider_row = None
+        self.t_max_slider_wrapper = None
         self.grid_items = []
 
         central = QtWidgets.QWidget()
@@ -416,13 +420,12 @@ class Window(QtWidgets.QMainWindow):
             self.view.opts["center"].z() + config.pan,
         )
 
-        if self.n_slider_row is not None:
-            while self.n_slider_row.count():
-                item = self.n_slider_row.takeAt(0)
-                widget = item.widget()
-                if widget:
-                    widget.setParent(None)
-                    widget.deleteLater()
+        if self.n_slider_wrapper is not None:
+            self.panel_layout.removeWidget(self.n_slider_wrapper)
+            self.n_slider_wrapper.setParent(None)
+            self.n_slider_wrapper.deleteLater()
+            self.n_slider_row = None
+            self.n_slider_wrapper = None
 
         n_row = QtWidgets.QHBoxLayout()
         self.n_slider_row = n_row
@@ -448,8 +451,46 @@ class Window(QtWidgets.QMainWindow):
         n_spin.valueChanged.connect(self._on_n_changed)
         n_row.addWidget(n_slider)
         n_row.addWidget(n_spin)
-        self.panel_layout.addLayout(n_row)
+        self.n_slider_wrapper = QtWidgets.QWidget()
+        self.n_slider_wrapper.setLayout(n_row)
+        self.panel_layout.addWidget(self.n_slider_wrapper)
         self.current_n = config.time_defaults["n"]
+
+        if self.t_max_slider_wrapper is not None:
+            self.panel_layout.removeWidget(self.t_max_slider_wrapper)
+            self.t_max_slider_wrapper.setParent(None)
+            self.t_max_slider_wrapper.deleteLater()
+            self.t_max_slider_row = None
+            self.t_max_slider_wrapper = None
+
+        t_max_row = QtWidgets.QHBoxLayout()
+        self.t_max_slider_row = t_max_row
+        t_max_label = QtWidgets.QLabel("t_max")
+        t_max_label.setStyleSheet("color: white;")
+        t_max_row.addWidget(t_max_label)
+        t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        t_max_slider.setRange(1, 500)
+        t_max_slider.setValue(config.time_defaults["t_max"])
+        t_max_slider.param_step = 1
+        t_max_spin = QtWidgets.QSpinBox()
+        t_max_spin.setKeyboardTracking(False)
+        t_max_spin.setRange(1, 5000)
+        t_max_spin.setSingleStep(1)
+        t_max_spin.setValue(config.time_defaults["t_max"])
+        t_max_spin.param_step = 1
+        t_max_slider.spin = t_max_spin
+        t_max_spin.slider = t_max_slider
+        t_max_slider.valueChanged.connect(partial(self._on_slider_moved, t_max_slider, t_max_spin))
+        t_max_slider.valueChanged.connect(self._on_slider_tick)
+        t_max_slider.sliderReleased.connect(self._on_slider_released)
+        t_max_spin.valueChanged.connect(partial(self._on_spin_changed, t_max_spin, t_max_slider))
+        t_max_spin.valueChanged.connect(self._on_t_max_changed)
+        t_max_row.addWidget(t_max_slider)
+        t_max_row.addWidget(t_max_spin)
+        self.t_max_slider_wrapper = QtWidgets.QWidget()
+        self.t_max_slider_wrapper.setLayout(t_max_row)
+        self.panel_layout.addWidget(self.t_max_slider_wrapper)
+        self.current_t_max = config.time_defaults["t_max"]
 
         for p in config.params:
             row = QtWidgets.QHBoxLayout()
@@ -474,8 +515,10 @@ class Window(QtWidgets.QMainWindow):
             spin.valueChanged.connect(partial(self._on_spin_changed, spin, s))
             row.addWidget(s)
             row.addWidget(spin)
-            self.slider_rows.append((p, s, row))
-            self.panel_layout.addLayout(row)
+            wrapper = QtWidgets.QWidget()
+            wrapper.setLayout(row)
+            self.panel_layout.addWidget(wrapper)
+            self.slider_rows.append((p, s, row, wrapper))
 
         self.lyapunov_label.setText("")
         self.lyapunov_container.setVisible(False)
@@ -488,6 +531,19 @@ class Window(QtWidgets.QMainWindow):
         self.current_name = name
         self.dropdown.setText(name)
         self._rebuild_view(name)
+
+
+    def _get_current_config_and_values(self):
+        if self.current_name == "Custom":
+            config = self._custom_config
+            if config is None:
+                return None, {}
+            values = self.custom_panel.get_param_values()
+        else:
+            config = ATTRACTORS[self.current_name]
+            values = {p.name: p.step * s.value() for p, s, _, _ in self.slider_rows}
+
+        return config, values
 
     def _update_plot(self):
         self.timer.stop()
@@ -548,11 +604,21 @@ class Window(QtWidgets.QMainWindow):
 
         self._solve_pending = True
         self._solve_needed = False
-        config = ATTRACTORS[self.current_name]
-        values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
-        user_n = self.current_n or config.time_defaults["n"]
+
+        config, values = self._get_current_config_and_values()
+        if config is None:
+            self._solve_pending = False
+            return
+
+        if self.current_name == "Custom":
+            user_n = self.custom_panel.get_n()
+            t_max = self.custom_panel.get_t_max()
+        else:
+            user_n = self.current_n or config.time_defaults["n"]
+            t_max = self.current_t_max
+
         dispatch_n = user_n if full else min(user_n, PARTIAL_N)
-        self.solve_requested.emit(config, values, dispatch_n, not full)
+        self.solve_requested.emit(config, values, dispatch_n, not full, t_max)
 
     def _on_solve_result(self, sol, is_partial):
         self._solve_pending = False
@@ -567,14 +633,16 @@ class Window(QtWidgets.QMainWindow):
 
         if not is_partial:
             self._update_projections(x, y, z)
-            config = ATTRACTORS[self.current_name]
-            values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
-            self.lyapunov_requested.emit(config, values)
+            config, values = self._get_current_config_and_values()
+
+            if config is not None:
+                self.lyapunov_requested.emit(config, values)
+
             if self._initial_full_solves == 0:
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
 
-            new_half = float(np.max(np.abs(sol))) * 3
+            new_half = min(float(np.max(np.abs(sol))) * 3, 500.0)
             if (
                 abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6)
                 > 0.1
@@ -601,6 +669,9 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_n_changed(self, val):
         self.current_n = val
+
+    def _on_t_max_changed(self, val):
+        self.current_t_max = val
 
     def _plot_trail(self, n, alpha=1.0):
         colour = np.zeros((n, 4))
@@ -642,8 +713,9 @@ class Window(QtWidgets.QMainWindow):
         dialog.show()
 
     def _open_bifurcation(self):
-        config = ATTRACTORS[self.current_name]
-        values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
+        config, values = self._get_current_config_and_values()
+        if config is None:
+            return
         dialog = BifurcationDialog(config, values, self)
         dialog.show()
 

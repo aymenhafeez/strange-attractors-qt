@@ -66,21 +66,27 @@ class PoincareSectionDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        config = ATTRACTORS[main_window.current_name]
+        config = ATTRACTORS.get(main_window.current_name)
+        if config is not None:
+            default_tmax = config.time_defaults["t_max"] * 10
+            default_n = config.time_defaults["n"] * 10
+        else:
+            default_tmax = 500
+            default_n = 1_000_000
         solve_row = QHBoxLayout()
         solve_row.addWidget(QLabel("t_max:"))
         self.tmax_spin = QDoubleSpinBox()
         self.tmax_spin.setRange(1, 1e6)
         self.tmax_spin.setSingleStep(100)
         self.tmax_spin.setDecimals(0)
-        self.tmax_spin.setValue(config.time_defaults["t_max"] * 10)
+        self.tmax_spin.setValue(default_tmax)
         solve_row.addWidget(self.tmax_spin)
 
         solve_row.addWidget(QLabel("n:"))
         self.n_spin = QSpinBox()
         self.n_spin.setRange(1000, 10_000_000)
         self.n_spin.setSingleStep(100_000)
-        self.n_spin.setValue(config.time_defaults["n"] * 10)
+        self.n_spin.setValue(default_n)
         solve_row.addWidget(self.n_spin)
 
         self.run_btn = QPushButton("▶ Run")
@@ -154,10 +160,7 @@ class PoincareSectionDialog(QDialog):
         self.cancel_btn.setEnabled(True)
         self.progress.setVisible(True)
 
-        config = ATTRACTORS[self._main_window.current_name]
-        values = {
-            p.name: p.step * s.value() for p, s, _ in self._main_window.slider_rows
-        }
+        config, values = self._main_window._get_current_config_and_values()
         worker = _PoincareWorker(
             config,
             values,
