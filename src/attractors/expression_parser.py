@@ -1,11 +1,3 @@
-import math
-import re
-import numba
-import numpy as np
-from dataclasses import dataclass
-from typing import Union
-
-
 class ParseError(Exception):
     """
     Exception raised when parser gets invalid syntax at a given position in the input
@@ -51,5 +43,40 @@ def tokenise(expr: str) -> list[tuple[str, str | float, int]]:
 
             tokens.append(("NUMBER", float(expr[start:i]), start))
             continue
+
+        if ch.isalpha() or ch == "_":
+            start = i
+            while i < len(expr) and (expr[i].isalnum() or expr[i] == "_"):
+                i += 1
+            name = expr[start:i]
+            tokens.append(("NAME", name, start))
+            continue
+
+        if ch in "+-*/":
+            # check for ** power operator
+            if ch == "*" and i + 1 < len(expr) and expr[i + 1] == "*":
+                tokens.append(("OP", "**", i))
+                i += 2
+                continue
+            tokens.append(("OP", ch, i))
+            i += 1
+            continue
+
+        if ch == "(":
+            tokens.append(("LPAREN", ch, i))
+            i += 1
+            continue
+        if ch == ")":
+            tokens.append(("RPAREN", ch, i))
+            i += 1
+            continue
+        if ch == ",":
+            tokens.append(("COMMA", ch, i))
+            i += 1
+            continue
+
+        raise ParseError(f"Unexpected character '{ch}' at position {i}", i)
+
+    tokens.append(("END", "", len(expr)))
 
     return tokens
