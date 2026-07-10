@@ -300,7 +300,10 @@ def _emit(node: Node) -> str:
 
     if isinstance(node, UnaryOp):
         # put - in parentheses to preserve order of operations
-        return f"({_emit(node.operand)})" if node.op == "-" else _emit(node.operand)
+        operand = _emit(node.operand)
+        if node.op == "-":
+            return f"(-{operand})"
+        return operand
 
     if isinstance(node, Call):
         func = FUNC_MAP.get(node.func)
