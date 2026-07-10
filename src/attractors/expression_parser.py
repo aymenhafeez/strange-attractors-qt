@@ -2,6 +2,8 @@ from typing import Union
 
 from dataclasses import dataclass
 
+Token = list[tuple[str, str | float, int]]
+
 
 class ParseError(Exception):
     """
@@ -13,8 +15,8 @@ class ParseError(Exception):
         super().__init__(message)
 
 
-def tokenise(expr: str) -> list[tuple[str, str | float, int]]:
-    tokens: list[tuple[str, str | float, int]] = []
+def tokenise(expr: str) -> Token:
+    tokens: Token = []
 
     i = 0
     while i < len(expr):
