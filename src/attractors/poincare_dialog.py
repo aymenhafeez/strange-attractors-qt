@@ -66,7 +66,8 @@ class PoincareSectionDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        config = ATTRACTORS.get(main_window.current_name)
+        config_results = main_window._get_current_config_and_values()
+        config = config_results[0] if config_results is not None else None
         if config is not None:
             default_tmax = config.time_defaults["t_max"] * 10
             default_n = config.time_defaults["n"] * 10
