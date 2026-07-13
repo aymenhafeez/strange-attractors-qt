@@ -130,12 +130,30 @@ class Call:
     """Function call, e.g. sin(x)"""
 
     func: str
-    arg: "Node"
+    args: "list[Node]"
+    pos: int = 0
 
 
 Node = Num | Var | BinOp | UnaryOp | Call
 
-BUILTINS = frozenset({"sin", "cos", "tan", "exp", "log", "sqrt", "abs", "pi", "euler"})
+BUILTINS = frozenset(
+    {
+        "sin",
+        "cos",
+        "tan",
+        "exp",
+        "log",
+        "sqrt",
+        "abs",
+        "pi",
+        "euler",
+        "atan2",
+        "pow",
+        "min",
+        "max",
+        "hypot",
+    }
+)
 
 STATE_VARS = frozenset({"x", "y", "z", "t"})
 
@@ -235,10 +253,14 @@ class Parser:
             self.advance()
 
             if self.peek()[0] == "LPAREN":
+                call_pos = pos
                 self.advance()
-                arg = self.parse_expr()
+                args = [self.parse_expr()]
+                while self.peek()[0] == "COMMA":
+                    self.advance()
+                    args.append(self.parse_expr())
                 self.expect("RPAREN")
-                return Call(name, arg)
+                return Call(name, args, call_pos)
 
             if name == "pi":
                 return Num(math.pi)
@@ -271,7 +293,7 @@ def parse_expression(exp_str: str) -> Node:
     return node
 
 
-FUNC_MAP = {
+FUNC_MAP_1 = {
     "sin": "np.sin",
     "cos": "np.cos",
     "tan": "np.tan",
@@ -279,6 +301,14 @@ FUNC_MAP = {
     "log": "np.log",
     "sqrt": "np.sqrt",
     "abs": "np.abs",
+}
+
+FUNC_MAP_2 = {
+    "atan2": "np.arctan2",
+    "pow": "np.power",
+    "min": "np.minimum",
+    "max": "np.maximum",
+    "hypot": "np.hypot",
 }
 
 
@@ -306,12 +336,21 @@ def _emit(node: Node) -> str:
         return operand
 
     if isinstance(node, Call):
-        func = FUNC_MAP.get(node.func)
-        if func is None:
-            raise ParseError(f"Unknown function '{node.func}'", 0)
-
-        arg = _emit(node.arg)
-        return f"{func}({arg})"
+        n_args = len(node.args)
+        if n_args == 1:
+            func = FUNC_MAP_1.get(node.func)
+            if func is None:
+                raise ParseError(f"Unknown function '{node.func}'", node.pos)
+            return f"{func}({_emit(node.args[0])})"
+        else:
+            func = FUNC_MAP_2.get(node.func)
+            if func is None:
+                raise ParseError(
+                    f"Unknown function '{node.func}' (or wrong argument count)",
+                    node.pos,
+                )
+            emitted_args = ", ".join(_emit(a) for a in node.args)
+            return f"{func}({emitted_args})"
 
     raise ParseError(f"Unknown node type: {type(node).__name__}", 0)
 
@@ -335,7 +374,8 @@ def _collect_names(
     elif isinstance(node, UnaryOp):
         _collect_names(node.operand, seen)
     elif isinstance(node, Call):
-        _collect_names(node.arg, seen)
+        for arg in node.args:
+            _collect_names(arg, seen)
 
     return seen
 
