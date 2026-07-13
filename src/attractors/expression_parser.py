@@ -380,7 +380,10 @@ def compile_system(equations: tuple[str, str, str]) -> tuple[callable, list[str]
     emitted = [_emit(ast) for ast in asts]
 
     if params:
-        param_unpack = ", ".join(params) + " = params"
+        joined = ", ".join(params)
+        if len(params) == 1:
+            joined += ","
+        param_unpack = joined + " = params"
     else:
         param_unpack = "# no parameters"
 
