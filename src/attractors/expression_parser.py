@@ -375,7 +375,7 @@ def compile_system(equations: tuple[str, str, str]) -> tuple[callable, list[str]
     Parse the ODE's and compile them to Numba JIT'd functions
     """
     asts = [parse_expression(eq) for eq in equations]
-    params = detect_parameters(equations)
+    params = sorted(detect_parameters(equations))
 
     emitted = [_emit(ast) for ast in asts]
 
