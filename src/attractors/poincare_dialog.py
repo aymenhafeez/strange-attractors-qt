@@ -16,7 +16,6 @@ from PyQt6.QtWidgets import (
 )
 from pyqtgraph.exporters import ImageExporter
 
-from .registry import ATTRACTORS
 from .solver import solve_attractor
 
 
