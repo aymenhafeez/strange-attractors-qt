@@ -62,8 +62,6 @@ ATTRACTOR_INFO = "color: #ddd; font-size: 13px"
 
 SLIDER_PARAMS = "color: white; font-weight: bold;"
 
-ALPHA_SLIDER = "color: white; font-weight: bold;"
-
 LINE_MODE_CHECKBOX = "color: white;"
 
 SPLITTER = "QSplitter::handle { width: 1px; background: #555; }"

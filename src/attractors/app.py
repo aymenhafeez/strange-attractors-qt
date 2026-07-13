@@ -10,7 +10,6 @@ from .custom_panel import CustomPanel
 from .poincare_dialog import PoincareSectionDialog
 from .registry import ATTRACTORS
 from .style import (
-    ALPHA_SLIDER,
     CONTAINER,
     DROPDOWN_BOX,
     DROPDOWN_SELECTION,
@@ -162,7 +161,7 @@ class Window(QtWidgets.QMainWindow):
         self.panel.setObjectName("controlPanel")
         self.panel_layout = QtWidgets.QVBoxLayout(self.panel)
         self.panel_layout.setContentsMargins(8, 8, 8, 8)
-        self.panel_layout.setSpacing(15)
+        self.panel_layout.setSpacing(7)
 
         self.base_colour = (1.0, 1.0, 1.0)
         self.current_alpha = 1.0
@@ -208,39 +207,52 @@ class Window(QtWidgets.QMainWindow):
         self.options.addWidget(self.tools_button)
         self.panel_layout.addLayout(self.options)
 
-        # options_row = QtWidgets.QHBoxLayout()
+        options_row = QtWidgets.QHBoxLayout()
 
         self.anim_button.clicked.connect(self.toggle_animation)
-        self.panel_layout.addWidget(self.anim_button)
-
-        alpha_row = QtWidgets.QHBoxLayout()
-        alpha_label = QtWidgets.QLabel("α ")
-        alpha_label.setStyleSheet(ALPHA_SLIDER)
-        alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        alpha_slider.setRange(0, 100)
-        alpha_slider.setValue(100)
-        alpha_slider.valueChanged.connect(self._update_alpha)
-        alpha_row.addWidget(alpha_label)
-        alpha_row.addWidget(alpha_slider)
-        self.panel_layout.addLayout(alpha_row)
+        options_row.addWidget(self.anim_button)
+        options_row.addStretch(1)
 
         self.line_mode = QtWidgets.QCheckBox("Line")
         self.line_mode.setChecked(False)
         self.line_mode.setStyleSheet(LINE_MODE_CHECKBOX)
         self.line_mode.toggled.connect(self._toggle_line_mode)
-        alpha_row.addWidget(self.line_mode)
+        options_row.addWidget(self.line_mode)
 
         self.trail_mode = QtWidgets.QCheckBox("Trail")
         self.trail_mode.setChecked(False)
         self.trail_mode.setStyleSheet(LINE_MODE_CHECKBOX)
         self.trail_mode.toggled.connect(self._refresh_colours)
-        alpha_row.addWidget(self.trail_mode)
+        options_row.addWidget(self.trail_mode)
 
         self.show_grid = QtWidgets.QCheckBox("Grid")
         self.show_grid.setChecked(True)
         self.show_grid.setStyleSheet(LINE_MODE_CHECKBOX)
         self.show_grid.toggled.connect((self._toggle_grid))
-        alpha_row.addWidget(self.show_grid)
+
+        options_row.addWidget(self.show_grid)
+        self.panel_layout.addLayout(options_row)
+
+        alpha_row = QtWidgets.QHBoxLayout()
+        alpha_row.setSpacing(10)
+        alpha_label = QtWidgets.QLabel("α ")
+        alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        alpha_slider.setRange(0, 100)
+        alpha_slider.setValue(100)
+        alpha_spin = QtWidgets.QSpinBox()
+        alpha_spin.setKeyboardTracking(False)
+        alpha_spin.setRange(0, 100)
+        alpha_spin.setValue(100)
+        alpha_slider.valueChanged.connect(self._update_alpha)
+        alpha_spin.valueChanged.connect(self._update_alpha)
+        alpha_slider.valueChanged.connect(alpha_spin.setValue)
+        alpha_spin.valueChanged.connect(alpha_slider.setValue)
+        alpha_row.addWidget(alpha_label)
+        alpha_row.addWidget(alpha_slider)
+        alpha_row.addWidget(alpha_spin)
+        alpha_wrapper = QtWidgets.QWidget()
+        alpha_wrapper.setLayout(alpha_row)
+        self.panel_layout.addWidget(alpha_wrapper)
 
         splitter.addWidget(self.panel)
         splitter.setSizes([int(WINDOW_SIZE * 0.7), int(WINDOW_SIZE * 0.3)])
@@ -613,7 +625,7 @@ class Window(QtWidgets.QMainWindow):
 
     def _update_plot(self):
         self.timer.stop()
-        self.anim_button.setText("Play")
+        self.anim_button.setText("▶ Play")
         self._dispatch_solve(full=True)
 
         config, values = self._get_current_config_and_values()
