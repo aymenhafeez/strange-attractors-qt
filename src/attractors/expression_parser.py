@@ -135,7 +135,7 @@ class Call:
 
 Node = Num | Var | BinOp | UnaryOp | Call
 
-BUILTINS = frozenset({"sin", "cos", "tan", "exp", "log", "sqrt", "abs", "pi", "E"})
+BUILTINS = frozenset({"sin", "cos", "tan", "exp", "log", "sqrt", "abs", "pi", "euler"})
 
 STATE_VARS = frozenset({"x", "y", "z", "t"})
 
@@ -242,7 +242,7 @@ class Parser:
 
             if name == "pi":
                 return Num(math.pi)
-            if name == "e":
+            if name == "euler":
                 return Num(math.e)
 
             return Var(name)
