@@ -59,7 +59,7 @@ class Window(QtWidgets.QMainWindow):
         self.anim_step = 200
         self.full_solution = None
         self.timer = QtCore.QTimer()
-        self.anim_button = QtWidgets.QPushButton("Play")
+        self.anim_button = QtWidgets.QPushButton("▶ Play")
         self.timer.timeout.connect(self._animate_frame)
 
         self._solve_pending = False
@@ -353,11 +353,11 @@ class Window(QtWidgets.QMainWindow):
     def toggle_animation(self):
         if self.timer.isActive():
             self.timer.stop()
-            self.anim_button.setText("Play")
+            self.anim_button.setText("▶ Play")
         else:
             self.anim_frame = 0
             self.timer.start(16)
-            self.anim_button.setText("Pause")
+            self.anim_button.setText("■ Stop")
 
     def _animate_frame(self):
         sol = self.full_solution
@@ -380,11 +380,11 @@ class Window(QtWidgets.QMainWindow):
 
         if frame >= len(sol):
             self.timer.stop()
-            self.anim_button.setText("Play")
+            self.anim_button.setText("▶ Play")
 
     def _rebuild_view(self, name):
         self.timer.stop()
-        self.anim_button.setText("Play")
+        self.anim_button.setText("▶ Play")
 
         self.panel_layout.removeWidget(self.projection_container)
 
@@ -659,12 +659,12 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_slider_moved(self, s, spin, val):
         self.timer.stop()
-        self.anim_button.setText("Play")
+        self.anim_button.setText("▶ Play")
         spin.setValue(val * s.param_step)
 
     def _on_spin_changed(self, spin, s, val):
         self.timer.stop()
-        self.anim_button.setText("Play")
+        self.anim_button.setText("▶ Play")
         s.setValue(int(val / spin.param_step))
 
     def _on_n_changed(self, val):
