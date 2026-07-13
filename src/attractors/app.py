@@ -6,11 +6,11 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .bifurcation_dialog import BifurcationDialog
+from .custom_panel import CustomPanel
 from .poincare_dialog import PoincareSectionDialog
 from .registry import ATTRACTORS
 from .style import (
     ALPHA_SLIDER,
-    ATTRACTOR_INFO,
     CONTAINER,
     DROPDOWN_BOX,
     DROPDOWN_SELECTION,
@@ -34,7 +34,7 @@ STEP = 1000
 
 
 class Window(QtWidgets.QMainWindow):
-    solve_requested = QtCore.pyqtSignal(object, dict, object, bool)
+    solve_requested = QtCore.pyqtSignal(object, dict, object, bool, object)
     lyapunov_requested = QtCore.pyqtSignal(object, dict)
 
     def __init__(self):
@@ -177,8 +177,22 @@ class Window(QtWidgets.QMainWindow):
         self.view.addItem(self.scatter)
         self.view.addItem(self.line)
 
+        self.options = QtWidgets.QHBoxLayout()
+
         self.dropdown = QtWidgets.QPushButton(list(ATTRACTORS.keys())[0])
         self.dropdown.setStyleSheet(DROPDOWN_BOX)
+
+        menu = QtWidgets.QMenu(self.dropdown)
+        menu.setStyleSheet(DROPDOWN_SELECTION)
+
+        for name in ATTRACTORS:
+            action = menu.addAction(name)
+            assert action is not None
+            action.triggered.connect(partial(self.on_attractor_change, name))
+        custom_action = menu.addAction("Custom")
+        assert custom_action is not None
+        custom_action.triggered.connect(partial(self.on_attractor_change, "Custom"))
+        self.dropdown.setMenu(menu)
 
         self.tools_button = QtWidgets.QPushButton("Tools")
         self.tools_button.setStyleSheet(DROPDOWN_BOX)
@@ -189,17 +203,12 @@ class Window(QtWidgets.QMainWindow):
         poincare_action = tools_menu.addAction("Poincaré section")
         poincare_action.triggered.connect(self._open_poincare)
         self.tools_button.setMenu(tools_menu)
-        self.panel_layout.addWidget(self.tools_button)
 
-        menu = QtWidgets.QMenu(self.dropdown)
-        menu.setStyleSheet(DROPDOWN_SELECTION)
+        self.options.addWidget(self.dropdown)
+        self.options.addWidget(self.tools_button)
+        self.panel_layout.addLayout(self.options)
 
-        for name in ATTRACTORS:
-            action = menu.addAction(name)
-            assert action is not None
-            action.triggered.connect(partial(self.on_attractor_change, name))
-        self.dropdown.setMenu(menu)
-        self.panel_layout.addWidget(self.dropdown)
+        # options_row = QtWidgets.QHBoxLayout()
 
         self.anim_button.clicked.connect(self.toggle_animation)
         self.panel_layout.addWidget(self.anim_button)
@@ -238,6 +247,18 @@ class Window(QtWidgets.QMainWindow):
 
         self.current_name = list(ATTRACTORS.keys())[0]
         self.slider_rows = []
+
+        self._custom_config = None
+        self.custom_panel = CustomPanel(self)
+        self.custom_panel.compile_requested.connect(self._on_custom_compile)
+        self.custom_panel.setVisible(False)
+
+        container_layout.addWidget(
+            self.custom_panel,
+            0,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.AlignmentFlag.AlignLeft,
+        )
 
         self.projection_container = QtWidgets.QWidget()
         proj_layout = QtWidgets.QVBoxLayout(self.projection_container)
@@ -383,19 +404,50 @@ class Window(QtWidgets.QMainWindow):
             self.anim_button.setText("▶ Play")
 
     def _rebuild_view(self, name):
+        if name == "Custom":
+            self._rebuild_view_custom()
+            return
+        self._rebuild_view_from_config(ATTRACTORS[name])
+
+    def _rebuild_view_custom(self):
         self.timer.stop()
         self.anim_button.setText("▶ Play")
 
+        self._hide_standard_controls()
+        self.custom_panel.setVisible(True)
+
+        if self._custom_config is not None:
+            self._apply_config_to_view(self._custom_config)
+
+    def _hide_standard_controls(self):
+        for _, _, _, wrapper in self.slider_rows:
+            wrapper.setVisible(False)
+        if self.n_slider_wrapper is not None:
+            self.n_slider_wrapper.setVisible(False)
+        if self.t_max_slider_wrapper is not None:
+            self.t_max_slider_wrapper.setVisible(False)
+
+    def _show_standard_controls(self):
+        for _, _, _, wrapper in self.slider_rows:
+            wrapper.setVisible(True)
+        if self.n_slider_wrapper is not None:
+            self.n_slider_wrapper.setVisible(True)
+        if self.t_max_slider_wrapper is not None:
+            self.t_max_slider_wrapper.setVisible(True)
+
+    def _rebuild_view_from_config(self, config):
+        self.timer.stop()
+        self.anim_button.setText("▶ Play")
+
+        self.custom_panel.setVisible(False)
+        self._show_standard_controls()
+
         self.panel_layout.removeWidget(self.projection_container)
 
-        for _, _, row_layout in self.slider_rows:
-            while row_layout.count():
-                item = row_layout.takeAt(0)
-                widget = item.widget()
-                if widget:
-                    widget.setParent(None)
-                    widget.deleteLater()
-            self.panel_layout.removeItem(row_layout)
+        for *_, wrapper in self.slider_rows:
+            self.panel_layout.removeWidget(wrapper)
+            wrapper.setParent(None)
+            wrapper.deleteLater()
         self.slider_rows.clear()
 
         while self.panel_layout.count():
@@ -405,7 +457,9 @@ class Window(QtWidgets.QMainWindow):
             else:
                 break
 
-        config = ATTRACTORS[name]
+        self._apply_config_to_view(config)
+
+    def _apply_config_to_view(self, config):
         self.equation_label.setText(config.equation_text)
         self.equation_label.setVisible(bool(config.equation_text))
         self.view.setCameraPosition(
@@ -480,10 +534,14 @@ class Window(QtWidgets.QMainWindow):
         t_max_spin.param_step = 1
         t_max_slider.spin = t_max_spin
         t_max_spin.slider = t_max_slider
-        t_max_slider.valueChanged.connect(partial(self._on_slider_moved, t_max_slider, t_max_spin))
+        t_max_slider.valueChanged.connect(
+            partial(self._on_slider_moved, t_max_slider, t_max_spin)
+        )
         t_max_slider.valueChanged.connect(self._on_slider_tick)
         t_max_slider.sliderReleased.connect(self._on_slider_released)
-        t_max_spin.valueChanged.connect(partial(self._on_spin_changed, t_max_spin, t_max_slider))
+        t_max_spin.valueChanged.connect(
+            partial(self._on_spin_changed, t_max_spin, t_max_slider)
+        )
         t_max_spin.valueChanged.connect(self._on_t_max_changed)
         t_max_row.addWidget(t_max_slider)
         t_max_row.addWidget(t_max_spin)
@@ -532,17 +590,25 @@ class Window(QtWidgets.QMainWindow):
         self.dropdown.setText(name)
         self._rebuild_view(name)
 
+    def _on_custom_compile(self, config):
+        self._custom_config = config
+
+        for *_, wrapper in self.slider_rows:
+            self.panel_layout.removeWidget(wrapper)
+            wrapper.setParent(None)
+            wrapper.deleteLater()
+        self.slider_rows.clear()
+
+        self._apply_config_to_view(config)
 
     def _get_current_config_and_values(self):
         if self.current_name == "Custom":
             config = self._custom_config
-            if config is None:
-                return None, {}
-            values = self.custom_panel.get_param_values()
         else:
             config = ATTRACTORS[self.current_name]
-            values = {p.name: p.step * s.value() for p, s, _, _ in self.slider_rows}
-
+        if config is None:
+            return None, {}
+        values = {p.name: p.step * s.value() for p, s, _, _ in self.slider_rows}
         return config, values
 
     def _update_plot(self):
@@ -550,8 +616,9 @@ class Window(QtWidgets.QMainWindow):
         self.anim_button.setText("Play")
         self._dispatch_solve(full=True)
 
-        config = ATTRACTORS[self.current_name]
-        values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
+        config, values = self._get_current_config_and_values()
+        if config is None:
+            return
 
         formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
         self.status_system.setText(f"<b>SYSTEM</b>: {config.name}")
@@ -610,12 +677,8 @@ class Window(QtWidgets.QMainWindow):
             self._solve_pending = False
             return
 
-        if self.current_name == "Custom":
-            user_n = self.custom_panel.get_n()
-            t_max = self.custom_panel.get_t_max()
-        else:
-            user_n = self.current_n or config.time_defaults["n"]
-            t_max = self.current_t_max
+        user_n = self.current_n or config.time_defaults["n"]
+        t_max = self.current_t_max
 
         dispatch_n = user_n if full else min(user_n, PARTIAL_N)
         self.solve_requested.emit(config, values, dispatch_n, not full, t_max)

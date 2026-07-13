@@ -71,3 +71,52 @@ SPLITTER = "QSplitter::handle { width: 1px; background: #555; }"
 CONTAINER = "border: 1px solid #aaa;"
 
 LYAPUNOV_PLOT = "background-color: rgba(0, 0, 0, 0); border: 0px"
+
+CUSTOM_PANEL = """
+    QWidget {
+        background-color: rgba(0, 0, 0, 240);
+        color: white;
+        border: 1px solid #666;
+        border-radius: 0px;
+    }
+    QTextEdit {
+        background-color: white;
+        color: #333;
+        border: 1px solid #aaa;
+    }
+    QDoubleSpinBox {
+        background-color: white;
+        color: #333;
+        border: 1px solid #aaa;
+    }
+    QPushButton {
+        background-color: #ddd;
+        color: black;
+        border: 1px solid #aaa;
+        padding: 4px 12px;
+    }
+    QPushButton:hover {
+        background-color: #eee;
+    }
+    QPushButton:pressed {
+        background-color: #ccc;
+    }
+"""
+
+CUSTOM_TOGGLE = """
+    QPushButton {
+        background-color: rgba(0, 0, 0, 180);
+        color: white;
+        border: 1px solid #666;
+        border-radius: 0px;
+        padding: 3px 8px;
+        font-size: 12px;
+        text-align: left;
+    }
+    QPushButton:hover {
+        color: white;
+        background-color: rgba(40, 40, 40, 220);
+    }
+"""
+
+NO_BORDER = "border: none;"
