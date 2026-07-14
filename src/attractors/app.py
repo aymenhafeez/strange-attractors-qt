@@ -265,6 +265,7 @@ class Window(QtWidgets.QMainWindow):
         self.trajectory_panel.trajectories_changed.connect(
             self._on_trajectories_changed
         )
+        self.trajectory_panel.styles_changed.connect(self._on_trajectory_styles_changed)
         self.trajectory_panel.raise_()
 
         self.container.installEventFilter(self)
@@ -448,17 +449,12 @@ class Window(QtWidgets.QMainWindow):
         all_segments = []
         for i, sol in enumerate(self._solutions):
             segment = sol[:frame]
-            traj = self._trajectories[i] if i < len(self._trajectories) else None
-            if traj is not None:
-                qc = traj["colour"]
-                base_colour = (qc.redF(), qc.greenF(), qc.blueF())
-            else:
-                base_colour = self.base_colour
+            base_colour, alpha = self._get_traj_colour_alpha(i)
 
             if self.trail_mode.isChecked():
-                c = self._plot_trail(len(segment), self.current_alpha, base_colour)
+                c = self._plot_trail(len(segment), alpha, base_colour)
             else:
-                c = np.full((len(segment), 4), (*base_colour, self.current_alpha))
+                c = np.full((len(segment), 4), (*base_colour, alpha))
 
             if i < len(self._scatters):
                 self._scatters[i].setData(pos=segment, color=c)
@@ -771,17 +767,12 @@ class Window(QtWidgets.QMainWindow):
         line_mode = self.line_mode.isChecked()
 
         for i, sol in enumerate(solutions):
-            traj = self._trajectories[i] if i < len(self._trajectories) else None
-            if traj is not None:
-                qc = traj["colour"]
-                base_colour = (qc.redF(), qc.greenF(), qc.blueF())
-            else:
-                base_colour = self.base_colour
+            base_colour, alpha = self._get_traj_colour_alpha(i)
 
             if self.trail_mode.isChecked():
-                c = self._plot_trail(len(sol), self.current_alpha, base_colour)
+                c = self._plot_trail(len(sol), alpha, base_colour)
             else:
-                c = np.full((len(sol), 4), (*base_colour, self.current_alpha))
+                c = np.full((len(sol), 4), (*base_colour, alpha))
 
             self._scatters[i].setData(pos=sol, color=c)
             self._scatters[i].setVisible(not line_mode)
@@ -832,6 +823,17 @@ class Window(QtWidgets.QMainWindow):
     def _on_t_max_changed(self, val):
         self.current_t_max = val
 
+    def _get_traj_colour_alpha(self, i: int):
+        traj = self._trajectories[i] if i < len(self._trajectories) else None
+        if traj is not None:
+            qc = traj["colour"]
+            base_colour = (qc.redF(), qc.greenF(), qc.blueF())
+            alpha = self.current_alpha * traj.get("alpha", 1.0)
+        else:
+            base_colour = self.base_colour
+            alpha = self.current_alpha
+        return base_colour, alpha
+
     def _plot_trail(self, n, alpha=1.0, base_colour=None):
         if base_colour is None:
             base_colour = self.base_colour
@@ -850,17 +852,12 @@ class Window(QtWidgets.QMainWindow):
         for i, sol in enumerate(self._solutions):
             if i >= len(self._scatters):
                 break
-            traj = self._trajectories[i] if i < len(self._trajectories) else None
-            if traj is not None:
-                qc = traj["colour"]
-                base_colour = (qc.redF(), qc.greenF(), qc.blueF())
-            else:
-                base_colour = self.base_colour
+            base_colour, alpha = self._get_traj_colour_alpha(i)
 
             if self.trail_mode.isChecked():
-                c = self._plot_trail(len(sol), self.current_alpha, base_colour)
+                c = self._plot_trail(len(sol), alpha, base_colour)
             else:
-                c = np.full((len(sol), 4), (*base_colour, self.current_alpha))
+                c = np.full((len(sol), 4), (*base_colour, alpha))
 
             self._scatters[i].setData(color=c)
             self._scatters[i].setVisible(not line_mode)
@@ -872,6 +869,10 @@ class Window(QtWidgets.QMainWindow):
         self._solve_needed = True
         self._full_needed = True
         self._dispatch_solve(full=True)
+
+    def _on_trajectory_styles_changed(self, trajectories: list[dict]):
+        self._trajectories = trajectories
+        self._refresh_colours()
 
     def _on_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
         self.lyapunov_label.setText(

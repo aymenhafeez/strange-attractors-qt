@@ -24,9 +24,14 @@ class _TrajectoryRow(QtWidgets.QWidget):
         self, ic: list[float], colour: QtGui.QColor, removeable: bool, parent=None
     ):
         super().__init__(parent)
-        layout = QtWidgets.QHBoxLayout(self)
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.setContentsMargins(0, 4, 0, 4)
+        outer.setSpacing(8)
+
+        layout = QtWidgets.QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
+        outer.addLayout(layout)
 
         self._colour = colour
         self.colour_btn = QtWidgets.QPushButton()
@@ -57,6 +62,22 @@ class _TrajectoryRow(QtWidgets.QWidget):
         else:
             layout.addSpacing(28)
 
+        alpha_row = QtWidgets.QHBoxLayout()
+        alpha_row.setContentsMargins(0, 0, 0, 0)
+        alpha_row.setSpacing(6)
+        alpha_row.addSpacing(30)
+        alpha_label = QtWidgets.QLabel("α")
+        alpha_label.setStyleSheet(NO_BORDER)
+        alpha_row.addWidget(alpha_label)
+        self.alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.alpha_slider.setRange(0, 100)
+        self.alpha_slider.setValue(100)
+        self.alpha_slider.setFixedHeight(18)
+        self.alpha_slider.valueChanged.connect(self.style_changed)
+        alpha_row.addWidget(self.alpha_slider)
+        alpha_row.addSpacing(28)
+        outer.addLayout(alpha_row)
+
     def _apply_colour_btn(self):
         self.colour_btn.setStyleSheet(
             f"background-color: {self._colour.name()}; border: 1px solid #555;"
@@ -67,13 +88,16 @@ class _TrajectoryRow(QtWidgets.QWidget):
         if colour.isValid():
             self._colour = colour
             self._apply_colour_btn()
-            self.changed.emit()
+            self.style_changed.emit()
 
     def get_ic(self) -> list[float]:
         return [s.value() for s in self.spins]
 
     def get_colour(self) -> QtGui.QColor:
         return self._colour
+
+    def get_alpha(self) -> float:
+        return self.alpha_slider.value() / 100.0
 
     def set_ic(self, ic: list[float]):
         for spin, val in zip(self.spins, ic):
@@ -84,6 +108,7 @@ class _TrajectoryRow(QtWidgets.QWidget):
 
 class TrajectoryPanel(QtWidgets.QWidget):
     trajectories_changed = QtCore.pyqtSignal(list)
+    styles_changed = QtCore.pyqtSignal(list)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -128,7 +153,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         rows_container_layout.addLayout(header)
 
         self._rows_layout = QtWidgets.QVBoxLayout()
-        self._rows_layout.setSpacing(12)
+        self._rows_layout.setSpacing(16)
         rows_container_layout.addLayout(self._rows_layout)
 
         self._rows: list[_TrajectoryRow] = []
@@ -173,6 +198,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         colour = DEFAULT_PALETTE[len(self._rows) % len(DEFAULT_PALETTE)]
         row = _TrajectoryRow(ic, colour, removeable)
         row.changed.connect(self._emit)
+        row.style_changed.connect(self._emit_styles)
         row.remove_requested.connect(self._remove_row)
         self._rows_layout.addWidget(row)
         self._rows.append(row)
@@ -198,7 +224,13 @@ class TrajectoryPanel(QtWidgets.QWidget):
     def _emit(self):
         self.trajectories_changed.emit(self.get_trajectories())
 
+    def _emit_styles(self):
+        self.styles_changed.emit(self.get_trajectories())
+
     def get_trajectories(self) -> list[dict]:
         if not self._enable_check.isChecked():
             return []
-        return [{"ic": r.get_ic(), "colour": r.get_colour()} for r in self._rows]
+        return [
+            {"ic": r.get_ic(), "colour": r.get_colour(), "alpha": r.get_alpha()}
+            for r in self._rows
+        ]
