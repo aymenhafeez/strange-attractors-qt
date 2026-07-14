@@ -6,6 +6,7 @@ from attractors.expression_parser import (
     BinOp,
     Call,
     _emit,
+    compile_system,
     Num,
     ParseError,
     parse_expression,
@@ -167,3 +168,29 @@ class TestMultiArgFunctions:
             node = parse_expression("foobar(x)")
             _emit(node)
         assert exc_info.value.pos != 0
+
+
+class TestDetectParameters:
+    def test_excludes_state_vars(self):
+        params = detect_parameters(("x + y", "z - t", "x * z"))
+        assert set(params) == set()
+
+    def test_excludes_builtins(self):
+        params = detect_parameters(("sin(x)", "cos(y)", "exp(z)"))
+        assert set(params) == set()
+
+    def test_detects_free_params(self):
+        params = detect_parameters(("a * (y - x)", "x * (b - z) - y", "x * y - c * z"))
+        assert set(params) == {"a", "b", "c"}
+
+    def test_first_seen_order(self):
+        params = detect_parameters(("a * x", "b * y", "c * z"))
+        assert params == ["a", "b", "c"]
+
+    def test_empty_params(self):
+        params = detect_parameters(("y", "-x", "0.0 * z"))
+        assert params == []
+
+    def test_multiarg_function_args_not_detected_as_params(self):
+        params = detect_parameters(("atan2(y, x)", "z", "0.0 * z"))
+        assert set(params) == set()
