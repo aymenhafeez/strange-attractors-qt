@@ -5,6 +5,7 @@ import numpy as np
 from attractors.expression_parser import (
     BinOp,
     Call,
+    _emit,
     Num,
     ParseError,
     parse_expression,
@@ -133,7 +134,36 @@ class TestSingleArgFunctions:
         ],
     )
     def test_emits(self, fn, np_fn):
-        from attractors.expression_parser import _emit
-
         node = parse_expression(f"{fn}(x)")
         assert _emit(node) == f"{np_fn}(x)"
+
+
+class TestMultiArgFunctions:
+    @pytest.mark.parametrize(
+        "expr,expected_np",
+        [
+            ("atan2(y, x)", "np.arctan2(y, x)"),
+            ("pow(x, 2.0)", f"np.power(x, {repr(2.0)})"),
+            ("min(a, b)", "np.minimum(a, b)"),
+            ("max(a, b)", "np.maximum(a, b)"),
+            ("hypot(x, y)", "np.hypot(x, y)"),
+        ],
+    )
+    def test_emits(self, expr, expected_np):
+        node = parse_expression(expr)
+        assert isinstance(node, Call)
+        assert len(node.args) == 2
+        assert _emit(node) == expected_np
+
+    def test_unknown_function_raises_with_position(self):
+        with pytest.raises(ParseError) as exc_info:
+            node = parse_expression("atan(x, y)")
+            _emit(node)
+        assert exc_info.value.pos != 0
+
+    def test_unknown_single_arg_function_raises_with_position(self):
+        with pytest.raises(ParseError) as exc_info:
+            node = parse_expression("foobar(x)")
+            node = parse_expression("foobar(x)")
+            _emit(node)
+        assert exc_info.value.pos != 0
