@@ -26,11 +26,11 @@ class _TrajectoryRow(QtWidgets.QWidget):
         super().__init__(parent)
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(6)
 
         self._colour = colour
         self.colour_btn = QtWidgets.QPushButton()
-        self.colour_btn.setFixedSize(18, 18)
+        self.colour_btn.setFixedSize(24, 24)
         self._apply_colour_btn()
         self.colour_btn.clicked.connect(self._pick_colour)
         layout.addWidget(self.colour_btn)
@@ -42,19 +42,20 @@ class _TrajectoryRow(QtWidgets.QWidget):
             spin.setDecimals(3)
             spin.setSingleStep(0.1)
             spin.setValue(val)
-            spin.setFixedWidth(70)
+            spin.setFixedWidth(84)
+            spin.setFixedHeight(28)
             spin.valueChanged.connect(self.changed)
             layout.addWidget(spin)
             self.spins.append(spin)
 
         if removeable:
             remove_btn = QtWidgets.QPushButton("×")
-            remove_btn.setFixedSize(18, 18)
-            remove_btn.setStyleSheet("color: #888; border: none;")
+            remove_btn.setFixedSize(24, 24)
+            remove_btn.setStyleSheet("color: #888; border: none; font-size: 15px;")
             remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
             layout.addWidget(remove_btn)
         else:
-            layout.addSpacing(22)
+            layout.addSpacing(28)
 
     def _apply_colour_btn(self):
         self.colour_btn.setStyleSheet(
@@ -98,8 +99,8 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self._content = QtWidgets.QWidget()
         self._content.setStyleSheet(CUSTOM_PANEL)
         content_layout = QtWidgets.QVBoxLayout(self._content)
-        content_layout.setContentsMargins(6, 6, 6, 4)
-        content_layout.setSpacing(4)
+        content_layout.setContentsMargins(8, 8, 8, 8)
+        content_layout.setSpacing(8)
 
         enable_row = QtWidgets.QHBoxLayout()
         self._enable_check = QtWidgets.QCheckBox("Enable multi-trajectory")
@@ -113,19 +114,21 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self._rows_container.setEnabled(False)
         rows_container_layout = QtWidgets.QVBoxLayout(self._rows_container)
         rows_container_layout.setContentsMargins(0, 0, 0, 0)
-        rows_container_layout.setSpacing(4)
+        rows_container_layout.setSpacing(10)
 
         header = QtWidgets.QHBoxLayout()
-        header.addSpacing(22)
+        header.setSpacing(6)
+        header.addSpacing(28)
         for axis in ("x₀", "y₀", "z₀"):
             lbl = QtWidgets.QLabel(axis)
             lbl.setStyleSheet(NO_BORDER)
-            lbl.setFixedWidth(70)
+            lbl.setFixedWidth(84)
+            lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             header.addWidget(lbl)
         rows_container_layout.addLayout(header)
 
         self._rows_layout = QtWidgets.QVBoxLayout()
-        self._rows_layout.setSpacing(2)
+        self._rows_layout.setSpacing(12)
         rows_container_layout.addLayout(self._rows_layout)
 
         self._rows: list[_TrajectoryRow] = []
@@ -133,6 +136,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         content_layout.addWidget(self._rows_container)
 
         self._add_btn = QtWidgets.QPushButton("+ Add")
+        self._add_btn.setFixedHeight(30)
         self._add_btn.setEnabled(False)
         self._add_btn.clicked.connect(lambda: self._add_row())
         content_layout.addWidget(self._add_btn)
@@ -172,13 +176,24 @@ class TrajectoryPanel(QtWidgets.QWidget):
         row.remove_requested.connect(self._remove_row)
         self._rows_layout.addWidget(row)
         self._rows.append(row)
+        self._resize_to_content()
         self._emit()
 
     def _remove_row(self, row: _TrajectoryRow):
         self._rows_layout.removeWidget(row)
         self._rows.remove(row)
+        row.hide()
+        row.setParent(None)
         row.deleteLater()
+        self._resize_to_content()
         self._emit()
+
+    def _resize_to_content(self):
+        QtCore.QTimer.singleShot(0, self._apply_resize)
+
+    def _apply_resize(self):
+        self._content.adjustSize()
+        self.adjustSize()
 
     def _emit(self):
         self.trajectories_changed.emit(self.get_trajectories())
