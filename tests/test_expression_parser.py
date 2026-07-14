@@ -7,6 +7,7 @@ from attractors.expression_parser import (
     Call,
     _emit,
     compile_system,
+    detect_parameters,
     Num,
     ParseError,
     parse_expression,
@@ -194,3 +195,55 @@ class TestDetectParameters:
     def test_multiarg_function_args_not_detected_as_params(self):
         params = detect_parameters(("atan2(y, x)", "z", "0.0 * z"))
         assert set(params) == set()
+
+
+class TestCompileSystem:
+    def test_returns_callable_and_param_list(self):
+        func, params = compile_system(
+            ("a * (y - x)", "x * (b - z) - y", "x * y - c * z")
+        )
+        assert callable(func)
+        # alphabetical
+        assert params == ["a", "b", "c"]
+
+    def test_params_are_alphabetically_sorted(self):
+        _, params = compile_system(("c * x", "a * y", "b * z"))
+        assert params == ["a", "b", "c"]
+
+    def test_zero_param_system_callable(self):
+        func, params = compile_system(("y", "-x", "-z"))
+        assert params == []
+        result = func(np.array([1.0, 0.0, 0.5]), 0.0, np.array([], dtype=np.float64))
+        assert result[0] == pytest.approx(0.0)
+        assert result[1] == pytest.approx(-1.0)
+        assert result[2] == pytest.approx(-0.5)
+
+    def test_single_param_system_callable(self):
+        func, params = compile_system(("a * x", "y", "z"))
+        assert params == ["a"]
+        result = func(np.array([2.0, 1.0, 1.0]), 0.0, np.array([3.0]))
+        assert result[0] == pytest.approx(6.0)
+
+    def test_lorenz_spot_check(self):
+        # Lorenz: dx = s(y-x), dy = x(r-z)-y, dz = xy - b*z
+        # at (1,1,1) with s=10, r=28, b=8/3:
+        # dx = 10*(1-1) = 0, dy = 1*(28-1)-1 = 26, dz = 1 - 8/3 ≈ -1.6667
+        func, _ = compile_system(
+            (
+                "s * (y - x)",
+                "x * (r - z) - y",
+                "x * y - b * z",
+            )
+        )
+        state = np.array([1.0, 1.0, 1.0])
+        # alphabetical
+        params = np.array([8 / 3, 28.0, 10.0])
+        result = func(state, 0.0, params)
+        assert result[0] == pytest.approx(0.0)
+        assert result[1] == pytest.approx(26.0)
+        assert result[2] == pytest.approx(1.0 - 8 / 3)
+
+    def test_parse_error_surfaces(self):
+        with pytest.raises(ParseError):
+            # unclosed paren
+            compile_system(("a * (y - x", "y", "z"))
