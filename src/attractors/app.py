@@ -898,6 +898,11 @@ class Window(QtWidgets.QMainWindow):
 
     def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:
         self.timer.stop()
+        self.solve_requested.disconnect(self._solver_worker.solve)
+        self.lyapunov_requested.disconnect(self._lyapunov_worker.compute)
+        QtCore.QCoreApplication.removePostedEvents(self._solver_worker)
+        QtCore.QCoreApplication.removePostedEvents(self._lyapunov_worker)
+
         self._solver_worker._cancel = True
         self._solver_thread.quit()
         self._solver_thread.wait()
