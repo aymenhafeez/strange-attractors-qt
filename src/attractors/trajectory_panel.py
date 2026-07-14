@@ -4,14 +4,14 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 from .style import CUSTOM_PANEL, CUSTOM_TOGGLE, NO_BORDER
 
 DEFAULT_PALETTE = [
-    QtGui.QColor("#1f77b4"),
-    QtGui.QColor("#ff7f0e"),
-    QtGui.QColor("#2ca02c"),
-    QtGui.QColor("#d62728"),
-    QtGui.QColor("#9467bd"),
-    QtGui.QColor("#8c564b"),
-    QtGui.QColor("#e377c2"),
-    QtGui.QColor("#bcbd22"),
+    QtGui.QColor("#3b82f6"),
+    QtGui.QColor("#f97316"),
+    QtGui.QColor("#10b981"),
+    QtGui.QColor("#ef4444"),
+    QtGui.QColor("#8b5cf6"),
+    QtGui.QColor("#06b6d4"),
+    QtGui.QColor("#ec4899"),
+    QtGui.QColor("#eab308"),
 ]
 
 MAX_TRAJECTORIES = 8
