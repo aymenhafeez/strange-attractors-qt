@@ -159,14 +159,17 @@ class TestMultiArgFunctions:
 
     def test_unknown_function_raises_with_position(self):
         with pytest.raises(ParseError) as exc_info:
-            node = parse_expression("atan(x, y)")
+            from attractors.expression_parser import _emit
+
+            node = parse_expression("x + atan(x, y)")
             _emit(node)
         assert exc_info.value.pos != 0
 
     def test_unknown_single_arg_function_raises_with_position(self):
         with pytest.raises(ParseError) as exc_info:
-            node = parse_expression("foobar(x)")
-            node = parse_expression("foobar(x)")
+            from attractors.expression_parser import _emit
+
+            node = parse_expression("x + foobar(x)")
             _emit(node)
         assert exc_info.value.pos != 0
 
