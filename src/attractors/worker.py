@@ -1,4 +1,4 @@
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from pyqtgraph.Qt.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from .lyapunov import compute_lyapunov
 from .solver import solve_attractor
@@ -11,14 +11,18 @@ class SolveWorker(QObject):
         super().__init__()
         self._cancel = False
 
-    @pyqtSlot(object, dict, object, bool, object)
-    def solve(self, config, values, n, is_partial, t_max):
+    @pyqtSlot(object, dict, list, int, bool, float)
+    def solve(self, config, values, ics, n, is_partial, t_max):
         self._cancel = False
-
+        solutions = []
         try:
-            sol = solve_attractor(config, values, n, t_max=t_max)
+            for ic in ics:
+                if self._cancel:
+                    return
+                sol = solve_attractor(config, values, n, t_max=t_max, ic=ic)
+                solutions.append(sol)
             if not self._cancel:
-                self.result_ready.emit(sol, is_partial)
+                self.result_ready.emit(solutions, is_partial)
         except Exception:
             if not self._cancel:
                 self.result_ready.emit(None, False)
