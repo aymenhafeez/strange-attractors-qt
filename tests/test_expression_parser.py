@@ -1,14 +1,17 @@
 import pytest
 import math
+import numpy as np
 
 from attractors.expression_parser import (
     BinOp,
+    Call,
     Num,
     ParseError,
     parse_expression,
     tokenise,
     UnaryOp,
     Var,
+)
 
 
 class TestTokenise:
@@ -107,3 +110,30 @@ class TestParseExpression:
     def test_leftover_tokens_raises(self):
         with pytest.raises(ParseError):
             parse_expression("x y")
+
+
+class TestSingleArgFunctions:
+    @pytest.mark.parametrize("fn", ["sin", "cos", "tan", "exp", "log", "sqrt", "abs"])
+    def test_parses(self, fn):
+        node = parse_expression(f"{fn}(x)")
+        assert isinstance(node, Call)
+        assert node.func == fn
+        assert len(node.args) == 1
+
+    @pytest.mark.parametrize(
+        "fn,np_fn",
+        [
+            ("sin", "np.sin"),
+            ("cos", "np.cos"),
+            ("tan", "np.tan"),
+            ("exp", "np.exp"),
+            ("log", "np.log"),
+            ("sqrt", "np.sqrt"),
+            ("abs", "np.abs"),
+        ],
+    )
+    def test_emits(self, fn, np_fn):
+        from attractors.expression_parser import _emit
+
+        node = parse_expression(f"{fn}(x)")
+        assert _emit(node) == f"{np_fn}(x)"
