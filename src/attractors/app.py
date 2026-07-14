@@ -6,11 +6,10 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .bifurcation_dialog import BifurcationDialog
+from .custom_panel import CustomPanel
 from .poincare_dialog import PoincareSectionDialog
 from .registry import ATTRACTORS
 from .style import (
-    ALPHA_SLIDER,
-    ATTRACTOR_INFO,
     CONTAINER,
     DROPDOWN_BOX,
     DROPDOWN_SELECTION,
@@ -34,7 +33,7 @@ STEP = 1000
 
 
 class Window(QtWidgets.QMainWindow):
-    solve_requested = QtCore.pyqtSignal(object, dict, object, bool)
+    solve_requested = QtCore.pyqtSignal(object, dict, object, bool, object)
     lyapunov_requested = QtCore.pyqtSignal(object, dict)
 
     def __init__(self):
@@ -43,7 +42,11 @@ class Window(QtWidgets.QMainWindow):
 
         self._initial_full_solves = 0
         self.current_n = 100000
+        self.current_t_max = 50
         self.n_slider_row = None
+        self.n_slider_wrapper = None
+        self.t_max_slider_row = None
+        self.t_max_slider_wrapper = None
         self.grid_items = []
 
         central = QtWidgets.QWidget()
@@ -55,7 +58,7 @@ class Window(QtWidgets.QMainWindow):
         self.anim_step = 200
         self.full_solution = None
         self.timer = QtCore.QTimer()
-        self.anim_button = QtWidgets.QPushButton("Play")
+        self.anim_button = QtWidgets.QPushButton("▶ Play")
         self.timer.timeout.connect(self._animate_frame)
 
         self._solve_pending = False
@@ -158,7 +161,7 @@ class Window(QtWidgets.QMainWindow):
         self.panel.setObjectName("controlPanel")
         self.panel_layout = QtWidgets.QVBoxLayout(self.panel)
         self.panel_layout.setContentsMargins(8, 8, 8, 8)
-        self.panel_layout.setSpacing(15)
+        self.panel_layout.setSpacing(7)
 
         self.base_colour = (1.0, 1.0, 1.0)
         self.current_alpha = 1.0
@@ -173,8 +176,22 @@ class Window(QtWidgets.QMainWindow):
         self.view.addItem(self.scatter)
         self.view.addItem(self.line)
 
+        self.options = QtWidgets.QHBoxLayout()
+
         self.dropdown = QtWidgets.QPushButton(list(ATTRACTORS.keys())[0])
         self.dropdown.setStyleSheet(DROPDOWN_BOX)
+
+        menu = QtWidgets.QMenu(self.dropdown)
+        menu.setStyleSheet(DROPDOWN_SELECTION)
+
+        for name in ATTRACTORS:
+            action = menu.addAction(name)
+            assert action is not None
+            action.triggered.connect(partial(self.on_attractor_change, name))
+        custom_action = menu.addAction("Custom")
+        assert custom_action is not None
+        custom_action.triggered.connect(partial(self.on_attractor_change, "Custom"))
+        self.dropdown.setMenu(menu)
 
         self.tools_button = QtWidgets.QPushButton("Tools")
         self.tools_button.setStyleSheet(DROPDOWN_BOX)
@@ -185,55 +202,75 @@ class Window(QtWidgets.QMainWindow):
         poincare_action = tools_menu.addAction("Poincaré section")
         poincare_action.triggered.connect(self._open_poincare)
         self.tools_button.setMenu(tools_menu)
-        self.panel_layout.addWidget(self.tools_button)
 
-        menu = QtWidgets.QMenu(self.dropdown)
-        menu.setStyleSheet(DROPDOWN_SELECTION)
+        self.options.addWidget(self.dropdown)
+        self.options.addWidget(self.tools_button)
+        self.panel_layout.addLayout(self.options)
 
-        for name in ATTRACTORS:
-            action = menu.addAction(name)
-            assert action is not None
-            action.triggered.connect(partial(self.on_attractor_change, name))
-        self.dropdown.setMenu(menu)
-        self.panel_layout.addWidget(self.dropdown)
+        options_row = QtWidgets.QHBoxLayout()
 
         self.anim_button.clicked.connect(self.toggle_animation)
-        self.panel_layout.addWidget(self.anim_button)
-
-        alpha_row = QtWidgets.QHBoxLayout()
-        alpha_label = QtWidgets.QLabel("α ")
-        alpha_label.setStyleSheet(ALPHA_SLIDER)
-        alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        alpha_slider.setRange(0, 100)
-        alpha_slider.setValue(100)
-        alpha_slider.valueChanged.connect(self._update_alpha)
-        alpha_row.addWidget(alpha_label)
-        alpha_row.addWidget(alpha_slider)
-        self.panel_layout.addLayout(alpha_row)
+        options_row.addWidget(self.anim_button)
+        options_row.addStretch(1)
 
         self.line_mode = QtWidgets.QCheckBox("Line")
         self.line_mode.setChecked(False)
         self.line_mode.setStyleSheet(LINE_MODE_CHECKBOX)
         self.line_mode.toggled.connect(self._toggle_line_mode)
-        alpha_row.addWidget(self.line_mode)
+        options_row.addWidget(self.line_mode)
 
         self.trail_mode = QtWidgets.QCheckBox("Trail")
         self.trail_mode.setChecked(False)
         self.trail_mode.setStyleSheet(LINE_MODE_CHECKBOX)
         self.trail_mode.toggled.connect(self._refresh_colours)
-        alpha_row.addWidget(self.trail_mode)
+        options_row.addWidget(self.trail_mode)
 
         self.show_grid = QtWidgets.QCheckBox("Grid")
         self.show_grid.setChecked(True)
         self.show_grid.setStyleSheet(LINE_MODE_CHECKBOX)
         self.show_grid.toggled.connect((self._toggle_grid))
-        alpha_row.addWidget(self.show_grid)
+
+        options_row.addWidget(self.show_grid)
+        self.panel_layout.addLayout(options_row)
+
+        alpha_row = QtWidgets.QHBoxLayout()
+        alpha_row.setSpacing(10)
+        alpha_label = QtWidgets.QLabel("α ")
+        alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        alpha_slider.setRange(0, 100)
+        alpha_slider.setValue(100)
+        alpha_spin = QtWidgets.QSpinBox()
+        alpha_spin.setKeyboardTracking(False)
+        alpha_spin.setRange(0, 100)
+        alpha_spin.setValue(100)
+        alpha_slider.valueChanged.connect(self._update_alpha)
+        alpha_spin.valueChanged.connect(self._update_alpha)
+        alpha_slider.valueChanged.connect(alpha_spin.setValue)
+        alpha_spin.valueChanged.connect(alpha_slider.setValue)
+        alpha_row.addWidget(alpha_label)
+        alpha_row.addWidget(alpha_slider)
+        alpha_row.addWidget(alpha_spin)
+        alpha_wrapper = QtWidgets.QWidget()
+        alpha_wrapper.setLayout(alpha_row)
+        self.panel_layout.addWidget(alpha_wrapper)
 
         splitter.addWidget(self.panel)
         splitter.setSizes([int(WINDOW_SIZE * 0.7), int(WINDOW_SIZE * 0.3)])
 
         self.current_name = list(ATTRACTORS.keys())[0]
         self.slider_rows = []
+
+        self._custom_config = None
+        self.custom_panel = CustomPanel(self)
+        self.custom_panel.compile_requested.connect(self._on_custom_compile)
+        self.custom_panel.setVisible(False)
+
+        container_layout.addWidget(
+            self.custom_panel,
+            0,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.AlignmentFlag.AlignLeft,
+        )
 
         self.projection_container = QtWidgets.QWidget()
         proj_layout = QtWidgets.QVBoxLayout(self.projection_container)
@@ -349,11 +386,11 @@ class Window(QtWidgets.QMainWindow):
     def toggle_animation(self):
         if self.timer.isActive():
             self.timer.stop()
-            self.anim_button.setText("Play")
+            self.anim_button.setText("▶ Play")
         else:
             self.anim_frame = 0
             self.timer.start(16)
-            self.anim_button.setText("Pause")
+            self.anim_button.setText("■ Stop")
 
     def _animate_frame(self):
         sol = self.full_solution
@@ -376,22 +413,53 @@ class Window(QtWidgets.QMainWindow):
 
         if frame >= len(sol):
             self.timer.stop()
-            self.anim_button.setText("Play")
+            self.anim_button.setText("▶ Play")
 
     def _rebuild_view(self, name):
+        if name == "Custom":
+            self._rebuild_view_custom()
+            return
+        self._rebuild_view_from_config(ATTRACTORS[name])
+
+    def _rebuild_view_custom(self):
         self.timer.stop()
-        self.anim_button.setText("Play")
+        self.anim_button.setText("▶ Play")
+
+        self._hide_standard_controls()
+        self.custom_panel.setVisible(True)
+
+        if self._custom_config is not None:
+            self._apply_config_to_view(self._custom_config)
+
+    def _hide_standard_controls(self):
+        for _, _, _, wrapper in self.slider_rows:
+            wrapper.setVisible(False)
+        if self.n_slider_wrapper is not None:
+            self.n_slider_wrapper.setVisible(False)
+        if self.t_max_slider_wrapper is not None:
+            self.t_max_slider_wrapper.setVisible(False)
+
+    def _show_standard_controls(self):
+        for _, _, _, wrapper in self.slider_rows:
+            wrapper.setVisible(True)
+        if self.n_slider_wrapper is not None:
+            self.n_slider_wrapper.setVisible(True)
+        if self.t_max_slider_wrapper is not None:
+            self.t_max_slider_wrapper.setVisible(True)
+
+    def _rebuild_view_from_config(self, config):
+        self.timer.stop()
+        self.anim_button.setText("▶ Play")
+
+        self.custom_panel.setVisible(False)
+        self._show_standard_controls()
 
         self.panel_layout.removeWidget(self.projection_container)
 
-        for _, _, row_layout in self.slider_rows:
-            while row_layout.count():
-                item = row_layout.takeAt(0)
-                widget = item.widget()
-                if widget:
-                    widget.setParent(None)
-                    widget.deleteLater()
-            self.panel_layout.removeItem(row_layout)
+        for *_, wrapper in self.slider_rows:
+            self.panel_layout.removeWidget(wrapper)
+            wrapper.setParent(None)
+            wrapper.deleteLater()
         self.slider_rows.clear()
 
         while self.panel_layout.count():
@@ -401,7 +469,9 @@ class Window(QtWidgets.QMainWindow):
             else:
                 break
 
-        config = ATTRACTORS[name]
+        self._apply_config_to_view(config)
+
+    def _apply_config_to_view(self, config):
         self.equation_label.setText(config.equation_text)
         self.equation_label.setVisible(bool(config.equation_text))
         self.view.setCameraPosition(
@@ -416,13 +486,12 @@ class Window(QtWidgets.QMainWindow):
             self.view.opts["center"].z() + config.pan,
         )
 
-        if self.n_slider_row is not None:
-            while self.n_slider_row.count():
-                item = self.n_slider_row.takeAt(0)
-                widget = item.widget()
-                if widget:
-                    widget.setParent(None)
-                    widget.deleteLater()
+        if self.n_slider_wrapper is not None:
+            self.panel_layout.removeWidget(self.n_slider_wrapper)
+            self.n_slider_wrapper.setParent(None)
+            self.n_slider_wrapper.deleteLater()
+            self.n_slider_row = None
+            self.n_slider_wrapper = None
 
         n_row = QtWidgets.QHBoxLayout()
         self.n_slider_row = n_row
@@ -448,8 +517,50 @@ class Window(QtWidgets.QMainWindow):
         n_spin.valueChanged.connect(self._on_n_changed)
         n_row.addWidget(n_slider)
         n_row.addWidget(n_spin)
-        self.panel_layout.addLayout(n_row)
+        self.n_slider_wrapper = QtWidgets.QWidget()
+        self.n_slider_wrapper.setLayout(n_row)
+        self.panel_layout.addWidget(self.n_slider_wrapper)
         self.current_n = config.time_defaults["n"]
+
+        if self.t_max_slider_wrapper is not None:
+            self.panel_layout.removeWidget(self.t_max_slider_wrapper)
+            self.t_max_slider_wrapper.setParent(None)
+            self.t_max_slider_wrapper.deleteLater()
+            self.t_max_slider_row = None
+            self.t_max_slider_wrapper = None
+
+        t_max_row = QtWidgets.QHBoxLayout()
+        self.t_max_slider_row = t_max_row
+        t_max_label = QtWidgets.QLabel("t_max")
+        t_max_label.setStyleSheet("color: white;")
+        t_max_row.addWidget(t_max_label)
+        t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        t_max_slider.setRange(1, 500)
+        t_max_slider.setValue(config.time_defaults["t_max"])
+        t_max_slider.param_step = 1
+        t_max_spin = QtWidgets.QSpinBox()
+        t_max_spin.setKeyboardTracking(False)
+        t_max_spin.setRange(1, 5000)
+        t_max_spin.setSingleStep(1)
+        t_max_spin.setValue(config.time_defaults["t_max"])
+        t_max_spin.param_step = 1
+        t_max_slider.spin = t_max_spin
+        t_max_spin.slider = t_max_slider
+        t_max_slider.valueChanged.connect(
+            partial(self._on_slider_moved, t_max_slider, t_max_spin)
+        )
+        t_max_slider.valueChanged.connect(self._on_slider_tick)
+        t_max_slider.sliderReleased.connect(self._on_slider_released)
+        t_max_spin.valueChanged.connect(
+            partial(self._on_spin_changed, t_max_spin, t_max_slider)
+        )
+        t_max_spin.valueChanged.connect(self._on_t_max_changed)
+        t_max_row.addWidget(t_max_slider)
+        t_max_row.addWidget(t_max_spin)
+        self.t_max_slider_wrapper = QtWidgets.QWidget()
+        self.t_max_slider_wrapper.setLayout(t_max_row)
+        self.panel_layout.addWidget(self.t_max_slider_wrapper)
+        self.current_t_max = config.time_defaults["t_max"]
 
         for p in config.params:
             row = QtWidgets.QHBoxLayout()
@@ -474,8 +585,10 @@ class Window(QtWidgets.QMainWindow):
             spin.valueChanged.connect(partial(self._on_spin_changed, spin, s))
             row.addWidget(s)
             row.addWidget(spin)
-            self.slider_rows.append((p, s, row))
-            self.panel_layout.addLayout(row)
+            wrapper = QtWidgets.QWidget()
+            wrapper.setLayout(row)
+            self.panel_layout.addWidget(wrapper)
+            self.slider_rows.append((p, s, row, wrapper))
 
         self.lyapunov_label.setText("")
         self.lyapunov_container.setVisible(False)
@@ -489,13 +602,35 @@ class Window(QtWidgets.QMainWindow):
         self.dropdown.setText(name)
         self._rebuild_view(name)
 
+    def _on_custom_compile(self, config):
+        self._custom_config = config
+
+        for *_, wrapper in self.slider_rows:
+            self.panel_layout.removeWidget(wrapper)
+            wrapper.setParent(None)
+            wrapper.deleteLater()
+        self.slider_rows.clear()
+
+        self._apply_config_to_view(config)
+
+    def _get_current_config_and_values(self):
+        if self.current_name == "Custom":
+            config = self._custom_config
+        else:
+            config = ATTRACTORS[self.current_name]
+        if config is None:
+            return None, {}
+        values = {p.name: p.step * s.value() for p, s, _, _ in self.slider_rows}
+        return config, values
+
     def _update_plot(self):
         self.timer.stop()
-        self.anim_button.setText("Play")
+        self.anim_button.setText("▶ Play")
         self._dispatch_solve(full=True)
 
-        config = ATTRACTORS[self.current_name]
-        values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
+        config, values = self._get_current_config_and_values()
+        if config is None:
+            return
 
         formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
         self.status_system.setText(f"<b>SYSTEM</b>: {config.name}")
@@ -548,11 +683,17 @@ class Window(QtWidgets.QMainWindow):
 
         self._solve_pending = True
         self._solve_needed = False
-        config = ATTRACTORS[self.current_name]
-        values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
+
+        config, values = self._get_current_config_and_values()
+        if config is None:
+            self._solve_pending = False
+            return
+
         user_n = self.current_n or config.time_defaults["n"]
+        t_max = self.current_t_max
+
         dispatch_n = user_n if full else min(user_n, PARTIAL_N)
-        self.solve_requested.emit(config, values, dispatch_n, not full)
+        self.solve_requested.emit(config, values, dispatch_n, not full, t_max)
 
     def _on_solve_result(self, sol, is_partial):
         self._solve_pending = False
@@ -567,14 +708,16 @@ class Window(QtWidgets.QMainWindow):
 
         if not is_partial:
             self._update_projections(x, y, z)
-            config = ATTRACTORS[self.current_name]
-            values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
-            self.lyapunov_requested.emit(config, values)
+            config, values = self._get_current_config_and_values()
+
+            if config is not None:
+                self.lyapunov_requested.emit(config, values)
+
             if self._initial_full_solves == 0:
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
 
-            new_half = float(np.max(np.abs(sol))) * 3
+            new_half = min(float(np.max(np.abs(sol))) * 3, 500.0)
             if (
                 abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6)
                 > 0.1
@@ -591,16 +734,19 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_slider_moved(self, s, spin, val):
         self.timer.stop()
-        self.anim_button.setText("Play")
+        self.anim_button.setText("▶ Play")
         spin.setValue(val * s.param_step)
 
     def _on_spin_changed(self, spin, s, val):
         self.timer.stop()
-        self.anim_button.setText("Play")
+        self.anim_button.setText("▶ Play")
         s.setValue(int(val / spin.param_step))
 
     def _on_n_changed(self, val):
         self.current_n = val
+
+    def _on_t_max_changed(self, val):
+        self.current_t_max = val
 
     def _plot_trail(self, n, alpha=1.0):
         colour = np.zeros((n, 4))
@@ -642,8 +788,9 @@ class Window(QtWidgets.QMainWindow):
         dialog.show()
 
     def _open_bifurcation(self):
-        config = ATTRACTORS[self.current_name]
-        values = {p.name: p.step * s.value() for p, s, _ in self.slider_rows}
+        config, values = self._get_current_config_and_values()
+        if config is None:
+            return
         dialog = BifurcationDialog(config, values, self)
         dialog.show()
 

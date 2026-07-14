@@ -22,5 +22,10 @@ dependencies = [
 [project.scripts]
 strange-attractors = "attractors.__main__:main"
 
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
 [tool.uv]
 package = true
