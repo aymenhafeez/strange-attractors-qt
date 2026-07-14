@@ -24,6 +24,7 @@ from .style import (
     STATUS_PARAMS,
     STATUS_SYSTEM,
 )
+from .trajectory_panel import TrajectoryPanel
 from .worker import LyapunovWorker, SolveWorker
 
 WINDOW_SIZE = 1100
@@ -33,7 +34,7 @@ STEP = 1000
 
 
 class Window(QtWidgets.QMainWindow):
-    solve_requested = QtCore.pyqtSignal(object, dict, object, bool, object)
+    solve_requested = QtCore.pyqtSignal(object, dict, list, int, bool, float)
     lyapunov_requested = QtCore.pyqtSignal(object, dict)
 
     def __init__(self):
@@ -41,6 +42,7 @@ class Window(QtWidgets.QMainWindow):
         self.setWindowTitle("Strange Attractors")
 
         self._initial_full_solves = 0
+        self._repositioning = False
         self.current_n = 100000
         self.current_t_max = 50
         self.n_slider_row = None
@@ -56,7 +58,6 @@ class Window(QtWidgets.QMainWindow):
 
         self.anim_frame = 0
         self.anim_step = 200
-        self.full_solution = None
         self.timer = QtCore.QTimer()
         self.anim_button = QtWidgets.QPushButton("▶ Play")
         self.timer.timeout.connect(self._animate_frame)
@@ -79,9 +80,9 @@ class Window(QtWidgets.QMainWindow):
         self._lyapunov_worker.lyapunov_ready.connect(self._on_lyapunov_result)
 
         self.view = gl.GLViewWidget()
-        container = QtWidgets.QWidget()
-        container.setStyleSheet(CONTAINER)
-        container_layout = QtWidgets.QGridLayout(container)
+        self.container = QtWidgets.QWidget()
+        self.container.setStyleSheet(CONTAINER)
+        container_layout = QtWidgets.QGridLayout(self.container)
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(0)
         container_layout.addWidget(self.view, 0, 0)
@@ -152,7 +153,7 @@ class Window(QtWidgets.QMainWindow):
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         splitter.setStyleSheet(SPLITTER)
 
-        splitter.addWidget(container)
+        splitter.addWidget(self.container)
 
         layout.addWidget(splitter)
 
@@ -165,16 +166,10 @@ class Window(QtWidgets.QMainWindow):
 
         self.base_colour = (1.0, 1.0, 1.0)
         self.current_alpha = 1.0
-        self.scatter = gl.GLScatterPlotItem(
-            pos=np.zeros((1, 3)), color=(*self.base_colour, 1.0), size=1.0, pxMode=True
-        )
-        self.line = gl.GLLinePlotItem(
-            pos=np.zeros((1, 3)), color=(*self.base_colour, 1.0), width=1.0
-        )
-        self.scatter.setVisible(True)
-        self.line.setVisible(False)
-        self.view.addItem(self.scatter)
-        self.view.addItem(self.line)
+        self._scatters: list[gl.GLScatterPlotItem] = []
+        self._lines: list[gl.GLLinePlotItem] = []
+        self._solutions: list[np.ndarray] = []
+        self._trajectories: list[dict] = []
 
         self.options = QtWidgets.QHBoxLayout()
 
@@ -261,16 +256,20 @@ class Window(QtWidgets.QMainWindow):
         self.slider_rows = []
 
         self._custom_config = None
-        self.custom_panel = CustomPanel(self)
+        self.custom_panel = CustomPanel(self.container)
         self.custom_panel.compile_requested.connect(self._on_custom_compile)
         self.custom_panel.setVisible(False)
+        self.custom_panel.raise_()
 
-        container_layout.addWidget(
-            self.custom_panel,
-            0,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.AlignmentFlag.AlignLeft,
+        self.trajectory_panel = TrajectoryPanel(self.container)
+        self.trajectory_panel.trajectories_changed.connect(
+            self._on_trajectories_changed
         )
+        self.trajectory_panel.raise_()
+
+        self.container.installEventFilter(self)
+        self.custom_panel.installEventFilter(self)
+        self.trajectory_panel.installEventFilter(self)
 
         self.projection_container = QtWidgets.QWidget()
         proj_layout = QtWidgets.QVBoxLayout(self.projection_container)
@@ -310,6 +309,36 @@ class Window(QtWidgets.QMainWindow):
         self.grid_half_size = 30.0
         self.grid_items = []
         self._build_grid(self.grid_half_size)
+        self._reposition_overlays()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._reposition_overlays()
+
+    def eventFilter(self, obj, event):
+        if obj is self.container and event.type() == QtCore.QEvent.Type.Resize:
+            self._reposition_overlays()
+        if (
+            obj in (self.custom_panel, self.trajectory_panel)
+            and event.type() == QtCore.QEvent.Type.Resize
+        ):
+            self._reposition_overlays()
+        return super().eventFilter(obj, event)
+
+    def _reposition_overlays(self):
+        if self._repositioning:
+            return
+        self._repositioning = True
+        margin = 8
+        self.view.lower()
+        self.custom_panel.adjustSize()
+        self.custom_panel.move(margin, margin)
+        self.custom_panel.raise_()
+        self.trajectory_panel.adjustSize()
+        x = self.container.width() - self.trajectory_panel.width() - margin
+        self.trajectory_panel.move(x, margin)
+        self.trajectory_panel.raise_()
+        self._repositioning = False
 
     def _build_grid(self, half_size):
         for item in self.grid_items:
@@ -383,6 +412,22 @@ class Window(QtWidgets.QMainWindow):
                     self.grid_items.append(t1)
                     self.grid_items.append(t2)
 
+    def _sync_gl_items(self, n: int):
+        line_mode = self.line_mode.isChecked()
+        while len(self._scatters) < n:
+            scatter = gl.GLScatterPlotItem(size=1.0)
+            scatter.setGLOptions("additive")
+            scatter.setVisible(not line_mode)
+            self.view.addItem(scatter)
+            self._scatters.append(scatter)
+            line = gl.GLLinePlotItem()
+            line.setVisible(line_mode)
+            self.view.addItem(line)
+            self._lines.append(line)
+        while len(self._scatters) > n:
+            self.view.removeItem(self._scatters.pop())
+            self.view.removeItem(self._lines.pop())
+
     def toggle_animation(self):
         if self.timer.isActive():
             self.timer.stop()
@@ -393,25 +438,39 @@ class Window(QtWidgets.QMainWindow):
             self.anim_button.setText("■ Stop")
 
     def _animate_frame(self):
-        sol = self.full_solution
-        if sol is None:
+        if not self._solutions:
             return
 
-        frame = min(self.anim_frame + self.anim_step, len(sol))
+        sol0 = self._solutions[0]
+        frame = min(self.anim_frame + self.anim_step, len(sol0))
         self.anim_frame = frame
-        segment = sol[:frame]
-        x, y, z = segment.T
 
-        if self.trail_mode.isChecked():
-            c = self._plot_trail(len(segment), self.current_alpha)
-        else:
-            c = np.full((len(segment), 4), (*self.base_colour, self.current_alpha))
+        all_segments = []
+        for i, sol in enumerate(self._solutions):
+            segment = sol[:frame]
+            traj = self._trajectories[i] if i < len(self._trajectories) else None
+            if traj is not None:
+                qc = traj["colour"]
+                base_colour = (qc.redF(), qc.greenF(), qc.blueF())
+            else:
+                base_colour = self.base_colour
 
-        self.scatter.setData(pos=segment, color=c)
-        self.line.setData(pos=segment, color=c)
-        self._update_projections(x, y, z)
+            if self.trail_mode.isChecked():
+                c = self._plot_trail(len(segment), self.current_alpha, base_colour)
+            else:
+                c = np.full((len(segment), 4), (*base_colour, self.current_alpha))
 
-        if frame >= len(sol):
+            if i < len(self._scatters):
+                self._scatters[i].setData(pos=segment, color=c)
+                self._lines[i].setData(pos=segment, color=c)
+            all_segments.append(segment)
+
+        if all_segments:
+            all_pts = np.concatenate(all_segments, axis=0)
+            x, y, z = all_pts.T
+            self._update_projections(x, y, z)
+
+        if frame >= len(sol0):
             self.timer.stop()
             self.anim_button.setText("▶ Play")
 
@@ -595,6 +654,7 @@ class Window(QtWidgets.QMainWindow):
 
         self.panel_layout.addStretch()
         self.panel_layout.addWidget(self.projection_container)
+        self.trajectory_panel.reset(config)
         self._update_plot()
 
     def on_attractor_change(self, name):
@@ -652,8 +712,9 @@ class Window(QtWidgets.QMainWindow):
             pw.autoRange()
 
     def _reapply_projections(self):
-        if self.full_solution is not None:
-            x, y, z = self.full_solution.T
+        if self._solutions:
+            all_sol = np.concatenate(self._solutions, axis=0)
+            x, y, z = all_sol.T
             self._update_projections(x, y, z)
 
     def _update_alpha(self, val):
@@ -661,8 +722,9 @@ class Window(QtWidgets.QMainWindow):
         self._refresh_colours()
 
     def _toggle_line_mode(self, checked):
-        self.line.setVisible(checked)
-        self.scatter.setVisible(not checked)
+        for scatter, line in zip(self._scatters, self._lines):
+            line.setVisible(checked)
+            scatter.setVisible(not checked)
 
     def _toggle_grid(self, checked):
         for item in self.grid_items:
@@ -692,21 +754,43 @@ class Window(QtWidgets.QMainWindow):
         user_n = self.current_n or config.time_defaults["n"]
         t_max = self.current_t_max
 
+        ics = [t["ic"] for t in self._trajectories] or [config.initial_conditions]
         dispatch_n = user_n if full else min(user_n, PARTIAL_N)
-        self.solve_requested.emit(config, values, dispatch_n, not full, t_max)
+        self.solve_requested.emit(config, values, ics, dispatch_n, not full, t_max)
 
-    def _on_solve_result(self, sol, is_partial):
+    def _on_solve_result(self, solutions, is_partial):
         self._solve_pending = False
 
-        if sol is None:
+        if solutions is None:
             return
 
-        self.full_solution = sol
-        x, y, z = sol.T
-        self.scatter.setData(pos=sol)
-        self.line.setData(pos=sol)
+        if not is_partial:
+            self._solutions = solutions
+
+        self._sync_gl_items(len(solutions))
+        line_mode = self.line_mode.isChecked()
+
+        for i, sol in enumerate(solutions):
+            traj = self._trajectories[i] if i < len(self._trajectories) else None
+            if traj is not None:
+                qc = traj["colour"]
+                base_colour = (qc.redF(), qc.greenF(), qc.blueF())
+            else:
+                base_colour = self.base_colour
+
+            if self.trail_mode.isChecked():
+                c = self._plot_trail(len(sol), self.current_alpha, base_colour)
+            else:
+                c = np.full((len(sol), 4), (*base_colour, self.current_alpha))
+
+            self._scatters[i].setData(pos=sol, color=c)
+            self._scatters[i].setVisible(not line_mode)
+            self._lines[i].setData(pos=sol, color=c)
+            self._lines[i].setVisible(line_mode)
 
         if not is_partial:
+            all_sol = np.concatenate(solutions, axis=0)
+            x, y, z = all_sol.T
             self._update_projections(x, y, z)
             config, values = self._get_current_config_and_values()
 
@@ -717,7 +801,7 @@ class Window(QtWidgets.QMainWindow):
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
 
-            new_half = min(float(np.max(np.abs(sol))) * 3, 500.0)
+            new_half = min(float(np.max(np.abs(solutions[0]))) * 3, 500.0)
             if (
                 abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6)
                 > 0.1
@@ -748,29 +832,46 @@ class Window(QtWidgets.QMainWindow):
     def _on_t_max_changed(self, val):
         self.current_t_max = val
 
-    def _plot_trail(self, n, alpha=1.0):
+    def _plot_trail(self, n, alpha=1.0, base_colour=None):
+        if base_colour is None:
+            base_colour = self.base_colour
         colour = np.zeros((n, 4))
-
-        colour[:, 0] = np.linspace(0.2, self.base_colour[0], n)
-        colour[:, 1] = np.linspace(0.2, self.base_colour[1], n)
-        colour[:, 2] = np.linspace(0.5, self.base_colour[2], n)
+        colour[:, 0] = np.linspace(0.2, base_colour[0], n)
+        colour[:, 1] = np.linspace(0.2, base_colour[1], n)
+        colour[:, 2] = np.linspace(0.5, base_colour[2], n)
         colour[:, 3] = np.linspace(0.0, alpha, n)
-
         return colour
 
     def _refresh_colours(self):
-        solution = self.full_solution
-
-        if solution is None:
+        if not self._solutions:
             return
 
-        if self.trail_mode.isChecked():
-            c = self._plot_trail(len(solution), self.current_alpha)
-        else:
-            c = np.full((len(solution), 4), (*self.base_colour, self.current_alpha))
+        line_mode = self.line_mode.isChecked()
+        for i, sol in enumerate(self._solutions):
+            if i >= len(self._scatters):
+                break
+            traj = self._trajectories[i] if i < len(self._trajectories) else None
+            if traj is not None:
+                qc = traj["colour"]
+                base_colour = (qc.redF(), qc.greenF(), qc.blueF())
+            else:
+                base_colour = self.base_colour
 
-        self.scatter.setData(color=c)
-        self.line.setData(color=c)
+            if self.trail_mode.isChecked():
+                c = self._plot_trail(len(sol), self.current_alpha, base_colour)
+            else:
+                c = np.full((len(sol), 4), (*base_colour, self.current_alpha))
+
+            self._scatters[i].setData(color=c)
+            self._scatters[i].setVisible(not line_mode)
+            self._lines[i].setData(color=c)
+            self._lines[i].setVisible(line_mode)
+
+    def _on_trajectories_changed(self, trajectories: list[dict]):
+        self._trajectories = trajectories
+        self._solve_needed = True
+        self._full_needed = True
+        self._dispatch_solve(full=True)
 
     def _on_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
         self.lyapunov_label.setText(
@@ -783,7 +884,7 @@ class Window(QtWidgets.QMainWindow):
         self.curve_l3.setData(t_hist, lyap_hist[:, 2])
 
     def _open_poincare(self):
-        sol = self.full_solution.copy() if self.full_solution is not None else None
+        sol = self._solutions[0].copy() if self._solutions else None
         dialog = PoincareSectionDialog(self, sol, self)
         dialog.show()
 

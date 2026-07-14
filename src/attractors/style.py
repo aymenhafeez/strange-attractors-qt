@@ -99,6 +99,22 @@ CUSTOM_PANEL = """
     QPushButton:pressed {
         background-color: #ccc;
     }
+    QCheckBox {
+        border: none;
+    }
+    QCheckBox::indicator {
+        width: 13px;
+        height: 13px;
+        background-color: white;
+        border: 1px solid #aaa;
+    }
+    QCheckBox::indicator:checked {
+        background-color: #4a90d9;
+        border: 1px solid #2a6099;
+    }
+    QCheckBox::indicator:hover {
+        border: 1px solid #4a90d9;
+    }
 """
 
 CUSTOM_TOGGLE = """
