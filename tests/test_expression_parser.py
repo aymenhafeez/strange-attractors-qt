@@ -226,7 +226,7 @@ class TestCompileSystem:
     def test_lorenz_spot_check(self):
         # Lorenz: dx = s(y-x), dy = x(r-z)-y, dz = xy - b*z
         # at (1,1,1) with s=10, r=28, b=8/3:
-        # dx = 10*(1-1) = 0, dy = 1*(28-1)-1 = 26, dz = 1 - 8/3 ≈ -1.6667
+        # dx = 10*(1-1) = 0, dy = 1*(28-1)-1 = 26, dz = 1 - 8/3 approx= -1.6667
         func, _ = compile_system(
             (
                 "s * (y - x)",
