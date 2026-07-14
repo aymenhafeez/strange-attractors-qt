@@ -71,11 +71,18 @@ CONTAINER = "border: 1px solid #aaa;"
 LYAPUNOV_PLOT = "background-color: rgba(0, 0, 0, 0); border: 0px"
 
 CUSTOM_PANEL = """
-    QWidget {
+    QWidget#customPanelContent {
         background-color: rgba(0, 0, 0, 240);
-        color: white;
         border: 1px solid #666;
         border-radius: 0px;
+    }
+    QWidget#rowsContainer {
+        border: none;
+        background: transparent;
+    }
+    QLabel {
+        color: white;
+        border: none;
     }
     QTextEdit {
         background-color: white;
@@ -101,6 +108,7 @@ CUSTOM_PANEL = """
     }
     QCheckBox {
         border: none;
+        color: white;
     }
     QCheckBox::indicator {
         width: 13px;

@@ -1,4 +1,4 @@
-from PyQt6 import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .expression_parser import (
     ParseError,
@@ -27,6 +27,7 @@ class CustomPanel(QtWidgets.QWidget):
         layout.addWidget(self.toggle_btn)
 
         self._content = QtWidgets.QWidget()
+        self._content.setObjectName("customPanelContent")
         self._content.setStyleSheet(CUSTOM_PANEL)
         content_layout = QtWidgets.QVBoxLayout(self._content)
         content_layout.setContentsMargins(6, 6, 6, 4)
@@ -95,6 +96,7 @@ class CustomPanel(QtWidgets.QWidget):
         visible = not self._content.isVisible()
         self._content.setVisible(visible)
         self.toggle_btn.setText("▼ Custom" if visible else "▶ Custom")
+        self.adjustSize()
 
     def _get_equations(self) -> tuple[str, str, str]:
         return tuple(te.toPlainText().strip() for te in self.text_edits)

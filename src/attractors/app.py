@@ -231,6 +231,7 @@ class Window(QtWidgets.QMainWindow):
         alpha_row = QtWidgets.QHBoxLayout()
         alpha_row.setSpacing(10)
         alpha_label = QtWidgets.QLabel("α ")
+        alpha_label.setStyleSheet(SLIDER_PARAMS)
         alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         alpha_slider.setRange(0, 100)
         alpha_slider.setValue(100)

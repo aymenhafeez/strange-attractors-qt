@@ -1,3 +1,4 @@
+from attractors.style import SLIDER_PARAMS
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .style import CUSTOM_PANEL, CUSTOM_TOGGLE, NO_BORDER
@@ -18,6 +19,7 @@ MAX_TRAJECTORIES = 8
 
 class _TrajectoryRow(QtWidgets.QWidget):
     changed = QtCore.pyqtSignal()
+    style_changed = QtCore.pyqtSignal()
     remove_requested = QtCore.pyqtSignal(object)
 
     def __init__(
@@ -73,6 +75,7 @@ class _TrajectoryRow(QtWidgets.QWidget):
         self.alpha_slider.setRange(0, 100)
         self.alpha_slider.setValue(100)
         self.alpha_slider.setFixedHeight(18)
+        self.alpha_slider.setStyleSheet(NO_BORDER)
         self.alpha_slider.valueChanged.connect(self.style_changed)
         alpha_row.addWidget(self.alpha_slider)
         alpha_row.addSpacing(28)
@@ -122,6 +125,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         layout.addWidget(self.toggle_btn)
 
         self._content = QtWidgets.QWidget()
+        self._content.setObjectName("customPanelContent")
         self._content.setStyleSheet(CUSTOM_PANEL)
         content_layout = QtWidgets.QVBoxLayout(self._content)
         content_layout.setContentsMargins(8, 8, 8, 8)
@@ -136,6 +140,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         content_layout.addLayout(enable_row)
 
         self._rows_container = QtWidgets.QWidget()
+        self._rows_container.setObjectName("rowsContainer")
         self._rows_container.setEnabled(False)
         rows_container_layout = QtWidgets.QVBoxLayout(self._rows_container)
         rows_container_layout.setContentsMargins(0, 0, 0, 0)
