@@ -19,10 +19,12 @@ This is a local, more performant version of
 ## Current features
 
 * Selection of attractors with real time slider updates for parameters
+* Input custom attractor equations
 * Scatter and line rendering modes
 * Trajectory animation
 * Trail mode showing solution's time step evolution
 * 2D heatmap projections
+* Multi trajectory view with varying initial conditions
 * Lyapunov exponent spectrum, convergence plots and Kaplan-Yorke dimension
 * Bifuraction plot from Poincaré sweep
 * Poincaré section view with configurable section plane
@@ -48,12 +50,9 @@ pip install -e .
 python -m src.attractors
 ```
 
-
 Optionally use the `--fullscreen` flag to launch the app in fullscreen mode.
 
 ## TODO
 
 * Improve Bifuraction performance
-* Sync Poincaré section with main window parameter and attractor changes in real time
-* Parse user defined systems
-* Allow comparison of multiple trajectories with varied initial conditions
+* Extend expression parser to accept non strange attractor like systems
