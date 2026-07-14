@@ -1,6 +1,14 @@
 import pytest
+import math
 
-from attractors.expression_parser import ParseError, tokenise
+from attractors.expression_parser import (
+    BinOp,
+    Num,
+    ParseError,
+    parse_expression,
+    tokenise,
+    UnaryOp,
+    Var,
 
 
 class TestTokenise:
@@ -52,3 +60,50 @@ class TestTokenise:
     def test_invalid_scientific_notation(self):
         with pytest.raises(ParseError):
             tokenise("1eX")
+
+
+class TestParseExpression:
+    def test_numbe(self):
+        assert parse_expression("3.14") == Num(3.14)
+
+    def test_variable(self):
+        assert parse_expression("x") == Var("x")
+
+    def test_addition(self):
+        node = parse_expression("x + y")
+        assert isinstance(node, BinOp)
+        assert node.op == "+"
+
+    def test_precedence_mul_over_add(self):
+        node = parse_expression("2 + 3 * 4")
+        assert isinstance(node, BinOp) and node.op == "+"
+        assert isinstance(node.right, BinOp) and node.right.op == "*"
+
+    def test_precedence_paren_override(self):
+        node = parse_expression("(2 + 3) * 4")
+        assert isinstance(node, BinOp) and node.op == "*"
+        assert isinstance(node.left, BinOp) and node.left.op == "+"
+
+    def test_power_right_associative(self):
+        node = parse_expression("2**3**2")
+        assert isinstance(node, BinOp) and node.op == "**"
+        assert isinstance(node.right, BinOp) and node.right.op == "**"
+
+    def test_unary_minus(self):
+        node = parse_expression("-x")
+        assert isinstance(node, UnaryOp) and node.op == "-"
+
+    def test_unary_double_minus(self):
+        node = parse_expression("--x")
+        assert isinstance(node, UnaryOp)
+        assert isinstance(node.operand, UnaryOp)
+
+    def test_constant_pi(self):
+        assert parse_expression("pi") == Num(math.pi)
+
+    def test_contant_euler(self):
+        assert parse_expression("euler") == Num(math.e)
+
+    def test_leftover_tokens_raises(self):
+        with pytest.raises(ParseError):
+            parse_expression("x y")
