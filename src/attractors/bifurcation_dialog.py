@@ -1,6 +1,6 @@
 import numpy as np
 import pyqtgraph as pg
-from PyQt6.QtCore import QThreadPool
+from pyqtgraph.Qt.QtCore import QThreadPool
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,

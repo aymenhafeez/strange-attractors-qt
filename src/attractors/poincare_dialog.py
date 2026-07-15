@@ -1,6 +1,6 @@
 import numpy as np
 import pyqtgraph as pg
-from PyQt6.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
+from pyqtgraph.Qt.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,

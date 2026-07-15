@@ -1,5 +1,5 @@
 import numpy as np
-from PyQt6.QtCore import QRunnable, pyqtSignal, QObject
+from pyqtgraph.Qt.QtCore import QRunnable, pyqtSignal, QObject
 
 from .solver import solve_attractor
 

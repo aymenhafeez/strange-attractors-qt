@@ -1,4 +1,4 @@
-from attractors.style import SLIDER_PARAMS
+from .style import SLIDER_PARAMS
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .style import CUSTOM_PANEL, CUSTOM_TOGGLE, NO_BORDER
