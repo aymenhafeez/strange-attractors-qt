@@ -24,7 +24,7 @@ STATUS_IC = """
 """
 
 SLIDERS = """
-    QWidget#controlPanel {
+    #controlPanel {
         background-color: #000000;
         border: 1px solid #aaa;
         border-left: 2px solid #999;
