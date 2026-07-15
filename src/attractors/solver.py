@@ -2,10 +2,18 @@ import numpy as np
 from scipy.integrate import odeint
 import threading
 
+from .models import AttractorConfig
+
 _odeint_lock = threading.Lock()
 
 
-def solve_attractor(config, param_values, n=None, t_max=None, ic=None):
+def solve_attractor(
+    config: AttractorConfig,
+    param_values: dict[str, float],
+    n: int | None = None,
+    t_max: int | None = None,
+    ic: list[float] | None = None,
+):
     t_def = config.time_defaults
     _t_max = t_max if t_max is not None else t_def["t_max"]
     t = np.linspace(t_def["t_min"], _t_max, n or t_def["n"])
