@@ -83,7 +83,13 @@ class ControlPanel(QtWidgets.QWidget):
 
         self.anim_button = QtWidgets.QPushButton("▶ Play")
         self.anim_button.clicked.connect(self.animation_toggled)
+
+        self.point_button = QtWidgets.QCheckBox("Point")
+        self.point_button.setStyleSheet(LINE_MODE_CHECKBOX)
+        self.point_button.setChecked(True)
+
         options_row.addWidget(self.anim_button)
+        options_row.addWidget(self.point_button)
         options_row.addStretch(1)
 
         self.line_mode = QtWidgets.QCheckBox("Line")

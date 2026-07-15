@@ -51,6 +51,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls.n_changed.connect(self._on_n_changed)
         self.controls.t_max_changed.connect(self._on_t_max_changed)
         self.controls.animation_toggled.connect(self._on_anim_toggled)
+        self.controls.point_button.toggled.connect(self.scene.set_point_mode)
         self.controls.line_mode.toggled.connect(self.scene.set_line_mode)
         self.controls.trail_mode.toggled.connect(self.scene.set_trail_mode)
         self.controls.show_grid.toggled.connect(self.scene.set_grid_visible)

@@ -38,6 +38,7 @@ class ViewManager(QtCore.QObject):
         self._line_mode = False
         self._trail_mode = False
         self._heads = []
+        self._heads_visible = True
         self._repositioning = False
         self._anim_frame = 0
         self._anim_step = 200
@@ -247,18 +248,28 @@ class ViewManager(QtCore.QObject):
             self.view.removeItem(self._scatters.pop())
             self.view.removeItem(self._lines.pop())
         while len(self._heads) < n:
-            head = gl.GLScatterPlotItem(size=15.0)
+            head = gl.GLScatterPlotItem(size=20.0)
             head.setGLOptions("additive")
             self.view.addItem(head)
             self._heads.append(head)
         while len(self._heads) > n:
             self.view.removeItem(self._heads.pop())
+        self._sync_head_visibility()
 
     def set_line_mode(self, checked):
         self._line_mode = checked
         for scatter, line in zip(self._scatters, self._lines):
             line.setVisible(checked)
             scatter.setVisible(not checked)
+
+    def set_point_mode(self, checked):
+        self._heads_visible = checked
+        self._sync_head_visibility()
+
+    def _sync_head_visibility(self):
+        visible = self._heads_visible and self._timer.isActive()
+        for h in self._heads:
+            h.setVisible(visible)
 
     def set_trail_mode(self, checked):
         self._trail_mode = checked
@@ -316,6 +327,8 @@ class ViewManager(QtCore.QObject):
             self._scatters[i].setVisible(not self._line_mode)
             self._lines[i].setData(color=c)
             self._lines[i].setVisible(self._line_mode)
+            if i < len(self._heads):
+                self._heads[i].setData(color=c[-1:])
 
     def display_solutions(self, solutions, is_partial):
         if not is_partial:
@@ -333,6 +346,8 @@ class ViewManager(QtCore.QObject):
             self._scatters[i].setVisible(not self._line_mode)
             self._lines[i].setData(pos=sol, color=c)
             self._lines[i].setVisible(self._line_mode)
+            if i < len(self._heads):
+                self._heads[i].setData(pos=sol[-1:], color=c[-1:])
 
     def auto_adjust_grid(self, solutions):
         if not solutions:
@@ -380,14 +395,12 @@ class ViewManager(QtCore.QObject):
     def toggle_animation(self):
         if self._timer.isActive():
             self._timer.stop()
-            for h in self._heads:
-                h.setVisible(False)
+            self._sync_head_visibility()
             return False
         else:
             self._anim_frame = 0
             self._timer.start(16)
-            for h in self._heads:
-                h.setVisible(True)
+            self._sync_head_visibility()
             return True
 
     def stop_animation(self):
@@ -423,6 +436,11 @@ class ViewManager(QtCore.QObject):
             all_pts = np.concatenate(all_segments, axis=0)
             x, y, z = all_pts.T
             self.projections_data.emit(x, y, z)
+
+        if frame >= len(sol0):
+            self._timer.stop()
+            self._sync_head_visibility()
+            self.animation_finished.emit()
 
         if frame >= len(sol0):
             self._timer.stop()
