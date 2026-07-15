@@ -81,7 +81,7 @@ class ControlPanel(QtWidgets.QWidget):
 
         options_row = QtWidgets.QHBoxLayout()
 
-        self.anim_button = QtWidgets.QPushButton("\u25b6 Play")
+        self.anim_button = QtWidgets.QPushButton("▶ Play")
         self.anim_button.clicked.connect(self.animation_toggled)
         options_row.addWidget(self.anim_button)
         options_row.addStretch(1)
@@ -162,7 +162,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.attractor_changed.emit(name)
 
     def set_anim_playing(self, playing):
-        self.anim_button.setText("\u25a0 Stop" if playing else "\u25b6 Play")
+        self.anim_button.setText("■ Stop" if playing else "▶ Play")
 
     def configure(self, config):
         self._clear_sliders()
