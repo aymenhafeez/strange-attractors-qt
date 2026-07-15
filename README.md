@@ -5,7 +5,7 @@ PyQtGraph app for visualising strange attractors.
 <table>
   <tr>
     <td><img src="media/image_7.png" /></td>
-    <td><img src="media/image_5.gif" /></td>
+    <td><video src="media/video_1.mp4" autoplay loop muted playsinline width="100%"></video></td>
   </tr>
   <tr>
     <td><img src="media/image_4.png" /></td>
