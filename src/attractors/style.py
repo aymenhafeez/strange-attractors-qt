@@ -73,7 +73,7 @@ LYAPUNOV_PLOT = "background-color: rgba(0, 0, 0, 0); border: 0px"
 CUSTOM_PANEL = """
     QWidget#customPanelContent {
         background-color: rgba(0, 0, 0, 240);
-        border: 1px solid #666;
+        border: 1px solid #aaa;
         border-radius: 0px;
     }
     QWidget#rowsContainer {
@@ -129,7 +129,7 @@ CUSTOM_TOGGLE = """
     QPushButton {
         background-color: rgba(0, 0, 0, 180);
         color: white;
-        border: 1px solid #666;
+        border: 1px solid #aaa;
         border-radius: 0px;
         padding: 3px 8px;
         font-size: 12px;
