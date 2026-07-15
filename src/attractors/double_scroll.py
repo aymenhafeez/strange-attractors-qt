@@ -29,7 +29,9 @@ _double_scroll_attractor = AttractorConfig(
     camera_elevation=20,
     camera_azimuth=-40,
     pan=0,
-    equation_text=("dx/dt = a(y - x)\ndy/dt = x(b - z)\ndz/dt = x·y - c z"),
+    equation_text=(
+        "dx/dt = y - 2·x·z\ndy/dt = -x + 0.5(1 - x^2) y - 0.5 y·z\ndz/dt = 0.1·x·y + a·x^2 - 0.8·b"
+    ),
     description=(
         "Qiu et al. derived this attractor as a variant of the Sprott A system, with "
         "the addition of cubic nonlinear term in order to construct a novel 3D "
