@@ -283,9 +283,7 @@ class ViewManager(QtCore.QObject):
         self._trajectories = trajectories
 
     def update_status(self, config, values):
-        formatted_params = "  ".join(
-            f"{k}: {v:.2f}" for k, v in sorted(values.items())
-        )
+        formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
         self.status_system.setText(f"<b>SYSTEM</b>: {config.name}")
         self.status_system.setToolTip(f"{config.description}")
         self.status_params.setText(f"<b>PARAMS</b>: {formatted_params}")
@@ -353,10 +351,7 @@ class ViewManager(QtCore.QObject):
         if not solutions:
             return
         new_half = min(float(np.max(np.abs(solutions[0]))) * 3, 500.0)
-        if (
-            abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6)
-            > 0.1
-        ):
+        if abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6) > 0.1:
             self.build_grid(new_half)
 
     def set_equation(self, text):
@@ -440,8 +435,4 @@ class ViewManager(QtCore.QObject):
         if frame >= len(sol0):
             self._timer.stop()
             self._sync_head_visibility()
-            self.animation_finished.emit()
-
-        if frame >= len(sol0):
-            self._timer.stop()
             self.animation_finished.emit()
