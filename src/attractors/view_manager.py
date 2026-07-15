@@ -37,6 +37,7 @@ class ViewManager(QtCore.QObject):
         self._current_alpha = 1.0
         self._line_mode = False
         self._trail_mode = False
+        self._heads = []
         self._repositioning = False
         self._anim_frame = 0
         self._anim_step = 200
@@ -245,6 +246,13 @@ class ViewManager(QtCore.QObject):
         while len(self._scatters) > n:
             self.view.removeItem(self._scatters.pop())
             self.view.removeItem(self._lines.pop())
+        while len(self._heads) < n:
+            head = gl.GLScatterPlotItem(size=15.0)
+            head.setGLOptions("additive")
+            self.view.addItem(head)
+            self._heads.append(head)
+        while len(self._heads) > n:
+            self.view.removeItem(self._heads.pop())
 
     def set_line_mode(self, checked):
         self._line_mode = checked
@@ -372,10 +380,14 @@ class ViewManager(QtCore.QObject):
     def toggle_animation(self):
         if self._timer.isActive():
             self._timer.stop()
+            for h in self._heads:
+                h.setVisible(False)
             return False
         else:
             self._anim_frame = 0
             self._timer.start(16)
+            for h in self._heads:
+                h.setVisible(True)
             return True
 
     def stop_animation(self):
@@ -403,6 +415,8 @@ class ViewManager(QtCore.QObject):
             if i < len(self._scatters):
                 self._scatters[i].setData(pos=segment, color=c)
                 self._lines[i].setData(pos=segment, color=c)
+            if i < len(self._heads):
+                self._heads[i].setData(pos=segment[-1:], color=c[-1:])
             all_segments.append(segment)
 
         if all_segments:
