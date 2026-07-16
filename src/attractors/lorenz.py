@@ -30,7 +30,7 @@ _lorenz_attractor = AttractorConfig(
     camera_elevation=20,
     camera_azimuth=-40,
     pan=25,
-    equation_text=("dx/dt = a(y - x)\ndy/dt = x(b - z) - y\ndz/dt = xy - cz"),
+    equation_text=("dx/dt = a(y - x)\ndy/dt = x(b - z) - y\ndz/dt = x·y - c·z"),
     description=(
         "The Lorenz attractor is a set of chaotic solutions to a 3D system of "
         "equations modelling simplified atmospheric convection. It is famous "
