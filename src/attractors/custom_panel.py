@@ -1,3 +1,4 @@
+from attractors.style import SLIDER_PARAMS
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .expression_parser import (
@@ -34,7 +35,7 @@ class CustomPanel(QtWidgets.QWidget):
         content_layout.setSpacing(4)
 
         eq_label = QtWidgets.QLabel("Equations")
-        eq_label.setStyleSheet(NO_BORDER)
+        eq_label.setStyleSheet(SLIDER_PARAMS)
         content_layout.addWidget(eq_label)
 
         self.text_edits: list[QtWidgets.QTextEdit] = []
@@ -63,14 +64,14 @@ class CustomPanel(QtWidgets.QWidget):
             content_layout.addLayout(row)
 
         ic_label = QtWidgets.QLabel("Initial Conditions")
-        ic_label.setStyleSheet(NO_BORDER)
+        ic_label.setStyleSheet(SLIDER_PARAMS)
         content_layout.addWidget(ic_label)
 
         ic_row = QtWidgets.QHBoxLayout()
         self.ic_spins: list[QtWidgets.QDoubleSpinBox] = []
         for axis, default in [("x₀", 0.1), ("y₀", 0.0), ("z₀", 0.0)]:
             lbl = QtWidgets.QLabel(axis)
-            lbl.setStyleSheet(NO_BORDER)
+            lbl.setStyleSheet(SLIDER_PARAMS)
             spin = QtWidgets.QDoubleSpinBox()
             spin.setRange(-1000.0, 1000.0)
             spin.setDecimals(4)
@@ -81,9 +82,23 @@ class CustomPanel(QtWidgets.QWidget):
             self.ic_spins.append(spin)
         content_layout.addLayout(ic_row)
 
-        self.compile_btn = QtWidgets.QPushButton("Compile and Solve")
+        self.range_group = QtWidgets.QGroupBox()
+        self.range_group.setStyleSheet(NO_BORDER)
+        self.range_layout = QtWidgets.QVBoxLayout(self.range_group)
+        self.range_layout.setContentsMargins(0, 4, 0, 0)
+        self.range_group.hide()
+        content_layout.addWidget(self.range_group)
+
+        self._range_widgets: dict = {}
+
+        self.compile_btn = QtWidgets.QPushButton("Compile")
         self.compile_btn.clicked.connect(self._on_compile)
         content_layout.addWidget(self.compile_btn)
+
+        self.solve_btn = QtWidgets.QPushButton("Solve")
+        self.solve_btn.clicked.connect(self._on_solve)
+        self.solve_btn.hide()
+        content_layout.addWidget(self.solve_btn)
 
         self.status_label = QtWidgets.QLabel("")
         self.status_label.setWordWrap(True)
@@ -117,27 +132,120 @@ class CustomPanel(QtWidgets.QWidget):
             self._show_status(f"Compilation failed: {exc}", error=True)
             return
 
+        self.range_group.hide()
+        self.solve_btn.hide()
+        self.compile_btn.show()
+
+        self._func = func
+        self._detected_params = detected_params
+        self._equation_text = format_equations(equations)
+
+        if not detected_params:
+            self._emit_config()
+            return
+
+        self._build_range_editors(detected_params)
+        self.range_group.show()
+        self.compile_btn.hide()
+        self.solve_btn.show()
+        self.adjustSize()
+
+        self._show_status(
+            f"Compiled — {len(detected_params)} parameter(s): "
+            + ", ".join(detected_params)
+            + ". Set ranges and click solve",
+            error=False,
+        )
+
+    def _build_range_editors(self, params: list[str]):
+        self._clear_layout(self.range_layout)
+        self._range_widgets = {}
+
+        header = QtWidgets.QHBoxLayout()
+        for text in ("Min", "Max", "Step"):
+            lbl = QtWidgets.QLabel(text)
+            lbl.setStyleSheet("font-weight: bold;")
+            lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            header.addWidget(lbl)
+        self.range_layout.addLayout(header)
+
+        for p in params:
+            row = QtWidgets.QHBoxLayout()
+            row.addWidget(QtWidgets.QLabel(p))
+
+            mn = QtWidgets.QDoubleSpinBox()
+            mn.setRange(-1e6, 1e6)
+            mn.setDecimals(4)
+            mn.setValue(DEFAULT_RANGE[0])
+            row.addWidget(mn)
+
+            mx = QtWidgets.QDoubleSpinBox()
+            mx.setRange(-1e6, 1e6)
+            mx.setDecimals(4)
+            mx.setValue(DEFAULT_RANGE[1])
+            row.addWidget(mx)
+
+            st = QtWidgets.QDoubleSpinBox()
+            st.setRange(1e-6, 1e6)
+            st.setDecimals(6)
+            st.setValue(STEP)
+            row.addWidget(st)
+
+            self.range_layout.addLayout(row)
+            self._range_widgets[p] = [mn, mx, st]
+
+    def _clear_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+            r_layout = item.layout()
+            if r_layout:
+                self._clear_layout(r_layout)
+
+    def _on_solve(self):
+        self.range_group.hide()
+        self.solve_btn.hide()
+        self.compile_btn.show()
+        self.adjustSize()
+        self._emit_config()
+
+    def _emit_config(self):
+        params = []
+        for p in self._detected_params:
+            if p in self._range_widgets:
+                mn, mx, st = self._range_widgets[p]
+                params.append(
+                    AttractorParam(p, 1.0, mn.value(), mx.value(), st.value())
+                )
+            else:
+                params.append(AttractorParam(p, 1.0, *DEFAULT_RANGE, STEP))
+
         config = AttractorConfig(
             name="Custom",
-            equation=func,
-            params=[
-                AttractorParam(p, 1.0, *DEFAULT_RANGE, STEP) for p in detected_params
-            ],
+            equation=self._func,
+            params=params,
             initial_conditions=[spin.value() for spin in self.ic_spins],
             time_defaults={
                 "t_min": 0,
                 "t_max": 50,
                 "n": 100000,
             },
-            equation_text=format_equations(equations),
+            equation_text=self._equation_text,
             description="User-defined custom attractor",
         )
 
         self._show_status(
-            f"Compiled — {len(detected_params)} parameter(s): "
-            + ", ".join(detected_params),
+            f"Compiled — {len(params)} parameter(s): "
+            + ", ".join(p.name for p in params),
             error=False,
         )
+
+        self._detected_params = []
+        self._func = None
+        self._equation_text = ""
+        self._range_widgets = {}
 
         self.compile_requested.emit(config)
 
