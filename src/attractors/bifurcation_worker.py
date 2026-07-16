@@ -72,19 +72,22 @@ class BifurcationWorker(QRunnable):
                     crossings = np.where((z[:-1] < z_mid) & (z[1:] >= z_mid))[0]
 
                     all_vals.append(val)
+
+                    if len(crossings) == 0:
+                        all_peaks.append(np.array([]))
+                    else:
+                        frac = (z_mid - z[crossings]) / (
+                            z[crossings + 1] - z[crossings]
+                        )
+                        peaks = data[crossings, self.axis] + frac * (
+                            data[crossings + 1, self.axis] - data[crossings, self.axis]
+                        )
+                        all_peaks.append(peaks)
+
                 except Exception as e:
                     self.signals.error.emit(f"Failed at {self.sweep_param}={val}: {e}")
                     cancelled = True
                     break
-
-                if len(crossings) == 0:
-                    all_peaks.append(np.array([]))
-                else:
-                    frac = (z_mid - z[crossings]) / (z[crossings + 1] - z[crossings])
-                    peaks = data[crossings, self.axis] + frac * (
-                        data[crossings + 1, self.axis] - data[crossings, self.axis]
-                    )
-                    all_peaks.append(peaks)
 
             if cancelled:
                 break
