@@ -246,7 +246,7 @@ class ControlPanel(QtWidgets.QWidget):
         t_max_slider.param_step = 1
         t_max_spin = QtWidgets.QSpinBox()
         t_max_spin.setKeyboardTracking(False)
-        t_max_spin.setRange(1, 5000)
+        t_max_spin.setRange(1, 500)
         t_max_spin.setSingleStep(1)
         t_max_spin.setValue(config.time_defaults["t_max"])
         t_max_spin.param_step = 1
@@ -324,9 +324,7 @@ class ControlPanel(QtWidgets.QWidget):
             img.setImage(np.log1p(heatmap))
             x_min, x_max = xedges[0], xedges[-1]
             y_min, y_max = yedges[0], yedges[-1]
-            img.setRect(
-                pg.QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min)
-            )
+            img.setRect(pg.QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min))
             pw.autoRange()
 
     def reapply_projections(self, solutions):
