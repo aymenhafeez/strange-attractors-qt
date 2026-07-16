@@ -1,5 +1,5 @@
 import numpy as np
-from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .bifurcation_dialog import BifurcationDialog
 from .control_panel import ControlPanel
@@ -158,9 +158,7 @@ class Window(QtWidgets.QMainWindow):
         ics = self.scene.get_trajectories()
         ic_list = [t["ic"] for t in ics] if ics else [config.initial_conditions]
         dispatch_n = user_n if full else min(user_n, PARTIAL_N)
-        self.solver.request_solve(
-            config, values, ic_list, dispatch_n, not full, t_max
-        )
+        self.solver.request_solve(config, values, ic_list, dispatch_n, not full, t_max)
 
     def _on_controls_solve_requested(self, full):
         self.scene.stop_animation()
