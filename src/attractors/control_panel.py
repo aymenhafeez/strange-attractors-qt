@@ -241,12 +241,12 @@ class ControlPanel(QtWidgets.QWidget):
         t_max_label.setStyleSheet("color: white;")
         t_max_row.addWidget(t_max_label)
         t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        t_max_slider.setRange(1, 500)
+        t_max_slider.setRange(1, 750)
         t_max_slider.setValue(config.time_defaults["t_max"])
         t_max_slider.param_step = 1
         t_max_spin = QtWidgets.QSpinBox()
         t_max_spin.setKeyboardTracking(False)
-        t_max_spin.setRange(1, 500)
+        t_max_spin.setRange(1, 750)
         t_max_spin.setSingleStep(1)
         t_max_spin.setValue(config.time_defaults["t_max"])
         t_max_spin.param_step = 1
