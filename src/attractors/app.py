@@ -58,6 +58,8 @@ class Window(QtWidgets.QMainWindow):
         self.controls.alpha_slider.valueChanged.connect(self.scene.set_alpha)
         self.controls.alpha_spin.valueChanged.connect(self.scene.set_alpha)
         self.controls.save_requested.connect(self.scene.save_view_as_png)
+        self.controls.traj_tail_mode.toggled.connect(self.scene.set_traj_tail_enabled)
+        self.controls.traj_tail_length_changed.connect(self.scene.set_traj_tail_length)
 
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         splitter.setStyleSheet(SPLITTER)
@@ -119,6 +121,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls.configure(config)
         self.current_n = config.time_defaults["n"]
         self.current_t_max = config.time_defaults["t_max"]
+        self.controls.set_traj_tail_max(self.current_n)
         self.scene.clear_lyapunov()
         self.scene.reset_trajectory_panel(config)
         self._update_plot()
@@ -214,6 +217,7 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_n_changed(self, val):
         self.current_n = val
+        self.controls.set_traj_tail_max(val)
 
     def _on_t_max_changed(self, val):
         self.current_t_max = val

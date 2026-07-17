@@ -27,6 +27,8 @@ class ControlPanel(QtWidgets.QWidget):
     t_max_changed = QtCore.pyqtSignal(int)
     animation_toggled = QtCore.pyqtSignal()
     save_requested = QtCore.pyqtSignal()
+    traj_tail_toggled = QtCore.pyqtSignal(bool)
+    traj_tail_length_changed = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -73,7 +75,7 @@ class ControlPanel(QtWidgets.QWidget):
         tools_menu.setStyleSheet(DROPDOWN_SELECTION)
         bifurcation_action = tools_menu.addAction("Bifurcation diagram")
         bifurcation_action.triggered.connect(self.bifurcation_requested)
-        poincare_action = tools_menu.addAction("Poincar\u00e9 section")
+        poincare_action = tools_menu.addAction("Poincaré section")
         poincare_action.triggered.connect(self.poincare_requested)
         self.tools_button.setMenu(tools_menu)
 
@@ -110,11 +112,16 @@ class ControlPanel(QtWidgets.QWidget):
         self.show_grid.setStyleSheet(LINE_MODE_CHECKBOX)
         options_row.addWidget(self.show_grid)
 
+        self.traj_tail_mode = QtWidgets.QCheckBox("Tail")
+        self.traj_tail_mode.setChecked(False)
+        self.traj_tail_mode.setStyleSheet(LINE_MODE_CHECKBOX)
+        options_row.addWidget(self.traj_tail_mode)
+
         self.panel_layout.addLayout(options_row)
 
         alpha_row = QtWidgets.QHBoxLayout()
         alpha_row.setSpacing(10)
-        alpha_label = QtWidgets.QLabel("\u03b1 ")
+        alpha_label = QtWidgets.QLabel("α ")
         alpha_label.setStyleSheet(SLIDER_PARAMS)
         self.alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.alpha_slider.setRange(0, 100)
@@ -131,6 +138,41 @@ class ControlPanel(QtWidgets.QWidget):
         alpha_wrapper = QtWidgets.QWidget()
         alpha_wrapper.setLayout(alpha_row)
         self.panel_layout.addWidget(alpha_wrapper)
+
+        traj_tail_row = QtWidgets.QHBoxLayout()
+        traj_tail_row.setSpacing(10)
+        traj_tail_label = QtWidgets.QLabel("Len")
+        traj_tail_label.setStyleSheet(SLIDER_PARAMS)
+        self.traj_tail_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.traj_tail_slider.setRange(1, 500)
+        self.traj_tail_slider.setValue(5)
+        self.traj_tail_spin = QtWidgets.QSpinBox()
+        self.traj_tail_spin.setKeyboardTracking(False)
+        self.traj_tail_spin.setRange(1000, 500000)
+        self.traj_tail_spin.setSingleStep(STEP)
+        self.traj_tail_spin.setValue(5000)
+        self.traj_tail_slider.param_step = STEP
+        self.traj_tail_spin.param_step = STEP
+        self.traj_tail_slider.valueChanged.connect(
+            lambda val: self.traj_tail_spin.setValue(
+                val * self.traj_tail_slider.param_step
+            )
+        )
+        self.traj_tail_spin.valueChanged.connect(
+            lambda val: self.traj_tail_slider.setValue(
+                int(val / self.traj_tail_spin.param_step)
+            )
+        )
+        self.traj_tail_spin.valueChanged.connect(self.traj_tail_length_changed.emit)
+        traj_tail_row.addWidget(traj_tail_label)
+        traj_tail_row.addWidget(self.traj_tail_slider)
+        traj_tail_row.addWidget(self.traj_tail_spin)
+        traj_tail_wrapper = QtWidgets.QWidget()
+        traj_tail_wrapper.setLayout(traj_tail_row)
+        traj_tail_wrapper.setVisible(False)
+        self.traj_tail_mode.toggled.connect(self.traj_tail_toggled.emit)
+        self.traj_tail_mode.toggled.connect(traj_tail_wrapper.setVisible)
+        self.panel_layout.addWidget(traj_tail_wrapper)
 
         controls_row = QtWidgets.QHBoxLayout()
         self.reset_button = QtWidgets.QPushButton("Reset")
@@ -314,6 +356,14 @@ class ControlPanel(QtWidgets.QWidget):
         for p, s, _, _ in self.slider_rows:
             s.setValue(int(p.default / p.step))
         self.solve_requested.emit(True)
+
+    def set_traj_tail_max(self, max_val):
+        max_slider = max(1, int(max_val / STEP))
+        self.traj_tail_slider.setRange(1, max_slider)
+        self.traj_tail_spin.setRange(STEP, max_val)
+
+        if self.traj_tail_spin.value() > max_val:
+            self.traj_tail_spin.setValue(max_val)
 
     def hide_standard_controls(self):
         for _, _, _, wrapper in self.slider_rows:

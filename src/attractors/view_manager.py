@@ -41,6 +41,8 @@ class ViewManager(QtCore.QObject):
         self._heads_visible = True
         self._repositioning = False
         self._anim_frame = 0
+        self._traj_tail_length = 5000
+        self._traj_tail_enabled = False
         self._anim_step = 200
         self._grid_visible = True
         self.grid_half_size = 30.0
@@ -271,10 +273,6 @@ class ViewManager(QtCore.QObject):
         for h in self._heads:
             h.setVisible(visible)
 
-    def set_trail_mode(self, checked):
-        self._trail_mode = checked
-        self.refresh_colours()
-
     def set_alpha(self, val):
         self._current_alpha = val / 100.0 if val > 1 else val
         self.refresh_colours()
@@ -316,11 +314,7 @@ class ViewManager(QtCore.QObject):
         for i, sol in enumerate(self._solutions):
             if i >= len(self._scatters):
                 break
-            base_colour, alpha = self._get_traj_colour_alpha(i)
-            if self._trail_mode:
-                c = self._plot_trail(len(sol), alpha, base_colour)
-            else:
-                c = np.full((len(sol), 4), (*base_colour, alpha))
+            _, c = self._get_traj_tail_data(i, sol)
             self._scatters[i].setData(color=c)
             self._scatters[i].setVisible(not self._line_mode)
             self._lines[i].setData(color=c)
@@ -335,17 +329,13 @@ class ViewManager(QtCore.QObject):
         self.sync_gl_items(len(solutions))
 
         for i, sol in enumerate(solutions):
-            base_colour, alpha = self._get_traj_colour_alpha(i)
-            if self._trail_mode:
-                c = self._plot_trail(len(sol), alpha, base_colour)
-            else:
-                c = np.full((len(sol), 4), (*base_colour, alpha))
-            self._scatters[i].setData(pos=sol, color=c)
+            segment, c = self._get_traj_tail_data(i, sol)
+            self._scatters[i].setData(pos=segment, color=c)
             self._scatters[i].setVisible(not self._line_mode)
-            self._lines[i].setData(pos=sol, color=c)
+            self._lines[i].setData(pos=segment, color=c)
             self._lines[i].setVisible(self._line_mode)
             if i < len(self._heads):
-                self._heads[i].setData(pos=sol[-1:], color=c[-1:])
+                self._heads[i].setData(pos=segment[-1:], color=c[-1:])
 
     def auto_adjust_grid(self, solutions):
         if not solutions:
@@ -373,7 +363,7 @@ class ViewManager(QtCore.QObject):
 
     def set_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
         self.lyapunov_label.setText(
-            f"\u03bb = ({lyap[0]:+.2f}, {lyap[1]:+.2f}, {lyap[2]:+.2f})  D_KY = {ky_dim:.2f}"
+            f"λ = ({lyap[0]:+.2f}, {lyap[1]:+.2f}, {lyap[2]:+.2f})  D_KY = {ky_dim:.2f}"
         )
         self.lyapunov_container.setVisible(True)
         self.curve_l1.setData(t_hist, lyap_hist[:, 0])
@@ -414,6 +404,46 @@ class ViewManager(QtCore.QObject):
     def is_animating(self):
         return self._timer.isActive()
 
+    def _get_traj_tail_data(self, i, sol):
+        if self._traj_tail_enabled:
+            segment = sol[-self._traj_tail_length :]
+        else:
+            segment = sol
+
+        base_colour, alpha = self._get_traj_colour_alpha(i)
+        if self._trail_mode:
+            c = self._plot_trail(len(segment), alpha, base_colour)
+        else:
+            c = np.full((len(segment), 4), (*base_colour, alpha))
+
+        return segment, c
+
+    def set_traj_tail_enabled(self, checked):
+        self._traj_tail_enabled = checked
+        self._update_display()
+
+    def set_trail_mode(self, checked):
+        self._trail_mode = checked
+        self._update_colours()
+
+    def set_traj_tail_length(self, val):
+        self._traj_tail_length = val
+        self._update_display()
+
+    def _update_display(self):
+        if not self._solutions:
+            return
+        for i, sol in enumerate(self._solutions):
+            if i >= len(self._scatters):
+                break
+            segment, c = self._get_traj_tail_data(i, sol)
+            self._scatters[i].setData(pos=segment, color=c)
+            self._scatters[i].setVisible(not self._line_mode)
+            self._lines[i].setData(pos=segment, color=c)
+            self._lines[i].setVisible(self._line_mode)
+            if i < len(self._heads):
+                self._heads[i].setData(pos=segment[-1:], color=c[-1:])
+
     def _animate_frame(self):
         if not self._solutions:
             return
@@ -424,7 +454,11 @@ class ViewManager(QtCore.QObject):
 
         all_segments = []
         for i, sol in enumerate(self._solutions):
-            segment = sol[:frame]
+            if self._traj_tail_enabled:
+                start = max(0, frame - self._traj_tail_length)
+                segment = sol[start:frame]
+            else:
+                segment = sol[:frame]
             base_colour, alpha = self._get_traj_colour_alpha(i)
             if self._trail_mode:
                 c = self._plot_trail(len(segment), alpha, base_colour)
