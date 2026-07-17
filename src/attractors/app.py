@@ -58,7 +58,6 @@ class Window(QtWidgets.QMainWindow):
         self.controls.alpha_slider.valueChanged.connect(self.scene.set_alpha)
         self.controls.alpha_spin.valueChanged.connect(self.scene.set_alpha)
         self.controls.save_requested.connect(self.scene.save_view_as_png)
-        self.controls.traj_tail_mode.toggled.connect(self.scene.set_traj_tail_enabled)
         self.controls.traj_tail_length_changed.connect(self.scene.set_traj_tail_length)
 
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)

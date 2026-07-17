@@ -418,13 +418,10 @@ class ViewManager(QtCore.QObject):
 
         return segment, c
 
-    def set_traj_tail_enabled(self, checked):
-        self._traj_tail_enabled = checked
-        self._update_display()
-
     def set_trail_mode(self, checked):
         self._trail_mode = checked
-        self._update_colours()
+        self._traj_tail_enabled = checked
+        self._update_display()
 
     def set_traj_tail_length(self, val):
         self._traj_tail_length = val

@@ -27,7 +27,6 @@ class ControlPanel(QtWidgets.QWidget):
     t_max_changed = QtCore.pyqtSignal(int)
     animation_toggled = QtCore.pyqtSignal()
     save_requested = QtCore.pyqtSignal()
-    traj_tail_toggled = QtCore.pyqtSignal(bool)
     traj_tail_length_changed = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None):
@@ -112,11 +111,6 @@ class ControlPanel(QtWidgets.QWidget):
         self.show_grid.setStyleSheet(LINE_MODE_CHECKBOX)
         options_row.addWidget(self.show_grid)
 
-        self.traj_tail_mode = QtWidgets.QCheckBox("Tail")
-        self.traj_tail_mode.setChecked(False)
-        self.traj_tail_mode.setStyleSheet(LINE_MODE_CHECKBOX)
-        options_row.addWidget(self.traj_tail_mode)
-
         self.panel_layout.addLayout(options_row)
 
         alpha_row = QtWidgets.QHBoxLayout()
@@ -170,8 +164,7 @@ class ControlPanel(QtWidgets.QWidget):
         traj_tail_wrapper = QtWidgets.QWidget()
         traj_tail_wrapper.setLayout(traj_tail_row)
         traj_tail_wrapper.setVisible(False)
-        self.traj_tail_mode.toggled.connect(self.traj_tail_toggled.emit)
-        self.traj_tail_mode.toggled.connect(traj_tail_wrapper.setVisible)
+        self.trail_mode.toggled.connect(traj_tail_wrapper.setVisible)
         self.panel_layout.addWidget(traj_tail_wrapper)
 
         controls_row = QtWidgets.QHBoxLayout()
