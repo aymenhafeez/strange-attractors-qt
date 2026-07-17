@@ -129,10 +129,14 @@ class ControlPanel(QtWidgets.QWidget):
         alpha_wrapper.setLayout(alpha_row)
         self.panel_layout.addWidget(alpha_wrapper)
 
+        self.reset_button = QtWidgets.QPushButton("Reset")
+        self.reset_button.clicked.connect(self.reset_to_defaults)
+
         self.projection_container = QtWidgets.QWidget()
         proj_layout = QtWidgets.QVBoxLayout(self.projection_container)
         proj_layout.setContentsMargins(0, 0, 0, 0)
         proj_layout.setSpacing(3)
+        proj_layout.addWidget(self.reset_button)
 
         self.image_items = {}
         for key, (lh, lv) in [
@@ -295,6 +299,11 @@ class ControlPanel(QtWidgets.QWidget):
             wrapper.setLayout(row)
             self.panel_layout.addWidget(wrapper)
             self.slider_rows.append((p, s, row, wrapper))
+
+    def reset_to_defaults(self):
+        for p, s, _, _ in self.slider_rows:
+            s.setValue(int(p.default / p.step))
+        self.solve_requested.emit(True)
 
     def hide_standard_controls(self):
         for _, _, _, wrapper in self.slider_rows:
