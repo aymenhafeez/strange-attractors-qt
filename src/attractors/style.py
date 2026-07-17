@@ -142,3 +142,19 @@ CUSTOM_TOGGLE = """
 """
 
 NO_BORDER = "border: none;"
+
+FLAT_BUTTON = """
+    QPushButton {
+        background-color: #ddd;
+        color: black;
+        border: 1px solid #aaa;
+        border-radius: 0px;  /* The key change */
+        padding: 4px 12px;
+    }
+    QPushButton:hover {
+        background-color: #eee;
+    }
+    QPushButton:pressed {
+        background-color: #ccc;
+    }
+"""

@@ -11,6 +11,7 @@ from .style import (
     LINE_MODE_CHECKBOX,
     SLIDER_PARAMS,
     SLIDERS,
+    FLAT_BUTTON,
 )
 
 STEP = 1000
@@ -83,6 +84,7 @@ class ControlPanel(QtWidgets.QWidget):
         options_row = QtWidgets.QHBoxLayout()
 
         self.anim_button = QtWidgets.QPushButton("▶ Play")
+        self.anim_button.setStyleSheet(FLAT_BUTTON)
         self.anim_button.clicked.connect(self.animation_toggled)
 
         self.point_button = QtWidgets.QCheckBox("Point")
@@ -132,8 +134,10 @@ class ControlPanel(QtWidgets.QWidget):
 
         controls_row = QtWidgets.QHBoxLayout()
         self.reset_button = QtWidgets.QPushButton("Reset")
+        self.reset_button.setStyleSheet(FLAT_BUTTON)
         self.reset_button.clicked.connect(self.reset_to_defaults)
         self.save_button = QtWidgets.QPushButton("Save view")
+        self.save_button.setStyleSheet(FLAT_BUTTON)
         self.save_button.clicked.connect(self.save_requested.emit)
         controls_row.addWidget(self.reset_button)
         controls_row.addWidget(self.save_button)
