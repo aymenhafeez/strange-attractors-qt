@@ -67,7 +67,7 @@ class BifurcationDialog(QDialog):
         self.transient_spin = QDoubleSpinBox()
         self.transient_spin.setRange(0.0, 0.99)
         self.transient_spin.setSingleStep(0.05)
-        self.transient_spin.setValue(0.7)
+        self.transient_spin.setValue(0.85)
         row2.addWidget(self.transient_spin)
         layout.addLayout(row2)
 
@@ -99,7 +99,7 @@ class BifurcationDialog(QDialog):
             [],
             pen=None,
             symbol="o",
-            symbolSize=1,
+            symbolSize=0.25,
             symbolBrush=(255, 255, 255),
         )
         layout.addWidget(self.plot_widget)
