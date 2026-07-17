@@ -66,6 +66,7 @@ def _gram_schmidt(theta_flat):
     return theta.ravel(), lyap_sums
 
 
+@numba.njit(nogil=True)
 def compute_lyapunov(
     equation,
     initial_conditions,
@@ -74,34 +75,31 @@ def compute_lyapunov(
     t_max,
     n,
     gs_interval=10,
-    return_history=False,
 ):
     state = np.zeros(12, dtype=np.float64)
     state[:3] = initial_conditions
     state[3:] = np.eye(3).ravel()
     total_time = t_max - t_min
     dt = total_time / n
-    p = np.array(params, dtype=np.float64)
     lyap_sums = np.zeros(3)
 
     gs_counter = 0
 
-    if return_history:
-        t_hist = []
-        lyap_hist = []
+    n_gs = n // gs_interval
+    t_hist = np.empty(n_gs)
+    lyap_hist = np.empty((n_gs, 3))
 
     for i in range(n):
-        state = _rk4_step(state, dt, p, equation)
+        state = _rk4_step(state, dt, params, equation)
 
         if (i + 1) % gs_interval == 0:
             state[3:], sums = _gram_schmidt(state[3:])
             lyap_sums += sums
             gs_counter += 1
 
-            if return_history:
-                t_current = gs_counter * gs_interval * dt
-                t_hist.append(t_current)
-                lyap_hist.append(lyap_sums / t_current)
+            t_current = gs_counter * gs_interval * dt
+            t_hist[gs_counter - 1] = t_current
+            lyap_hist[gs_counter - 1] = lyap_sums / t_current
 
     total_gs_time = gs_counter * gs_interval * dt
     lyap = lyap_sums / total_gs_time
@@ -113,7 +111,4 @@ def compute_lyapunov(
     else:
         ky = 3.0
 
-    if return_history:
-        return lyap, ky, np.array(t_hist), np.array(lyap_hist)
-
-    return lyap, ky
+    return lyap, ky, t_hist[:gs_counter], lyap_hist[:gs_counter]

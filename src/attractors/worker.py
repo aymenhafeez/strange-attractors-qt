@@ -1,3 +1,4 @@
+import numpy as np
 from pyqtgraph.Qt.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from .lyapunov import compute_lyapunov
@@ -40,7 +41,9 @@ class LyapunovWorker(QObject):
         self._cancel = False
 
         try:
-            pvals = [values[p.name] for p in config.params]
+            pvals = np.ascontiguousarray(
+                [values[p.name] for p in config.params], dtype=np.float64
+            )
             lyap, ky_dim, t_hist, lyap_hist = compute_lyapunov(
                 config.equation,
                 config.initial_conditions,
@@ -48,7 +51,6 @@ class LyapunovWorker(QObject):
                 config.time_defaults["t_min"],
                 config.time_defaults["t_max"],
                 config.time_defaults["n"],
-                return_history=True,
             )
 
             if not self._cancel:
