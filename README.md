@@ -54,5 +54,4 @@ Optionally use the `--fullscreen` flag to launch the app in fullscreen mode.
 
 ## TODO
 
-* Improve Bifuraction performance
 * Extend expression parser to accept non strange attractor like systems
