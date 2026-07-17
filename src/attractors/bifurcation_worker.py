@@ -1,7 +1,7 @@
 import numpy as np
 from pyqtgraph.Qt.QtCore import QRunnable, pyqtSignal, QObject
 
-from .solver import solve_attractor
+from .solver import solve_rk4
 
 
 class _BifurcationSignals(QObject):
@@ -59,9 +59,25 @@ class BifurcationWorker(QRunnable):
                     self.signals.progress.emit(int(progress))
 
                 try:
-                    params = {**self.base_params, self.sweep_param: float(val)}
-                    sol = solve_attractor(
-                        self.config, params, self.n_total, t_max=self.t_max, ic=ic
+                    param_dict = {**self.base_params, self.sweep_param: float(val)}
+                    pvals = np.ascontiguousarray(
+                        [param_dict[p.name] for p in self.config.params],
+                        dtype=np.float64,
+                    )
+                    y0 = (
+                        ic
+                        if ic is not None
+                        else np.array(self.config.initial_conditions, dtype=np.float64)
+                    )
+                    # see integrator profiling notebook
+                    n_eff = max(self.n_total // 10, 5000)
+                    sol = solve_rk4(
+                        self.config.equation,
+                        y0,
+                        0,
+                        self.t_max,
+                        n_eff,
+                        pvals,
                     )
                     ic = sol[-1]
 
