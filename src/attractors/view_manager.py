@@ -387,6 +387,16 @@ class ViewManager(QtCore.QObject):
     def reset_trajectory_panel(self, config):
         self.trajectory_panel.reset(config)
 
+    def save_view_as_png(self):
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self.container, "Save View as PNG", "", "PNG Files (*.png)"
+        )
+        if not filename:
+            return
+
+        img = self.view.grabFramebuffer()
+        img.save(filename)
+
     def toggle_animation(self):
         if self._timer.isActive():
             self._timer.stop()

@@ -57,6 +57,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls.show_grid.toggled.connect(self.scene.set_grid_visible)
         self.controls.alpha_slider.valueChanged.connect(self.scene.set_alpha)
         self.controls.alpha_spin.valueChanged.connect(self.scene.set_alpha)
+        self.controls.save_requested.connect(self.scene.save_view_as_png)
 
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         splitter.setStyleSheet(SPLITTER)

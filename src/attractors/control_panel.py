@@ -25,6 +25,7 @@ class ControlPanel(QtWidgets.QWidget):
     n_changed = QtCore.pyqtSignal(int)
     t_max_changed = QtCore.pyqtSignal(int)
     animation_toggled = QtCore.pyqtSignal()
+    save_requested = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -129,14 +130,19 @@ class ControlPanel(QtWidgets.QWidget):
         alpha_wrapper.setLayout(alpha_row)
         self.panel_layout.addWidget(alpha_wrapper)
 
+        controls_row = QtWidgets.QHBoxLayout()
         self.reset_button = QtWidgets.QPushButton("Reset")
         self.reset_button.clicked.connect(self.reset_to_defaults)
+        self.save_button = QtWidgets.QPushButton("Save view")
+        self.save_button.clicked.connect(self.save_requested.emit)
+        controls_row.addWidget(self.reset_button)
+        controls_row.addWidget(self.save_button)
 
         self.projection_container = QtWidgets.QWidget()
         proj_layout = QtWidgets.QVBoxLayout(self.projection_container)
         proj_layout.setContentsMargins(0, 0, 0, 0)
         proj_layout.setSpacing(3)
-        proj_layout.addWidget(self.reset_button)
+        proj_layout.addLayout(controls_row)
 
         self.image_items = {}
         for key, (lh, lv) in [
