@@ -136,7 +136,7 @@ class ControlPanel(QtWidgets.QWidget):
         traj_tail_row = QtWidgets.QHBoxLayout()
         traj_tail_row.setSpacing(10)
         traj_tail_label = QtWidgets.QLabel("Len")
-        traj_tail_label.setStyleSheet(SLIDER_PARAMS)
+        traj_tail_label.setStyleSheet(LINE_MODE_CHECKBOX)
         self.traj_tail_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.traj_tail_slider.setRange(1, 500)
         self.traj_tail_slider.setValue(5)
@@ -256,7 +256,7 @@ class ControlPanel(QtWidgets.QWidget):
         n_row = QtWidgets.QHBoxLayout()
         self.n_slider_row = n_row
         n_label = QtWidgets.QLabel("N")
-        n_label.setStyleSheet("color: white;")
+        n_label.setStyleSheet(LINE_MODE_CHECKBOX)
         n_row.addWidget(n_label)
         n_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         n_slider.setRange(1, 500)
@@ -287,7 +287,7 @@ class ControlPanel(QtWidgets.QWidget):
         t_max_row = QtWidgets.QHBoxLayout()
         self.t_max_slider_row = t_max_row
         t_max_label = QtWidgets.QLabel("t_max")
-        t_max_label.setStyleSheet("color: white;")
+        t_max_label.setStyleSheet(LINE_MODE_CHECKBOX)
         t_max_row.addWidget(t_max_label)
         t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         t_max_slider.setRange(1, 750)
