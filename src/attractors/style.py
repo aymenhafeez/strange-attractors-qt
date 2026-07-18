@@ -64,7 +64,13 @@ SLIDER_PARAMS = "color: white; font-weight: bold;"
 
 LINE_MODE_CHECKBOX = "color: white;"
 
-SPLITTER = "QSplitter::handle { width: 1px; background: #555; }"
+SPLITTER = """
+    QSplitter {
+        border: 1px solid #555;
+        border-radius: 0px;
+    }
+    QSplitter::handle { width: 1px; background: #555; }
+"""
 
 CONTAINER = "border: 1px solid #aaa;"
 
