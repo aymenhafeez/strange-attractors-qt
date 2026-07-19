@@ -206,7 +206,7 @@ class ControlPanel(QtWidgets.QWidget):
             pw.getPlotItem().addColorBar(
                 img,
                 values=(0, 10),
-                colorMap=pg.colormap.get("CMRmap", source="matplotlib"),
+                colorMap=cmap,
                 width=10,
             )
             proj_layout.addWidget(pw)
