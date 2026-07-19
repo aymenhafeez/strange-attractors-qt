@@ -182,6 +182,7 @@ class BifurcationPanel(QtWidgets.QWidget):
     def _cancel_sweep(self):
         if self._worker:
             self._worker._cancel = True
+            self._worker = None
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
 
@@ -197,6 +198,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
         self.progress.setValue(100)
+        self._worker = None
 
     def _on_worker_error(self, msg, gen):
         if gen != self._sweep_gen:
@@ -206,6 +208,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
         self.progress.setVisible(False)
+        self._worker = None
 
     def _export_plot(self):
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
