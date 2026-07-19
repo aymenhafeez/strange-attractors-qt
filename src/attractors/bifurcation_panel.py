@@ -86,6 +86,11 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.progress.setVisible(False)
         layout.addWidget(self.progress)
 
+        self._error_label = QtWidgets.QLabel("")
+        self._error_label.setStyleSheet("color: #ff6b6b; font-size: 11px;")
+        self._error_label.setVisible(False)
+        layout.addWidget(self._error_label)
+
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground("k")
         self.plot_widget.setLabel("bottom", "Parameter value")
@@ -114,6 +119,7 @@ class BifurcationPanel(QtWidgets.QWidget):
     def set_config(self, config, current_values):
         self._cancel_sweep()
         self._sweep_gen += 1
+        self._error_label.setVisible(False)
         self.config = config
         self.current_values = current_values
         self.param_combo.blockSignals(True)
@@ -142,6 +148,8 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.cancel_btn.setEnabled(True)
         self.progress.setVisible(True)
         self.progress.setValue(0)
+        self._error_label.setVisible(False)
+        self.run_btn.setText("\u25b6 Run")
         self._sweep_gen += 1
         gen = self._sweep_gen
 
@@ -193,6 +201,8 @@ class BifurcationPanel(QtWidgets.QWidget):
     def _on_worker_error(self, msg, gen):
         if gen != self._sweep_gen:
             return
+        self._error_label.setText(f"Error: {msg}")
+        self._error_label.setVisible(True)
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
         self.progress.setVisible(False)
