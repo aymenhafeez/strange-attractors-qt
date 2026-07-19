@@ -186,7 +186,10 @@ class Window(QtWidgets.QMainWindow):
     def _on_controls_solve_requested(self, full):
         self.scene.stop_animation()
         self.controls.set_anim_playing(False)
-        self._solve_needed = True
+        self.solver._solver_worker._cancel = True
+        QtCore.QCoreApplication.removePostedEvents(self.solver._solver_worker)
+        self._solve_pending = False
+        self._solve_needed = full
         self._full_needed = full
         self._dispatch_solve(full=full)
 
