@@ -58,9 +58,7 @@ class _PoincareWorker(QRunnable):
 
     def run(self):
         try:
-            sol = solve_attractor(
-                self.config, self.values, self.n, t_max=self.t_max
-            )
+            sol = solve_attractor(self.config, self.values, self.n, t_max=self.t_max)
             if not self._cancel:
                 self.signals.result_ready.emit(sol)
         except Exception as e:
@@ -74,6 +72,7 @@ class PoincarePanel(QtWidgets.QWidget):
     plane_changed = QtCore.pyqtSignal(str, float)
     solve_started = QtCore.pyqtSignal()
     solve_finished = QtCore.pyqtSignal()
+    close_requested = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -116,6 +115,11 @@ class PoincarePanel(QtWidgets.QWidget):
         self.auto_check.setToolTip("Auto-solve when attractor parameters change")
         param_row.addWidget(self.auto_check)
 
+        close_btn = QtWidgets.QPushButton("×")
+        close_btn.setFixedWidth(24)
+        close_btn.clicked.connect(self.close_requested.emit)
+        param_row.addWidget(close_btn)
+
         layout.addLayout(param_row)
 
         ctrl_row = QtWidgets.QHBoxLayout()
@@ -150,7 +154,11 @@ class PoincarePanel(QtWidgets.QWidget):
         layout.addWidget(self.plot_widget)
 
         self._scatter = self.plot_widget.plot(
-            [], [], pen=None, symbol="o", symbolSize=1,
+            [],
+            [],
+            pen=None,
+            symbol="o",
+            symbolSize=1,
             symbolBrush=(255, 255, 255),
         )
 
@@ -224,9 +232,7 @@ class PoincarePanel(QtWidgets.QWidget):
     def _emit_plane(self):
         if not self.isVisible():
             return
-        self.plane_changed.emit(
-            self.plane_combo.currentText(), self.value_spin.value()
-        )
+        self.plane_changed.emit(self.plane_combo.currentText(), self.value_spin.value())
 
     def _on_plane_changed(self, plane):
         lh, lv = _AXIS_LABELS[plane]
@@ -235,8 +241,7 @@ class PoincarePanel(QtWidgets.QWidget):
         if self._solutions and len(self._solutions) > 0:
             col = _PLANE_COLS[plane]
             midpoint = (
-                self._solutions[0][:, col].max()
-                + self._solutions[0][:, col].min()
+                self._solutions[0][:, col].max() + self._solutions[0][:, col].min()
             ) / 2
             self.value_spin.blockSignals(True)
             self.value_spin.setValue(midpoint)
@@ -280,13 +285,12 @@ class PoincarePanel(QtWidgets.QWidget):
                 if len(combined) > 0:
                     h_all = combined
                     v_all = np.concatenate(all_v)
-                    heatmap, xedges, yedges = np.histogram2d(
-                        h_all, v_all, bins=N_BINS
-                    )
+                    heatmap, xedges, yedges = np.histogram2d(h_all, v_all, bins=N_BINS)
                     self._img.setImage(np.log1p(heatmap))
                     self._img.setRect(
                         QtCore.QRectF(
-                            xedges[0], yedges[0],
+                            xedges[0],
+                            yedges[0],
                             xedges[-1] - xedges[0],
                             yedges[-1] - yedges[0],
                         )

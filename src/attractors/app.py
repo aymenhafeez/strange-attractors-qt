@@ -62,6 +62,7 @@ class Window(QtWidgets.QMainWindow):
 
         self.poincare_panel = PoincarePanel()
         self.poincare_panel.plane_changed.connect(self.scene.set_poincare_plane)
+        self.poincare_panel.close_requested.connect(self._close_poincare)
         self.poincare_panel.hide()
 
         self._poincare_splitter_size = 200
@@ -243,6 +244,16 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
         self.scene.set_lyapunov_result(lyap, ky_dim, t_hist, lyap_hist)
+
+    def _close_poincare(self):
+        sizes = self.inner_splitter.sizes()
+        if len(sizes) > 1:
+            self._poincare_splitter_size = sizes[-1]
+        self.scene.remove_poincare_plane()
+        self.poincare_panel.hide()
+        sizes = self.inner_splitter.sizes()
+        if sizes:
+            self.inner_splitter.setSizes([sum(sizes), 0])
 
     def _toggle_poincare(self):
         if self.poincare_panel.isVisible():
