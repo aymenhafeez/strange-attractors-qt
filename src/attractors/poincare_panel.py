@@ -149,6 +149,7 @@ class PoincarePanel(QtWidgets.QWidget):
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground("k")
         self.plot_widget.setAspectLocked(True)
+        self.plot_widget.getPlotItem().setContentsMargins(0, 10, 0, 0)
         layout.addWidget(self.plot_widget)
 
         self._scatter = self.plot_widget.plot(
@@ -162,6 +163,10 @@ class PoincarePanel(QtWidgets.QWidget):
 
         self._img = pg.ImageItem()
         cmap = pg.colormap.get("CMRmap", source="matplotlib")
+        self._colourbar = self.plot_widget.getPlotItem().addColorBar(
+            self._img, colorMap=cmap, values=(0, 10), width=20
+        )
+        self._colourbar.setVisible(False)
         self._img.setLookupTable(cmap.getLookupTable())
         self._img.setVisible(False)
         self.plot_widget.addItem(self._img)
@@ -262,6 +267,7 @@ class PoincarePanel(QtWidgets.QWidget):
         heatmap = self.heatmap_check.isChecked()
         self._scatter.setVisible(not heatmap)
         self._img.setVisible(heatmap)
+        self._colourbar.setVisible(heatmap)
         self._recompute()
 
     def recompute(self):
