@@ -130,7 +130,7 @@ class PoincarePanel(QtWidgets.QWidget):
 
         ctrl_row.addWidget(QtWidgets.QLabel("Value:"))
         self.value_spin = QtWidgets.QDoubleSpinBox()
-        self.value_spin.setRange(-1e6, 1e6)
+        self.value_spin.setRange(-1000, 1000)
         self.value_spin.setSingleStep(0.5)
         self.value_spin.setDecimals(3)
         ctrl_row.addWidget(self.value_spin)
