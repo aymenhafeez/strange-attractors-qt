@@ -199,14 +199,14 @@ class ControlPanel(QtWidgets.QWidget):
             pw.getPlotItem().setContentsMargins(0, 10, 0, 0)
             pw.getViewBox().setAspectLocked(True)
             img = pg.ImageItem()
-            cmap = pg.colormap.get("CET-L1")
+            cmap = pg.colormap.get("CMRmap", source="matplotlib")
             img.setLookupTable(cmap.getLookupTable())
             pw.addItem(img)
             self.image_items[key] = (img, pw)
             pw.getPlotItem().addColorBar(
                 img,
                 values=(0, 10),
-                colorMap=pg.colormap.get("CET-L1"),
+                colorMap=pg.colormap.get("CMRmap", source="matplotlib"),
                 width=10,
             )
             proj_layout.addWidget(pw)

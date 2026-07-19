@@ -155,7 +155,7 @@ class PoincarePanel(QtWidgets.QWidget):
         )
 
         self._img = pg.ImageItem()
-        cmap = pg.colormap.get("CET-L1")
+        cmap = pg.colormap.get("CMRmap", source="matplotlib")
         self._img.setLookupTable(cmap.getLookupTable())
         self._img.setVisible(False)
         self.plot_widget.addItem(self._img)
