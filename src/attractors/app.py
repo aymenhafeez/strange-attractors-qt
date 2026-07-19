@@ -196,7 +196,8 @@ class Window(QtWidgets.QMainWindow):
         if not is_partial:
             config, values = self._get_current_config_and_values()
             if config is not None:
-                self.poincare_panel.set_attractor(config, values)
+                if self.poincare_panel.isVisible():
+                    self.poincare_panel.set_attractor(config, values)
                 self.solver.request_lyapunov(config, values)
             all_sol = np.concatenate(solutions, axis=0)
             x, y, z = all_sol.T
@@ -249,6 +250,7 @@ class Window(QtWidgets.QMainWindow):
         sizes = self.inner_splitter.sizes()
         if len(sizes) > 1:
             self._poincare_splitter_size = sizes[-1]
+        self.poincare_panel._cancel_solve()
         self.scene.remove_poincare_plane()
         self.poincare_panel.hide()
         sizes = self.inner_splitter.sizes()
