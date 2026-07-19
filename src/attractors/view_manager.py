@@ -48,6 +48,10 @@ class ViewManager(QtCore.QObject):
         self.grid_half_size = 30.0
         self.grid_items = []
 
+        self._poincare_axis = None
+        self._poincare_value = 0.0
+        self._poincare_plane_items = []
+
         self.container = QtWidgets.QWidget()
         self.container.setStyleSheet(CONTAINER)
         container_layout = QtWidgets.QGridLayout(self.container)
@@ -230,10 +234,83 @@ class ViewManager(QtCore.QObject):
                     self.grid_items.append(t1)
                     self.grid_items.append(t2)
 
+        if self._poincare_axis is not None:
+            self._update_poincare_plane()
+
     def set_grid_visible(self, visible):
         self._grid_visible = visible
         for item in self.grid_items:
             item.setVisible(visible)
+
+    def set_poincare_plane(self, axis, value):
+        self._poincare_axis = axis
+        self._poincare_value = value
+        self._update_poincare_plane()
+
+    def remove_poincare_plane(self):
+        self._poincare_axis = None
+        for item in self._poincare_plane_items:
+            self.view.removeItem(item)
+        self._poincare_plane_items.clear()
+
+    def _update_poincare_plane(self):
+        for item in self._poincare_plane_items:
+            self.view.removeItem(item)
+        self._poincare_plane_items.clear()
+
+        if self._poincare_axis is None:
+            return
+
+        half = self.grid_half_size
+        axis = self._poincare_axis
+        value = self._poincare_value
+
+        if axis == "x":
+            verts = np.array([
+                [value, -half, -half],
+                [value,  half, -half],
+                [value,  half,  half],
+                [value, -half,  half],
+            ])
+        elif axis == "y":
+            verts = np.array([
+                [-half, value, -half],
+                [ half, value, -half],
+                [ half, value,  half],
+                [-half, value,  half],
+            ])
+        else:
+            verts = np.array([
+                [-half, -half, value],
+                [ half, -half, value],
+                [ half,  half, value],
+                [-half,  half, value],
+            ])
+
+        faces = np.array([[0, 1, 2], [0, 2, 3]])
+        colors = np.array([[1.0, 0.2, 0.2, 0.12]])
+        mesh = gl.GLMeshItem(
+            vertexes=verts,
+            faces=faces,
+            faceColors=colors,
+            shader="shaded",
+            smooth=False,
+            glOptions="translucent",
+        )
+        self.view.addItem(mesh)
+        self._poincare_plane_items.append(mesh)
+
+        border_verts = np.array([
+            verts[0], verts[1], verts[2], verts[3], verts[0],
+        ])
+        border = gl.GLLinePlotItem(
+            pos=border_verts,
+            color=(1.0, 0.3, 0.3, 0.7),
+            width=1.5,
+            glOptions="translucent",
+        )
+        self.view.addItem(border)
+        self._poincare_plane_items.append(border)
 
     def sync_gl_items(self, n):
         while len(self._scatters) < n:
