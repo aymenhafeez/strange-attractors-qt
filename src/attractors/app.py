@@ -259,14 +259,7 @@ class Window(QtWidgets.QMainWindow):
 
     def _toggle_poincare(self):
         if self.poincare_panel.isVisible():
-            sizes = self.inner_splitter.sizes()
-            if len(sizes) > 1:
-                self._poincare_splitter_size = sizes[-1]
-            self.scene.remove_poincare_plane()
-            self.poincare_panel.hide()
-            sizes = self.inner_splitter.sizes()
-            if sizes:
-                self.inner_splitter.setSizes([sum(sizes), 0])
+            self._close_poincare()
         else:
             self.poincare_panel.show()
             sizes = self.inner_splitter.sizes()
