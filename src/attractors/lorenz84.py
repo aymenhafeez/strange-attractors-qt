@@ -23,7 +23,7 @@ _lorenz84_attractor = AttractorConfig(
         AttractorParam("a", 0.25, 0.0, 75.0, 0.01),
         AttractorParam("b", 4.0, 0.0, 150.0, 0.01),
         AttractorParam("c", 8.0, 0.0, 20.0, 0.01),
-        AttractorParam("d", 1.0, 0.0, 20.0, 0.01),
+        AttractorParam("d", 1.0, 0.0, 3.1, 0.01),
     ],
     initial_conditions=[0.1, 0.0, 0.0],
     time_defaults={"t_min": 0, "t_max": 150, "n": 100000},
