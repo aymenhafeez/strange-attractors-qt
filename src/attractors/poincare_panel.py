@@ -70,8 +70,6 @@ class _PoincareWorker(QRunnable):
 
 class PoincarePanel(QtWidgets.QWidget):
     plane_changed = QtCore.pyqtSignal(str, float)
-    solve_started = QtCore.pyqtSignal()
-    solve_finished = QtCore.pyqtSignal()
     close_requested = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
@@ -191,7 +189,6 @@ class PoincarePanel(QtWidgets.QWidget):
             return
         self._cancel_solve()
         self._set_solve_enabled(False)
-        self.solve_started.emit()
         self._solve_gen += 1
         gen = self._solve_gen
 
@@ -201,12 +198,8 @@ class PoincarePanel(QtWidgets.QWidget):
         worker.signals.result_ready.connect(
             lambda sol, g=gen: self._on_solve_result(sol, g)
         )
-        worker.signals.finished.connect(
-            lambda g=gen: self._on_solve_finished(g)
-        )
-        worker.signals.error.connect(
-            lambda msg, g=gen: self._on_solve_error(msg, g)
-        )
+        worker.signals.finished.connect(lambda g=gen: self._on_solve_finished(g))
+        worker.signals.error.connect(lambda msg, g=gen: self._on_solve_error(msg, g))
         self._worker = worker
         QThreadPool.globalInstance().start(worker)
 
@@ -234,14 +227,12 @@ class PoincarePanel(QtWidgets.QWidget):
             return
         self._set_solve_enabled(True)
         self._worker = None
-        self.solve_finished.emit()
 
     def _on_solve_error(self, msg, gen):
         if gen != self._solve_gen:
             return
         self._set_solve_enabled(True)
         self._worker = None
-        self.solve_finished.emit()
 
     def _emit_plane(self):
         if not self.isVisible():
