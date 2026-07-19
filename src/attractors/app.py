@@ -3,7 +3,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .bifurcation_dialog import BifurcationDialog
 from .control_panel import ControlPanel
-from .poincare_dialog import PoincareSectionDialog
+from .poincare_panel import PoincarePanel
 from .registry import ATTRACTORS
 from .view_manager import ViewManager
 from .solve_manager import SolveManager
@@ -47,7 +47,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._on_controls_solve_requested)
         self.controls.bifurcation_requested.connect(self._open_bifurcation)
-        self.controls.poincare_requested.connect(self._open_poincare)
+        self.controls.poincare_requested.connect(self._toggle_poincare)
         self.controls.n_changed.connect(self._on_n_changed)
         self.controls.t_max_changed.connect(self._on_t_max_changed)
         self.controls.animation_toggled.connect(self._on_anim_toggled)
@@ -60,9 +60,21 @@ class Window(QtWidgets.QMainWindow):
         self.controls.save_requested.connect(self.scene.save_view_as_png)
         self.controls.traj_tail_length_changed.connect(self.scene.set_traj_tail_length)
 
+        self.poincare_panel = PoincarePanel()
+        self.poincare_panel.plane_changed.connect(self.scene.set_poincare_plane)
+        self.poincare_panel.close_requested.connect(self._close_poincare)
+        self.poincare_panel.hide()
+
+        self._poincare_splitter_size = 400
+
+        self.inner_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+        self.inner_splitter.addWidget(self.scene.container)
+        self.inner_splitter.addWidget(self.poincare_panel)
+        self.inner_splitter.setSizes([600, 0])
+
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         splitter.setStyleSheet(SPLITTER)
-        splitter.addWidget(self.scene.container)
+        splitter.addWidget(self.inner_splitter)
         splitter.addWidget(self.controls)
         splitter.setSizes([int(WINDOW_SIZE * 0.7), int(WINDOW_SIZE * 0.3)])
         layout.addWidget(splitter)
@@ -115,7 +127,7 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_config_to_view(self, config):
-        self.scene.set_equation(config.equation_text)
+        self.scene.set_info(config, self.controls.get_current_values())
         self.scene.set_camera(config)
         self.controls.configure(config)
         self.current_n = config.time_defaults["n"]
@@ -145,7 +157,7 @@ class Window(QtWidgets.QMainWindow):
         self._dispatch_solve(full=True)
         config, values = self._get_current_config_and_values()
         if config is not None:
-            self.scene.update_status(config, values)
+            self.scene.set_info(config, values)
 
     def _dispatch_solve(self, full=False):
         if self._solve_pending:
@@ -182,12 +194,14 @@ class Window(QtWidgets.QMainWindow):
         self.scene.display_solutions(solutions, is_partial)
 
         if not is_partial:
+            config, values = self._get_current_config_and_values()
+            if config is not None:
+                if self.poincare_panel.isVisible():
+                    self.poincare_panel.set_attractor(config, values)
+                self.solver.request_lyapunov(config, values)
             all_sol = np.concatenate(solutions, axis=0)
             x, y, z = all_sol.T
             self.controls.update_projections(x, y, z)
-            config, values = self._get_current_config_and_values()
-            if config is not None:
-                self.solver.request_lyapunov(config, values)
             if self._initial_full_solves == 0:
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
@@ -232,11 +246,34 @@ class Window(QtWidgets.QMainWindow):
     def _on_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
         self.scene.set_lyapunov_result(lyap, ky_dim, t_hist, lyap_hist)
 
-    def _open_poincare(self):
-        sols = self.scene.get_solutions()
-        sol = sols[0].copy() if sols else None
-        dialog = PoincareSectionDialog(self, sol, self)
-        dialog.show()
+    def _close_poincare(self):
+        sizes = self.inner_splitter.sizes()
+        if len(sizes) > 1:
+            self._poincare_splitter_size = sizes[-1]
+        self.poincare_panel._cancel_solve()
+        self.scene.remove_poincare_plane()
+        self.poincare_panel.hide()
+        sizes = self.inner_splitter.sizes()
+        if sizes:
+            self.inner_splitter.setSizes([sum(sizes), 0])
+
+    def _toggle_poincare(self):
+        if self.poincare_panel.isVisible():
+            self._close_poincare()
+        else:
+            self.poincare_panel.show()
+            sizes = self.inner_splitter.sizes()
+            total = sum(sizes) if sizes else 600
+            h = max(self._poincare_splitter_size, 120)
+            self.inner_splitter.setSizes([max(total - h, 100), h])
+            self.scene.set_poincare_plane(
+                self.poincare_panel.plane_combo.currentText(),
+                self.poincare_panel.value_spin.value(),
+            )
+            self.poincare_panel.recompute()
+            config, values = self._get_current_config_and_values()
+            if config is not None:
+                self.poincare_panel.set_attractor(config, values)
 
     def _open_bifurcation(self):
         config, values = self._get_current_config_and_values()

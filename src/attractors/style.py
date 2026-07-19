@@ -7,22 +7,6 @@ EQUATION_LABEL = """
     border-radius: 0px;
 """
 
-STATUS_BAR = "background-color: #000000;"
-
-STATUS_PARAMS = "color: #aaa; font-size: 12px;"
-
-STATUS_SYSTEM = """
-    color: #aaa;
-    font-size: 13px;
-    border-left: 0px;
-"""
-
-STATUS_IC = """
-    color: #aaa;
-    font-size: 13px;
-    border-right: 0px;
-"""
-
 SLIDERS = """
     #controlPanel {
         background-color: #000000;
@@ -72,7 +56,7 @@ SPLITTER = """
     QSplitter::handle { width: 1px; background: #555; }
 """
 
-CONTAINER = "border: 1px solid #aaa;"
+CONTAINER = "background: #000; border: none;"
 
 LYAPUNOV_PLOT = "background-color: rgba(0, 0, 0, 0); border: 0px"
 
