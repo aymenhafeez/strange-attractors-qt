@@ -65,7 +65,7 @@ class Window(QtWidgets.QMainWindow):
         self.poincare_panel.close_requested.connect(self._close_poincare)
         self.poincare_panel.hide()
 
-        self._poincare_splitter_size = 200
+        self._poincare_splitter_size = 400
 
         self.inner_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
         self.inner_splitter.addWidget(self.scene.container)
