@@ -80,7 +80,7 @@ class PoincarePanel(QtWidgets.QWidget):
         self._config = None
         self._values = None
         self._worker = None
-        self._auto_solve_pending = False
+        self._solve_gen = 0
 
         self.setMinimumHeight(120)
 
@@ -192,13 +192,21 @@ class PoincarePanel(QtWidgets.QWidget):
         self._cancel_solve()
         self._set_solve_enabled(False)
         self.solve_started.emit()
+        self._solve_gen += 1
+        gen = self._solve_gen
 
         t_max = self.tmax_spin.value()
         n = self.n_spin.value()
         worker = _PoincareWorker(self._config, self._values, n, t_max)
-        worker.signals.result_ready.connect(self._on_solve_result)
-        worker.signals.finished.connect(self._on_solve_finished)
-        worker.signals.error.connect(self._on_solve_error)
+        worker.signals.result_ready.connect(
+            lambda sol, g=gen: self._on_solve_result(sol, g)
+        )
+        worker.signals.finished.connect(
+            lambda g=gen: self._on_solve_finished(g)
+        )
+        worker.signals.error.connect(
+            lambda msg, g=gen: self._on_solve_error(msg, g)
+        )
         self._worker = worker
         QThreadPool.globalInstance().start(worker)
 
@@ -207,7 +215,9 @@ class PoincarePanel(QtWidgets.QWidget):
             self._worker._cancel = True
             self._worker = None
 
-    def _on_solve_result(self, sol):
+    def _on_solve_result(self, sol, gen):
+        if gen != self._solve_gen:
+            return
         self._solutions = [sol]
         if sol is not None:
             plane = self.plane_combo.currentText()
@@ -219,12 +229,16 @@ class PoincarePanel(QtWidgets.QWidget):
             self._emit_plane()
         self._recompute()
 
-    def _on_solve_finished(self):
+    def _on_solve_finished(self, gen):
+        if gen != self._solve_gen:
+            return
         self._set_solve_enabled(True)
         self._worker = None
         self.solve_finished.emit()
 
-    def _on_solve_error(self, msg):
+    def _on_solve_error(self, msg, gen):
+        if gen != self._solve_gen:
+            return
         self._set_solve_enabled(True)
         self._worker = None
         self.solve_finished.emit()
