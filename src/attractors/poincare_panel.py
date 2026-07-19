@@ -146,6 +146,11 @@ class PoincarePanel(QtWidgets.QWidget):
 
         layout.addLayout(ctrl_row)
 
+        self._error_label = QtWidgets.QLabel("")
+        self._error_label.setStyleSheet("color: #ff6b6b; font-size: 11px;")
+        self._error_label.setVisible(False)
+        layout.addWidget(self._error_label)
+
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground("k")
         self.plot_widget.setAspectLocked(True)
@@ -194,6 +199,7 @@ class PoincarePanel(QtWidgets.QWidget):
             return
         self._cancel_solve()
         self._set_solve_enabled(False)
+        self._error_label.setVisible(False)
         self._solve_gen += 1
         gen = self._solve_gen
 
@@ -236,6 +242,8 @@ class PoincarePanel(QtWidgets.QWidget):
     def _on_solve_error(self, msg, gen):
         if gen != self._solve_gen:
             return
+        self._error_label.setText(f"Error: {msg}")
+        self._error_label.setVisible(True)
         self._set_solve_enabled(True)
         self._worker = None
 
