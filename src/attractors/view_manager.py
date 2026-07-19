@@ -241,43 +241,64 @@ class ViewManager(QtCore.QObject):
         value = self._poincare_value
 
         if axis == "x":
-            verts = np.array([
-                [value, -half, -half],
-                [value,  half, -half],
-                [value,  half,  half],
-                [value, -half,  half],
-            ], dtype=np.float64)
+            verts = np.array(
+                [
+                    [value, -half, -half],
+                    [value, half, -half],
+                    [value, half, half],
+                    [value, -half, half],
+                ],
+                dtype=np.float64,
+            )
         elif axis == "y":
-            verts = np.array([
-                [-half, value, -half],
-                [ half, value, -half],
-                [ half, value,  half],
-                [-half, value,  half],
-            ], dtype=np.float64)
+            verts = np.array(
+                [
+                    [-half, value, -half],
+                    [half, value, -half],
+                    [half, value, half],
+                    [-half, value, half],
+                ],
+                dtype=np.float64,
+            )
         else:
-            verts = np.array([
-                [-half, -half, value],
-                [ half, -half, value],
-                [ half,  half, value],
-                [-half,  half, value],
-            ], dtype=np.float64)
+            verts = np.array(
+                [
+                    [-half, -half, value],
+                    [half, -half, value],
+                    [half, half, value],
+                    [-half, half, value],
+                ],
+                dtype=np.float64,
+            )
 
         faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int32)
         vc = np.full((4, 4), [1.0, 0.3, 0.3, 0.35], dtype=np.float32)
 
         mesh = gl.GLMeshItem(
-            vertexes=verts, faces=faces, vertexColors=vc,
-            smooth=False, glOptions="translucent",
+            vertexes=verts,
+            faces=faces,
+            vertexColors=vc,
+            smooth=False,
+            glOptions="translucent",
         )
         self.view.addItem(mesh)
         self._poincare_plane_items.append(mesh)
 
-        border_verts = np.array([
-            verts[0], verts[1], verts[2], verts[3], verts[0],
-        ], dtype=np.float64)
+        border_verts = np.array(
+            [
+                verts[0],
+                verts[1],
+                verts[2],
+                verts[3],
+                verts[0],
+            ],
+            dtype=np.float64,
+        )
         border = gl.GLLinePlotItem(
-            pos=border_verts, color=(1.0, 0.3, 0.3, 0.7),
-            width=1.5, glOptions="translucent",
+            pos=border_verts,
+            color=(1.0, 0.3, 0.3, 0.7),
+            width=1.5,
+            glOptions="translucent",
         )
         self.view.addItem(border)
         self._poincare_plane_items.append(border)

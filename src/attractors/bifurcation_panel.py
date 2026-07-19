@@ -1,94 +1,95 @@
 import numpy as np
 import pyqtgraph as pg
+from pyqtgraph.Qt import QtCore, QtWidgets
 from pyqtgraph.Qt.QtCore import QThreadPool
-from PyQt6.QtWidgets import (
-    QComboBox,
-    QDialog,
-    QDoubleSpinBox,
-    QFileDialog,
-    QHBoxLayout,
-    QLabel,
-    QProgressBar,
-    QPushButton,
-    QSpinBox,
-    QVBoxLayout,
-)
 from pyqtgraph.exporters import ImageExporter
 
 from .bifurcation_worker import BifurcationWorker
 
 
-class BifurcationDialog(QDialog):
-    def __init__(self, config, current_values, parent=None):
+class BifurcationPanel(QtWidgets.QWidget):
+    close_requested = QtCore.pyqtSignal()
+
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Bifurcation Diagram")
-        self.resize(800, 600)
         self._worker = None
+        self.config = None
+        self.current_values = None
+        self._sweep_gen = 0
 
-        self.config = config
-        self.current_values = current_values
-        self._threadpool = QThreadPool.globalInstance()
+        self.setMinimumHeight(200)
 
-        layout = QVBoxLayout(self)
+        layout = QtWidgets.QVBoxLayout(self)
 
-        row1 = QHBoxLayout()
-        row1.addWidget(QLabel("Sweep param:"))
-        self.param_combo = QComboBox()
-        self.param_combo.addItems([p.name for p in config.params])
+        row1 = QtWidgets.QHBoxLayout()
+        row1.addWidget(QtWidgets.QLabel("Sweep param:"))
+        self.param_combo = QtWidgets.QComboBox()
         self.param_combo.currentTextChanged.connect(self._update_defaults)
         row1.addWidget(self.param_combo)
 
-        row1.addWidget(QLabel("  Variable:"))
-        self.var_combo = QComboBox()
+        row1.addWidget(QtWidgets.QLabel("  Variable:"))
+        self.var_combo = QtWidgets.QComboBox()
         self.var_combo.addItems(["x", "y", "z"])
         row1.addWidget(self.var_combo)
+
+        row1.addStretch()
+        close_btn = QtWidgets.QPushButton("\u00d7")
+        close_btn.setFixedWidth(24)
+        close_btn.clicked.connect(self.close_requested.emit)
+        row1.addWidget(close_btn)
+
         layout.addLayout(row1)
 
-        row2 = QHBoxLayout()
-        row2.addWidget(QLabel("From:"))
-        self.min_spin = QDoubleSpinBox()
+        row2 = QtWidgets.QHBoxLayout()
+        row2.addWidget(QtWidgets.QLabel("From:"))
+        self.min_spin = QtWidgets.QDoubleSpinBox()
         self.min_spin.setRange(-1e6, 1e6)
         self.min_spin.setSingleStep(0.01)
         row2.addWidget(self.min_spin)
 
-        row2.addWidget(QLabel("To:"))
-        self.max_spin = QDoubleSpinBox()
+        row2.addWidget(QtWidgets.QLabel("To:"))
+        self.max_spin = QtWidgets.QDoubleSpinBox()
         self.max_spin.setRange(-1e6, 1e6)
         self.max_spin.setSingleStep(0.01)
         row2.addWidget(self.max_spin)
 
-        row2.addWidget(QLabel("Steps:"))
-        self.steps_spin = QSpinBox()
+        row2.addWidget(QtWidgets.QLabel("Steps:"))
+        self.steps_spin = QtWidgets.QSpinBox()
         self.steps_spin.setRange(10, 10000)
         self.steps_spin.setValue(500)
         row2.addWidget(self.steps_spin)
 
-        row2.addWidget(QLabel("Transient:"))
-        self.transient_spin = QDoubleSpinBox()
+        row2.addWidget(QtWidgets.QLabel("Transient:"))
+        self.transient_spin = QtWidgets.QDoubleSpinBox()
         self.transient_spin.setRange(0.0, 0.99)
         self.transient_spin.setSingleStep(0.05)
         self.transient_spin.setValue(0.85)
         row2.addWidget(self.transient_spin)
         layout.addLayout(row2)
 
-        row3 = QHBoxLayout()
-        self.run_btn = QPushButton("▶ Run")
+        row3 = QtWidgets.QHBoxLayout()
+        self.run_btn = QtWidgets.QPushButton("\u25b6 Run")
         self.run_btn.clicked.connect(self._run_sweep)
         row3.addWidget(self.run_btn)
 
-        self.cancel_btn = QPushButton("■ Cancel")
+        self.cancel_btn = QtWidgets.QPushButton("\u25a0 Cancel")
         self.cancel_btn.setEnabled(False)
         self.cancel_btn.clicked.connect(self._cancel_sweep)
         row3.addWidget(self.cancel_btn)
 
-        self.export_btn = QPushButton("Export PNG...")
+        self.export_btn = QtWidgets.QPushButton("Export PNG...")
         self.export_btn.clicked.connect(self._export_plot)
         row3.addWidget(self.export_btn)
         layout.addLayout(row3)
 
-        self.progress = QProgressBar()
+        self.progress = QtWidgets.QProgressBar()
         self.progress.setVisible(False)
         layout.addWidget(self.progress)
+
+        self._error_label = QtWidgets.QLabel("")
+        self._error_label.setStyleSheet("color: #ff6b6b; font-size: 11px;")
+        self._error_label.setVisible(False)
+        layout.addWidget(self._error_label)
 
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground("k")
@@ -104,9 +105,9 @@ class BifurcationDialog(QDialog):
         )
         layout.addWidget(self.plot_widget)
 
-        self._update_defaults()
-
     def _update_defaults(self):
+        if self.config is None:
+            return
         p = next(
             p for p in self.config.params if p.name == self.param_combo.currentText()
         )
@@ -115,7 +116,22 @@ class BifurcationDialog(QDialog):
         self.max_spin.setValue(p.max_val - 0.01 * span)
         self.plot_widget.setLabel("left", self.var_combo.currentText())
 
+    def set_config(self, config, current_values):
+        self._cancel_sweep()
+        self._sweep_gen += 1
+        self._error_label.setVisible(False)
+        self.config = config
+        self.current_values = current_values
+        self.param_combo.blockSignals(True)
+        self.param_combo.clear()
+        self.param_combo.addItems([p.name for p in config.params])
+        self.param_combo.blockSignals(False)
+        self.plot_data.setData([], [])
+        self._update_defaults()
+
     def _run_sweep(self):
+        if self.config is None:
+            return
         param_name = self.param_combo.currentText()
         min_val = self.min_spin.value()
         max_val = self.max_spin.value()
@@ -124,12 +140,18 @@ class BifurcationDialog(QDialog):
         axis = self.var_combo.currentIndex()
 
         param_values = np.linspace(min_val, max_val, steps)
-        base_params = {k: v for k, v in self.current_values.items() if k != param_name}
+        base_params = {
+            k: v for k, v in self.current_values.items() if k != param_name
+        }
 
         self.run_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
         self.progress.setVisible(True)
         self.progress.setValue(0)
+        self._error_label.setVisible(False)
+        self.run_btn.setText("\u25b6 Run")
+        self._sweep_gen += 1
+        gen = self._sweep_gen
 
         t_max = self.config.time_defaults["t_max"] * 4
         n = self.config.time_defaults["n"]
@@ -144,36 +166,52 @@ class BifurcationDialog(QDialog):
             axis,
             t_max,
         )
-        worker.signals.chunk_ready.connect(self._on_chunk_ready)
-        worker.signals.finished.connect(self._on_worker_finished)
-        worker.signals.error.connect(self._on_worker_error)
+        worker.signals.chunk_ready.connect(
+            lambda vals, peaks, g=gen: self._on_chunk_ready(vals, peaks, g)
+        )
+        worker.signals.finished.connect(
+            lambda g=gen: self._on_worker_finished(g)
+        )
+        worker.signals.error.connect(
+            lambda msg, g=gen: self._on_worker_error(msg, g)
+        )
         worker.signals.progress.connect(self.progress.setValue)
         self._worker = worker
-        self._threadpool.start(worker)
-
-    def _on_chunk_ready(self, vals, peaks_list):
-        lens = [len(p) for p in peaks_list]
-        self.plot_data.setData(np.repeat(vals, lens), np.concatenate(peaks_list))
-
-    def _on_worker_finished(self):
-        self.run_btn.setEnabled(True)
-        self.cancel_btn.setEnabled(False)
-        self.progress.setValue(100)
+        QThreadPool.globalInstance().start(worker)
 
     def _cancel_sweep(self):
         if self._worker:
             self._worker._cancel = True
+            self._worker = None
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
 
-    def _on_worker_error(self, msg):
+    def _on_chunk_ready(self, vals, peaks_list, gen):
+        if gen != self._sweep_gen:
+            return
+        lens = [len(p) for p in peaks_list]
+        self.plot_data.setData(np.repeat(vals, lens), np.concatenate(peaks_list))
+
+    def _on_worker_finished(self, gen):
+        if gen != self._sweep_gen:
+            return
+        self.run_btn.setEnabled(True)
+        self.cancel_btn.setEnabled(False)
+        self.progress.setValue(100)
+        self._worker = None
+
+    def _on_worker_error(self, msg, gen):
+        if gen != self._sweep_gen:
+            return
+        self._error_label.setText(f"Error: {msg}")
+        self._error_label.setVisible(True)
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
         self.progress.setVisible(False)
-        self.run_btn.setText(f"Error: {msg}")
+        self._worker = None
 
     def _export_plot(self):
-        path, _ = QFileDialog.getSaveFileName(
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self,
             "Export bifurcation diagram",
             "",

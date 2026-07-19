@@ -1,7 +1,7 @@
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .bifurcation_dialog import BifurcationDialog
+from .bifurcation_panel import BifurcationPanel
 from .control_panel import ControlPanel
 from .poincare_panel import PoincarePanel
 from .registry import ATTRACTORS
@@ -46,7 +46,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls = ControlPanel()
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._on_controls_solve_requested)
-        self.controls.bifurcation_requested.connect(self._open_bifurcation)
+        self.controls.bifurcation_requested.connect(self._toggle_bifurcation)
         self.controls.poincare_requested.connect(self._toggle_poincare)
         self.controls.n_changed.connect(self._on_n_changed)
         self.controls.t_max_changed.connect(self._on_t_max_changed)
@@ -67,10 +67,17 @@ class Window(QtWidgets.QMainWindow):
 
         self._poincare_splitter_size = 400
 
+        self.bifurcation_panel = BifurcationPanel()
+        self.bifurcation_panel.close_requested.connect(self._close_bifurcation)
+        self.bifurcation_panel.hide()
+
+        self._bifurcation_splitter_size = 500
+
         self.inner_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
         self.inner_splitter.addWidget(self.scene.container)
         self.inner_splitter.addWidget(self.poincare_panel)
-        self.inner_splitter.setSizes([600, 0])
+        self.inner_splitter.addWidget(self.bifurcation_panel)
+        self.inner_splitter.setSizes([600, 0, 0])
 
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         splitter.setStyleSheet(SPLITTER)
@@ -135,6 +142,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls.set_traj_tail_max(self.current_n)
         self.scene.clear_lyapunov()
         self.scene.reset_trajectory_panel(config)
+        self.bifurcation_panel.set_config(config, self.controls.get_current_values())
         self._update_plot()
 
     def _on_custom_compile(self, config):
@@ -247,15 +255,15 @@ class Window(QtWidgets.QMainWindow):
         self.scene.set_lyapunov_result(lyap, ky_dim, t_hist, lyap_hist)
 
     def _close_poincare(self):
-        sizes = self.inner_splitter.sizes()
-        if len(sizes) > 1:
-            self._poincare_splitter_size = sizes[-1]
         self.poincare_panel._cancel_solve()
         self.scene.remove_poincare_plane()
         self.poincare_panel.hide()
         sizes = self.inner_splitter.sizes()
-        if sizes:
-            self.inner_splitter.setSizes([sum(sizes), 0])
+        idx = self.inner_splitter.indexOf(self.poincare_panel)
+        if idx >= 0:
+            self._poincare_splitter_size = sizes[idx]
+            sizes[idx] = 0
+        self.inner_splitter.setSizes(sizes)
 
     def _toggle_poincare(self):
         if self.poincare_panel.isVisible():
@@ -263,9 +271,12 @@ class Window(QtWidgets.QMainWindow):
         else:
             self.poincare_panel.show()
             sizes = self.inner_splitter.sizes()
-            total = sum(sizes) if sizes else 600
+            total = sum(sizes)
             h = max(self._poincare_splitter_size, 120)
-            self.inner_splitter.setSizes([max(total - h, 100), h])
+            idx = self.inner_splitter.indexOf(self.poincare_panel)
+            sizes[0] = max(total - h, 100)
+            sizes[idx] = h
+            self.inner_splitter.setSizes(sizes)
             self.scene.set_poincare_plane(
                 self.poincare_panel.plane_combo.currentText(),
                 self.poincare_panel.value_spin.value(),
@@ -275,12 +286,32 @@ class Window(QtWidgets.QMainWindow):
             if config is not None:
                 self.poincare_panel.set_attractor(config, values)
 
-    def _open_bifurcation(self):
-        config, values = self._get_current_config_and_values()
-        if config is None:
-            return
-        dialog = BifurcationDialog(config, values, self)
-        dialog.show()
+    def _close_bifurcation(self):
+        self.bifurcation_panel._cancel_sweep()
+        self.bifurcation_panel.hide()
+        sizes = self.inner_splitter.sizes()
+        idx = self.inner_splitter.indexOf(self.bifurcation_panel)
+        if idx >= 0:
+            self._bifurcation_splitter_size = sizes[idx]
+            sizes[idx] = 0
+        self.inner_splitter.setSizes(sizes)
+
+    def _toggle_bifurcation(self):
+        if self.bifurcation_panel.isVisible():
+            self._close_bifurcation()
+        else:
+            config, values = self._get_current_config_and_values()
+            if config is None:
+                return
+            self.bifurcation_panel.set_config(config, values)
+            self.bifurcation_panel.show()
+            sizes = self.inner_splitter.sizes()
+            total = sum(sizes)
+            h = max(self._bifurcation_splitter_size, 120)
+            idx = self.inner_splitter.indexOf(self.bifurcation_panel)
+            sizes[0] = max(total - h, 100)
+            sizes[idx] = h
+            self.inner_splitter.setSizes(sizes)
 
     def closeEvent(self, a0):
         self.scene.stop_animation()
