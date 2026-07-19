@@ -93,7 +93,7 @@ class PoincarePanel(QtWidgets.QWidget):
 
         param_row.addWidget(QtWidgets.QLabel("t_max:"))
         self.tmax_spin = QtWidgets.QDoubleSpinBox()
-        self.tmax_spin.setRange(1, 1_000_000)
+        self.tmax_spin.setRange(1, 100000)
         self.tmax_spin.setSingleStep(100)
         self.tmax_spin.setDecimals(0)
         self.tmax_spin.setValue(500)
@@ -101,18 +101,18 @@ class PoincarePanel(QtWidgets.QWidget):
 
         param_row.addWidget(QtWidgets.QLabel("n:"))
         self.n_spin = QtWidgets.QSpinBox()
-        self.n_spin.setRange(1000, 10_000_000)
-        self.n_spin.setSingleStep(100_000)
-        self.n_spin.setValue(50_000)
+        self.n_spin.setRange(1000, 10000000)
+        self.n_spin.setSingleStep(1000)
+        self.n_spin.setValue(50000)
         param_row.addWidget(self.n_spin)
 
-        self.solve_btn = QtWidgets.QPushButton("Solve")
+        self.solve_btn = QtWidgets.QPushButton("Run")
         self.solve_btn.clicked.connect(self._start_solve)
         param_row.addWidget(self.solve_btn)
 
         self.auto_check = QtWidgets.QCheckBox("Auto")
         self.auto_check.setChecked(True)
-        self.auto_check.setToolTip("Auto-solve when attractor parameters change")
+        self.auto_check.setToolTip("Auto solve when attractor parameters change")
         param_row.addWidget(self.auto_check)
 
         close_btn = QtWidgets.QPushButton("×")
