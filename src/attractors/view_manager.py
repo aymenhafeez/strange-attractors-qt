@@ -4,15 +4,7 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .custom_panel import CustomPanel
-from .style import (
-    CONTAINER,
-    EQUATION_LABEL,
-    LYAPUNOV_PLOT,
-    STATUS_BAR,
-    STATUS_IC,
-    STATUS_PARAMS,
-    STATUS_SYSTEM,
-)
+from .style import CONTAINER, EQUATION_LABEL, LYAPUNOV_PLOT
 from .trajectory_panel import TrajectoryPanel
 
 
@@ -103,23 +95,6 @@ class ViewManager(QtCore.QObject):
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignBottom,
         )
         self.lyapunov_container.setVisible(False)
-
-        self.status_system = QtWidgets.QLabel("")
-        self.status_params = QtWidgets.QLabel("")
-        self.status_ic = QtWidgets.QLabel("")
-
-        status_container = QtWidgets.QWidget()
-        status_container.setStyleSheet(STATUS_BAR)
-        status_layout = QtWidgets.QHBoxLayout(status_container)
-        status_layout.setContentsMargins(1, 0, 8, 0)
-        status_layout.setSpacing(0)
-        for lbl in [self.status_system, self.status_params, self.status_ic]:
-            lbl.setStyleSheet(STATUS_PARAMS)
-            status_layout.addWidget(lbl)
-        status_container.setFixedHeight(22)
-        container_layout.addWidget(status_container, 1, 0)
-        self.status_system.setStyleSheet(STATUS_SYSTEM)
-        self.status_ic.setStyleSheet(STATUS_IC)
 
         self.custom_panel = CustomPanel(self.container)
         self.custom_panel.compile_requested.connect(self._on_custom_compiled)
@@ -357,12 +332,17 @@ class ViewManager(QtCore.QObject):
     def set_trajectories(self, trajectories):
         self._trajectories = trajectories
 
-    def update_status(self, config, values):
+    def set_info(self, config, values):
         formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
-        self.status_system.setText(f"<b>SYSTEM</b>: {config.name}")
-        self.status_system.setToolTip(f"{config.description}")
-        self.status_params.setText(f"<b>PARAMS</b>: {formatted_params}")
-        self.status_ic.setText(f"<b>IC</b>: {config.initial_conditions}")
+        equations = config.equation_text.replace("\n", "<br>")
+        text = (
+            f"<b>SYSTEM</b>: {config.name}<br>"
+            f"{equations}<br>"
+            f"<b>IC</b>: {config.initial_conditions}<br>"
+            f"<b>PARAMS</b>: {formatted_params}"
+        )
+        self.equation_label.setText(text)
+        self.equation_label.setVisible(True)
 
     def _get_traj_colour_alpha(self, i):
         traj = self._trajectories[i] if i < len(self._trajectories) else None
@@ -420,10 +400,6 @@ class ViewManager(QtCore.QObject):
         new_half = min(float(np.max(np.abs(solutions[0]))) * 3, 500.0)
         if abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6) > 0.1:
             self.build_grid(new_half)
-
-    def set_equation(self, text):
-        self.equation_label.setText(text)
-        self.equation_label.setVisible(bool(text))
 
     def set_camera(self, config):
         self.view.setCameraPosition(

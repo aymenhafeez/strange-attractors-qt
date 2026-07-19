@@ -126,7 +126,7 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_config_to_view(self, config):
-        self.scene.set_equation(config.equation_text)
+        self.scene.set_info(config, self.controls.get_current_values())
         self.scene.set_camera(config)
         self.controls.configure(config)
         self.current_n = config.time_defaults["n"]
@@ -156,7 +156,7 @@ class Window(QtWidgets.QMainWindow):
         self._dispatch_solve(full=True)
         config, values = self._get_current_config_and_values()
         if config is not None:
-            self.scene.update_status(config, values)
+            self.scene.set_info(config, values)
 
     def _dispatch_solve(self, full=False):
         if self._solve_pending:
