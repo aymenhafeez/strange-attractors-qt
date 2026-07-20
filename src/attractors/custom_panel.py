@@ -216,11 +216,22 @@ class CustomPanel(QtWidgets.QWidget):
         for p in self._detected_params:
             if p in self._range_widgets:
                 mn, mx, st = self._range_widgets[p]
-                params.append(
-                    AttractorParam(p, 1.0, mn.value(), mx.value(), st.value())
-                )
+                min_val = mn.value()
+                max_val = mx.value()
+                step = st.value()
+
+                if min_val >= max_val:
+                    self._show_status(
+                        f"Invalid range for {p}: min must be less than max", error=True
+                    )
+                    return
+
+                default = 0.5 * (min_val + max_val)
+                params.append(AttractorParam(p, default, min_val, max_val, step))
             else:
-                params.append(AttractorParam(p, 1.0, *DEFAULT_RANGE, STEP))
+                min_val, max_val = DEFAULT_RANGE
+                default = 0.5 * (min_val + max_val)
+                params.append(AttractorParam(p, default, min_val, max_val, STEP))
 
         config = AttractorConfig(
             name="Custom",
