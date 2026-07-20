@@ -108,9 +108,17 @@ class BifurcationPanel(QtWidgets.QWidget):
     def _update_defaults(self):
         if self.config is None:
             return
+
+        param_name = self.param_combo.currentText()
+        if not param_name:
+            return
+
         p = next(
             p for p in self.config.params if p.name == self.param_combo.currentText()
         )
+        if p is None:
+            return
+
         span = p.max_val - p.min_val
         self.min_spin.setValue(p.min_val + 0.01 * span)
         self.max_spin.setValue(p.max_val - 0.01 * span)
@@ -122,11 +130,26 @@ class BifurcationPanel(QtWidgets.QWidget):
         self._error_label.setVisible(False)
         self.config = config
         self.current_values = current_values
+
         self.param_combo.blockSignals(True)
         self.param_combo.clear()
         self.param_combo.addItems([p.name for p in config.params])
         self.param_combo.blockSignals(False)
+
         self.plot_data.setData([], [])
+
+        has_params = bool(config.params)
+        self.run_btn.setEnabled(has_params)
+        self.param_combo.setEnabled(has_params)
+        self.max_spin.setEnabled(has_params)
+        self.steps_spin.setEnabled(has_params)
+        self.transient_spin.setEnabled(has_params)
+
+        if not has_params:
+            self._error_label.setText("No parameters available to sweep")
+            self._error_label.setVisible(True)
+            return
+
         self._update_defaults()
 
     def _run_sweep(self):
@@ -140,9 +163,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         axis = self.var_combo.currentIndex()
 
         param_values = np.linspace(min_val, max_val, steps)
-        base_params = {
-            k: v for k, v in self.current_values.items() if k != param_name
-        }
+        base_params = {k: v for k, v in self.current_values.items() if k != param_name}
 
         self.run_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
@@ -169,12 +190,8 @@ class BifurcationPanel(QtWidgets.QWidget):
         worker.signals.chunk_ready.connect(
             lambda vals, peaks, g=gen: self._on_chunk_ready(vals, peaks, g)
         )
-        worker.signals.finished.connect(
-            lambda g=gen: self._on_worker_finished(g)
-        )
-        worker.signals.error.connect(
-            lambda msg, g=gen: self._on_worker_error(msg, g)
-        )
+        worker.signals.finished.connect(lambda g=gen: self._on_worker_finished(g))
+        worker.signals.error.connect(lambda msg, g=gen: self._on_worker_error(msg, g))
         worker.signals.progress.connect(self.progress.setValue)
         self._worker = worker
         QThreadPool.globalInstance().start(worker)
