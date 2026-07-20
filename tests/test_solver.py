@@ -2,7 +2,8 @@ import numba
 import numpy as np
 import pytest
 
-from attractors.solver import solve_rk4
+from attractors.models import AttractorConfig
+from attractors.solver import solve_attractor, solve_rk4
 
 
 @numba.njit(nogil=True)
@@ -14,6 +15,8 @@ def _constant_system(state, t, params):
 def _exponential_x_system(state, t, params):
     x, y, z = state
     return np.array([x, 0.0, 0.0])
+
+
 def test_solve_rk4_returns_expected_shape():
     y0 = np.array([0.0, 0.0, 0.0])
     params = np.array([], dtype=np.float64)
@@ -32,3 +35,18 @@ def test_solve_rk4_integrates_simple_exponential():
 
     assert sol[-1, 0] == pytest.approx(np.e, rel=1e-6)
     assert sol[-1, 1:] == pytest.approx([0.0, 0.0])
+
+
+def test_solve_attractor_uses_config_defaults():
+    config = AttractorConfig(
+        name="constant",
+        equation=_constant_system,
+        params=[],
+        initial_conditions=[10.0, 20.0, 30.0],
+        time_defaults={"t_min": 0, "t_max": 1, "n": 10},
+    )
+
+    sol = solve_attractor(config, {})
+
+    assert sol.shape == (10, 3)
+    assert sol[-1] == pytest.approx([11.0, 18.0, 30.5])
