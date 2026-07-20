@@ -359,6 +359,7 @@ class ViewManager(QtCore.QObject):
         )
         self.equation_label.setText(text)
         self.equation_label.setVisible(True)
+        self.equation_label.setToolTip(config.description)
 
     def _get_traj_colour_alpha(self, i):
         traj = self._trajectories[i] if i < len(self._trajectories) else None
