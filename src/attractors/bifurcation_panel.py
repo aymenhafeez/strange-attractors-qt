@@ -114,7 +114,8 @@ class BifurcationPanel(QtWidgets.QWidget):
             return
 
         p = next(
-            p for p in self.config.params if p.name == self.param_combo.currentText()
+            (p for p in self.config.params if p.name == self.param_combo.currentText()),
+            None,
         )
         if p is None:
             return
@@ -141,6 +142,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         has_params = bool(config.params)
         self.run_btn.setEnabled(has_params)
         self.param_combo.setEnabled(has_params)
+        self.min_spin.setEnabled(has_params)
         self.max_spin.setEnabled(has_params)
         self.steps_spin.setEnabled(has_params)
         self.transient_spin.setEnabled(has_params)
