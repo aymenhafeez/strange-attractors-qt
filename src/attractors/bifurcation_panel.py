@@ -206,7 +206,16 @@ class BifurcationPanel(QtWidgets.QWidget):
     def _on_chunk_ready(self, vals, peaks_list, gen):
         if gen != self._sweep_gen:
             return
+
+        if not peaks_list:
+            self.plot_data.setData([], [])
+            return
+
         lens = [len(p) for p in peaks_list]
+        if sum(lens) == 0:
+            self.plot_data.setData([], [])
+            return
+
         self.plot_data.setData(np.repeat(vals, lens), np.concatenate(peaks_list))
 
     def _on_worker_finished(self, gen):
