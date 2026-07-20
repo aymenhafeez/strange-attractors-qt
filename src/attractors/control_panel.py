@@ -18,6 +18,14 @@ STEP = 1000
 N_BINS = 96
 
 
+def _slider_index(value, min_val, step):
+    return int(round((value - min_val) / step))
+
+
+def _slider_value(index, min_val, step):
+    return min_val + index * step
+
+
 class ControlPanel(QtWidgets.QWidget):
     attractor_changed = QtCore.pyqtSignal(str)
     solve_requested = QtCore.pyqtSignal(bool)
@@ -321,22 +329,28 @@ class ControlPanel(QtWidgets.QWidget):
             label.setStyleSheet(SLIDER_PARAMS)
             row.addWidget(label)
             s = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-            s.setRange(int(p.min_val / p.step), int(p.max_val / p.step))
-            s.setValue(int(p.default / p.step))
+            s.setRange(0, _slider_index(p.max_val, p.min_val, p.step))
+            s.setValue(_slider_index(p.default, p.min_val, p.step))
+            s.param_min = p.min_val
             s.param_step = p.step
             spin = QtWidgets.QDoubleSpinBox()
             spin.setKeyboardTracking(False)
             spin.setRange(p.min_val, p.max_val)
             spin.setSingleStep(p.step)
             spin.setValue(p.default)
+            spin.param_min = p.min_val
             spin.param_step = p.step
             s.valueChanged.connect(
-                lambda val, ss=s, sp=spin: sp.setValue(val * ss.param_step)
+                lambda val, ss=s, sp=spin: sp.setValue(
+                    _slider_value(val, ss.param_min, ss.param_step)
+                )
             )
             s.valueChanged.connect(lambda: self.solve_requested.emit(False))
             s.sliderReleased.connect(lambda: self.solve_requested.emit(True))
             spin.valueChanged.connect(
-                lambda val, ss=s, sp=spin: ss.setValue(int(val / sp.param_step))
+                lambda val, ss=s, sp=spin: ss.setValue(
+                    _slider_index(val, sp.param_min, sp.param_step)
+                )
             )
             row.addWidget(s)
             row.addWidget(spin)
@@ -347,7 +361,7 @@ class ControlPanel(QtWidgets.QWidget):
 
     def reset_to_defaults(self):
         for p, s, _, _ in self.slider_rows:
-            s.setValue(int(p.default / p.step))
+            s.setValue(_slider_index(p.default, p.min_val, p.step))
         self.solve_requested.emit(True)
 
     def set_traj_tail_max(self, max_val):
@@ -375,7 +389,10 @@ class ControlPanel(QtWidgets.QWidget):
             self.t_max_slider_wrapper.setVisible(True)
 
     def get_current_values(self):
-        return {p.name: p.step * s.value() for p, s, _, _ in self.slider_rows}
+        return {
+            p.name: _slider_value(s.value(), p.min_val, p.step)
+            for p, s, _, _ in self.slider_rows
+        }
 
     def update_projections(self, x, y, z):
         for key, (data_h, data_v) in {"XY": (x, y), "XZ": (x, z), "YZ": (y, z)}.items():
