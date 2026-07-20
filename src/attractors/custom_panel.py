@@ -205,11 +205,14 @@ class CustomPanel(QtWidgets.QWidget):
                 self._clear_layout(r_layout)
 
     def _on_solve(self):
+        if not self._emit_config():
+            return
+
         self.range_group.hide()
         self.solve_btn.hide()
         self.compile_btn.show()
         self.adjustSize()
-        self._emit_config()
+        # self._emit_config()
 
     def _emit_config(self):
         params = []
@@ -224,7 +227,7 @@ class CustomPanel(QtWidgets.QWidget):
                     self._show_status(
                         f"Invalid range for {p}: min must be less than max", error=True
                     )
-                    return
+                    return False
 
                 default = 0.5 * (min_val + max_val)
                 params.append(AttractorParam(p, default, min_val, max_val, step))
@@ -259,6 +262,7 @@ class CustomPanel(QtWidgets.QWidget):
         self._range_widgets = {}
 
         self.compile_requested.emit(config)
+        return True
 
     def _show_status(self, message: str, error: bool = False):
         self.status_label.setText(message)
