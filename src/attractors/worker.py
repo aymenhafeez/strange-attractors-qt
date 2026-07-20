@@ -1,8 +1,12 @@
+import logging
+
 import numpy as np
 from pyqtgraph.Qt.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from .lyapunov import compute_lyapunov
 from .solver import solve_attractor
+
+logger = logging.getLogger(__name__)
 
 
 class SolveWorker(QObject):
@@ -25,6 +29,7 @@ class SolveWorker(QObject):
             if not self._cancel:
                 self.result_ready.emit(solutions, is_partial)
         except Exception:
+            logger.exception("Attractor solve failed")
             if not self._cancel:
                 self.result_ready.emit(None, False)
 
@@ -56,4 +61,5 @@ class LyapunovWorker(QObject):
             if not self._cancel:
                 self.lyapunov_ready.emit(lyap, ky_dim, t_hist, lyap_hist)
         except Exception:
+            logger.exception("Lyapunov computation failed")
             pass
