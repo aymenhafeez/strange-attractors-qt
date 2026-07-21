@@ -2,7 +2,7 @@ import numba
 import numpy as np
 import pytest
 
-from attractors.models import AttractorConfig
+from attractors.models import AttractorConfig, AttractorParam
 from attractors.solver import solve_attractor, solve_rk4
 
 
@@ -15,6 +15,12 @@ def _constant_system(state, t, params):
 def _exponential_x_system(state, t, params):
     x, y, z = state
     return np.array([x, 0.0, 0.0])
+
+
+@numba.njit(nogil=True)
+def _param_order_system(state, t, params):
+    a, b, c = params
+    return np.array([a, b, c])
 
 
 def test_solve_rk4_returns_expected_shape():
@@ -50,3 +56,18 @@ def test_solve_attractor_uses_config_defaults():
 
     assert sol.shape == (10, 3)
     assert sol[-1] == pytest.approx([11.0, 18.0, 30.5])
+
+
+def test_solve_attractor_allows_n_tmax_and_ic_overrides():
+    config = AttractorConfig(
+        name="constant",
+        equation=_constant_system,
+        params=[],
+        initial_conditions=[10.0, 20.0, 30.0],
+        time_defaults={"t_min": 0, "t_max": 1, "n": 10},
+    )
+
+    sol = solve_attractor(config, {}, n=4, t_max=2.0, ic=[0.0, 0.0, 0.0])
+
+    assert sol.shape == (4, 3)
+    assert sol[-1] == pytest.approx([2.0, -4.0, 1.0])
