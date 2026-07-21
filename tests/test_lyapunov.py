@@ -37,3 +37,24 @@ def test_numerical_jacobian_matches_known_linear_system():
     )
 
     assert jac == pytest.approx(expected)
+
+
+
+def test_compute_lyapunov_recovers_linear_system_exponents():
+    params = np.array([-0.1, -0.2, -0.3], dtype=np.float64)
+    initial_conditions = np.array([1.0, 1.0, 1.0], dtype=np.float64)
+
+    lyap, ky_dim, t_hist, lyap_hist = compute_lyapunov(
+        _linear_diagonal_system,
+        initial_conditions,
+        params,
+        0.0,
+        2.0,
+        200,
+        gs_interval=10,
+    )
+
+    assert lyap == pytest.approx(params, abs=1e-8)
+    assert ky_dim == pytest.approx(0.0)
+    assert t_hist.shape == (20,)
+    assert lyap_hist.shape == (20, 3)
