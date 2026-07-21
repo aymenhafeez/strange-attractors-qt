@@ -49,9 +49,12 @@ class LyapunovWorker(QObject):
             pvals = np.ascontiguousarray(
                 [values[p.name] for p in config.params], dtype=np.float64
             )
+            initial_conditions = np.ascontiguousarray(
+                config.initial_conditions, dtype=np.float64
+            )
             lyap, ky_dim, t_hist, lyap_hist = compute_lyapunov(
                 config.equation,
-                config.initial_conditions,
+                initial_conditions,
                 pvals,
                 config.time_defaults["t_min"],
                 config.time_defaults["t_max"],
