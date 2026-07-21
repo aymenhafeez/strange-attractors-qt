@@ -26,3 +26,10 @@ def test_registry_keys_match_config_names_or_display_names():
 def test_all_configs_have_three_initial_conditions():
     for config in ATTRACTORS.values():
         assert len(config.initial_conditions) == 3
+
+
+def test_all_configs_have_required_time_defaults():
+    for config in ATTRACTORS.values():
+        assert set(config.time_defaults) == {"t_min", "t_max", "n"}
+        assert config.time_defaults["t_max"] > config.time_defaults["t_min"]
+        assert config.time_defaults["n"] > 0
