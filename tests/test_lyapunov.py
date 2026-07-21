@@ -58,3 +58,22 @@ def test_compute_lyapunov_recovers_linear_system_exponents():
     assert ky_dim == pytest.approx(0.0)
     assert t_hist.shape == (20,)
     assert lyap_hist.shape == (20, 3)
+
+
+def test_compute_lyapunov_history_tracks_convergence():
+    params = np.array([-0.1, -0.2, -0.3], dtype=np.float64)
+    initial_conditions = np.array([1.0, 1.0, 1.0], dtype=np.float64)
+
+    lyap, _, t_hist, lyap_hist = compute_lyapunov(
+        _linear_diagonal_system,
+        initial_conditions,
+        params,
+        0.0,
+        1.0,
+        100,
+        gs_interval=10,
+    )
+
+    assert t_hist == pytest.approx(np.linspace(0.1, 1.0, 10))
+    assert lyap_hist[-1] == pytest.approx(lyap)
+    assert np.all(np.isfinite(lyap_hist))
