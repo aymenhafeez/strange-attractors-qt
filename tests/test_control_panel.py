@@ -54,3 +54,27 @@ def test_control_panel_gets_current_values_returns_config_defaults(qapp):
         "a": pytest.approx(1.5),
         "b": pytest.approx(-2.0),
     }
+
+
+def test_control_panel_reset_to_defaults_restores_slider_values(qapp):
+    config = AttractorConfig(
+        name="test",
+        equation=lambda state, t, params: state,
+        params=[
+            AttractorParam("a", 1.5, 0.0, 10.0, 0.5),
+        ],
+        initial_conditions=[0.0, 0.0, 0.0],
+        time_defaults={"t_min": 0, "t_max": 10, "n": 1000},
+    )
+
+    panel = ControlPanel()
+    panel.configure(config)
+
+    param, slider, _, _ = panel.slider_rows[0]
+    slider.setValue(_slider_index(4.0, param.min_val, param.step))
+
+    assert panel.get_current_values()["a"] == pytest.approx(4.0)
+
+    panel.reset_to_defaults()
+
+    assert panel.get_current_values()["a"] == pytest.approx(1.5)
