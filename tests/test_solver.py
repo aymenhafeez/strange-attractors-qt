@@ -71,3 +71,21 @@ def test_solve_attractor_allows_n_tmax_and_ic_overrides():
 
     assert sol.shape == (4, 3)
     assert sol[-1] == pytest.approx([2.0, -4.0, 1.0])
+
+
+def test_solve_attractor_maps_params_in_config_order():
+    config = AttractorConfig(
+        name="params",
+        equation=_param_order_system,
+        params=[
+            AttractorParam("b", 0.0, 0.0, 10.0),
+            AttractorParam("a", 0.0, 0.0, 0.0, 10.0),
+            AttractorParam("c", 0.0, 0.0, 10.0),
+        ],
+        initial_conditions=[0.0, 0.0, 0.0],
+        time_defaults={"t_min": 0, "t_max": 1, "n": 1},
+    )
+
+    sol = solve_attractor(config, {"a": 10.0, "b": 20.0, "c": 30.0})
+
+    assert sol[-1] == pytest.approx([20.0, 10.0, 30.0])
