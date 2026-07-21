@@ -89,3 +89,20 @@ def test_solve_attractor_maps_params_in_config_order():
     sol = solve_attractor(config, {"a": 10.0, "b": 20.0, "c": 30.0})
 
     assert sol[-1] == pytest.approx([20.0, 10.0, 30.0])
+
+
+def test_solve_attractor_missing_param_raises_key_error():
+    config = AttractorConfig(
+        name="params",
+        equation=_param_order_system,
+        params=[
+            AttractorParam("a", 0.0, 0.0, 10.0),
+        ],
+        initial_conditions=[0.0, 0.0, 0.0],
+        time_defaults={"t_min": 0, "t_max": 1, "n": 1},
+    )
+
+    with pytest.raises(KeyError) as exc_info:
+        solve_attractor(config, {})
+
+        assert exc_info.value.args == ("a",)
