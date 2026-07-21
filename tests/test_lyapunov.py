@@ -39,6 +39,22 @@ def test_numerical_jacobian_matches_known_linear_system():
     assert jac == pytest.approx(expected)
 
 
+def test_gram_schmidt_returns_orthonormal_basis():
+    theta = np.array(
+        [
+            [3.0, 1.0, 0.0],
+            [0.0, 4.0, 0.0],
+            [0.0, 0.0, 5.0],
+        ],
+        dtype=np.float64,
+    )
+
+    theta_out, lyap_sums = _gram_schmidt(theta.ravel())
+    q = theta_out.reshape(3, 3)
+
+    assert q.T @ q == pytest.approx(np.eye(3))
+    assert lyap_sums == pytest.approx(np.log([3.0, 4.0, 5.0]))
+
 
 def test_compute_lyapunov_recovers_linear_system_exponents():
     params = np.array([-0.1, -0.2, -0.3], dtype=np.float64)
