@@ -95,3 +95,33 @@ def test_both_directions_returns_crossings_in_time_order():
 
     assert h == pytest.approx([15.0, 30.0, 60.0])
     assert v == pytest.approx([150.0, 300.0, 600.0])
+
+
+def test_plane_y_returns_xz_coordinates():
+    sol = np.array(
+        [
+            [10.0, -1.0, 100.0],
+            [20.0, 1.0, 200.0],
+        ],
+        dtype=np.float64,
+    )
+
+    h, v = compute_poincare_crossings(sol, "y", 0.0)
+
+    assert h == pytest.approx([15.0])
+    assert v == pytest.approx([150.0])
+
+
+def test_plane_z_returns_xy_coordinates():
+    sol = np.array(
+        [
+            [10.0, 100.0, -1.0],
+            [20.0, 200.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+
+    h, v = compute_poincare_crossings(sol, "z", 0.0)
+
+    assert h == pytest.approx([15.0])
+    assert v == pytest.approx([150.0])
