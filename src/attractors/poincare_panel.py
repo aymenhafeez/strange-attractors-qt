@@ -101,7 +101,7 @@ class PoincarePanel(QtWidgets.QWidget):
         self.n_spin = QtWidgets.QSpinBox()
         self.n_spin.setRange(1000, 10000000)
         self.n_spin.setSingleStep(1000)
-        self.n_spin.setValue(50000)
+        self.n_spin.setValue(100000)
         param_row.addWidget(self.n_spin)
 
         self.solve_btn = QtWidgets.QPushButton("Run")
