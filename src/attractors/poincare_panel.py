@@ -215,6 +215,9 @@ class PoincarePanel(QtWidgets.QWidget):
         QThreadPool.globalInstance().start(worker)
 
     def _cancel_solve(self):
+        self.cancel_solve()
+
+    def cancel_solve(self):
         if self._worker is not None:
             self._worker._cancel = True
             self._worker = None

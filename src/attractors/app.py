@@ -283,7 +283,7 @@ class Window(QtWidgets.QMainWindow):
         self.scene.set_lyapunov_result(lyap, ky_dim, t_hist, lyap_hist)
 
     def _close_poincare(self):
-        self.poincare_panel._cancel_solve()
+        self.poincare_panel.cancel_solve()
         self.scene.remove_poincare_plane()
         self.poincare_panel.hide()
         sizes = self.inner_splitter.sizes()
@@ -315,7 +315,7 @@ class Window(QtWidgets.QMainWindow):
                 self.poincare_panel.set_attractor(config, values)
 
     def _close_bifurcation(self):
-        self.bifurcation_panel._cancel_sweep()
+        self.bifurcation_panel.cancel_sweep()
         self.bifurcation_panel.hide()
         sizes = self.inner_splitter.sizes()
         idx = self.inner_splitter.indexOf(self.bifurcation_panel)

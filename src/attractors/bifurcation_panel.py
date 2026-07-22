@@ -199,6 +199,9 @@ class BifurcationPanel(QtWidgets.QWidget):
         QThreadPool.globalInstance().start(worker)
 
     def _cancel_sweep(self):
+        self.cancel_sweep()
+
+    def cancel_sweep(self):
         if self._worker:
             self._worker._cancel = True
             self._worker = None
