@@ -11,6 +11,14 @@ from .style import SPLITTER
 
 WINDOW_SIZE = 1100
 PARTIAL_N = 40000
+PROJECTION_UPDATE_INTERVAL_MS = 100
+
+
+def _should_update_projection(now_ms, last_update_ms, interval_ms):
+    if last_update_ms is None:
+        return True
+
+    return now_ms - last_update_ms >= interval_ms
 
 
 class Window(QtWidgets.QMainWindow):
@@ -24,6 +32,7 @@ class Window(QtWidgets.QMainWindow):
         self._full_needed = False
         self._active_solve_request_id = None
         self._active_lyapunov_request_id = None
+        self._last_projection_update_ms = None
         self.current_n = 100000
         self.current_t_max = 50
         self.current_name = list(ATTRACTORS.keys())[0]
@@ -230,6 +239,7 @@ class Window(QtWidgets.QMainWindow):
             all_sol = np.concatenate(solutions, axis=0)
             x, y, z = all_sol.T
             self.controls.update_projections(x, y, z)
+            self._last_projection_update_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
             if self._initial_full_solves == 0:
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
@@ -247,6 +257,15 @@ class Window(QtWidgets.QMainWindow):
         self.controls.reapply_projections(self.scene.get_solutions())
 
     def _on_projections_data(self, x, y, z):
+        now_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
+        if not _should_update_projection(
+            now_ms,
+            self._last_projection_update_ms,
+            PROJECTION_UPDATE_INTERVAL_MS,
+        ):
+            return
+
+        self._last_projection_update_ms = now_ms
         self.controls.update_projections(x, y, z)
 
     def _reset_camera(self):

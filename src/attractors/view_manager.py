@@ -35,7 +35,7 @@ class ViewManager(QtCore.QObject):
         self._anim_frame = 0
         self._traj_tail_length = 5000
         self._traj_tail_enabled = False
-        self._anim_step = 200
+        self._anim_step = 100
         self._grid_visible = True
         self.grid_half_size = 30.0
         self.grid_items = []
