@@ -60,6 +60,8 @@ class Window(QtWidgets.QMainWindow):
         self.controls.alpha_slider.valueChanged.connect(self.scene.set_alpha)
         self.controls.alpha_spin.valueChanged.connect(self.scene.set_alpha)
         self.controls.save_requested.connect(self.scene.save_view_as_png)
+        self.controls.camera_reset_requested.connect(self._reset_camera)
+        self.controls.camera_fit_requested.connect(self.scene.fit_camera_to_solutions)
         self.controls.traj_tail_length_changed.connect(self.scene.set_traj_tail_length)
 
         self.poincare_panel = PoincarePanel()
@@ -246,6 +248,11 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_projections_data(self, x, y, z):
         self.controls.update_projections(x, y, z)
+
+    def _reset_camera(self):
+        config, _ = self._get_current_config_and_values()
+        if config is not None:
+            self.scene.set_camera(config)
 
     def _on_anim_toggled(self):
         playing = self.scene.toggle_animation()

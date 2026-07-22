@@ -425,10 +425,30 @@ class ViewManager(QtCore.QObject):
             elevation=config.camera_elevation,
             azimuth=config.camera_azimuth,
         )
-        self.view.opts["center"] = QtGui.QVector3D(
-            self.view.opts["center"].x(),
-            self.view.opts["center"].y(),
-            self.view.opts["center"].z() + config.pan,
+        self.view.opts["center"] = QtGui.QVector3D(0, 0, config.pan)
+
+    def fit_camera_to_solutions(self):
+        if not self._solutions:
+            return
+
+        points = np.concatenate(self._solutions, axis=0)
+        if points.size == 0:
+            return
+
+        finite = np.all(np.isfinite(points), axis=1)
+        if not np.any(finite):
+            return
+
+        points = points[finite]
+        mins = np.min(points, axis=0)
+        maxs = np.max(points, axis=0)
+        center = 0.5 * (mins + maxs)
+        span = np.max(maxs - mins)
+        distance = max(float(span) * 1.25, 1.0)
+
+        self.view.setCameraPosition(
+            pos=QtGui.QVector3D(float(center[0]), float(center[1]), float(center[2])),
+            distance=distance,
         )
 
     def set_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
