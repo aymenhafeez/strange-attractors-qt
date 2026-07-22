@@ -10,14 +10,14 @@ logger = logging.getLogger(__name__)
 
 
 class SolveWorker(QObject):
-    result_ready = pyqtSignal(object, bool)
+    result_ready = pyqtSignal(int, object, bool)
 
     def __init__(self):
         super().__init__()
         self._cancel = False
 
-    @pyqtSlot(object, dict, list, int, bool, float)
-    def solve(self, config, values, ics, n, is_partial, t_max):
+    @pyqtSlot(int, object, dict, list, int, bool, float)
+    def solve(self, request_id, config, values, ics, n, is_partial, t_max):
         self._cancel = False
         solutions = []
         try:
@@ -27,22 +27,22 @@ class SolveWorker(QObject):
                 sol = solve_attractor(config, values, n, t_max=t_max, ic=ic)
                 solutions.append(sol)
             if not self._cancel:
-                self.result_ready.emit(solutions, is_partial)
+                self.result_ready.emit(request_id, solutions, is_partial)
         except Exception:
             logger.exception("Attractor solve failed")
             if not self._cancel:
-                self.result_ready.emit(None, False)
+                self.result_ready.emit(request_id, None, False)
 
 
 class LyapunovWorker(QObject):
-    lyapunov_ready = pyqtSignal(object, float, object, object)
+    lyapunov_ready = pyqtSignal(int, object, float, object, object)
 
     def __init__(self):
         super().__init__()
         self._cancel = False
 
-    @pyqtSlot(object, dict)
-    def compute(self, config, values):
+    @pyqtSlot(int, object, dict)
+    def compute(self, request_id, config, values):
         self._cancel = False
 
         try:
@@ -62,7 +62,7 @@ class LyapunovWorker(QObject):
             )
 
             if not self._cancel:
-                self.lyapunov_ready.emit(lyap, ky_dim, t_hist, lyap_hist)
+                self.lyapunov_ready.emit(request_id, lyap, ky_dim, t_hist, lyap_hist)
         except Exception:
             logger.exception("Lyapunov computation failed")
             pass

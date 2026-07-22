@@ -22,6 +22,8 @@ class Window(QtWidgets.QMainWindow):
         self._solve_pending = False
         self._solve_needed = False
         self._full_needed = False
+        self._active_solve_request_id = None
+        self._active_lyapunov_request_id = None
         self.current_n = 100000
         self.current_t_max = 50
         self.current_name = list(ATTRACTORS.keys())[0]
@@ -162,6 +164,9 @@ class Window(QtWidgets.QMainWindow):
     def _update_plot(self):
         self.scene.stop_animation()
         self.controls.set_anim_playing(False)
+        self.solver.cancel_solve()
+        self.solver.cancel_lyapunov()
+        self._solve_pending = False
         self._dispatch_solve(full=True)
         config, values = self._get_current_config_and_values()
         if config is not None:
@@ -181,19 +186,27 @@ class Window(QtWidgets.QMainWindow):
         ics = self.scene.get_trajectories()
         ic_list = [t["ic"] for t in ics] if ics else [config.initial_conditions]
         dispatch_n = user_n if full else min(user_n, PARTIAL_N)
-        self.solver.request_solve(config, values, ic_list, dispatch_n, not full, t_max)
+        self.solver.cancel_lyapunov()
+        self._active_solve_request_id = self.solver.request_solve(
+            config, values, ic_list, dispatch_n, not full, t_max
+        )
 
     def _on_controls_solve_requested(self, full):
         self.scene.stop_animation()
         self.controls.set_anim_playing(False)
-        self.solver._solver_worker._cancel = True
-        QtCore.QCoreApplication.removePostedEvents(self.solver._solver_worker)
+        self.solver.cancel_solve()
         self._solve_pending = False
         self._solve_needed = full
         self._full_needed = full
         self._dispatch_solve(full=full)
 
-    def _on_solve_result(self, solutions, is_partial):
+    def _on_solve_result(self, request_id, solutions, is_partial):
+        if request_id != self._active_solve_request_id:
+            if is_partial and solutions is not None:
+                self.scene.display_solutions(solutions, is_partial)
+                self.scene.refresh_colours()
+            return
+
         self._solve_pending = False
 
         if solutions is None:
@@ -209,7 +222,9 @@ class Window(QtWidgets.QMainWindow):
             if config is not None:
                 if self.poincare_panel.isVisible():
                     self.poincare_panel.set_attractor(config, values)
-                self.solver.request_lyapunov(config, values)
+                self._active_lyapunov_request_id = self.solver.request_lyapunov(
+                    config, values
+                )
             all_sol = np.concatenate(solutions, axis=0)
             x, y, z = all_sol.T
             self.controls.update_projections(x, y, z)
@@ -254,7 +269,10 @@ class Window(QtWidgets.QMainWindow):
     def _on_trajectory_styles_changed(self, trajectories):
         self.scene.refresh_colours()
 
-    def _on_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
+    def _on_lyapunov_result(self, request_id, lyap, ky_dim, t_hist, lyap_hist):
+        if request_id != self._active_lyapunov_request_id:
+            return
+
         self.scene.set_lyapunov_result(lyap, ky_dim, t_hist, lyap_hist)
 
     def _close_poincare(self):

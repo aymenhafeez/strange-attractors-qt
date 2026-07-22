@@ -83,7 +83,7 @@ class PoincarePanel(QtWidgets.QWidget):
         self.setMinimumHeight(120)
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(4)
 
         param_row = QtWidgets.QHBoxLayout()
