@@ -197,7 +197,6 @@ class ControlPanel(QtWidgets.QWidget):
 
         self.status_label = QtWidgets.QLabel("")
         self.status_label.setWordWrap(True)
-        self.status_label.setStyleSheet("color: #ff6b6b; font-size: 11px;")
         self.status_label.hide()
 
         self.projection_container = QtWidgets.QWidget()
@@ -410,8 +409,10 @@ class ControlPanel(QtWidgets.QWidget):
             for p, s, _, _ in self.slider_rows
         }
 
-    def set_status(self, message):
+    def set_status(self, message, error=False):
+        colour = "#ff6b6b" if error else "#a8e6a3"
         self.status_label.setText(message)
+        self.status_label.setStyleSheet(f"color: {colour}; font-size: 11px;")
         self.status_label.show()
 
     def clear_status(self):

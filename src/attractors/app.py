@@ -41,6 +41,12 @@ def validate_solutions(solutions, max_abs=MAX_TRAJECTORY_ABS):
     return True, ""
 
 
+def _solve_status_text(n_trajectories):
+    if n_trajectories == 1:
+        return "Solving trajectory"
+    return f"Solving {n_trajectories} trajectories"
+
+
 class Window(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -218,6 +224,8 @@ class Window(QtWidgets.QMainWindow):
         ic_list = [t["ic"] for t in ics] if ics else [config.initial_conditions]
         dispatch_n = user_n if full else min(user_n, PARTIAL_N)
         self.solver.cancel_lyapunov()
+        if full:
+            self.controls.set_status(_solve_status_text(len(ic_list)))
         self._active_solve_request_id = self.solver.request_solve(
             config, values, ic_list, dispatch_n, not full, t_max
         )
@@ -246,11 +254,13 @@ class Window(QtWidgets.QMainWindow):
             if self._solve_needed:
                 self._solve_needed = False
                 self._dispatch_solve(full=self._full_needed)
+            else:
+                self.controls.set_status("Solve failed", error=True)
             return
 
         is_valid, message = validate_solutions(solutions)
         if not is_valid:
-            self.controls.set_status(message)
+            self.controls.set_status(message, error=True)
             if self._solve_needed:
                 self._solve_needed = False
                 full = self._full_needed
@@ -266,6 +276,7 @@ class Window(QtWidgets.QMainWindow):
             if config is not None:
                 if self.poincare_panel.isVisible():
                     self.poincare_panel.set_attractor(config, values)
+                self.controls.set_status("Computing Lyapunov spectrum")
                 self._active_lyapunov_request_id = self.solver.request_lyapunov(
                     config, values
                 )
@@ -333,6 +344,7 @@ class Window(QtWidgets.QMainWindow):
             return
 
         self.scene.set_lyapunov_result(lyap, ky_dim, t_hist, lyap_hist)
+        self.controls.clear_status()
 
     def _close_poincare(self):
         self.poincare_panel.cancel_solve()
