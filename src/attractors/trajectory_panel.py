@@ -117,7 +117,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self.toggle_btn = QtWidgets.QPushButton("▶ Trajectories")
+        self.toggle_btn = QtWidgets.QPushButton("Trajectories ▸")
         self.toggle_btn.clicked.connect(self._toggle_content)
         layout.addWidget(self.toggle_btn)
 
@@ -170,7 +170,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
     def _toggle_content(self):
         visible = not self._content.isVisible()
         self._content.setVisible(visible)
-        self.toggle_btn.setText("▼ Trajectories" if visible else "▶ Trajectories")
+        self.toggle_btn.setText("Trajectories ▾" if visible else "Trajectories ▸")
         self.adjustSize()
 
     def _on_enable_toggled(self, enabled: bool):

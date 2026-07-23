@@ -5,6 +5,13 @@ from .bifurcation_panel import BifurcationPanel
 from .control_panel import ControlPanel
 from .poincare_panel import PoincarePanel
 from .projection_panel import ProjectionPanel
+from .presets import (
+    PresetError,
+    delete_named_preset,
+    list_presets,
+    load_named_preset,
+    save_named_preset,
+)
 from .registry import ATTRACTORS
 from .view_manager import ViewManager
 from .solve_manager import SolveManager
@@ -14,7 +21,7 @@ from .style import SPLITTER_HANDLE
 WINDOW_SIZE = 1100
 PARTIAL_N = 40000
 PROJECTION_UPDATE_INTERVAL_MS = 100
-MAIN_VIEW_MARGIN = 10
+MAIN_VIEW_MARGIN = 8
 
 
 def _should_update_projection(now_ms, last_update_ms, interval_ms):
@@ -28,6 +35,27 @@ def _solve_status_text(n_trajectories):
     if n_trajectories == 1:
         return "Solving trajectory"
     return f"Solving {n_trajectories} trajectories"
+
+
+def _attractor_name_for_config(config):
+    if config.name == "Custom":
+        return "Custom"
+
+    for name, registered_config in ATTRACTORS.items():
+        if registered_config is config:
+            return name
+
+    return config.name
+
+
+def _preset_directory():
+    app_data = QtCore.QStandardPaths.writableLocation(
+        QtCore.QStandardPaths.StandardLocation.AppDataLocation
+    )
+    if app_data:
+        return app_data + "/presets"
+
+    return str(QtCore.QDir.homePath() + "/.strange-attractors/presets")
 
 
 class Window(QtWidgets.QMainWindow):
@@ -47,6 +75,7 @@ class Window(QtWidgets.QMainWindow):
         self.current_t_max = 50
         self.current_name = list(ATTRACTORS.keys())[0]
         self._custom_config = None
+        self._preset_directory = _preset_directory()
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
@@ -78,6 +107,9 @@ class Window(QtWidgets.QMainWindow):
         self.controls.alpha_slider.valueChanged.connect(self.scene.set_alpha)
         self.controls.alpha_spin.valueChanged.connect(self.scene.set_alpha)
         self.controls.save_requested.connect(self.scene.save_view_as_png)
+        self.controls.preset_save_requested.connect(self._save_preset)
+        self.controls.preset_load_requested.connect(self._load_preset)
+        self.controls.preset_delete_requested.connect(self._delete_preset)
         self.controls.camera_reset_requested.connect(self._reset_camera)
         self.controls.camera_fit_requested.connect(self.scene.fit_camera_to_solutions)
         self.controls.traj_tail_length_changed.connect(self.scene.set_traj_tail_length)
@@ -119,7 +151,7 @@ class Window(QtWidgets.QMainWindow):
         main_area = QtWidgets.QWidget()
         main_area_layout = QtWidgets.QVBoxLayout(main_area)
         main_area_layout.setContentsMargins(
-            MAIN_VIEW_MARGIN,
+            0,
             MAIN_VIEW_MARGIN,
             MAIN_VIEW_MARGIN,
             MAIN_VIEW_MARGIN,
@@ -136,6 +168,7 @@ class Window(QtWidgets.QMainWindow):
         self.scene.container.installEventFilter(self)
 
         self.scene.build_grid(30.0)
+        self._refresh_presets()
         self._rebuild_view(self.current_name)
 
     def eventFilter(self, obj, event):
@@ -184,6 +217,96 @@ class Window(QtWidgets.QMainWindow):
         self.current_name = "Custom"
         self.controls.set_current_attractor("Custom")
         self._apply_config_to_view(config)
+
+    def _apply_loaded_preset(self, config, values, n, t_max):
+        if config.name == "Custom":
+            self._custom_config = config
+            self.current_name = "Custom"
+            self.controls.set_current_attractor("Custom")
+            self.controls.hide_standard_controls()
+        else:
+            name = _attractor_name_for_config(config)
+            self.current_name = name
+            self.controls.set_current_attractor(name)
+            self.controls.show_standard_controls()
+
+        self.scene.stop_animation()
+        self.controls.set_anim_playing(False)
+        self.scene.set_camera(config)
+        self.controls.configure(config)
+        self.controls.set_current_values(values)
+        self.controls.set_time_values(n, t_max)
+        self.current_n = n
+        self.current_t_max = t_max
+        self.controls.set_traj_tail_max(self.current_n)
+        self.scene.set_info(config, self.controls.get_current_values())
+        self.scene.clear_lyapunov()
+        self.controls.trajectory_panel.reset(config)
+        self.bifurcation_panel.set_config(config, self.controls.get_current_values())
+        self._update_plot()
+
+    def _refresh_presets(self, selected=None):
+        self.controls.set_saved_presets(list_presets(self._preset_directory), selected)
+
+    def _default_preset_name(self):
+        return f"{self.current_name} preset"
+
+    def _save_preset(self, name):
+        config, values = self._get_current_config_and_values()
+        if config is None:
+            self.controls.set_status("No attractor selected", error=True)
+            return
+
+        preset_name = name.strip() or self._default_preset_name()
+
+        try:
+            save_named_preset(
+                self._preset_directory,
+                preset_name,
+                config,
+                values,
+                self.current_n,
+                self.current_t_max,
+            )
+        except PresetError as exc:
+            self.controls.set_status(str(exc), error=True)
+            return
+
+        self._refresh_presets(preset_name)
+        self.controls.set_status(f"Saved preset: {preset_name}")
+
+    def _load_preset(self, name):
+        preset_name = name.strip()
+        if not preset_name:
+            self.controls.set_status("Select a preset to load", error=True)
+            return
+
+        try:
+            config, values, n, t_max = load_named_preset(
+                self._preset_directory, preset_name
+            )
+        except PresetError as exc:
+            self.controls.set_status(str(exc), error=True)
+            return
+
+        self._apply_loaded_preset(config, values, n, t_max)
+        self._refresh_presets(preset_name)
+        self.controls.set_status(f"Loaded preset: {preset_name}")
+
+    def _delete_preset(self, name):
+        preset_name = name.strip()
+        if not preset_name:
+            self.controls.set_status("Select a preset to delete", error=True)
+            return
+
+        try:
+            delete_named_preset(self._preset_directory, preset_name)
+        except PresetError as exc:
+            self.controls.set_status(str(exc), error=True)
+            return
+
+        self._refresh_presets()
+        self.controls.set_status(f"Deleted preset: {preset_name}")
 
     def _get_current_config_and_values(self):
         if self.current_name == "Custom":

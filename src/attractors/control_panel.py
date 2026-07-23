@@ -30,6 +30,9 @@ class ControlPanel(QtWidgets.QWidget):
     camera_reset_requested = QtCore.pyqtSignal()
     camera_fit_requested = QtCore.pyqtSignal()
     save_requested = QtCore.pyqtSignal()
+    preset_save_requested = QtCore.pyqtSignal(str)
+    preset_load_requested = QtCore.pyqtSignal(str)
+    preset_delete_requested = QtCore.pyqtSignal(str)
     traj_tail_length_changed = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None):
@@ -204,6 +207,36 @@ class ControlPanel(QtWidgets.QWidget):
         self.controls_grid.addWidget(self.fit_camera_button, 1, 0)
         self.controls_grid.addWidget(self.save_button, 1, 1)
 
+        self.preset_toggle_btn = QtWidgets.QPushButton("Presets ▸")
+        self.preset_toggle_btn.clicked.connect(self._toggle_preset_content)
+
+        self.preset_content = QtWidgets.QWidget()
+        self.preset_content.setObjectName("customPanelContent")
+
+        self.preset_label = QtWidgets.QLabel("Preset library")
+        self.preset_name_edit = QtWidgets.QLineEdit()
+        self.preset_name_edit.setPlaceholderText("Preset name")
+        self.preset_combo = QtWidgets.QComboBox()
+        self.preset_combo.currentTextChanged.connect(self._on_preset_selected)
+        self.save_preset_button = QtWidgets.QPushButton("Save")
+        self.save_preset_button.clicked.connect(self._emit_preset_save)
+        self.load_preset_button = QtWidgets.QPushButton("Load")
+        self.load_preset_button.clicked.connect(self._emit_preset_load)
+        self.delete_preset_button = QtWidgets.QPushButton("Delete")
+        self.delete_preset_button.clicked.connect(self._emit_preset_delete)
+
+        self.preset_grid = QtWidgets.QGridLayout()
+        self.preset_grid.setContentsMargins(6, 6, 6, 4)
+        self.preset_grid.setSpacing(6)
+        self.preset_grid.addWidget(self.preset_label, 0, 0, 1, 2)
+        self.preset_grid.addWidget(self.preset_name_edit, 1, 0, 1, 2)
+        self.preset_grid.addWidget(self.preset_combo, 2, 0, 1, 2)
+        self.preset_grid.addWidget(self.save_preset_button, 3, 0)
+        self.preset_grid.addWidget(self.load_preset_button, 3, 1)
+        self.preset_grid.addWidget(self.delete_preset_button, 4, 0, 1, 2)
+        self.preset_content.setLayout(self.preset_grid)
+        self.preset_content.setVisible(False)
+
         self.status_label = QtWidgets.QLabel("")
         self.status_label.setWordWrap(True)
         self.status_label.setMinimumHeight(28)
@@ -214,6 +247,8 @@ class ControlPanel(QtWidgets.QWidget):
         self.custom_panel.setVisible(False)
 
         self.controls_layout.addLayout(self.controls_grid)
+        self.controls_layout.addWidget(self.preset_toggle_btn)
+        self.controls_layout.addWidget(self.preset_content)
         self.controls_layout.addWidget(self.status_label)
 
     def _on_attractor_selected(self, name):
@@ -224,6 +259,43 @@ class ControlPanel(QtWidgets.QWidget):
         self.current_name = name
         self.dropdown.setText(name)
         self.custom_panel.setVisible(name == "Custom")
+
+    def set_saved_presets(self, names, selected=None):
+        selected_name = selected or self.current_preset_name()
+        with QtCore.QSignalBlocker(self.preset_combo):
+            self.preset_combo.clear()
+            self.preset_combo.addItems(names)
+            if selected_name in names:
+                self.preset_combo.setCurrentText(selected_name)
+
+        has_presets = self.preset_combo.count() > 0
+        self.load_preset_button.setEnabled(has_presets)
+        self.delete_preset_button.setEnabled(has_presets)
+        self._on_preset_selected(self.preset_combo.currentText())
+
+    def current_preset_name(self):
+        return self.preset_combo.currentText().strip()
+
+    def _preset_name_from_edit_or_combo(self):
+        return self.preset_name_edit.text().strip() or self.current_preset_name()
+
+    def _on_preset_selected(self, name):
+        with QtCore.QSignalBlocker(self.preset_name_edit):
+            self.preset_name_edit.setText(name)
+
+    def _toggle_preset_content(self):
+        visible = self.preset_content.isHidden()
+        self.preset_content.setVisible(visible)
+        self.preset_toggle_btn.setText("Presets ▾" if visible else "Presets ▸")
+
+    def _emit_preset_save(self):
+        self.preset_save_requested.emit(self._preset_name_from_edit_or_combo())
+
+    def _emit_preset_load(self):
+        self.preset_load_requested.emit(self.current_preset_name())
+
+    def _emit_preset_delete(self):
+        self.preset_delete_requested.emit(self.current_preset_name())
 
     def set_anim_playing(self, playing):
         self.anim_button.setText("■ Stop" if playing else "▶ Play")
@@ -391,6 +463,32 @@ class ControlPanel(QtWidgets.QWidget):
             p.name: _slider_value(s.value(), p.min_val, p.step)
             for p, s, _, _ in self.slider_rows
         }
+
+    def set_current_values(self, values):
+        for p, s, row, _ in self.slider_rows:
+            if p.name not in values:
+                continue
+            spin = row.itemAt(2).widget()
+            slider_value = _slider_index(values[p.name], p.min_val, p.step)
+            with QtCore.QSignalBlocker(s), QtCore.QSignalBlocker(spin):
+                s.setValue(slider_value)
+                spin.setValue(_slider_value(slider_value, p.min_val, p.step))
+
+    def set_time_values(self, n, t_max):
+        if self.n_slider_row is not None:
+            slider = self.n_slider_row.itemAt(1).widget()
+            spin = self.n_slider_row.itemAt(2).widget()
+            slider_value = int(n / spin.param_step)
+            with QtCore.QSignalBlocker(slider), QtCore.QSignalBlocker(spin):
+                slider.setValue(slider_value)
+                spin.setValue(n)
+        if self.t_max_slider_row is not None:
+            slider = self.t_max_slider_row.itemAt(1).widget()
+            spin = self.t_max_slider_row.itemAt(2).widget()
+            slider_value = int(t_max / spin.param_step)
+            with QtCore.QSignalBlocker(slider), QtCore.QSignalBlocker(spin):
+                slider.setValue(slider_value)
+                spin.setValue(t_max)
 
     def set_status(self, message, error=False):
         colour = "#ff6b6b" if error else "#a8e6a3"
