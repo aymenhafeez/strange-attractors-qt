@@ -5,7 +5,6 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .custom_panel import CustomPanel
 from .style import CONTAINER, EQUATION_LABEL, LYAPUNOV_PLOT
-from .trajectory_panel import TrajectoryPanel
 
 
 N_BINS = 96
@@ -30,8 +29,6 @@ def _decimate_for_display(points, max_points):
 
 class ViewManager(QtCore.QObject):
     animation_finished = QtCore.pyqtSignal()
-    trajectories_changed = QtCore.pyqtSignal(list)
-    styles_changed = QtCore.pyqtSignal(list)
     projections_data = QtCore.pyqtSignal(object, object, object)
     custom_compiled = QtCore.pyqtSignal(object)
 
@@ -119,32 +116,14 @@ class ViewManager(QtCore.QObject):
         self.custom_panel.setVisible(False)
         self.custom_panel.raise_()
 
-        self.trajectory_panel = TrajectoryPanel(self.container)
-        self.trajectory_panel.trajectories_changed.connect(
-            self._on_trajectories_changed
-        )
-        self.trajectory_panel.styles_changed.connect(self._on_styles_changed)
-        self.trajectory_panel.raise_()
-
         self._timer = QtCore.QTimer()
         self._timer.timeout.connect(self._animate_frame)
 
     def _on_custom_compiled(self, config):
         self.custom_compiled.emit(config)
 
-    def _on_trajectories_changed(self, trajectories):
-        self._trajectories = trajectories
-        self.trajectories_changed.emit(trajectories)
-
-    def _on_styles_changed(self, trajectories):
-        self._trajectories = trajectories
-        self.styles_changed.emit(trajectories)
-
     def get_solutions(self):
         return self._solutions
-
-    def get_trajectories(self):
-        return self._trajectories
 
     def reposition_overlays(self):
         if self._repositioning:
@@ -155,10 +134,6 @@ class ViewManager(QtCore.QObject):
         self.custom_panel.adjustSize()
         self.custom_panel.move(margin, margin)
         self.custom_panel.raise_()
-        self.trajectory_panel.adjustSize()
-        x = self.container.width() - self.trajectory_panel.width() - margin
-        self.trajectory_panel.move(x, margin)
-        self.trajectory_panel.raise_()
         self._repositioning = False
 
     def build_grid(self, half_size):
@@ -507,9 +482,6 @@ class ViewManager(QtCore.QObject):
     def clear_lyapunov(self):
         self.lyapunov_label.setText("")
         self.lyapunov_container.setVisible(False)
-
-    def reset_trajectory_panel(self, config):
-        self.trajectory_panel.reset(config)
 
     def save_view_as_png(self):
         filename, _ = QtWidgets.QFileDialog.getSaveFileName(

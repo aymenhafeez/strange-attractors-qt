@@ -1,7 +1,4 @@
-from .style import SLIDER_PARAMS
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
-
-from .style import CUSTOM_PANEL, CUSTOM_TOGGLE, NO_BORDER
 
 DEFAULT_PALETTE = [
     QtGui.QColor("#3b82f6"),
@@ -15,6 +12,8 @@ DEFAULT_PALETTE = [
 ]
 
 MAX_TRAJECTORIES = 8
+SPIN_WIDTH = 64
+ICON_BUTTON_SIZE = 20
 
 
 class _TrajectoryRow(QtWidgets.QWidget):
@@ -37,7 +36,7 @@ class _TrajectoryRow(QtWidgets.QWidget):
 
         self._colour = colour
         self.colour_btn = QtWidgets.QPushButton()
-        self.colour_btn.setFixedSize(24, 24)
+        self.colour_btn.setFixedSize(ICON_BUTTON_SIZE, ICON_BUTTON_SIZE)
         self._apply_colour_btn()
         self.colour_btn.clicked.connect(self._pick_colour)
         layout.addWidget(self.colour_btn)
@@ -49,36 +48,35 @@ class _TrajectoryRow(QtWidgets.QWidget):
             spin.setDecimals(3)
             spin.setSingleStep(0.1)
             spin.setValue(val)
-            spin.setFixedWidth(84)
+            spin.setFixedWidth(SPIN_WIDTH)
             spin.setFixedHeight(28)
             spin.valueChanged.connect(self.changed)
             layout.addWidget(spin)
             self.spins.append(spin)
 
         if removeable:
-            remove_btn = QtWidgets.QPushButton("×")
-            remove_btn.setFixedSize(24, 24)
-            remove_btn.setStyleSheet("color: #888; border: none; font-size: 15px;")
+            remove_btn = QtWidgets.QToolButton()
+            remove_btn.setText("×")
+            remove_btn.setAutoRaise(True)
+            remove_btn.setFixedSize(ICON_BUTTON_SIZE, ICON_BUTTON_SIZE)
             remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
             layout.addWidget(remove_btn)
         else:
-            layout.addSpacing(28)
+            layout.addSpacing(ICON_BUTTON_SIZE + 4)
 
         alpha_row = QtWidgets.QHBoxLayout()
         alpha_row.setContentsMargins(0, 0, 0, 0)
         alpha_row.setSpacing(6)
-        alpha_row.addSpacing(30)
+        alpha_row.addSpacing(ICON_BUTTON_SIZE + 6)
         alpha_label = QtWidgets.QLabel("α")
-        alpha_label.setStyleSheet(NO_BORDER)
         alpha_row.addWidget(alpha_label)
         self.alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.alpha_slider.setRange(0, 100)
         self.alpha_slider.setValue(100)
         self.alpha_slider.setFixedHeight(18)
-        self.alpha_slider.setStyleSheet(NO_BORDER)
         self.alpha_slider.valueChanged.connect(self.style_changed)
         alpha_row.addWidget(self.alpha_slider)
-        alpha_row.addSpacing(28)
+        alpha_row.addSpacing(ICON_BUTTON_SIZE + 4)
         outer.addLayout(alpha_row)
 
     def _apply_colour_btn(self):
@@ -120,20 +118,17 @@ class TrajectoryPanel(QtWidgets.QWidget):
         layout.setSpacing(4)
 
         self.toggle_btn = QtWidgets.QPushButton("▶ Trajectories")
-        self.toggle_btn.setStyleSheet(CUSTOM_TOGGLE)
         self.toggle_btn.clicked.connect(self._toggle_content)
         layout.addWidget(self.toggle_btn)
 
         self._content = QtWidgets.QWidget()
         self._content.setObjectName("customPanelContent")
-        self._content.setStyleSheet(CUSTOM_PANEL)
         content_layout = QtWidgets.QVBoxLayout(self._content)
         content_layout.setContentsMargins(8, 8, 8, 8)
         content_layout.setSpacing(8)
 
         enable_row = QtWidgets.QHBoxLayout()
         self._enable_check = QtWidgets.QCheckBox("Enable multi-trajectory")
-        self._enable_check.setStyleSheet("border: none; color: white;")
         self._enable_check.setChecked(False)
         self._enable_check.toggled.connect(self._on_enable_toggled)
         enable_row.addWidget(self._enable_check)
@@ -148,11 +143,10 @@ class TrajectoryPanel(QtWidgets.QWidget):
 
         header = QtWidgets.QHBoxLayout()
         header.setSpacing(6)
-        header.addSpacing(28)
+        header.addSpacing(ICON_BUTTON_SIZE + 4)
         for axis in ("x₀", "y₀", "z₀"):
             lbl = QtWidgets.QLabel(axis)
-            lbl.setStyleSheet(NO_BORDER)
-            lbl.setFixedWidth(84)
+            lbl.setFixedWidth(SPIN_WIDTH)
             lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             header.addWidget(lbl)
         rows_container_layout.addLayout(header)

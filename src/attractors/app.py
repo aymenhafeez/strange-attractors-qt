@@ -59,8 +59,6 @@ class Window(QtWidgets.QMainWindow):
 
         self.scene = ViewManager(self)
         self.scene.animation_finished.connect(self._on_anim_finished)
-        self.scene.trajectories_changed.connect(self._on_trajectories_changed)
-        self.scene.styles_changed.connect(self._on_trajectory_styles_changed)
         self.scene.custom_compiled.connect(self._on_custom_compile)
         self.scene.projections_data.connect(self._on_projections_data)
 
@@ -84,6 +82,12 @@ class Window(QtWidgets.QMainWindow):
         self.controls.camera_reset_requested.connect(self._reset_camera)
         self.controls.camera_fit_requested.connect(self.scene.fit_camera_to_solutions)
         self.controls.traj_tail_length_changed.connect(self.scene.set_traj_tail_length)
+        self.controls.trajectory_panel.trajectories_changed.connect(
+            self._on_trajectories_changed
+        )
+        self.controls.trajectory_panel.styles_changed.connect(
+            self._on_trajectory_styles_changed
+        )
 
         self.poincare_panel = PoincarePanel()
         self.poincare_panel.plane_changed.connect(self.scene.set_poincare_plane)
@@ -131,7 +135,6 @@ class Window(QtWidgets.QMainWindow):
 
         self.scene.container.installEventFilter(self)
         self.scene.custom_panel.installEventFilter(self)
-        self.scene.trajectory_panel.installEventFilter(self)
 
         self.scene.build_grid(30.0)
         self._rebuild_view(self.current_name)
@@ -146,7 +149,6 @@ class Window(QtWidgets.QMainWindow):
             if obj in (
                 self.scene.container,
                 self.scene.custom_panel,
-                self.scene.trajectory_panel,
             ):
                 self.scene.reposition_overlays()
         return super().eventFilter(obj, event)
@@ -184,7 +186,7 @@ class Window(QtWidgets.QMainWindow):
         self.current_t_max = config.time_defaults["t_max"]
         self.controls.set_traj_tail_max(self.current_n)
         self.scene.clear_lyapunov()
-        self.scene.reset_trajectory_panel(config)
+        self.controls.trajectory_panel.reset(config)
         self.bifurcation_panel.set_config(config, self.controls.get_current_values())
         self._update_plot()
 
@@ -224,7 +226,7 @@ class Window(QtWidgets.QMainWindow):
             return
         user_n = self.current_n or config.time_defaults["n"]
         t_max = self.current_t_max
-        ics = self.scene.get_trajectories()
+        ics = self.controls.trajectory_panel.get_trajectories()
         ic_list = [t["ic"] for t in ics] if ics else [config.initial_conditions]
         dispatch_n = user_n if full else min(user_n, PARTIAL_N)
         self.solver.cancel_lyapunov()
@@ -347,11 +349,13 @@ class Window(QtWidgets.QMainWindow):
         self.current_t_max = val
 
     def _on_trajectories_changed(self, trajectories):
+        self.scene.set_trajectories(trajectories)
         self._solve_needed = True
         self._full_needed = True
         self._dispatch_solve(full=True)
 
     def _on_trajectory_styles_changed(self, trajectories):
+        self.scene.set_trajectories(trajectories)
         self.scene.refresh_colours()
 
     def _on_lyapunov_result(self, request_id, lyap, ky_dim, t_hist, lyap_hist):
