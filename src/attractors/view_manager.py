@@ -363,6 +363,9 @@ class ViewManager(QtCore.QObject):
         self._current_alpha = val / 100.0 if val > 1 else val
         self.refresh_colours()
 
+    def set_anim_step(self, step):
+        self._anim_step = max(1, int(step))
+
     def set_trajectories(self, trajectories):
         self._trajectories = trajectories
 
