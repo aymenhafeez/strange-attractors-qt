@@ -3,7 +3,6 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from .custom_panel import CustomPanel
 from .style import CONTAINER, EQUATION_LABEL, LYAPUNOV_PLOT
 
 
@@ -30,7 +29,6 @@ def _decimate_for_display(points, max_points):
 class ViewManager(QtCore.QObject):
     animation_finished = QtCore.pyqtSignal()
     projections_data = QtCore.pyqtSignal(object, object, object)
-    custom_compiled = QtCore.pyqtSignal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -111,16 +109,8 @@ class ViewManager(QtCore.QObject):
         )
         self.lyapunov_container.setVisible(False)
 
-        self.custom_panel = CustomPanel(self.container)
-        self.custom_panel.compile_requested.connect(self._on_custom_compiled)
-        self.custom_panel.setVisible(False)
-        self.custom_panel.raise_()
-
         self._timer = QtCore.QTimer()
         self._timer.timeout.connect(self._animate_frame)
-
-    def _on_custom_compiled(self, config):
-        self.custom_compiled.emit(config)
 
     def get_solutions(self):
         return self._solutions
@@ -131,9 +121,6 @@ class ViewManager(QtCore.QObject):
         self._repositioning = True
         margin = 8
         self.view.lower()
-        self.custom_panel.adjustSize()
-        self.custom_panel.move(margin, margin)
-        self.custom_panel.raise_()
         self._repositioning = False
 
     def build_grid(self, half_size):

@@ -2,6 +2,7 @@ from functools import partial
 
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .custom_panel import CustomPanel
 from .registry import ATTRACTORS
 from .trajectory_panel import TrajectoryPanel
 
@@ -208,14 +209,20 @@ class ControlPanel(QtWidgets.QWidget):
         self.status_label.hide()
 
         self.trajectory_panel = TrajectoryPanel()
+        self.custom_panel = CustomPanel()
+        self.custom_panel.setVisible(False)
 
         self.controls_layout.addLayout(self.controls_grid)
         self.controls_layout.addWidget(self.status_label)
 
     def _on_attractor_selected(self, name):
+        self.set_current_attractor(name)
+        self.attractor_changed.emit(name)
+
+    def set_current_attractor(self, name):
         self.current_name = name
         self.dropdown.setText(name)
-        self.attractor_changed.emit(name)
+        self.custom_panel.setVisible(name == "Custom")
 
     def set_anim_playing(self, playing):
         self.anim_button.setText("■ Stop" if playing else "▶ Play")
@@ -226,6 +233,7 @@ class ControlPanel(QtWidgets.QWidget):
         self._build_t_max_slider(config)
         self._build_param_sliders(config)
         self.controls_layout.addWidget(self.trajectory_panel)
+        self.controls_layout.addWidget(self.custom_panel)
         self.controls_layout.addStretch()
 
     def _clear_sliders(self):
@@ -244,6 +252,7 @@ class ControlPanel(QtWidgets.QWidget):
             wrapper.deleteLater()
         self.slider_rows.clear()
         self.controls_layout.removeWidget(self.trajectory_panel)
+        self.controls_layout.removeWidget(self.custom_panel)
         while self.controls_layout.count():
             item = self.controls_layout.itemAt(self.controls_layout.count() - 1)
             if item is not None and item.spacerItem():

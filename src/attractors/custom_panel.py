@@ -1,4 +1,3 @@
-from attractors.style import SLIDER_PARAMS
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .expression_parser import (
@@ -7,10 +6,11 @@ from .expression_parser import (
     format_equations,
 )
 from .models import AttractorConfig, AttractorParam
-from .style import CUSTOM_PANEL, CUSTOM_TOGGLE, NO_BORDER
 
 STEP = 0.01
 DEFAULT_RANGE = (0.0, 50.0)
+SPIN_WIDTH = 72
+RANGE_PARAM_WIDTH = 42
 
 
 class CustomPanel(QtWidgets.QWidget):
@@ -23,22 +23,21 @@ class CustomPanel(QtWidgets.QWidget):
         layout.setSpacing(4)
 
         self.toggle_btn = QtWidgets.QPushButton("▼ Custom")
-        self.toggle_btn.setStyleSheet(CUSTOM_TOGGLE)
         self.toggle_btn.clicked.connect(self._toggle_content)
         layout.addWidget(self.toggle_btn)
 
         self._content = QtWidgets.QWidget()
         self._content.setObjectName("customPanelContent")
-        self._content.setStyleSheet(CUSTOM_PANEL)
         content_layout = QtWidgets.QVBoxLayout(self._content)
         content_layout.setContentsMargins(6, 6, 6, 4)
         content_layout.setSpacing(4)
 
         eq_label = QtWidgets.QLabel("Equations")
-        eq_label.setStyleSheet(SLIDER_PARAMS)
         content_layout.addWidget(eq_label)
 
         self.text_edits: list[QtWidgets.QTextEdit] = []
+        self.equation_labels: list[QtWidgets.QLabel] = []
+        self.equation_rows: list[QtWidgets.QHBoxLayout] = []
         labels = ["dx/dt =", "dy/dt =", "dz/dt ="]
         placeholders = [
             "a * (y - x)",
@@ -49,8 +48,8 @@ class CustomPanel(QtWidgets.QWidget):
         for label_text, placeholder in zip(labels, placeholders):
             row = QtWidgets.QHBoxLayout()
             lbl = QtWidgets.QLabel(label_text)
-            lbl.setStyleSheet(NO_BORDER)
             row.addWidget(lbl)
+            self.equation_labels.append(lbl)
 
             te = QtWidgets.QTextEdit()
             te.setPlaceholderText(placeholder)
@@ -59,31 +58,30 @@ class CustomPanel(QtWidgets.QWidget):
             te.setHorizontalScrollBarPolicy(
                 QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
             )
-            row.addWidget(te)
             self.text_edits.append(te)
+            row.addWidget(te)
+            self.equation_rows.append(row)
             content_layout.addLayout(row)
 
         ic_label = QtWidgets.QLabel("Initial Conditions")
-        ic_label.setStyleSheet(SLIDER_PARAMS)
         content_layout.addWidget(ic_label)
 
         ic_row = QtWidgets.QHBoxLayout()
         self.ic_spins: list[QtWidgets.QDoubleSpinBox] = []
         for axis, default in [("x₀", 0.1), ("y₀", 0.0), ("z₀", 0.0)]:
             lbl = QtWidgets.QLabel(axis)
-            lbl.setStyleSheet(SLIDER_PARAMS)
             spin = QtWidgets.QDoubleSpinBox()
             spin.setRange(-1000.0, 1000.0)
             spin.setDecimals(4)
             spin.setSingleStep(0.1)
             spin.setValue(default)
+            spin.setMaximumWidth(SPIN_WIDTH)
             ic_row.addWidget(lbl)
             ic_row.addWidget(spin)
             self.ic_spins.append(spin)
         content_layout.addLayout(ic_row)
 
         self.range_group = QtWidgets.QGroupBox()
-        self.range_group.setStyleSheet(NO_BORDER)
         self.range_layout = QtWidgets.QVBoxLayout(self.range_group)
         self.range_layout.setContentsMargins(0, 4, 0, 0)
         self.range_group.hide()
@@ -161,38 +159,48 @@ class CustomPanel(QtWidgets.QWidget):
         self._clear_layout(self.range_layout)
         self._range_widgets = {}
 
-        header = QtWidgets.QHBoxLayout()
-        for text in ("Min", "Max", "Step"):
+        self.range_grid = QtWidgets.QGridLayout()
+        self.range_grid.setHorizontalSpacing(4)
+        self.range_grid.setVerticalSpacing(4)
+        self.range_grid.setColumnStretch(4, 1)
+
+        for col, text in enumerate(("", "Min", "Max", "Step")):
             lbl = QtWidgets.QLabel(text)
             lbl.setStyleSheet("font-weight: bold;")
             lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-            header.addWidget(lbl)
-        self.range_layout.addLayout(header)
+            if col == 0:
+                lbl.setFixedWidth(RANGE_PARAM_WIDTH)
+            self.range_grid.addWidget(lbl, 0, col)
 
-        for p in params:
-            row = QtWidgets.QHBoxLayout()
-            row.addWidget(QtWidgets.QLabel(p))
+        for row, p in enumerate(params, start=1):
+            param_label = QtWidgets.QLabel(p)
+            param_label.setFixedWidth(RANGE_PARAM_WIDTH)
+            self.range_grid.addWidget(param_label, row, 0)
 
             mn = QtWidgets.QDoubleSpinBox()
             mn.setRange(-1e6, 1e6)
             mn.setDecimals(4)
             mn.setValue(DEFAULT_RANGE[0])
-            row.addWidget(mn)
+            mn.setFixedWidth(SPIN_WIDTH)
+            self.range_grid.addWidget(mn, row, 1)
 
             mx = QtWidgets.QDoubleSpinBox()
             mx.setRange(-1e6, 1e6)
             mx.setDecimals(4)
             mx.setValue(DEFAULT_RANGE[1])
-            row.addWidget(mx)
+            mx.setFixedWidth(SPIN_WIDTH)
+            self.range_grid.addWidget(mx, row, 2)
 
             st = QtWidgets.QDoubleSpinBox()
             st.setRange(1e-6, 1e6)
             st.setDecimals(6)
             st.setValue(STEP)
-            row.addWidget(st)
+            st.setFixedWidth(SPIN_WIDTH)
+            self.range_grid.addWidget(st, row, 3)
 
-            self.range_layout.addLayout(row)
             self._range_widgets[p] = [mn, mx, st]
+
+        self.range_layout.addLayout(self.range_grid)
 
     def _clear_layout(self, layout):
         while layout.count():
@@ -266,6 +274,6 @@ class CustomPanel(QtWidgets.QWidget):
 
     def _show_status(self, message: str, error: bool = False):
         self.status_label.setText(message)
-        color = "#ff6b6b" if error else "#a8e6a3"
-        self.status_label.setStyleSheet(f"color: {color};")
+        colour = "#ff6b6b" if error else "#a8e6a3"
+        self.status_label.setStyleSheet(f"color: {colour};")
         self.status_label.show()

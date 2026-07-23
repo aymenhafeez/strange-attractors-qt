@@ -59,7 +59,6 @@ class Window(QtWidgets.QMainWindow):
 
         self.scene = ViewManager(self)
         self.scene.animation_finished.connect(self._on_anim_finished)
-        self.scene.custom_compiled.connect(self._on_custom_compile)
         self.scene.projections_data.connect(self._on_projections_data)
 
         self.controls = ControlPanel()
@@ -88,6 +87,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls.trajectory_panel.styles_changed.connect(
             self._on_trajectory_styles_changed
         )
+        self.controls.custom_panel.compile_requested.connect(self._on_custom_compile)
 
         self.poincare_panel = PoincarePanel()
         self.poincare_panel.plane_changed.connect(self.scene.set_poincare_plane)
@@ -134,22 +134,13 @@ class Window(QtWidgets.QMainWindow):
         layout.addWidget(splitter)
 
         self.scene.container.installEventFilter(self)
-        self.scene.custom_panel.installEventFilter(self)
 
         self.scene.build_grid(30.0)
         self._rebuild_view(self.current_name)
-        self.scene.reposition_overlays()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.scene.reposition_overlays()
 
     def eventFilter(self, obj, event):
         if event.type() == QtCore.QEvent.Type.Resize:
-            if obj in (
-                self.scene.container,
-                self.scene.custom_panel,
-            ):
+            if obj is self.scene.container:
                 self.scene.reposition_overlays()
         return super().eventFilter(obj, event)
 
@@ -167,14 +158,12 @@ class Window(QtWidgets.QMainWindow):
         self.scene.stop_animation()
         self.controls.set_anim_playing(False)
         self.controls.hide_standard_controls()
-        self.scene.custom_panel.setVisible(True)
         if self._custom_config is not None:
             self._apply_config_to_view(self._custom_config)
 
     def _rebuild_view_from_config(self, config):
         self.scene.stop_animation()
         self.controls.set_anim_playing(False)
-        self.scene.custom_panel.setVisible(False)
         self.controls.show_standard_controls()
         self._apply_config_to_view(config)
 
@@ -192,6 +181,8 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_custom_compile(self, config):
         self._custom_config = config
+        self.current_name = "Custom"
+        self.controls.set_current_attractor("Custom")
         self._apply_config_to_view(config)
 
     def _get_current_config_and_values(self):
