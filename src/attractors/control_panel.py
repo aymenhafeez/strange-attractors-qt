@@ -195,11 +195,17 @@ class ControlPanel(QtWidgets.QWidget):
         controls_row.addWidget(self.fit_camera_button)
         controls_row.addWidget(self.save_button)
 
+        self.status_label = QtWidgets.QLabel("")
+        self.status_label.setWordWrap(True)
+        self.status_label.setStyleSheet("color: #ff6b6b; font-size: 11px;")
+        self.status_label.hide()
+
         self.projection_container = QtWidgets.QWidget()
         proj_layout = QtWidgets.QVBoxLayout(self.projection_container)
         proj_layout.setContentsMargins(0, 0, 0, 0)
         proj_layout.setSpacing(3)
         proj_layout.addLayout(controls_row)
+        proj_layout.addWidget(self.status_label)
 
         self.image_items = {}
         for key, (lh, lv) in [
@@ -403,6 +409,14 @@ class ControlPanel(QtWidgets.QWidget):
             p.name: _slider_value(s.value(), p.min_val, p.step)
             for p, s, _, _ in self.slider_rows
         }
+
+    def set_status(self, message):
+        self.status_label.setText(message)
+        self.status_label.show()
+
+    def clear_status(self):
+        self.status_label.clear()
+        self.status_label.hide()
 
     def update_projections(self, x, y, z):
         for key, (data_h, data_v) in {"XY": (x, y), "XZ": (x, z), "YZ": (y, z)}.items():

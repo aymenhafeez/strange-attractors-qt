@@ -12,6 +12,7 @@ from .style import SPLITTER
 WINDOW_SIZE = 1100
 PARTIAL_N = 40000
 PROJECTION_UPDATE_INTERVAL_MS = 100
+MAX_TRAJECTORY_ABS = 1e6
 
 
 def _should_update_projection(now_ms, last_update_ms, interval_ms):
@@ -19,6 +20,25 @@ def _should_update_projection(now_ms, last_update_ms, interval_ms):
         return True
 
     return now_ms - last_update_ms >= interval_ms
+
+
+def validate_solutions(solutions, max_abs=MAX_TRAJECTORY_ABS):
+    if not solutions:
+        return False, "No trajectory data returned"
+
+    for i, sol in enumerate(solutions):
+        if not isinstance(sol, np.ndarray):
+            return False, f"Trajectory {i + 1} is not an array"
+        if sol.ndim != 2 or sol.shape[1] != 3:
+            return False, f"Trajectory {i + 1} has invalid shape"
+        if sol.shape[0] == 0:
+            return False, f"Trajectory {i + 1} is empty"
+        if not np.all(np.isfinite(sol)):
+            return False, f"Trajectory {i + 1} diverged for current parameters"
+        if float(np.max(np.abs(sol))) > max_abs:
+            return False, f"Trajectory {i + 1} exceeded display bounds"
+
+    return True, ""
 
 
 class Window(QtWidgets.QMainWindow):
@@ -214,8 +234,10 @@ class Window(QtWidgets.QMainWindow):
     def _on_solve_result(self, request_id, solutions, is_partial):
         if request_id != self._active_solve_request_id:
             if is_partial and solutions is not None:
-                self.scene.display_solutions(solutions, is_partial)
-                self.scene.refresh_colours()
+                is_valid, _ = validate_solutions(solutions)
+                if is_valid:
+                    self.scene.display_solutions(solutions, is_partial)
+                    self.scene.refresh_colours()
             return
 
         self._solve_pending = False
@@ -226,6 +248,17 @@ class Window(QtWidgets.QMainWindow):
                 self._dispatch_solve(full=self._full_needed)
             return
 
+        is_valid, message = validate_solutions(solutions)
+        if not is_valid:
+            self.controls.set_status(message)
+            if self._solve_needed:
+                self._solve_needed = False
+                full = self._full_needed
+                self._full_needed = False
+                self._dispatch_solve(full=full)
+            return
+
+        self.controls.clear_status()
         self.scene.display_solutions(solutions, is_partial)
 
         if not is_partial:

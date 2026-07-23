@@ -449,7 +449,13 @@ class ViewManager(QtCore.QObject):
     def auto_adjust_grid(self, solutions):
         if not solutions:
             return
-        new_half = min(float(np.max(np.abs(solutions[0]))) * 3, 500.0)
+        points = np.concatenate(solutions, axis=0)
+        if points.size == 0:
+            return
+        finite = np.isfinite(points)
+        if not np.any(finite):
+            return
+        new_half = min(float(np.max(np.abs(points[finite]))) * 3, 500.0)
         if abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6) > 0.1:
             self.build_grid(new_half)
 
@@ -592,8 +598,10 @@ class ViewManager(QtCore.QObject):
 
         if all_segments:
             all_pts = np.concatenate(all_segments, axis=0)
-            x, y, z = all_pts.T
-            self.projections_data.emit(x, y, z)
+            finite = np.all(np.isfinite(all_pts), axis=1)
+            if np.any(finite):
+                x, y, z = all_pts[finite].T
+                self.projections_data.emit(x, y, z)
 
         if frame >= len(sol0):
             self._timer.stop()
