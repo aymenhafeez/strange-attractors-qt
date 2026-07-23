@@ -33,10 +33,12 @@ class BifurcationPanel(QtWidgets.QWidget):
         row1.addWidget(self.var_combo)
 
         row1.addStretch()
-        close_btn = QtWidgets.QPushButton("\u00d7")
-        close_btn.setFixedWidth(24)
-        close_btn.clicked.connect(self.close_requested.emit)
-        row1.addWidget(close_btn)
+        self.close_button = QtWidgets.QToolButton()
+        self.close_button.setText("×")
+        self.close_button.setAutoRaise(True)
+        self.close_button.setFixedSize(18, 18)
+        self.close_button.clicked.connect(self.close_requested.emit)
+        row1.addWidget(self.close_button)
 
         layout.addLayout(row1)
 
