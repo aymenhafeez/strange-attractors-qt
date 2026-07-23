@@ -7,12 +7,12 @@ from .poincare_panel import PoincarePanel
 from .registry import ATTRACTORS
 from .view_manager import ViewManager
 from .solve_manager import SolveManager
+from .solution_validation import validate_solutions
 from .style import SPLITTER
 
 WINDOW_SIZE = 1100
 PARTIAL_N = 40000
 PROJECTION_UPDATE_INTERVAL_MS = 100
-MAX_TRAJECTORY_ABS = 1e6
 
 
 def _should_update_projection(now_ms, last_update_ms, interval_ms):
@@ -20,25 +20,6 @@ def _should_update_projection(now_ms, last_update_ms, interval_ms):
         return True
 
     return now_ms - last_update_ms >= interval_ms
-
-
-def validate_solutions(solutions, max_abs=MAX_TRAJECTORY_ABS):
-    if not solutions:
-        return False, "No trajectory data returned"
-
-    for i, sol in enumerate(solutions):
-        if not isinstance(sol, np.ndarray):
-            return False, f"Trajectory {i + 1} is not an array"
-        if sol.ndim != 2 or sol.shape[1] != 3:
-            return False, f"Trajectory {i + 1} has invalid shape"
-        if sol.shape[0] == 0:
-            return False, f"Trajectory {i + 1} is empty"
-        if not np.all(np.isfinite(sol)):
-            return False, f"Trajectory {i + 1} diverged for current parameters"
-        if float(np.max(np.abs(sol))) > max_abs:
-            return False, f"Trajectory {i + 1} exceeded display bounds"
-
-    return True, ""
 
 
 def _solve_status_text(n_trajectories):
