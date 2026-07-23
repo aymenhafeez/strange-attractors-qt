@@ -56,6 +56,7 @@ class ViewManager(QtCore.QObject):
         self._grid_visible = True
         self.grid_half_size = 30.0
         self.grid_items = []
+        self._colour_cache = {}
 
         self._poincare_axis = None
         self._poincare_value = 0.0
@@ -399,6 +400,23 @@ class ViewManager(QtCore.QObject):
         colour[:, 3] = np.linspace(0.0, alpha, n)
         return colour
 
+    def _get_colour_array(self, n, alpha, base_colour):
+        mode = "trail" if self._trail_mode else "flat"
+        colour_key = tuple(round(float(c), 6) for c in base_colour)
+        key = (mode, n, round(float(alpha), 6), colour_key)
+        cached = self._colour_cache.get(key)
+        if cached is not None:
+            return cached
+
+        if self._trail_mode:
+            colour = self._plot_trail(n, alpha, base_colour)
+        else:
+            colour = np.full((n, 4), (*base_colour, alpha))
+
+        self._colour_cache[key] = colour
+
+        return colour
+
     def refresh_colours(self):
         if not self._solutions:
             return
@@ -520,10 +538,7 @@ class ViewManager(QtCore.QObject):
         segment = _decimate_for_display(segment, STATIC_RENDER_MAX_POINTS)
 
         base_colour, alpha = self._get_traj_colour_alpha(i)
-        if self._trail_mode:
-            c = self._plot_trail(len(segment), alpha, base_colour)
-        else:
-            c = np.full((len(segment), 4), (*base_colour, alpha))
+        c = self._get_colour_array(len(segment), alpha, base_colour)
 
         return segment, c
 
@@ -567,10 +582,7 @@ class ViewManager(QtCore.QObject):
                 segment = sol[:frame]
             render_segment = _decimate_for_display(segment, ANIM_RENDER_MAX_POINTS)
             base_colour, alpha = self._get_traj_colour_alpha(i)
-            if self._trail_mode:
-                c = self._plot_trail(len(render_segment), alpha, base_colour)
-            else:
-                c = np.full((len(render_segment), 4), (*base_colour, alpha))
+            c = self._get_colour_array(len(render_segment), alpha, base_colour)
             if i < len(self._scatters):
                 self._scatters[i].setData(pos=render_segment, color=c)
                 self._lines[i].setData(pos=render_segment, color=c)
