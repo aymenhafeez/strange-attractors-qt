@@ -7,6 +7,8 @@ from .poincare_panel import PoincarePanel
 from .projection_panel import ProjectionPanel
 from .presets import (
     PresetError,
+    build_preset,
+    custom_config_from_preset_data,
     delete_named_preset,
     list_presets,
     load_named_preset,
@@ -14,6 +16,7 @@ from .presets import (
     save_named_preset,
 )
 from .registry import ATTRACTORS
+from .session import load_session, save_session, session_settings
 from .view_manager import ViewManager
 from .solve_manager import SolveManager
 from .solution_validation import validate_solutions
@@ -59,6 +62,21 @@ def _preset_directory():
     return str(QtCore.QDir.homePath() + "/.strange-attractors/presets")
 
 
+def _session_attractor_name(state):
+    name = state.get("attractor")
+    if name in ATTRACTORS:
+        return name
+    return list(ATTRACTORS.keys())[0]
+
+
+def _can_restore_builtin_session(state):
+    return state.get("attractor") in ATTRACTORS
+
+
+def _can_restore_session(state):
+    return _can_restore_builtin_session(state) or state.get("attractor") == "Custom"
+
+
 class Window(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -72,9 +90,11 @@ class Window(QtWidgets.QMainWindow):
         self._active_lyapunov_request_id = None
         self._last_projection_update_ms = None
         self._latest_projection_solutions = None
+        self._settings = session_settings()
+        self._session_state = load_session(self._settings)
         self.current_n = 100000
         self.current_t_max = 50
-        self.current_name = list(ATTRACTORS.keys())[0]
+        self.current_name = _session_attractor_name(self._session_state)
         self._custom_config = None
         self._preset_directory = _preset_directory()
 
@@ -171,7 +191,9 @@ class Window(QtWidgets.QMainWindow):
 
         self.scene.build_grid(30.0)
         self._refresh_presets()
+        self.controls.set_current_attractor(self.current_name)
         self._rebuild_view(self.current_name)
+        self._restore_session(self._session_state)
 
     def eventFilter(self, obj, event):
         if event.type() == QtCore.QEvent.Type.Resize:
@@ -247,6 +269,107 @@ class Window(QtWidgets.QMainWindow):
         self.bifurcation_panel.set_config(config, self.controls.get_current_values())
         self._update_plot()
 
+    def _collect_session_state(self):
+        values = self.controls.get_current_values()
+        custom_data = None
+        if self.current_name == "Custom" and self._custom_config is not None:
+            try:
+                custom_data = build_preset(
+                    self._custom_config,
+                    values,
+                    self.current_n,
+                    self.current_t_max,
+                )
+            except PresetError:
+                custom_data = None
+
+        return {
+            "attractor": (
+                self.current_name
+                if self.current_name in ATTRACTORS or custom_data is not None
+                else None
+            ),
+            "custom": custom_data,
+            "values": values,
+            "n": int(self.current_n),
+            "t_max": int(self.current_t_max),
+            "visual_options": self.controls.get_visual_options(),
+            "panels": {
+                "projections": self.projection_panel.isVisible(),
+                "poincare": self.poincare_panel.isVisible(),
+                "bifurcation": self.bifurcation_panel.isVisible(),
+            },
+            "camera": self.scene.get_camera_state(),
+            "selected_preset": self.controls.current_preset_name(),
+        }
+
+    def _restore_session(self, state):
+        if not state or not _can_restore_session(state):
+            return
+
+        if state.get("attractor") == "Custom":
+            custom_data = state.get("custom")
+            if not isinstance(custom_data, dict):
+                return
+            try:
+                config = custom_config_from_preset_data(custom_data)
+            except PresetError:
+                return
+            self._custom_config = config
+            self.current_name = "Custom"
+            self.controls.set_current_attractor("Custom")
+            self.controls.hide_standard_controls()
+            self.scene.stop_animation()
+            self.controls.set_anim_playing(False)
+            self.scene.set_camera(config)
+            self.controls.configure(config)
+            self.controls.custom_panel.set_from_config(config)
+            self.controls.set_current_values(state.get("values", {}))
+            self.scene.clear_lyapunov()
+            self.controls.trajectory_panel.reset(config)
+            self.bifurcation_panel.set_config(
+                config, self.controls.get_current_values()
+            )
+
+        values = state.get("values", {})
+        if isinstance(values, dict):
+            self.controls.set_current_values(values)
+
+        n = state.get("n")
+        t_max = state.get("t_max")
+        if n is not None and t_max is not None:
+            try:
+                self.current_n = int(n)
+                self.current_t_max = int(t_max)
+            except (TypeError, ValueError):
+                pass
+            else:
+                self.controls.set_time_values(self.current_n, self.current_t_max)
+                self.controls.set_traj_tail_max(self.current_n)
+
+        visual_options = state.get("visual_options", {})
+        if isinstance(visual_options, dict):
+            self.controls.set_visual_options(visual_options)
+
+        selected_preset = state.get("selected_preset")
+        if selected_preset:
+            self._refresh_presets(str(selected_preset))
+
+        panels = state.get("panels", {})
+        if isinstance(panels, dict):
+            if panels.get("projections"):
+                self._toggle_projections()
+            if panels.get("poincare"):
+                self._toggle_poincare()
+            if panels.get("bifurcation"):
+                self._toggle_bifurcation()
+
+        self._update_plot()
+
+        camera = state.get("camera")
+        if isinstance(camera, dict):
+            self.scene.set_camera_state(camera)
+
     def _refresh_presets(self, selected=None):
         self.controls.set_saved_presets(list_presets(self._preset_directory), selected)
         self._update_preset_summary(selected or self.controls.current_preset_name())
@@ -265,7 +388,7 @@ class Window(QtWidgets.QMainWindow):
             self.controls.set_preset_summary(str(exc))
             return
 
-        kind = "custom" if metadata["is_custom"] else "builtin"
+        kind = "custom" if metadata["is_custom"] else "built-in"
         summary = (
             f"{metadata['attractor']} ({kind}) · "
             f"N {metadata['n']} · t_max {metadata['t_max']} · "
@@ -593,6 +716,7 @@ class Window(QtWidgets.QMainWindow):
             self.inner_splitter.setSizes(sizes)
 
     def closeEvent(self, a0):
+        save_session(self._settings, self._collect_session_state())
         self.scene.stop_animation()
         self.solver.shutdown()
         super().closeEvent(a0)

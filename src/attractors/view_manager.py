@@ -433,6 +433,37 @@ class ViewManager(QtCore.QObject):
         )
         self.view.opts["center"] = QtGui.QVector3D(0, 0, config.pan)
 
+    def get_camera_state(self):
+        center = self.view.opts.get("center", QtGui.QVector3D(0, 0, 0))
+        return {
+            "distance": float(self.view.opts.get("distance", 0.0)),
+            "elevation": float(self.view.opts.get("elevation", 0.0)),
+            "azimuth": float(self.view.opts.get("azimuth", 0.0)),
+            "center": [float(center.x()), float(center.y()), float(center.z())],
+        }
+
+    def set_camera_state(self, state):
+        try:
+            center = state["center"]
+            x, y, z = (float(center[0]), float(center[1]), float(center[2]))
+            distance = float(state["distance"])
+            elevation = float(state["elevation"])
+            azimuth = float(state["azimuth"])
+        except (KeyError, TypeError, ValueError, IndexError):
+            return False
+
+        self.view.setCameraPosition(
+            pos=QtGui.QVector3D(x, y, z),
+            distance=distance,
+            elevation=elevation,
+            azimuth=azimuth,
+        )
+        self.view.opts["distance"] = distance
+        self.view.opts["elevation"] = elevation
+        self.view.opts["azimuth"] = azimuth
+        self.view.opts["center"] = QtGui.QVector3D(x, y, z)
+        return True
+
     def fit_camera_to_solutions(self):
         if not self._solutions:
             return

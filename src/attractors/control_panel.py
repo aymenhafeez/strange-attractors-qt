@@ -299,6 +299,30 @@ class ControlPanel(QtWidgets.QWidget):
     def set_preset_summary(self, summary):
         self.preset_summary.setText(summary or "No saved presets")
 
+    def get_visual_options(self):
+        return {
+            "point": self.point_button.isChecked(),
+            "line": self.line_mode.isChecked(),
+            "trail": self.trail_mode.isChecked(),
+            "grid": self.show_grid.isChecked(),
+            "alpha": self.alpha_spin.value(),
+            "animation_speed": self.anim_speed_spin.value(),
+        }
+
+    def set_visual_options(self, options):
+        if "point" in options:
+            self.point_button.setChecked(bool(options["point"]))
+        if "line" in options:
+            self.line_mode.setChecked(bool(options["line"]))
+        if "trail" in options:
+            self.trail_mode.setChecked(bool(options["trail"]))
+        if "grid" in options:
+            self.show_grid.setChecked(bool(options["grid"]))
+        if "alpha" in options:
+            self.alpha_spin.setValue(int(options["alpha"]))
+        if "animation_speed" in options:
+            self.anim_speed_spin.setValue(int(options["animation_speed"]))
+
     def _toggle_preset_content(self):
         visible = self.preset_content.isHidden()
         self.preset_content.setVisible(visible)

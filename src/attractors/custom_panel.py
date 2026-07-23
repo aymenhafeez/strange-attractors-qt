@@ -114,6 +114,36 @@ class CustomPanel(QtWidgets.QWidget):
     def _get_equations(self) -> tuple[str, str, str]:
         return tuple(te.toPlainText().strip() for te in self.text_edits)
 
+    def set_from_config(self, config):
+        equations = []
+        for line in config.equation_text.splitlines():
+            _, sep, rhs = line.partition("=")
+            equations.append(rhs.strip() if sep else line.strip())
+
+        for text_edit, equation in zip(self.text_edits, equations):
+            text_edit.setPlainText(equation)
+
+        for spin, value in zip(self.ic_spins, config.initial_conditions):
+            spin.setValue(float(value))
+
+        if config.params:
+            self._build_range_editors([param.name for param in config.params])
+            for param in config.params:
+                mn, mx, st = self._range_widgets[param.name]
+                mn.setValue(param.min_val)
+                mx.setValue(param.max_val)
+                st.setValue(param.step)
+            self.range_group.show()
+            self.compile_btn.hide()
+            self.solve_btn.show()
+        else:
+            self.range_group.hide()
+            self.compile_btn.show()
+            self.solve_btn.hide()
+
+        self._content.setVisible(True)
+        self.toggle_btn.setText("▼ Custom")
+
     def _on_compile(self):
         equations = self._get_equations()
 

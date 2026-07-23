@@ -79,7 +79,7 @@ def _preset_name_for_config(config):
     return config.name
 
 
-def _custom_config_from_preset(data):
+def custom_config_from_preset_data(data):
     try:
         equations = [str(eq) for eq in data["equations"]]
     except (KeyError, TypeError) as exc:
@@ -194,7 +194,7 @@ def load_preset(path):
 
     name = data.get("attractor")
     if name == "Custom":
-        config = _custom_config_from_preset(data)
+        config = custom_config_from_preset_data(data)
     elif name in ATTRACTORS:
         config = ATTRACTORS[name]
     else:
