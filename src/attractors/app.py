@@ -121,6 +121,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls.t_max_changed.connect(self._on_t_max_changed)
         self.controls.animation_toggled.connect(self._on_anim_toggled)
         self.controls.animation_speed_changed.connect(self.scene.set_anim_step)
+        self.controls.orbit_toggled.connect(self.scene.set_orbit_mode)
         self.controls.point_button.toggled.connect(self.scene.set_point_mode)
         self.controls.line_mode.toggled.connect(self.scene.set_line_mode)
         self.controls.trail_mode.toggled.connect(self.scene.set_trail_mode)
@@ -189,7 +190,7 @@ class Window(QtWidgets.QMainWindow):
 
         self.scene.container.installEventFilter(self)
 
-        self.scene.build_grid(30.0)
+        self.scene.build_grid(DEFAULT_GRID_HALF_SIZE)
         self._refresh_presets()
         self.controls.set_current_attractor(self.current_name)
         self._rebuild_view(self.current_name)
@@ -716,7 +717,7 @@ class Window(QtWidgets.QMainWindow):
             self.inner_splitter.setSizes(sizes)
 
     def closeEvent(self, a0):
-        save_session(self._settings, self._collect_session_state())
+        self.scene.set_orbit_mode(False)
         self.scene.stop_animation()
         self.solver.shutdown()
         super().closeEvent(a0)

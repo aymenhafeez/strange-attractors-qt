@@ -9,6 +9,11 @@ from .style import CONTAINER, EQUATION_LABEL, LYAPUNOV_PLOT
 N_BINS = 96
 STATIC_RENDER_MAX_POINTS = 80000
 ANIM_RENDER_MAX_POINTS = 30000
+DEFAULT_GRID_HALF_SIZE = 50.0
+GRID_PADDING_FACTOR = 4.0
+MAX_GRID_HALF_SIZE = 750.0
+ORBIT_INTERVAL_MS = 30
+ORBIT_STEP_DEGREES = 0.25
 
 
 def _decimate_indices(n_points, max_points):
@@ -49,7 +54,7 @@ class ViewManager(QtCore.QObject):
         self._traj_tail_enabled = False
         self._anim_step = 100
         self._grid_visible = True
-        self.grid_half_size = 30.0
+        self.grid_half_size = DEFAULT_GRID_HALF_SIZE
         self.grid_items = []
         self._colour_cache = {}
 
@@ -111,6 +116,8 @@ class ViewManager(QtCore.QObject):
 
         self._timer = QtCore.QTimer()
         self._timer.timeout.connect(self._animate_frame)
+        self._orbit_timer = QtCore.QTimer()
+        self._orbit_timer.timeout.connect(self._orbit_frame)
 
     def get_solutions(self):
         return self._solutions
@@ -328,6 +335,21 @@ class ViewManager(QtCore.QObject):
     def set_anim_step(self, step):
         self._anim_step = max(1, int(step))
 
+    def set_orbit_mode(self, enabled):
+        if enabled:
+            if not self._orbit_timer.isActive():
+                self._orbit_timer.start(ORBIT_INTERVAL_MS)
+        else:
+            self._orbit_timer.stop()
+
+    def _orbit_frame(self):
+        azimuth = float(self.view.opts.get("azimuth", 0.0)) + ORBIT_STEP_DEGREES
+        if hasattr(self.view, "orbit"):
+            self.view.orbit(ORBIT_STEP_DEGREES, 0)
+        else:
+            self.view.setCameraPosition(azimuth=azimuth)
+        self.view.opts["azimuth"] = azimuth
+
     def set_trajectories(self, trajectories):
         self._trajectories = trajectories
 
@@ -420,7 +442,13 @@ class ViewManager(QtCore.QObject):
         finite = np.isfinite(points)
         if not np.any(finite):
             return
-        new_half = min(float(np.max(np.abs(points[finite]))) * 3, 500.0)
+        new_half = min(
+            max(
+                float(np.max(np.abs(points[finite]))) * GRID_PADDING_FACTOR,
+                DEFAULT_GRID_HALF_SIZE,
+            ),
+            MAX_GRID_HALF_SIZE,
+        )
         if abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6) > 0.1:
             self.build_grid(new_half)
 

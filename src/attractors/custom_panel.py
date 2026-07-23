@@ -22,7 +22,7 @@ class CustomPanel(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self.toggle_btn = QtWidgets.QPushButton("▼ Custom")
+        self.toggle_btn = QtWidgets.QPushButton("Custom ▾")
         self.toggle_btn.clicked.connect(self._toggle_content)
         layout.addWidget(self.toggle_btn)
 
@@ -108,7 +108,7 @@ class CustomPanel(QtWidgets.QWidget):
     def _toggle_content(self):
         visible = not self._content.isVisible()
         self._content.setVisible(visible)
-        self.toggle_btn.setText("▼ Custom" if visible else "▶ Custom")
+        self.toggle_btn.setText("Custom ▾" if visible else "Custom ▸")
         self.adjustSize()
 
     def _get_equations(self) -> tuple[str, str, str]:
@@ -142,7 +142,7 @@ class CustomPanel(QtWidgets.QWidget):
             self.solve_btn.hide()
 
         self._content.setVisible(True)
-        self.toggle_btn.setText("▼ Custom")
+        self.toggle_btn.setText("Custom ▾")
 
     def _on_compile(self):
         equations = self._get_equations()

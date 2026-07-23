@@ -27,6 +27,7 @@ class ControlPanel(QtWidgets.QWidget):
     t_max_changed = QtCore.pyqtSignal(int)
     animation_toggled = QtCore.pyqtSignal()
     animation_speed_changed = QtCore.pyqtSignal(int)
+    orbit_toggled = QtCore.pyqtSignal(bool)
     camera_reset_requested = QtCore.pyqtSignal()
     camera_fit_requested = QtCore.pyqtSignal()
     save_requested = QtCore.pyqtSignal()
@@ -118,6 +119,11 @@ class ControlPanel(QtWidgets.QWidget):
         self.show_grid = QtWidgets.QCheckBox("Grid")
         self.show_grid.setChecked(True)
         options_row.addWidget(self.show_grid)
+
+        self.orbit_mode = QtWidgets.QCheckBox("Orbit")
+        self.orbit_mode.setChecked(False)
+        self.orbit_mode.toggled.connect(self.orbit_toggled.emit)
+        options_row.addWidget(self.orbit_mode)
 
         self.controls_layout.addLayout(options_row)
 
@@ -305,6 +311,7 @@ class ControlPanel(QtWidgets.QWidget):
             "line": self.line_mode.isChecked(),
             "trail": self.trail_mode.isChecked(),
             "grid": self.show_grid.isChecked(),
+            "orbit": self.orbit_mode.isChecked(),
             "alpha": self.alpha_spin.value(),
             "animation_speed": self.anim_speed_spin.value(),
         }
@@ -318,6 +325,8 @@ class ControlPanel(QtWidgets.QWidget):
             self.trail_mode.setChecked(bool(options["trail"]))
         if "grid" in options:
             self.show_grid.setChecked(bool(options["grid"]))
+        if "orbit" in options:
+            self.orbit_mode.setChecked(bool(options["orbit"]))
         if "alpha" in options:
             self.alpha_spin.setValue(int(options["alpha"]))
         if "animation_speed" in options:
