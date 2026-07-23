@@ -18,6 +18,10 @@ def save_session(settings, state):
     settings.setValue(SESSION_KEY, json.dumps(data))
 
 
+def clear_session(settings):
+    settings.remove(SESSION_KEY)
+
+
 def load_session(settings):
     raw = settings.value(SESSION_KEY, "")
     if not raw:

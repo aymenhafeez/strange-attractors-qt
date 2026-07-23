@@ -53,6 +53,7 @@ class ViewManager(QtCore.QObject):
         self._traj_tail_length = 5000
         self._traj_tail_enabled = False
         self._anim_step = 100
+        self._orbit_speed = 100
         self._grid_visible = True
         self.grid_half_size = DEFAULT_GRID_HALF_SIZE
         self.grid_items = []
@@ -342,10 +343,14 @@ class ViewManager(QtCore.QObject):
         else:
             self._orbit_timer.stop()
 
+    def set_orbit_speed(self, speed):
+        self._orbit_speed = max(1, int(speed))
+
     def _orbit_frame(self):
-        azimuth = float(self.view.opts.get("azimuth", 0.0)) + ORBIT_STEP_DEGREES
+        step = ORBIT_STEP_DEGREES * (self._orbit_speed / 100.0)
+        azimuth = float(self.view.opts.get("azimuth", 0.0)) + step
         if hasattr(self.view, "orbit"):
-            self.view.orbit(ORBIT_STEP_DEGREES, 0)
+            self.view.orbit(step, 0)
         else:
             self.view.setCameraPosition(azimuth=azimuth)
         self.view.opts["azimuth"] = azimuth

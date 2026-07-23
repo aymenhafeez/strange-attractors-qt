@@ -28,9 +28,12 @@ class ControlPanel(QtWidgets.QWidget):
     animation_toggled = QtCore.pyqtSignal()
     animation_speed_changed = QtCore.pyqtSignal(int)
     orbit_toggled = QtCore.pyqtSignal(bool)
+    orbit_speed_changed = QtCore.pyqtSignal(int)
     camera_reset_requested = QtCore.pyqtSignal()
     camera_fit_requested = QtCore.pyqtSignal()
     save_requested = QtCore.pyqtSignal()
+    preset_folder_requested = QtCore.pyqtSignal()
+    session_reset_requested = QtCore.pyqtSignal()
     preset_save_requested = QtCore.pyqtSignal(str, str)
     preset_load_requested = QtCore.pyqtSignal(str)
     preset_delete_requested = QtCore.pyqtSignal(str)
@@ -81,6 +84,11 @@ class ControlPanel(QtWidgets.QWidget):
         bifurcation_action.triggered.connect(self.bifurcation_requested)
         poincare_action = tools_menu.addAction("Poincaré section")
         poincare_action.triggered.connect(self.poincare_requested)
+        tools_menu.addSeparator()
+        open_preset_folder_action = tools_menu.addAction("Open preset folder")
+        open_preset_folder_action.triggered.connect(self.preset_folder_requested)
+        reset_session_action = tools_menu.addAction("Reset saved session")
+        reset_session_action.triggered.connect(self.session_reset_requested)
         self.tools_button.setMenu(tools_menu)
 
         options.addWidget(self.dropdown)
@@ -96,15 +104,15 @@ class ControlPanel(QtWidgets.QWidget):
         self.controls_scroll.setWidget(self.controls_tab)
         self.panel_layout.addWidget(self.controls_scroll)
 
-        options_row = QtWidgets.QHBoxLayout()
-
         self.anim_button = QtWidgets.QPushButton("▶ Play")
         self.anim_button.clicked.connect(self.animation_toggled)
+        self.controls_layout.addWidget(self.anim_button)
+
+        options_row = QtWidgets.QHBoxLayout()
 
         self.point_button = QtWidgets.QCheckBox("Point")
         self.point_button.setChecked(True)
 
-        options_row.addWidget(self.anim_button)
         options_row.addWidget(self.point_button)
         options_row.addStretch(1)
 
@@ -165,6 +173,26 @@ class ControlPanel(QtWidgets.QWidget):
         speed_wrapper = QtWidgets.QWidget()
         speed_wrapper.setLayout(speed_row)
         self.controls_layout.addWidget(speed_wrapper)
+
+        orbit_speed_row = QtWidgets.QHBoxLayout()
+        orbit_speed_row.setSpacing(10)
+        orbit_speed_label = QtWidgets.QLabel("Orbit speed")
+        self.orbit_speed_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.orbit_speed_slider.setRange(1, 500)
+        self.orbit_speed_slider.setValue(100)
+        self.orbit_speed_spin = QtWidgets.QSpinBox()
+        self.orbit_speed_spin.setKeyboardTracking(False)
+        self.orbit_speed_spin.setRange(1, 500)
+        self.orbit_speed_spin.setValue(100)
+        self.orbit_speed_slider.valueChanged.connect(self.orbit_speed_spin.setValue)
+        self.orbit_speed_spin.valueChanged.connect(self.orbit_speed_slider.setValue)
+        self.orbit_speed_spin.valueChanged.connect(self.orbit_speed_changed.emit)
+        orbit_speed_row.addWidget(orbit_speed_label)
+        orbit_speed_row.addWidget(self.orbit_speed_slider)
+        orbit_speed_row.addWidget(self.orbit_speed_spin)
+        orbit_speed_wrapper = QtWidgets.QWidget()
+        orbit_speed_wrapper.setLayout(orbit_speed_row)
+        self.controls_layout.addWidget(orbit_speed_wrapper)
 
         traj_tail_row = QtWidgets.QHBoxLayout()
         traj_tail_row.setSpacing(10)
@@ -312,6 +340,7 @@ class ControlPanel(QtWidgets.QWidget):
             "trail": self.trail_mode.isChecked(),
             "grid": self.show_grid.isChecked(),
             "orbit": self.orbit_mode.isChecked(),
+            "orbit_speed": self.orbit_speed_spin.value(),
             "alpha": self.alpha_spin.value(),
             "animation_speed": self.anim_speed_spin.value(),
         }
@@ -327,6 +356,8 @@ class ControlPanel(QtWidgets.QWidget):
             self.show_grid.setChecked(bool(options["grid"]))
         if "orbit" in options:
             self.orbit_mode.setChecked(bool(options["orbit"]))
+        if "orbit_speed" in options:
+            self.orbit_speed_spin.setValue(int(options["orbit_speed"]))
         if "alpha" in options:
             self.alpha_spin.setValue(int(options["alpha"]))
         if "animation_speed" in options:

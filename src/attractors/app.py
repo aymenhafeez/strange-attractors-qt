@@ -1,5 +1,7 @@
+from pathlib import Path
+
 import numpy as np
-from pyqtgraph.Qt import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .bifurcation_panel import BifurcationPanel
 from .control_panel import ControlPanel
@@ -16,8 +18,8 @@ from .presets import (
     save_named_preset,
 )
 from .registry import ATTRACTORS
-from .session import load_session, save_session, session_settings
-from .view_manager import ViewManager
+from .session import clear_session, load_session, save_session, session_settings
+from .view_manager import DEFAULT_GRID_HALF_SIZE, ViewManager
 from .solve_manager import SolveManager
 from .solution_validation import validate_solutions
 from .style import SPLITTER_HANDLE
@@ -92,6 +94,7 @@ class Window(QtWidgets.QMainWindow):
         self._latest_projection_solutions = None
         self._settings = session_settings()
         self._session_state = load_session(self._settings)
+        self._session_reset_requested = False
         self.current_n = 100000
         self.current_t_max = 50
         self.current_name = _session_attractor_name(self._session_state)
@@ -122,6 +125,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls.animation_toggled.connect(self._on_anim_toggled)
         self.controls.animation_speed_changed.connect(self.scene.set_anim_step)
         self.controls.orbit_toggled.connect(self.scene.set_orbit_mode)
+        self.controls.orbit_speed_changed.connect(self.scene.set_orbit_speed)
         self.controls.point_button.toggled.connect(self.scene.set_point_mode)
         self.controls.line_mode.toggled.connect(self.scene.set_line_mode)
         self.controls.trail_mode.toggled.connect(self.scene.set_trail_mode)
@@ -129,6 +133,8 @@ class Window(QtWidgets.QMainWindow):
         self.controls.alpha_slider.valueChanged.connect(self.scene.set_alpha)
         self.controls.alpha_spin.valueChanged.connect(self.scene.set_alpha)
         self.controls.save_requested.connect(self.scene.save_view_as_png)
+        self.controls.preset_folder_requested.connect(self._open_preset_folder)
+        self.controls.session_reset_requested.connect(self._reset_saved_session)
         self.controls.preset_save_requested.connect(self._save_preset)
         self.controls.preset_load_requested.connect(self._load_preset)
         self.controls.preset_delete_requested.connect(self._delete_preset)
@@ -184,7 +190,7 @@ class Window(QtWidgets.QMainWindow):
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         splitter.addWidget(self.controls)
         splitter.addWidget(main_area)
-        splitter.setSizes([int(WINDOW_SIZE * 0.25), int(WINDOW_SIZE * 0.75)])
+        splitter.setSizes([int(WINDOW_SIZE * 0.3), int(WINDOW_SIZE * 0.7)])
         splitter.setStyleSheet(SPLITTER_HANDLE)
         layout.addWidget(splitter)
 
@@ -374,6 +380,23 @@ class Window(QtWidgets.QMainWindow):
     def _refresh_presets(self, selected=None):
         self.controls.set_saved_presets(list_presets(self._preset_directory), selected)
         self._update_preset_summary(selected or self.controls.current_preset_name())
+
+    def _open_preset_folder(self):
+        Path(self._preset_directory).mkdir(parents=True, exist_ok=True)
+        opened = QtGui.QDesktopServices.openUrl(
+            QtCore.QUrl.fromLocalFile(self._preset_directory)
+        )
+        if not opened:
+            self.controls.set_status("Could not open preset folder", error=True)
+
+    def _reset_saved_session(self):
+        clear_session(self._settings)
+        self._session_reset_requested = True
+        self.controls.set_status("Saved session reset")
+
+    def _save_session_on_close(self):
+        if not self._session_reset_requested:
+            save_session(self._settings, self._collect_session_state())
 
     def _update_preset_summary(self, name):
         preset_name = name.strip()
@@ -717,6 +740,7 @@ class Window(QtWidgets.QMainWindow):
             self.inner_splitter.setSizes(sizes)
 
     def closeEvent(self, a0):
+        self._save_session_on_close()
         self.scene.set_orbit_mode(False)
         self.scene.stop_animation()
         self.solver.shutdown()
