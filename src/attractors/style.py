@@ -7,56 +7,26 @@ EQUATION_LABEL = """
     border-radius: 0px;
 """
 
-SLIDERS = """
-    #controlPanel {
-        background-color: #000000;
-        border: 1px solid #aaa;
-        border-left: 2px solid #999;
-    }
-"""
-
-DROPDOWN_BOX = """
-    QPushButton {
-        background-color: #000000;
-        color: white;
-        border: 1px solid #aaa;
-        border-radius: 0px;
-        padding: 4px 8px;
-        text-align: left;
-    }
-"""
-
-DROPDOWN_SELECTION = """
-    QMenu {
-        background-color: #000000;
-        border: 1px solid #aaa;
-    }
-    QMenu::item {
-        background-color: #000000;
-        color: white;
-        padding: 4px 20px;
-    }
-    QMenu::item:selected {
-        background-color: #dddddd;
-        color: #000000;
-    }
-"""
-
 ATTRACTOR_INFO = "color: #ddd; font-size: 13px"
 
 SLIDER_PARAMS = "color: white; font-weight: bold;"
 
-LINE_MODE_CHECKBOX = "color: white;"
-
-SPLITTER = """
-    QSplitter {
-        border: 1px solid #555;
-        border-radius: 0px;
-    }
-    QSplitter::handle { width: 1px; background: #555; }
-"""
-
 CONTAINER = "background: #000; border: none;"
+
+SPLITTER_HANDLE = """
+    QSplitter::handle {
+        background-color: transparent;
+    }
+    QSplitter::handle:horizontal {
+        width: 3px;
+    }
+    QSplitter::handle:vertical {
+        height: 3px;
+    }
+    QSplitter::handle:hover {
+        background-color: palette(highlight);
+    }
+"""
 
 LYAPUNOV_PLOT = "background-color: rgba(0, 0, 0, 0); border: 0px"
 
@@ -132,19 +102,3 @@ CUSTOM_TOGGLE = """
 """
 
 NO_BORDER = "border: none;"
-
-FLAT_BUTTON = """
-    QPushButton {
-        background-color: #ddd;
-        color: black;
-        border: 1px solid #aaa;
-        border-radius: 0px;  /* The key change */
-        padding: 4px 12px;
-    }
-    QPushButton:hover {
-        background-color: #eee;
-    }
-    QPushButton:pressed {
-        background-color: #ccc;
-    }
-"""

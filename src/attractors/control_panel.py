@@ -1,21 +1,10 @@
 from functools import partial
 
-import numpy as np
-import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .registry import ATTRACTORS
-from .style import (
-    DROPDOWN_BOX,
-    DROPDOWN_SELECTION,
-    LINE_MODE_CHECKBOX,
-    SLIDER_PARAMS,
-    SLIDERS,
-    FLAT_BUTTON,
-)
 
 STEP = 1000
-N_BINS = 96
 
 
 def _slider_index(value, min_val, step):
@@ -29,6 +18,7 @@ def _slider_value(index, min_val, step):
 class ControlPanel(QtWidgets.QWidget):
     attractor_changed = QtCore.pyqtSignal(str)
     solve_requested = QtCore.pyqtSignal(bool)
+    projections_requested = QtCore.pyqtSignal()
     bifurcation_requested = QtCore.pyqtSignal()
     poincare_requested = QtCore.pyqtSignal()
     n_changed = QtCore.pyqtSignal(int)
@@ -47,7 +37,6 @@ class ControlPanel(QtWidgets.QWidget):
         # plain QWidget to work around objectName selector bug on QWidget subclasses
         inner = QtWidgets.QWidget()
         inner.setObjectName("controlPanel")
-        inner.setStyleSheet(SLIDERS)
 
         outer_layout = QtWidgets.QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
@@ -67,9 +56,7 @@ class ControlPanel(QtWidgets.QWidget):
         options = QtWidgets.QHBoxLayout()
 
         self.dropdown = QtWidgets.QPushButton(list(ATTRACTORS.keys())[0])
-        self.dropdown.setStyleSheet(DROPDOWN_BOX)
         menu = QtWidgets.QMenu(self.dropdown)
-        menu.setStyleSheet(DROPDOWN_SELECTION)
         for name in ATTRACTORS:
             action = menu.addAction(name)
             assert action is not None
@@ -80,9 +67,9 @@ class ControlPanel(QtWidgets.QWidget):
         self.dropdown.setMenu(menu)
 
         self.tools_button = QtWidgets.QPushButton("Tools")
-        self.tools_button.setStyleSheet(DROPDOWN_BOX)
         tools_menu = QtWidgets.QMenu(self.tools_button)
-        tools_menu.setStyleSheet(DROPDOWN_SELECTION)
+        projections_action = tools_menu.addAction("Projection heatmaps")
+        projections_action.triggered.connect(self.projections_requested)
         bifurcation_action = tools_menu.addAction("Bifurcation diagram")
         bifurcation_action.triggered.connect(self.bifurcation_requested)
         poincare_action = tools_menu.addAction("Poincaré section")
@@ -93,14 +80,21 @@ class ControlPanel(QtWidgets.QWidget):
         options.addWidget(self.tools_button)
         self.panel_layout.addLayout(options)
 
+        self.controls_scroll = QtWidgets.QScrollArea()
+        self.controls_scroll.setWidgetResizable(True)
+        self.controls_tab = QtWidgets.QWidget()
+        self.controls_layout = QtWidgets.QVBoxLayout(self.controls_tab)
+        self.controls_layout.setContentsMargins(8, 8, 8, 8)
+        self.controls_layout.setSpacing(7)
+        self.controls_scroll.setWidget(self.controls_tab)
+        self.panel_layout.addWidget(self.controls_scroll)
+
         options_row = QtWidgets.QHBoxLayout()
 
         self.anim_button = QtWidgets.QPushButton("▶ Play")
-        self.anim_button.setStyleSheet(FLAT_BUTTON)
         self.anim_button.clicked.connect(self.animation_toggled)
 
         self.point_button = QtWidgets.QCheckBox("Point")
-        self.point_button.setStyleSheet(LINE_MODE_CHECKBOX)
         self.point_button.setChecked(True)
 
         options_row.addWidget(self.anim_button)
@@ -109,25 +103,21 @@ class ControlPanel(QtWidgets.QWidget):
 
         self.line_mode = QtWidgets.QCheckBox("Line")
         self.line_mode.setChecked(False)
-        self.line_mode.setStyleSheet(LINE_MODE_CHECKBOX)
         options_row.addWidget(self.line_mode)
 
         self.trail_mode = QtWidgets.QCheckBox("Trail")
         self.trail_mode.setChecked(False)
-        self.trail_mode.setStyleSheet(LINE_MODE_CHECKBOX)
         options_row.addWidget(self.trail_mode)
 
         self.show_grid = QtWidgets.QCheckBox("Grid")
         self.show_grid.setChecked(True)
-        self.show_grid.setStyleSheet(LINE_MODE_CHECKBOX)
         options_row.addWidget(self.show_grid)
 
-        self.panel_layout.addLayout(options_row)
+        self.controls_layout.addLayout(options_row)
 
         alpha_row = QtWidgets.QHBoxLayout()
         alpha_row.setSpacing(10)
         alpha_label = QtWidgets.QLabel("α ")
-        alpha_label.setStyleSheet(SLIDER_PARAMS)
         self.alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.alpha_slider.setRange(0, 100)
         self.alpha_slider.setValue(100)
@@ -142,12 +132,11 @@ class ControlPanel(QtWidgets.QWidget):
         alpha_row.addWidget(self.alpha_spin)
         alpha_wrapper = QtWidgets.QWidget()
         alpha_wrapper.setLayout(alpha_row)
-        self.panel_layout.addWidget(alpha_wrapper)
+        self.controls_layout.addWidget(alpha_wrapper)
 
         speed_row = QtWidgets.QHBoxLayout()
         speed_row.setSpacing(10)
         speed_label = QtWidgets.QLabel("Speed")
-        speed_label.setStyleSheet(SLIDER_PARAMS)
         self.anim_speed_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.anim_speed_slider.setRange(1, 500)
         self.anim_speed_slider.setValue(100)
@@ -163,12 +152,11 @@ class ControlPanel(QtWidgets.QWidget):
         speed_row.addWidget(self.anim_speed_spin)
         speed_wrapper = QtWidgets.QWidget()
         speed_wrapper.setLayout(speed_row)
-        self.panel_layout.addWidget(speed_wrapper)
+        self.controls_layout.addWidget(speed_wrapper)
 
         traj_tail_row = QtWidgets.QHBoxLayout()
         traj_tail_row.setSpacing(10)
         traj_tail_label = QtWidgets.QLabel("Len")
-        traj_tail_label.setStyleSheet(LINE_MODE_CHECKBOX)
         self.traj_tail_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.traj_tail_slider.setRange(1, 500)
         self.traj_tail_slider.setValue(5)
@@ -197,64 +185,29 @@ class ControlPanel(QtWidgets.QWidget):
         traj_tail_wrapper.setLayout(traj_tail_row)
         traj_tail_wrapper.setVisible(False)
         self.trail_mode.toggled.connect(traj_tail_wrapper.setVisible)
-        self.panel_layout.addWidget(traj_tail_wrapper)
+        self.controls_layout.addWidget(traj_tail_wrapper)
 
-        controls_row = QtWidgets.QHBoxLayout()
+        self.controls_grid = QtWidgets.QGridLayout()
+        self.controls_grid.setSpacing(6)
         self.reset_button = QtWidgets.QPushButton("Reset")
-        self.reset_button.setStyleSheet(FLAT_BUTTON)
         self.reset_button.clicked.connect(self.reset_to_defaults)
         self.reset_camera_button = QtWidgets.QPushButton("Reset camera")
-        self.reset_camera_button.setStyleSheet(FLAT_BUTTON)
         self.reset_camera_button.clicked.connect(self.camera_reset_requested.emit)
         self.fit_camera_button = QtWidgets.QPushButton("Fit view")
-        self.fit_camera_button.setStyleSheet(FLAT_BUTTON)
         self.fit_camera_button.clicked.connect(self.camera_fit_requested.emit)
         self.save_button = QtWidgets.QPushButton("Save view")
-        self.save_button.setStyleSheet(FLAT_BUTTON)
         self.save_button.clicked.connect(self.save_requested.emit)
-        controls_row.addWidget(self.reset_button)
-        controls_row.addWidget(self.reset_camera_button)
-        controls_row.addWidget(self.fit_camera_button)
-        controls_row.addWidget(self.save_button)
+        self.controls_grid.addWidget(self.reset_button, 0, 0)
+        self.controls_grid.addWidget(self.reset_camera_button, 0, 1)
+        self.controls_grid.addWidget(self.fit_camera_button, 1, 0)
+        self.controls_grid.addWidget(self.save_button, 1, 1)
 
         self.status_label = QtWidgets.QLabel("")
         self.status_label.setWordWrap(True)
         self.status_label.hide()
 
-        self.projection_container = QtWidgets.QWidget()
-        proj_layout = QtWidgets.QVBoxLayout(self.projection_container)
-        proj_layout.setContentsMargins(0, 0, 0, 0)
-        proj_layout.setSpacing(3)
-        proj_layout.addLayout(controls_row)
-        proj_layout.addWidget(self.status_label)
-
-        self.image_items = {}
-        for key, (lh, lv) in [
-            ("XY", ("X", "Y")),
-            ("XZ", ("X", "Z")),
-            ("YZ", ("Y", "Z")),
-        ]:
-            pw = pg.PlotWidget()
-            pw.showAxis("bottom", False)
-            pw.showAxis("left", False)
-            pw.showAxis("top", False)
-            pw.showAxis("right", False)
-            pw.setLabel("bottom", lh)
-            pw.setLabel("left", lv)
-            pw.getPlotItem().setContentsMargins(0, 10, 0, 0)
-            pw.getViewBox().setAspectLocked(True)
-            img = pg.ImageItem()
-            cmap = pg.colormap.get("CMRmap", source="matplotlib")
-            img.setLookupTable(cmap.getLookupTable())
-            pw.addItem(img)
-            self.image_items[key] = (img, pw)
-            pw.getPlotItem().addColorBar(
-                img,
-                values=(0, 10),
-                colorMap=cmap,
-                width=10,
-            )
-            proj_layout.addWidget(pw)
+        self.controls_layout.addLayout(self.controls_grid)
+        self.controls_layout.addWidget(self.status_label)
 
     def _on_attractor_selected(self, name):
         self.current_name = name
@@ -269,31 +222,27 @@ class ControlPanel(QtWidgets.QWidget):
         self._build_n_slider(config)
         self._build_t_max_slider(config)
         self._build_param_sliders(config)
-        self.panel_layout.addStretch()
-        self.panel_layout.addWidget(self.projection_container)
+        self.controls_layout.addStretch()
 
     def _clear_sliders(self):
         if self.n_slider_wrapper is not None:
-            self.panel_layout.removeWidget(self.n_slider_wrapper)
+            self.controls_layout.removeWidget(self.n_slider_wrapper)
             self.n_slider_wrapper.deleteLater()
             self.n_slider_row = None
             self.n_slider_wrapper = None
         if self.t_max_slider_wrapper is not None:
-            self.panel_layout.removeWidget(self.t_max_slider_wrapper)
+            self.controls_layout.removeWidget(self.t_max_slider_wrapper)
             self.t_max_slider_wrapper.deleteLater()
             self.t_max_slider_row = None
             self.t_max_slider_wrapper = None
         for *_, wrapper in self.slider_rows:
-            self.panel_layout.removeWidget(wrapper)
+            self.controls_layout.removeWidget(wrapper)
             wrapper.deleteLater()
         self.slider_rows.clear()
-        while self.panel_layout.count():
-            item = self.panel_layout.itemAt(self.panel_layout.count() - 1)
-            if item.widget() is self.projection_container:
-                self.panel_layout.removeWidget(self.projection_container)
-                break
+        while self.controls_layout.count():
+            item = self.controls_layout.itemAt(self.controls_layout.count() - 1)
             if item is not None and item.spacerItem():
-                self.panel_layout.takeAt(self.panel_layout.count() - 1)
+                self.controls_layout.takeAt(self.controls_layout.count() - 1)
             else:
                 break
 
@@ -301,7 +250,6 @@ class ControlPanel(QtWidgets.QWidget):
         n_row = QtWidgets.QHBoxLayout()
         self.n_slider_row = n_row
         n_label = QtWidgets.QLabel("N")
-        n_label.setStyleSheet(LINE_MODE_CHECKBOX)
         n_row.addWidget(n_label)
         n_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         n_slider.setRange(1, 500)
@@ -326,13 +274,12 @@ class ControlPanel(QtWidgets.QWidget):
         n_row.addWidget(n_spin)
         self.n_slider_wrapper = QtWidgets.QWidget()
         self.n_slider_wrapper.setLayout(n_row)
-        self.panel_layout.addWidget(self.n_slider_wrapper)
+        self.controls_layout.addWidget(self.n_slider_wrapper)
 
     def _build_t_max_slider(self, config):
         t_max_row = QtWidgets.QHBoxLayout()
         self.t_max_slider_row = t_max_row
         t_max_label = QtWidgets.QLabel("t_max")
-        t_max_label.setStyleSheet(LINE_MODE_CHECKBOX)
         t_max_row.addWidget(t_max_label)
         t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         t_max_slider.setRange(1, 750)
@@ -357,13 +304,12 @@ class ControlPanel(QtWidgets.QWidget):
         t_max_row.addWidget(t_max_spin)
         self.t_max_slider_wrapper = QtWidgets.QWidget()
         self.t_max_slider_wrapper.setLayout(t_max_row)
-        self.panel_layout.addWidget(self.t_max_slider_wrapper)
+        self.controls_layout.addWidget(self.t_max_slider_wrapper)
 
     def _build_param_sliders(self, config):
         for p in config.params:
             row = QtWidgets.QHBoxLayout()
             label = QtWidgets.QLabel(p.name)
-            label.setStyleSheet(SLIDER_PARAMS)
             row.addWidget(label)
             s = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
             s.setRange(0, _slider_index(p.max_val, p.min_val, p.step))
@@ -393,7 +339,7 @@ class ControlPanel(QtWidgets.QWidget):
             row.addWidget(spin)
             wrapper = QtWidgets.QWidget()
             wrapper.setLayout(row)
-            self.panel_layout.addWidget(wrapper)
+            self.controls_layout.addWidget(wrapper)
             self.slider_rows.append((p, s, row, wrapper))
 
     def reset_to_defaults(self):
@@ -440,21 +386,3 @@ class ControlPanel(QtWidgets.QWidget):
     def clear_status(self):
         self.status_label.clear()
         self.status_label.hide()
-
-    def update_projections(self, x, y, z):
-        for key, (data_h, data_v) in {"XY": (x, y), "XZ": (x, z), "YZ": (y, z)}.items():
-            img, pw = self.image_items[key]
-            heatmap, xedges, yedges = np.histogram2d(
-                data_h, data_v, bins=N_BINS, density=True
-            )
-            img.setImage(np.log1p(heatmap))
-            x_min, x_max = xedges[0], xedges[-1]
-            y_min, y_max = yedges[0], yedges[-1]
-            img.setRect(pg.QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min))
-            pw.autoRange()
-
-    def reapply_projections(self, solutions):
-        if solutions:
-            all_sol = np.concatenate(solutions, axis=0)
-            x, y, z = all_sol.T
-            self.update_projections(x, y, z)

@@ -4,11 +4,12 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 from .bifurcation_panel import BifurcationPanel
 from .control_panel import ControlPanel
 from .poincare_panel import PoincarePanel
+from .projection_panel import ProjectionPanel
 from .registry import ATTRACTORS
 from .view_manager import ViewManager
 from .solve_manager import SolveManager
 from .solution_validation import validate_solutions
-from .style import SPLITTER
+from .style import SPLITTER_HANDLE
 
 WINDOW_SIZE = 1100
 PARTIAL_N = 40000
@@ -40,6 +41,7 @@ class Window(QtWidgets.QMainWindow):
         self._active_solve_request_id = None
         self._active_lyapunov_request_id = None
         self._last_projection_update_ms = None
+        self._latest_projection_solutions = None
         self.current_n = 100000
         self.current_t_max = 50
         self.current_name = list(ATTRACTORS.keys())[0]
@@ -64,6 +66,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls = ControlPanel()
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._on_controls_solve_requested)
+        self.controls.projections_requested.connect(self._toggle_projections)
         self.controls.bifurcation_requested.connect(self._toggle_bifurcation)
         self.controls.poincare_requested.connect(self._toggle_poincare)
         self.controls.n_changed.connect(self._on_n_changed)
@@ -88,6 +91,12 @@ class Window(QtWidgets.QMainWindow):
 
         self._poincare_splitter_size = 400
 
+        self.projection_panel = ProjectionPanel()
+        self.projection_panel.close_requested.connect(self._close_projections)
+        self.projection_panel.hide()
+
+        self._projection_splitter_size = 260
+
         self.bifurcation_panel = BifurcationPanel()
         self.bifurcation_panel.close_requested.connect(self._close_bifurcation)
         self.bifurcation_panel.hide()
@@ -96,15 +105,17 @@ class Window(QtWidgets.QMainWindow):
 
         self.inner_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
         self.inner_splitter.addWidget(self.scene.container)
+        self.inner_splitter.addWidget(self.projection_panel)
         self.inner_splitter.addWidget(self.poincare_panel)
         self.inner_splitter.addWidget(self.bifurcation_panel)
-        self.inner_splitter.setSizes([600, 0, 0])
+        self.inner_splitter.setSizes([600, 0, 0, 0])
+        self.inner_splitter.setStyleSheet(SPLITTER_HANDLE)
 
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
-        splitter.setStyleSheet(SPLITTER)
-        splitter.addWidget(self.inner_splitter)
         splitter.addWidget(self.controls)
-        splitter.setSizes([int(WINDOW_SIZE * 0.7), int(WINDOW_SIZE * 0.3)])
+        splitter.addWidget(self.inner_splitter)
+        splitter.setSizes([int(WINDOW_SIZE * 0.25), int(WINDOW_SIZE * 0.75)])
+        splitter.setStyleSheet(SPLITTER_HANDLE)
         layout.addWidget(splitter)
 
         self.scene.container.installEventFilter(self)
@@ -254,6 +265,7 @@ class Window(QtWidgets.QMainWindow):
         self.scene.display_solutions(solutions, is_partial)
 
         if not is_partial:
+            self._latest_projection_solutions = solutions
             config, values = self._get_current_config_and_values()
             if config is not None:
                 if self.poincare_panel.isVisible():
@@ -262,11 +274,8 @@ class Window(QtWidgets.QMainWindow):
                 self._active_lyapunov_request_id = self.solver.request_lyapunov(
                     config, values
                 )
-            all_sol = np.concatenate(solutions, axis=0)
-            x, y, z = all_sol.T
-            self.controls.update_projections(x, y, z)
-            self._last_projection_update_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
-            if self._initial_full_solves == 0:
+            self._update_projection_panel_from_solutions(solutions)
+            if self.projection_panel.isVisible() and self._initial_full_solves == 0:
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
             self.scene.auto_adjust_grid(solutions)
@@ -280,9 +289,22 @@ class Window(QtWidgets.QMainWindow):
             self._dispatch_solve(full=full)
 
     def _reapply_projections(self):
-        self.controls.reapply_projections(self.scene.get_solutions())
+        solutions = self._latest_projection_solutions or self.scene.get_solutions()
+        self.projection_panel.reapply_projections(solutions)
+
+    def _update_projection_panel_from_solutions(self, solutions):
+        if not self.projection_panel.isVisible():
+            return
+
+        all_sol = np.concatenate(solutions, axis=0)
+        x, y, z = all_sol.T
+        self.projection_panel.update_projections(x, y, z)
+        self._last_projection_update_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
 
     def _on_projections_data(self, x, y, z):
+        if not self.projection_panel.isVisible():
+            return
+
         now_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
         if not _should_update_projection(
             now_ms,
@@ -292,7 +314,7 @@ class Window(QtWidgets.QMainWindow):
             return
 
         self._last_projection_update_ms = now_ms
-        self.controls.update_projections(x, y, z)
+        self.projection_panel.update_projections(x, y, z)
 
     def _reset_camera(self):
         config, _ = self._get_current_config_and_values()
@@ -327,6 +349,30 @@ class Window(QtWidgets.QMainWindow):
 
         self.scene.set_lyapunov_result(lyap, ky_dim, t_hist, lyap_hist)
         self.controls.clear_status()
+
+    def _close_projections(self):
+        self.projection_panel.hide()
+        sizes = self.inner_splitter.sizes()
+        idx = self.inner_splitter.indexOf(self.projection_panel)
+        if idx >= 0:
+            self._projection_splitter_size = sizes[idx]
+            sizes[idx] = 0
+        self.inner_splitter.setSizes(sizes)
+
+    def _toggle_projections(self):
+        if self.projection_panel.isVisible():
+            self._close_projections()
+        else:
+            self.projection_panel.show()
+            sizes = self.inner_splitter.sizes()
+            total = sum(sizes)
+            h = max(self._projection_splitter_size, 140)
+            idx = self.inner_splitter.indexOf(self.projection_panel)
+            sizes[0] = max(total - h, 100)
+            sizes[idx] = h
+            self.inner_splitter.setSizes(sizes)
+            QtCore.QTimer.singleShot(0, self._reapply_projections)
+            QtCore.QTimer.singleShot(50, self._reapply_projections)
 
     def _close_poincare(self):
         self.poincare_panel.cancel_solve()
