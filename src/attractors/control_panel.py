@@ -206,7 +206,8 @@ class ControlPanel(QtWidgets.QWidget):
 
         self.status_label = QtWidgets.QLabel("")
         self.status_label.setWordWrap(True)
-        self.status_label.hide()
+        self.status_label.setMinimumHeight(28)
+        self.status_label.setStyleSheet("color: transparent; font-size: 11px;")
 
         self.trajectory_panel = TrajectoryPanel()
         self.custom_panel = CustomPanel()
@@ -399,4 +400,4 @@ class ControlPanel(QtWidgets.QWidget):
 
     def clear_status(self):
         self.status_label.clear()
-        self.status_label.hide()
+        self.status_label.setStyleSheet("color: transparent; font-size: 11px;")
