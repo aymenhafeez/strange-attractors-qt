@@ -10,6 +10,7 @@ from .presets import (
     delete_named_preset,
     list_presets,
     load_named_preset,
+    preset_metadata,
     save_named_preset,
 )
 from .registry import ATTRACTORS
@@ -110,6 +111,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls.preset_save_requested.connect(self._save_preset)
         self.controls.preset_load_requested.connect(self._load_preset)
         self.controls.preset_delete_requested.connect(self._delete_preset)
+        self.controls.preset_selected.connect(self._update_preset_summary)
         self.controls.camera_reset_requested.connect(self._reset_camera)
         self.controls.camera_fit_requested.connect(self.scene.fit_camera_to_solutions)
         self.controls.traj_tail_length_changed.connect(self.scene.set_traj_tail_length)
@@ -247,11 +249,38 @@ class Window(QtWidgets.QMainWindow):
 
     def _refresh_presets(self, selected=None):
         self.controls.set_saved_presets(list_presets(self._preset_directory), selected)
+        self._update_preset_summary(selected or self.controls.current_preset_name())
+
+    def _update_preset_summary(self, name):
+        preset_name = name.strip()
+        if not preset_name:
+            self.controls.set_preset_notes("")
+            self.controls.set_preset_summary("No saved presets")
+            return
+
+        try:
+            metadata = preset_metadata(self._preset_directory, preset_name)
+        except PresetError as exc:
+            self.controls.set_preset_notes("")
+            self.controls.set_preset_summary(str(exc))
+            return
+
+        kind = "custom" if metadata["is_custom"] else "builtin"
+        summary = (
+            f"{metadata['attractor']} ({kind}) · "
+            f"N {metadata['n']} · t_max {metadata['t_max']} · "
+            f"{metadata['parameter_count']} parameter(s)"
+        )
+        updated_at = metadata.get("updated_at")
+        if updated_at:
+            summary = f"{summary}\nUpdated {updated_at}"
+        self.controls.set_preset_notes(metadata["notes"])
+        self.controls.set_preset_summary(summary)
 
     def _default_preset_name(self):
         return f"{self.current_name} preset"
 
-    def _save_preset(self, name):
+    def _save_preset(self, name, notes):
         config, values = self._get_current_config_and_values()
         if config is None:
             self.controls.set_status("No attractor selected", error=True)
@@ -267,6 +296,7 @@ class Window(QtWidgets.QMainWindow):
                 values,
                 self.current_n,
                 self.current_t_max,
+                notes,
             )
         except PresetError as exc:
             self.controls.set_status(str(exc), error=True)

@@ -30,9 +30,10 @@ class ControlPanel(QtWidgets.QWidget):
     camera_reset_requested = QtCore.pyqtSignal()
     camera_fit_requested = QtCore.pyqtSignal()
     save_requested = QtCore.pyqtSignal()
-    preset_save_requested = QtCore.pyqtSignal(str)
+    preset_save_requested = QtCore.pyqtSignal(str, str)
     preset_load_requested = QtCore.pyqtSignal(str)
     preset_delete_requested = QtCore.pyqtSignal(str)
+    preset_selected = QtCore.pyqtSignal(str)
     traj_tail_length_changed = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None):
@@ -216,8 +217,13 @@ class ControlPanel(QtWidgets.QWidget):
         self.preset_label = QtWidgets.QLabel("Preset library")
         self.preset_name_edit = QtWidgets.QLineEdit()
         self.preset_name_edit.setPlaceholderText("Preset name")
+        self.preset_notes_edit = QtWidgets.QTextEdit()
+        self.preset_notes_edit.setPlaceholderText("Notes")
+        self.preset_notes_edit.setFixedHeight(54)
         self.preset_combo = QtWidgets.QComboBox()
         self.preset_combo.currentTextChanged.connect(self._on_preset_selected)
+        self.preset_summary = QtWidgets.QLabel("No saved presets")
+        self.preset_summary.setWordWrap(True)
         self.save_preset_button = QtWidgets.QPushButton("Save")
         self.save_preset_button.clicked.connect(self._emit_preset_save)
         self.load_preset_button = QtWidgets.QPushButton("Load")
@@ -229,11 +235,13 @@ class ControlPanel(QtWidgets.QWidget):
         self.preset_grid.setContentsMargins(6, 6, 6, 4)
         self.preset_grid.setSpacing(6)
         self.preset_grid.addWidget(self.preset_label, 0, 0, 1, 2)
-        self.preset_grid.addWidget(self.preset_name_edit, 1, 0, 1, 2)
-        self.preset_grid.addWidget(self.preset_combo, 2, 0, 1, 2)
-        self.preset_grid.addWidget(self.save_preset_button, 3, 0)
-        self.preset_grid.addWidget(self.load_preset_button, 3, 1)
-        self.preset_grid.addWidget(self.delete_preset_button, 4, 0, 1, 2)
+        self.preset_grid.addWidget(self.preset_combo, 1, 0, 1, 2)
+        self.preset_grid.addWidget(self.preset_name_edit, 2, 0, 1, 2)
+        self.preset_grid.addWidget(self.preset_notes_edit, 3, 0, 1, 2)
+        self.preset_grid.addWidget(self.preset_summary, 4, 0, 1, 2)
+        self.preset_grid.addWidget(self.save_preset_button, 5, 0)
+        self.preset_grid.addWidget(self.load_preset_button, 5, 1)
+        self.preset_grid.addWidget(self.delete_preset_button, 6, 0, 1, 2)
         self.preset_content.setLayout(self.preset_grid)
         self.preset_content.setVisible(False)
 
@@ -282,6 +290,14 @@ class ControlPanel(QtWidgets.QWidget):
     def _on_preset_selected(self, name):
         with QtCore.QSignalBlocker(self.preset_name_edit):
             self.preset_name_edit.setText(name)
+        self.preset_selected.emit(name)
+
+    def set_preset_notes(self, notes):
+        with QtCore.QSignalBlocker(self.preset_notes_edit):
+            self.preset_notes_edit.setPlainText(notes)
+
+    def set_preset_summary(self, summary):
+        self.preset_summary.setText(summary or "No saved presets")
 
     def _toggle_preset_content(self):
         visible = self.preset_content.isHidden()
@@ -289,7 +305,10 @@ class ControlPanel(QtWidgets.QWidget):
         self.preset_toggle_btn.setText("Presets ▾" if visible else "Presets ▸")
 
     def _emit_preset_save(self):
-        self.preset_save_requested.emit(self._preset_name_from_edit_or_combo())
+        self.preset_save_requested.emit(
+            self._preset_name_from_edit_or_combo(),
+            self.preset_notes_edit.toPlainText().strip(),
+        )
 
     def _emit_preset_load(self):
         self.preset_load_requested.emit(self.current_preset_name())

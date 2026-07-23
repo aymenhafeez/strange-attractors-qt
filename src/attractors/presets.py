@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .expression_parser import compile_system, format_equations
@@ -24,6 +25,10 @@ def preset_filename(name):
 
 def preset_path(directory, name):
     return Path(directory) / preset_filename(name)
+
+
+def _utc_timestamp():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
 def _param_to_dict(param):
@@ -85,7 +90,8 @@ def _custom_config_from_preset(data):
 
     func, detected_params = compile_system(tuple(equations))
     params_by_name = {
-        param.name: param for param in [_param_from_dict(p) for p in data.get("params", [])]
+        param.name: param
+        for param in [_param_from_dict(p) for p in data.get("params", [])]
     }
     params = []
     for name in detected_params:
@@ -118,14 +124,27 @@ def _custom_config_from_preset(data):
     )
 
 
-def build_preset(config, values, n, t_max, preset_name=None):
+def build_preset(
+    config,
+    values,
+    n,
+    t_max,
+    preset_name=None,
+    notes="",
+    created_at=None,
+    updated_at=None,
+):
     attractor_name = _preset_name_for_config(config)
+    now = updated_at or _utc_timestamp()
     preset = {
         "version": PRESET_VERSION,
         "attractor": attractor_name,
         "values": {str(k): float(v) for k, v in values.items()},
         "n": int(n),
         "t_max": int(t_max),
+        "notes": str(notes or ""),
+        "created_at": created_at or now,
+        "updated_at": now,
     }
     if preset_name is not None:
         preset["name"] = str(preset_name)
@@ -145,8 +164,17 @@ def build_preset(config, values, n, t_max, preset_name=None):
     return preset
 
 
-def save_preset(path, config, values, n, t_max, preset_name=None):
-    preset = build_preset(config, values, n, t_max, preset_name)
+def save_preset(
+    path,
+    config,
+    values,
+    n,
+    t_max,
+    preset_name=None,
+    notes="",
+    created_at=None,
+):
+    preset = build_preset(config, values, n, t_max, preset_name, notes, created_at)
     try:
         Path(path).write_text(json.dumps(preset, indent=2), encoding="utf-8")
     except OSError as exc:
@@ -199,10 +227,49 @@ def list_presets(directory):
     return sorted(names, key=str.casefold)
 
 
-def save_named_preset(directory, name, config, values, n, t_max):
+def preset_metadata(directory, name):
+    try:
+        data = json.loads(preset_path(directory, name).read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise PresetError(f"Could not read preset: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise PresetError("Preset file is not valid JSON") from exc
+
+    if not isinstance(data, dict):
+        raise PresetError("Preset file is not valid")
+
+    return {
+        "name": str(data.get("name") or name),
+        "attractor": str(data.get("attractor") or "Unknown"),
+        "n": data.get("n"),
+        "t_max": data.get("t_max"),
+        "parameter_count": len(data.get("values", {})),
+        "notes": str(data.get("notes") or ""),
+        "created_at": data.get("created_at"),
+        "updated_at": data.get("updated_at"),
+        "is_custom": data.get("attractor") == "Custom",
+    }
+
+
+def save_named_preset(directory, name, config, values, n, t_max, notes=""):
     path = preset_path(directory, name)
     path.parent.mkdir(parents=True, exist_ok=True)
-    save_preset(path, config, values, n, t_max, preset_name=name)
+    created_at = None
+    if path.exists():
+        try:
+            created_at = preset_metadata(directory, name).get("created_at")
+        except PresetError:
+            created_at = None
+    save_preset(
+        path,
+        config,
+        values,
+        n,
+        t_max,
+        preset_name=name,
+        notes=notes,
+        created_at=created_at,
+    )
     return path
 
 
