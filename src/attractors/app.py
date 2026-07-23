@@ -14,6 +14,7 @@ from .style import SPLITTER_HANDLE
 WINDOW_SIZE = 1100
 PARTIAL_N = 40000
 PROJECTION_UPDATE_INTERVAL_MS = 100
+MAIN_VIEW_MARGIN = 10
 
 
 def _should_update_projection(now_ms, last_update_ms, interval_ms):
@@ -111,9 +112,19 @@ class Window(QtWidgets.QMainWindow):
         self.inner_splitter.setSizes([600, 0, 0, 0])
         self.inner_splitter.setStyleSheet(SPLITTER_HANDLE)
 
+        main_area = QtWidgets.QWidget()
+        main_area_layout = QtWidgets.QVBoxLayout(main_area)
+        main_area_layout.setContentsMargins(
+            MAIN_VIEW_MARGIN,
+            MAIN_VIEW_MARGIN,
+            MAIN_VIEW_MARGIN,
+            MAIN_VIEW_MARGIN,
+        )
+        main_area_layout.addWidget(self.inner_splitter)
+
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         splitter.addWidget(self.controls)
-        splitter.addWidget(self.inner_splitter)
+        splitter.addWidget(main_area)
         splitter.setSizes([int(WINDOW_SIZE * 0.25), int(WINDOW_SIZE * 0.75)])
         splitter.setStyleSheet(SPLITTER_HANDLE)
         layout.addWidget(splitter)
