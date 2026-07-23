@@ -9,6 +9,23 @@ from .trajectory_panel import TrajectoryPanel
 
 
 N_BINS = 96
+STATIC_RENDER_MAX_POINTS = 80000
+ANIM_RENDER_MAX_POINTS = 30000
+
+
+def _decimate_indices(n_points, max_points):
+    if n_points <= max_points:
+        return None
+
+    return np.linspace(0, n_points - 1, max_points, dtype=np.int64)
+
+
+def _decimate_for_display(points, max_points):
+    idx = _decimate_indices(len(points), max_points)
+    if idx is None:
+        return points
+
+    return points[idx]
 
 
 class ViewManager(QtCore.QObject):
@@ -500,6 +517,8 @@ class ViewManager(QtCore.QObject):
         else:
             segment = sol
 
+        segment = _decimate_for_display(segment, STATIC_RENDER_MAX_POINTS)
+
         base_colour, alpha = self._get_traj_colour_alpha(i)
         if self._trail_mode:
             c = self._plot_trail(len(segment), alpha, base_colour)
@@ -546,16 +565,17 @@ class ViewManager(QtCore.QObject):
                 segment = sol[start:frame]
             else:
                 segment = sol[:frame]
+            render_segment = _decimate_for_display(segment, ANIM_RENDER_MAX_POINTS)
             base_colour, alpha = self._get_traj_colour_alpha(i)
             if self._trail_mode:
-                c = self._plot_trail(len(segment), alpha, base_colour)
+                c = self._plot_trail(len(render_segment), alpha, base_colour)
             else:
-                c = np.full((len(segment), 4), (*base_colour, alpha))
+                c = np.full((len(render_segment), 4), (*base_colour, alpha))
             if i < len(self._scatters):
-                self._scatters[i].setData(pos=segment, color=c)
-                self._lines[i].setData(pos=segment, color=c)
+                self._scatters[i].setData(pos=render_segment, color=c)
+                self._lines[i].setData(pos=render_segment, color=c)
             if i < len(self._heads):
-                self._heads[i].setData(pos=segment[-1:], color=c[-1:])
+                self._heads[i].setData(pos=render_segment[-1:], color=c[-1:])
             all_segments.append(segment)
 
         if all_segments:
