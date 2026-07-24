@@ -17,11 +17,11 @@ def solve_attractor(config, param_values, n=None, t_max=None, ic=None):
 
 
 @numba.njit(nogil=True)
-def _rk4_step(state, dt, params, eq):
-    k1 = eq(state, 0.0, params)
-    k2 = eq(state + 0.5 * dt * k1, 0.0, params)
-    k3 = eq(state + 0.5 * dt * k2, 0.0, params)
-    k4 = eq(state + dt * k3, 0.0, params)
+def _rk4_step(state, t, dt, params, eq):
+    k1 = eq(state, t, params)
+    k2 = eq(state + 0.5 * dt * k1, t + 0.5 * dt, params)
+    k3 = eq(state + 0.5 * dt * k2, t + 0.5 * dt, params)
+    k4 = eq(state + dt * k3, t + dt, params)
 
     return state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
@@ -33,7 +33,8 @@ def solve_rk4(eq, y0, t_min, t_max, n, params):
     traj = np.empty((n, y0.shape[0]), dtype=np.float64)
 
     for i in range(n):
-        state = _rk4_step(state, dt, params, eq)
+        t = t_min + i * dt
+        state = _rk4_step(state, t, dt, params, eq)
         traj[i] = state
 
     return traj
