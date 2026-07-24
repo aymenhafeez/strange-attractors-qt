@@ -28,6 +28,7 @@ strange-attractors = "attractors.__main__:main"
 dev = [
     "ipython>=9.15.0",
     "pytest>=9.1.1",
+    "ruff>=0.16.0",
 ]
 
 [tool.uv]
