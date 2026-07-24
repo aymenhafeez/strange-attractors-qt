@@ -593,9 +593,11 @@ class ControlPanel(QtWidgets.QWidget):
                 spin.setValue(t_max)
 
     def set_status(self, message, error=False):
-        colour = "#ff6b6b" if error else "#a8e6a3"
+        colour = "#ff6b6b" if error else "#178640"
         self.status_label.setText(message)
-        self.status_label.setStyleSheet(f"color: {colour}; font-size: 11px;")
+        self.status_label.setStyleSheet(
+            f"color: {colour}; font-size: 11px; font-weight: bold;"
+        )
         self.status_label.show()
 
     def clear_status(self):

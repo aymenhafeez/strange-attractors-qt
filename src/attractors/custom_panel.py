@@ -312,6 +312,8 @@ class CustomPanel(QtWidgets.QWidget):
 
     def _show_status(self, message: str, error: bool = False):
         self.status_label.setText(message)
-        colour = "#ff6b6b" if error else "#a8e6a3"
-        self.status_label.setStyleSheet(f"color: {colour};")
+        colour = "#ff6b6b" if error else "#178640"
+        self.status_label.setStyleSheet(
+            f"color: {colour}; font-size: 11px; font-weight: bold;"
+        )
         self.status_label.show()
