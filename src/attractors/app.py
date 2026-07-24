@@ -6,6 +6,7 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 from .bifurcation_panel import BifurcationPanel
 from .control_panel import ControlPanel
 from .poincare_panel import PoincarePanel
+from .perf import PerfProfiler, perf_finish, perf_start
 from .projection_panel import ProjectionPanel
 from .presets import (
     PresetError,
@@ -90,11 +91,14 @@ class Window(QtWidgets.QMainWindow):
         self._full_needed = False
         self._active_solve_request_id = None
         self._active_lyapunov_request_id = None
+        self._solve_perf_tokens = {}
+        self._lyapunov_perf_tokens = {}
         self._last_projection_update_ms = None
         self._latest_projection_solutions = None
         self._settings = session_settings()
         self._session_state = load_session(self._settings)
         self._session_reset_requested = False
+        self._perf = PerfProfiler()
         self.current_n = 100000
         self.current_t_max = 50
         self.current_name = _session_attractor_name(self._session_state)
@@ -526,6 +530,19 @@ class Window(QtWidgets.QMainWindow):
         self._active_solve_request_id = self.solver.request_solve(
             config, values, ic_list, dispatch_n, not full, t_max
         )
+        token = perf_start(
+            self,
+            "solve",
+            key=self._active_solve_request_id,
+            attractor=config.name,
+            full=full,
+            partial=not full,
+            n=dispatch_n,
+            t_max=t_max,
+            trajectories=len(ic_list),
+        )
+        if token is not None:
+            self._solve_perf_tokens[self._active_solve_request_id] = token
 
     def _on_controls_solve_requested(self, full):
         self.scene.stop_animation()
@@ -545,9 +562,11 @@ class Window(QtWidgets.QMainWindow):
                     self.scene.refresh_colours()
             return
 
+        solve_token = getattr(self, "_solve_perf_tokens", {}).pop(request_id, None)
         self._solve_pending = False
 
         if solutions is None:
+            perf_finish(self, solve_token, status="failed", partial=is_partial)
             if self._solve_needed:
                 self._solve_needed = False
                 self._dispatch_solve(full=self._full_needed)
@@ -557,6 +576,7 @@ class Window(QtWidgets.QMainWindow):
 
         is_valid, message = validate_solutions(solutions)
         if not is_valid:
+            perf_finish(self, solve_token, status="invalid", partial=is_partial)
             self.controls.set_status(message, error=True)
             if self._solve_needed:
                 self._solve_needed = False
@@ -565,6 +585,7 @@ class Window(QtWidgets.QMainWindow):
                 self._dispatch_solve(full=full)
             return
 
+        perf_finish(self, solve_token, status="ok", partial=is_partial)
         self.controls.clear_status()
         self.scene.display_solutions(solutions, is_partial)
 
@@ -578,6 +599,16 @@ class Window(QtWidgets.QMainWindow):
                 self._active_lyapunov_request_id = self.solver.request_lyapunov(
                     config, values
                 )
+                token = perf_start(
+                    self,
+                    "lyapunov",
+                    key=self._active_lyapunov_request_id,
+                    attractor=config.name,
+                )
+                if token is not None:
+                    self._lyapunov_perf_tokens[
+                        self._active_lyapunov_request_id
+                    ] = token
             self._update_projection_panel_from_solutions(solutions)
             if self.projection_panel.isVisible() and self._initial_full_solves == 0:
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
@@ -602,7 +633,14 @@ class Window(QtWidgets.QMainWindow):
 
         all_sol = np.concatenate(solutions, axis=0)
         x, y, z = all_sol.T
+        token = perf_start(
+            self,
+            "projection_update",
+            source="solve_result",
+            points=len(all_sol),
+        )
         self.projection_panel.update_projections(x, y, z)
+        perf_finish(self, token)
         self._last_projection_update_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
 
     def _on_projections_data(self, x, y, z):
@@ -618,7 +656,14 @@ class Window(QtWidgets.QMainWindow):
             return
 
         self._last_projection_update_ms = now_ms
+        token = perf_start(
+            self,
+            "projection_update",
+            source="animation",
+            points=len(x),
+        )
         self.projection_panel.update_projections(x, y, z)
+        perf_finish(self, token)
 
     def _reset_camera(self):
         config, _ = self._get_current_config_and_values()
@@ -653,6 +698,8 @@ class Window(QtWidgets.QMainWindow):
         if request_id != self._active_lyapunov_request_id:
             return
 
+        token = getattr(self, "_lyapunov_perf_tokens", {}).pop(request_id, None)
+        perf_finish(self, token)
         self.scene.set_lyapunov_result(lyap, ky_dim, t_hist, lyap_hist)
         self.controls.clear_status()
 

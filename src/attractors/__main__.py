@@ -1,10 +1,12 @@
 import sys
 
 from .app import Window
+from .perf import configure_perf_logging
 import pyqtgraph as pg
 
 
 def main():
+    configure_perf_logging()
     app = pg.mkQApp()
     app.setStyle("Fusion")
     w = Window()
