@@ -5,10 +5,9 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .bifurcation_panel import BifurcationPanel
 from .control_panel import ControlPanel
-from .poincare_panel import PoincarePanel
-from .perf import PerfProfiler, perf_finish, perf_start
-from .projection_panel import ProjectionPanel
 from .grid_overlay import DEFAULT_GRID_HALF_SIZE
+from .perf import PerfProfiler, perf_finish, perf_start
+from .poincare_panel import PoincarePanel
 from .presets import (
     PresetError,
     build_preset,
@@ -19,12 +18,13 @@ from .presets import (
     preset_metadata,
     save_named_preset,
 )
+from .projection_panel import ProjectionPanel
 from .registry import ATTRACTORS
 from .session import clear_session, load_session, save_session, session_settings
-from .view_manager import ViewManager
-from .solve_manager import SolveManager
 from .solution_validation import validate_solutions
+from .solve_manager import SolveManager
 from .style import SPLITTER_HANDLE
+from .view_manager import ViewManager
 
 WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 850
@@ -71,7 +71,7 @@ def _session_attractor_name(state):
     name = state.get("attractor")
     if name in ATTRACTORS:
         return name
-    return list(ATTRACTORS.keys())[0]
+    return next(iter(ATTRACTORS.keys()))
 
 
 def _can_restore_builtin_session(state):
@@ -212,9 +212,9 @@ class Window(QtWidgets.QMainWindow):
         self._restore_session(self._session_state)
 
     def eventFilter(self, obj, event):
-        if event.type() == QtCore.QEvent.Type.Resize:
-            if obj is self.scene.container:
-                self.scene.reposition_overlays()
+        if event.type() == QtCore.QEvent.Type.Resize and obj is self.scene.container:
+            self.scene.reposition_overlays()
+
         return super().eventFilter(obj, event)
 
     def on_attractor_change(self, name):
@@ -233,6 +233,13 @@ class Window(QtWidgets.QMainWindow):
         self.controls.hide_standard_controls()
         if self._custom_config is not None:
             self._apply_config_to_view(self._custom_config)
+        else:
+            self.solver.cancel_solve()
+            self.solver.cancel_lyapunov()
+            self._solve_pending = False
+            self._latest_projection_solutions = None
+            self.scene.clear_solutions()
+            self.scene.clear_lyapunov()
 
     def _rebuild_view_from_config(self, config):
         self.scene.stop_animation()
@@ -326,6 +333,7 @@ class Window(QtWidgets.QMainWindow):
             "n": int(self.current_n),
             "t_max": int(self.current_t_max),
             "visual_options": self.controls.get_visual_options(),
+            "trajectories": self.controls.trajectory_panel.get_session_state(),
             "panels": {
                 "projections": self.projection_panel.isVisible(),
                 "poincare": self.poincare_panel.isVisible(),
@@ -386,6 +394,22 @@ class Window(QtWidgets.QMainWindow):
         visual_options = state.get("visual_options", {})
         if isinstance(visual_options, dict):
             self.controls.set_visual_options(visual_options)
+
+        trajectory_state = state.get("trajectories")
+        if isinstance(trajectory_state, dict):
+            config, _ = self._get_current_config_and_values()
+            if config is not None:
+                restoring_view = self._restoring_view
+                self._restoring_view = True
+                try:
+                    self.controls.trajectory_panel.set_session_state(
+                        trajectory_state, config
+                    )
+                finally:
+                    self._restoring_view = restoring_view
+                self.scene.set_trajectories(
+                    self.controls.trajectory_panel.get_trajectories()
+                )
 
         selected_preset = state.get("selected_preset")
         if selected_preset:
@@ -613,7 +637,6 @@ class Window(QtWidgets.QMainWindow):
                 is_valid, _ = validate_solutions(solutions)
                 if is_valid:
                     self.scene.display_solutions(solutions, is_partial)
-                    self.scene.refresh_colours()
             return
 
         solve_token = getattr(self, "_solve_perf_tokens", {}).pop(request_id, None)
@@ -656,8 +679,6 @@ class Window(QtWidgets.QMainWindow):
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
             self.scene.auto_adjust_grid(solutions)
-
-        self.scene.refresh_colours()
 
         if self._solve_needed:
             self._solve_needed = False
@@ -731,6 +752,10 @@ class Window(QtWidgets.QMainWindow):
         if getattr(self, "_restoring_view", False):
             return
 
+        self._latest_projection_solutions = None
+        self.scene.clear_solutions()
+        self.solver.cancel_solve()
+        self._solve_pending = False
         self._solve_needed = True
         self._full_needed = True
         self._dispatch_solve(full=True)

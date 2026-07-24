@@ -106,6 +106,17 @@ class _TrajectoryRow(QtWidgets.QWidget):
             spin.setValue(val)
             spin.blockSignals(False)
 
+    def set_colour(self, colour: QtGui.QColor):
+        if colour.isValid():
+            self._colour = colour
+            self._apply_colour_btn()
+
+    def set_alpha(self, alpha: float):
+        value = max(0, min(100, round(float(alpha) * 100)))
+        self.alpha_slider.blockSignals(True)
+        self.alpha_slider.setValue(value)
+        self.alpha_slider.blockSignals(False)
+
 
 class TrajectoryPanel(QtWidgets.QWidget):
     trajectories_changed = QtCore.pyqtSignal(list)
@@ -156,6 +167,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         rows_container_layout.addLayout(self._rows_layout)
 
         self._rows: list[_TrajectoryRow] = []
+        self._suppress_emit = False
 
         content_layout.addWidget(self._rows_container)
 
@@ -221,9 +233,13 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self.adjustSize()
 
     def _emit(self):
+        if self._suppress_emit:
+            return
         self.trajectories_changed.emit(self.get_trajectories())
 
     def _emit_styles(self):
+        if self._suppress_emit:
+            return
         self.styles_changed.emit(self.get_trajectories())
 
     def get_trajectories(self) -> list[dict]:
@@ -233,3 +249,69 @@ class TrajectoryPanel(QtWidgets.QWidget):
             {"ic": r.get_ic(), "colour": r.get_colour(), "alpha": r.get_alpha()}
             for r in self._rows
         ]
+
+    def get_session_state(self) -> dict:
+        return {
+            "enabled": self._enable_check.isChecked(),
+            "rows": [
+                {
+                    "ic": [float(v) for v in row.get_ic()],
+                    "colour": row.get_colour().name(),
+                    "alpha": float(row.get_alpha()),
+                }
+                for row in self._rows
+            ],
+        }
+
+    def set_session_state(self, state, config):
+        if not isinstance(state, dict):
+            return
+
+        rows = state.get("rows")
+        if not isinstance(rows, list) or not rows:
+            return
+
+        self._suppress_emit = True
+        try:
+            for row in self._rows:
+                self._rows_layout.removeWidget(row)
+                row.deleteLater()
+            self._rows.clear()
+
+            for idx, row_state in enumerate(rows[:MAX_TRAJECTORIES]):
+                ic = _ic_from_session_row(row_state, config.initial_conditions)
+                self._add_row(ic=ic, removeable=idx > 0)
+                row = self._rows[-1]
+                row_data = row_state if isinstance(row_state, dict) else {}
+
+                colour = QtGui.QColor(str(row_data.get("colour", "")))
+                row.set_colour(colour)
+                try:
+                    row.set_alpha(float(row_data.get("alpha", 1.0)))
+                except (TypeError, ValueError):
+                    row.set_alpha(1.0)
+
+            enabled = bool(state.get("enabled", False))
+            with QtCore.QSignalBlocker(self._enable_check):
+                self._enable_check.setChecked(enabled)
+            self._rows_container.setEnabled(enabled)
+            self._add_btn.setEnabled(enabled)
+        finally:
+            self._suppress_emit = False
+
+        self._resize_to_content()
+        self._emit()
+
+
+def _ic_from_session_row(row_state, fallback):
+    if not isinstance(row_state, dict):
+        return list(fallback)
+
+    raw_ic = row_state.get("ic")
+    if not isinstance(raw_ic, list) or len(raw_ic) != 3:
+        return list(fallback)
+
+    try:
+        return [float(v) for v in raw_ic]
+    except (TypeError, ValueError):
+        return list(fallback)
