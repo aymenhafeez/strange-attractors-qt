@@ -46,6 +46,7 @@ class ViewManager(QtCore.QObject):
         self.animation_controller = AnimationController(
             self._render_animation_frame,
             self._sync_head_visibility,
+            self.animation_finished.emit,
             parent=self,
         )
         self.trajectory_renderer = TrajectoryRenderer(
@@ -192,11 +193,7 @@ class ViewManager(QtCore.QObject):
 
         self.projection_emitter.emit_segments(all_segments)
 
-        done = frame >= len(sol0)
-        if done:
-            self.animation_finished.emit()
-
-        return {"frame": frame, "done": done}
+        return {"frame": frame, "done": frame >= len(sol0)}
 
     def _animate_frame(self):
         self.animation_controller.advance()

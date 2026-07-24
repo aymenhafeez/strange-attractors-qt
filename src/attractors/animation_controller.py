@@ -4,9 +4,17 @@ ANIMATION_INTERVAL_MS = 16
 
 
 class AnimationController:
-    def __init__(self, on_frame, on_visibility_changed, timer=None, parent=None):
+    def __init__(
+        self,
+        on_frame,
+        on_visibility_changed,
+        on_finished=None,
+        timer=None,
+        parent=None,
+    ):
         self._on_frame = on_frame
         self._on_visibility_changed = on_visibility_changed
+        self._on_finished = on_finished
         self._timer = timer or QtCore.QTimer(parent)
         if timer is None:
             self._timer.timeout.connect(self._tick)
@@ -51,4 +59,6 @@ class AnimationController:
         self._frame = finished["frame"]
         if finished["done"]:
             self.stop()
+            if self._on_finished is not None:
+                self._on_finished()
         return finished
