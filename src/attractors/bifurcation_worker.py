@@ -24,6 +24,7 @@ class BifurcationWorker(QRunnable):
         transient_frac,
         axis,
         t_max,
+        t_min=0,
     ):
         super().__init__()
         self.config = config
@@ -34,6 +35,7 @@ class BifurcationWorker(QRunnable):
         self.transient_frac = transient_frac
         self.axis = axis
         self.t_max = t_max
+        self.t_min = t_min
         self.signals = _BifurcationSignals()
         self._cancel = False
 
@@ -86,7 +88,7 @@ class BifurcationWorker(QRunnable):
                     sol = solve_rk4(
                         self.config.equation,
                         y0,
-                        0,
+                        self.t_min,
                         self.t_max,
                         n_eff,
                         pvals,

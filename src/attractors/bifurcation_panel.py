@@ -179,6 +179,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         gen = self._sweep_gen
 
         t_max = self.config.time_defaults.t_max * 4
+        t_min = self.config.time_defaults.t_min
         n = self.config.time_defaults.n
 
         worker = BifurcationWorker(
@@ -190,6 +191,7 @@ class BifurcationPanel(QtWidgets.QWidget):
             transient,
             axis,
             t_max,
+            t_min,
         )
         worker.signals.chunk_ready.connect(
             lambda vals, peaks, g=gen: self._on_chunk_ready(vals, peaks, g)
