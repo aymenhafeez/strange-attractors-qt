@@ -57,9 +57,9 @@ class LyapunovWorker(QObject):
                 config.equation,
                 initial_conditions,
                 pvals,
-                config.time_defaults["t_min"],
-                config.time_defaults["t_max"],
-                config.time_defaults["n"],
+                config.time_defaults.t_min,
+                config.time_defaults.t_max,
+                config.time_defaults.n,
             )
 
             if not self._cancel:

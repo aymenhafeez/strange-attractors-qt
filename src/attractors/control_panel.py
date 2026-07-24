@@ -442,13 +442,13 @@ class ControlPanel(QtWidgets.QWidget):
         n_row.addWidget(n_label)
         n_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         n_slider.setRange(1, 500)
-        n_slider.setValue(int(config.time_defaults["n"] / STEP))
+        n_slider.setValue(int(config.time_defaults.n / STEP))
         n_slider.param_step = STEP
         n_spin = QtWidgets.QSpinBox()
         n_spin.setKeyboardTracking(False)
         n_spin.setRange(1000, 500000)
         n_spin.setSingleStep(STEP)
-        n_spin.setValue(config.time_defaults["n"])
+        n_spin.setValue(config.time_defaults.n)
         n_spin.param_step = STEP
         n_slider.valueChanged.connect(
             lambda val: n_spin.setValue(val * n_slider.param_step)
@@ -472,13 +472,13 @@ class ControlPanel(QtWidgets.QWidget):
         t_max_row.addWidget(t_max_label)
         t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         t_max_slider.setRange(1, 750)
-        t_max_slider.setValue(config.time_defaults["t_max"])
+        t_max_slider.setValue(config.time_defaults.t_max)
         t_max_slider.param_step = 1
         t_max_spin = QtWidgets.QSpinBox()
         t_max_spin.setKeyboardTracking(False)
         t_max_spin.setRange(1, 750)
         t_max_spin.setSingleStep(1)
-        t_max_spin.setValue(config.time_defaults["t_max"])
+        t_max_spin.setValue(config.time_defaults.t_max)
         t_max_spin.param_step = 1
         t_max_slider.valueChanged.connect(
             lambda val: t_max_spin.setValue(val * t_max_slider.param_step)

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .expression_parser import compile_system, format_equations
-from .models import AttractorConfig, AttractorParam
+from .models import AttractorConfig, AttractorParam, TimeDefaults
 from .registry import ATTRACTORS
 
 PRESET_VERSION = 1
@@ -102,11 +102,11 @@ def custom_config_from_preset_data(data):
 
     try:
         initial_conditions = [float(v) for v in data["initial_conditions"]]
-        time_defaults = {
-            "t_min": int(data.get("time_defaults", {}).get("t_min", 0)),
-            "t_max": int(data["t_max"]),
-            "n": int(data["n"]),
-        }
+        time_defaults = TimeDefaults(
+            t_min=int(data.get("time_defaults", {}).get("t_min", 0)),
+            t_max=int(data["t_max"]),
+            n=int(data["n"]),
+        )
     except (KeyError, TypeError, ValueError) as exc:
         raise PresetError("Invalid custom preset values") from exc
 

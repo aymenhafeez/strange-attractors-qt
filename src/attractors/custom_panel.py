@@ -5,7 +5,7 @@ from .expression_parser import (
     compile_system,
     format_equations,
 )
-from .models import AttractorConfig, AttractorParam
+from .models import AttractorConfig, AttractorParam, TimeDefaults
 
 STEP = 0.01
 DEFAULT_RANGE = (0.0, 50.0)
@@ -287,11 +287,7 @@ class CustomPanel(QtWidgets.QWidget):
             equation=self._func,
             params=params,
             initial_conditions=[spin.value() for spin in self.ic_spins],
-            time_defaults={
-                "t_min": 0,
-                "t_max": 50,
-                "n": 100000,
-            },
+            time_defaults=TimeDefaults(t_min=0, t_max=50, n=100000),
             equation_text=self._equation_text,
             description="User-defined custom attractor",
         )

@@ -27,7 +27,7 @@ from .solution_validation import validate_solutions
 from .style import SPLITTER_HANDLE
 
 WINDOW_WIDTH = 1100
-WINDOW_HEIGHT = 900
+WINDOW_HEIGHT = 850
 PARTIAL_N = 40000
 PROJECTION_UPDATE_INTERVAL_MS = 100
 MAIN_VIEW_MARGIN = 8
@@ -246,8 +246,8 @@ class Window(QtWidgets.QMainWindow):
             self.scene.set_info(config, self.controls.get_current_values())
             self.scene.set_camera(config)
             self.controls.configure(config)
-            self.current_n = config.time_defaults["n"]
-            self.current_t_max = config.time_defaults["t_max"]
+            self.current_n = config.time_defaults.n
+            self.current_t_max = config.time_defaults.t_max
             self.controls.set_traj_tail_max(self.current_n)
             self.scene.clear_lyapunov()
             self.controls.trajectory_panel.reset(config)
@@ -544,7 +544,7 @@ class Window(QtWidgets.QMainWindow):
         if config is None:
             self._solve_pending = False
             return
-        user_n = self.current_n or config.time_defaults["n"]
+        user_n = self.current_n or config.time_defaults.n
         t_max = self.current_t_max
         ics = self.controls.trajectory_panel.get_trajectories()
         ic_list = [t["ic"] for t in ics] if ics else [config.initial_conditions]

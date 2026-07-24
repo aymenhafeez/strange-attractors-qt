@@ -4,8 +4,8 @@ import numpy as np
 
 def solve_attractor(config, param_values, n=None, t_max=None, ic=None):
     t_def = config.time_defaults
-    _t_max = t_max if t_max is not None else t_def["t_max"]
-    _n = n or t_def["n"]
+    _t_max = t_max if t_max is not None else t_def.t_max
+    _n = n or t_def.n
     params = np.ascontiguousarray(
         [param_values[p.name] for p in config.params], dtype=np.float64
     )
@@ -13,7 +13,7 @@ def solve_attractor(config, param_values, n=None, t_max=None, ic=None):
         ic if ic is not None else config.initial_conditions, dtype=np.float64
     )
 
-    return solve_rk4(config.equation, y0, t_def["t_min"], _t_max, _n, params)
+    return solve_rk4(config.equation, y0, t_def.t_min, _t_max, _n, params)
 
 
 @numba.njit(nogil=True)

@@ -178,8 +178,8 @@ class BifurcationPanel(QtWidgets.QWidget):
         self._sweep_gen += 1
         gen = self._sweep_gen
 
-        t_max = self.config.time_defaults["t_max"] * 4
-        n = self.config.time_defaults["n"]
+        t_max = self.config.time_defaults.t_max * 4
+        n = self.config.time_defaults.n
 
         worker = BifurcationWorker(
             self.config,
