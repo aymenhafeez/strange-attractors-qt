@@ -269,6 +269,10 @@ class Window(QtWidgets.QMainWindow):
         self.controls.set_anim_playing(False)
         self.scene.set_camera(config)
         self.controls.configure(config)
+
+        if config.name == "Custom":
+            self.controls.custom_panel.set_from_config(config)
+
         self.controls.set_current_values(values)
         self.controls.set_time_values(n, t_max)
         self.current_n = n
@@ -606,9 +610,7 @@ class Window(QtWidgets.QMainWindow):
                     attractor=config.name,
                 )
                 if token is not None:
-                    self._lyapunov_perf_tokens[
-                        self._active_lyapunov_request_id
-                    ] = token
+                    self._lyapunov_perf_tokens[self._active_lyapunov_request_id] = token
             self._update_projection_panel_from_solutions(solutions)
             if self.projection_panel.isVisible() and self._initial_full_solves == 0:
                 QtCore.QTimer.singleShot(0, self._reapply_projections)

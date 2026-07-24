@@ -103,6 +103,10 @@ class CustomPanel(QtWidgets.QWidget):
         self.status_label.hide()
         content_layout.addWidget(self.status_label)
 
+        self._func = None
+        self._detected_params = []
+        self._equation_text = ""
+
         layout.addWidget(self._content)
 
     def _toggle_content(self):
@@ -125,6 +129,10 @@ class CustomPanel(QtWidgets.QWidget):
 
         for spin, value in zip(self.ic_spins, config.initial_conditions):
             spin.setValue(float(value))
+
+        self._func = config.equation
+        self._detected_params = [param.name for param in config.params]
+        self._equation_text = config.equation_text
 
         if config.params:
             self._build_range_editors([param.name for param in config.params])
