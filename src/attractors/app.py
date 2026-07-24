@@ -25,7 +25,8 @@ from .solve_manager import SolveManager
 from .solution_validation import validate_solutions
 from .style import SPLITTER_HANDLE
 
-WINDOW_SIZE = 1100
+WINDOW_WIDTH = 1100
+WINDOW_HEIGHT = 900
 PARTIAL_N = 40000
 PROJECTION_UPDATE_INTERVAL_MS = 100
 MAIN_VIEW_MARGIN = 8
@@ -195,7 +196,7 @@ class Window(QtWidgets.QMainWindow):
         splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         splitter.addWidget(self.controls)
         splitter.addWidget(main_area)
-        splitter.setSizes([int(WINDOW_SIZE * 0.3), int(WINDOW_SIZE * 0.7)])
+        splitter.setSizes([int(WINDOW_WIDTH * 0.3), int(WINDOW_WIDTH * 0.7)])
         splitter.setStyleSheet(SPLITTER_HANDLE)
         layout.addWidget(splitter)
 
