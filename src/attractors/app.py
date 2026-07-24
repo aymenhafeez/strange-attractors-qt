@@ -121,6 +121,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls = ControlPanel()
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._on_controls_solve_requested)
+        self.controls.lyapunov_requested.connect(self._on_lyapunov_requested)
         self.controls.projections_requested.connect(self._toggle_projections)
         self.controls.bifurcation_requested.connect(self._toggle_bifurcation)
         self.controls.poincare_requested.connect(self._toggle_poincare)
@@ -557,6 +558,35 @@ class Window(QtWidgets.QMainWindow):
         self._full_needed = full
         self._dispatch_solve(full=full)
 
+    def _auto_lyapunov_enabled(self):
+        auto_lyapunov_enabled = getattr(self.controls, "auto_lyapunov_enabled", None)
+        if auto_lyapunov_enabled is None:
+            return True
+
+        return auto_lyapunov_enabled()
+
+    def _request_lyapunov(self, config=None, values=None):
+        if config is None or values is None:
+            config, values = self._get_current_config_and_values()
+        if config is None:
+            self.controls.set_status("No attractor selected", error=True)
+            return
+
+        self.solver.cancel_lyapunov()
+        self.controls.set_status("Computing Lyapunov spectrum")
+        self._active_lyapunov_request_id = self.solver.request_lyapunov(config, values)
+        token = perf_start(
+            self,
+            "lyapunov",
+            key=self._active_lyapunov_request_id,
+            attractor=config.name,
+        )
+        if token is not None:
+            self._lyapunov_perf_tokens[self._active_lyapunov_request_id] = token
+
+    def _on_lyapunov_requested(self):
+        self._request_lyapunov()
+
     def _on_solve_result(self, request_id, solutions, is_partial):
         if request_id != self._active_solve_request_id:
             if is_partial and solutions is not None:
@@ -599,18 +629,8 @@ class Window(QtWidgets.QMainWindow):
             if config is not None:
                 if self.poincare_panel.isVisible():
                     self.poincare_panel.set_attractor(config, values)
-                self.controls.set_status("Computing Lyapunov spectrum")
-                self._active_lyapunov_request_id = self.solver.request_lyapunov(
-                    config, values
-                )
-                token = perf_start(
-                    self,
-                    "lyapunov",
-                    key=self._active_lyapunov_request_id,
-                    attractor=config.name,
-                )
-                if token is not None:
-                    self._lyapunov_perf_tokens[self._active_lyapunov_request_id] = token
+                if self._auto_lyapunov_enabled():
+                    self._request_lyapunov(config, values)
             self._update_projection_panel_from_solutions(solutions)
             if self.projection_panel.isVisible() and self._initial_full_solves == 0:
                 QtCore.QTimer.singleShot(0, self._reapply_projections)

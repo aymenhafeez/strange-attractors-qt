@@ -20,6 +20,7 @@ def _slider_value(index, min_val, step):
 class ControlPanel(QtWidgets.QWidget):
     attractor_changed = QtCore.pyqtSignal(str)
     solve_requested = QtCore.pyqtSignal(bool)
+    lyapunov_requested = QtCore.pyqtSignal()
     projections_requested = QtCore.pyqtSignal()
     bifurcation_requested = QtCore.pyqtSignal()
     poincare_requested = QtCore.pyqtSignal()
@@ -194,6 +195,18 @@ class ControlPanel(QtWidgets.QWidget):
         orbit_speed_wrapper.setLayout(orbit_speed_row)
         self.controls_layout.addWidget(orbit_speed_wrapper)
 
+        lyapunov_row = QtWidgets.QHBoxLayout()
+        lyapunov_row.setSpacing(10)
+        self.auto_lyapunov_check = QtWidgets.QCheckBox("Auto Lyapunov")
+        self.auto_lyapunov_check.setChecked(True)
+        self.compute_lyapunov_button = QtWidgets.QPushButton("Compute Lyapunov")
+        self.compute_lyapunov_button.clicked.connect(self.lyapunov_requested.emit)
+        lyapunov_row.addWidget(self.auto_lyapunov_check)
+        lyapunov_row.addWidget(self.compute_lyapunov_button)
+        lyapunov_wrapper = QtWidgets.QWidget()
+        lyapunov_wrapper.setLayout(lyapunov_row)
+        self.controls_layout.addWidget(lyapunov_wrapper)
+
         traj_tail_row = QtWidgets.QHBoxLayout()
         traj_tail_row.setSpacing(10)
         traj_tail_label = QtWidgets.QLabel("Len")
@@ -341,6 +354,7 @@ class ControlPanel(QtWidgets.QWidget):
             "grid": self.show_grid.isChecked(),
             "orbit": self.orbit_mode.isChecked(),
             "orbit_speed": self.orbit_speed_spin.value(),
+            "auto_lyapunov": self.auto_lyapunov_check.isChecked(),
             "alpha": self.alpha_spin.value(),
             "animation_speed": self.anim_speed_spin.value(),
         }
@@ -358,10 +372,15 @@ class ControlPanel(QtWidgets.QWidget):
             self.orbit_mode.setChecked(bool(options["orbit"]))
         if "orbit_speed" in options:
             self.orbit_speed_spin.setValue(int(options["orbit_speed"]))
+        if "auto_lyapunov" in options:
+            self.auto_lyapunov_check.setChecked(bool(options["auto_lyapunov"]))
         if "alpha" in options:
             self.alpha_spin.setValue(int(options["alpha"]))
         if "animation_speed" in options:
             self.anim_speed_spin.setValue(int(options["animation_speed"]))
+
+    def auto_lyapunov_enabled(self):
+        return self.auto_lyapunov_check.isChecked()
 
     def _toggle_preset_content(self):
         visible = self.preset_content.isHidden()
