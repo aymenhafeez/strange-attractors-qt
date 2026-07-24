@@ -90,6 +90,7 @@ class Window(QtWidgets.QMainWindow):
         self._solve_pending = False
         self._solve_needed = False
         self._full_needed = False
+        self._restoring_view = False
         self._active_solve_request_id = None
         self._active_lyapunov_request_id = None
         self._solve_perf_tokens = {}
@@ -239,15 +240,21 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_config_to_view(self, config):
-        self.scene.set_info(config, self.controls.get_current_values())
-        self.scene.set_camera(config)
-        self.controls.configure(config)
-        self.current_n = config.time_defaults["n"]
-        self.current_t_max = config.time_defaults["t_max"]
-        self.controls.set_traj_tail_max(self.current_n)
-        self.scene.clear_lyapunov()
-        self.controls.trajectory_panel.reset(config)
-        self.bifurcation_panel.set_config(config, self.controls.get_current_values())
+        self._restoring_view = True
+        try:
+            self.scene.set_info(config, self.controls.get_current_values())
+            self.scene.set_camera(config)
+            self.controls.configure(config)
+            self.current_n = config.time_defaults["n"]
+            self.current_t_max = config.time_defaults["t_max"]
+            self.controls.set_traj_tail_max(self.current_n)
+            self.scene.clear_lyapunov()
+            self.controls.trajectory_panel.reset(config)
+            self.bifurcation_panel.set_config(
+                config, self.controls.get_current_values()
+            )
+        finally:
+            self._restoring_view = False
         self._update_plot()
 
     def _on_custom_compile(self, config):
@@ -257,34 +264,40 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_loaded_preset(self, config, values, n, t_max):
-        if config.name == "Custom":
-            self._custom_config = config
-            self.current_name = "Custom"
-            self.controls.set_current_attractor("Custom")
-            self.controls.hide_standard_controls()
-        else:
-            name = _attractor_name_for_config(config)
-            self.current_name = name
-            self.controls.set_current_attractor(name)
-            self.controls.show_standard_controls()
+        self._restoring_view = True
+        try:
+            if config.name == "Custom":
+                self._custom_config = config
+                self.current_name = "Custom"
+                self.controls.set_current_attractor("Custom")
+                self.controls.hide_standard_controls()
+            else:
+                name = _attractor_name_for_config(config)
+                self.current_name = name
+                self.controls.set_current_attractor(name)
+                self.controls.show_standard_controls()
 
-        self.scene.stop_animation()
-        self.controls.set_anim_playing(False)
-        self.scene.set_camera(config)
-        self.controls.configure(config)
+            self.scene.stop_animation()
+            self.controls.set_anim_playing(False)
+            self.scene.set_camera(config)
+            self.controls.configure(config)
 
-        if config.name == "Custom":
-            self.controls.custom_panel.set_from_config(config)
+            if config.name == "Custom":
+                self.controls.custom_panel.set_from_config(config)
 
-        self.controls.set_current_values(values)
-        self.controls.set_time_values(n, t_max)
-        self.current_n = n
-        self.current_t_max = t_max
-        self.controls.set_traj_tail_max(self.current_n)
-        self.scene.set_info(config, self.controls.get_current_values())
-        self.scene.clear_lyapunov()
-        self.controls.trajectory_panel.reset(config)
-        self.bifurcation_panel.set_config(config, self.controls.get_current_values())
+            self.controls.set_current_values(values)
+            self.controls.set_time_values(n, t_max)
+            self.current_n = n
+            self.current_t_max = t_max
+            self.controls.set_traj_tail_max(self.current_n)
+            self.scene.set_info(config, self.controls.get_current_values())
+            self.scene.clear_lyapunov()
+            self.controls.trajectory_panel.reset(config)
+            self.bifurcation_panel.set_config(
+                config, self.controls.get_current_values()
+            )
+        finally:
+            self._restoring_view = False
         self._update_plot()
 
     def _collect_session_state(self):
@@ -333,21 +346,25 @@ class Window(QtWidgets.QMainWindow):
                 config = custom_config_from_preset_data(custom_data)
             except PresetError:
                 return
-            self._custom_config = config
-            self.current_name = "Custom"
-            self.controls.set_current_attractor("Custom")
-            self.controls.hide_standard_controls()
-            self.scene.stop_animation()
-            self.controls.set_anim_playing(False)
-            self.scene.set_camera(config)
-            self.controls.configure(config)
-            self.controls.custom_panel.set_from_config(config)
-            self.controls.set_current_values(state.get("values", {}))
-            self.scene.clear_lyapunov()
-            self.controls.trajectory_panel.reset(config)
-            self.bifurcation_panel.set_config(
-                config, self.controls.get_current_values()
-            )
+            self._restoring_view = True
+            try:
+                self._custom_config = config
+                self.current_name = "Custom"
+                self.controls.set_current_attractor("Custom")
+                self.controls.hide_standard_controls()
+                self.scene.stop_animation()
+                self.controls.set_anim_playing(False)
+                self.scene.set_camera(config)
+                self.controls.configure(config)
+                self.controls.custom_panel.set_from_config(config)
+                self.controls.set_current_values(state.get("values", {}))
+                self.scene.clear_lyapunov()
+                self.controls.trajectory_panel.reset(config)
+                self.bifurcation_panel.set_config(
+                    config, self.controls.get_current_values()
+                )
+            finally:
+                self._restoring_view = False
 
         values = state.get("values", {})
         if isinstance(values, dict):
@@ -710,6 +727,9 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_trajectories_changed(self, trajectories):
         self.scene.set_trajectories(trajectories)
+        if getattr(self, "_restoring_view", False):
+            return
+
         self._solve_needed = True
         self._full_needed = True
         self._dispatch_solve(full=True)
