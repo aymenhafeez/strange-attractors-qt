@@ -1,11 +1,11 @@
 import numpy as np
-import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .camera_controller import CameraController
 from .grid_overlay import GridOverlay
-from .style import CONTAINER, EQUATION_LABEL, LYAPUNOV_PLOT
+from .lyapunov_overlay import LyapunovOverlay
+from .style import CONTAINER, EQUATION_LABEL
 
 
 N_BINS = 96
@@ -74,37 +74,7 @@ class ViewManager(QtCore.QObject):
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignBottom,
         )
 
-        self.lyapunov_label = QtWidgets.QLabel("")
-        self.lyapunov_label.setStyleSheet(EQUATION_LABEL)
-
-        self.lyapunov_plot = pg.PlotWidget()
-        self.lyapunov_plot.setFixedSize(300, 150)
-        self.lyapunov_plot.setBackground(None)
-        self.lyapunov_plot.hideAxis("bottom")
-        self.lyapunov_plot.hideAxis("left")
-        self.lyapunov_plot.setStyleSheet(LYAPUNOV_PLOT)
-        self.curve_l1 = self.lyapunov_plot.plot([], [], pen=(255, 100, 100))
-        self.curve_l2 = self.lyapunov_plot.plot([], [], pen=(100, 255, 100))
-        self.curve_l3 = self.lyapunov_plot.plot([], [], pen=(100, 100, 255))
-
-        self.lyapunov_container = QtWidgets.QWidget()
-        self.lyapunov_container.setStyleSheet(LYAPUNOV_PLOT)
-        lyap_layout = QtWidgets.QVBoxLayout(self.lyapunov_container)
-        lyap_layout.setContentsMargins(0, 0, 0, 0)
-        lyap_layout.setSpacing(2)
-        lyap_layout.addWidget(
-            self.lyapunov_plot, alignment=QtCore.Qt.AlignmentFlag.AlignBottom
-        )
-        lyap_layout.addWidget(
-            self.lyapunov_label, alignment=QtCore.Qt.AlignmentFlag.AlignRight
-        )
-        container_layout.addWidget(
-            self.lyapunov_container,
-            0,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignBottom,
-        )
-        self.lyapunov_container.setVisible(False)
+        self.lyapunov_overlay = LyapunovOverlay(container_layout)
 
         self._timer = QtCore.QTimer()
         self._timer.timeout.connect(self._animate_frame)
@@ -293,17 +263,10 @@ class ViewManager(QtCore.QObject):
         self.camera_controller.fit_camera_to_solutions(self._solutions)
 
     def set_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
-        self.lyapunov_label.setText(
-            f"λ = ({lyap[0]:+.2f}, {lyap[1]:+.2f}, {lyap[2]:+.2f})  D_KY = {ky_dim:.2f}"
-        )
-        self.lyapunov_container.setVisible(True)
-        self.curve_l1.setData(t_hist, lyap_hist[:, 0])
-        self.curve_l2.setData(t_hist, lyap_hist[:, 1])
-        self.curve_l3.setData(t_hist, lyap_hist[:, 2])
+        self.lyapunov_overlay.set_result(lyap, ky_dim, t_hist, lyap_hist)
 
     def clear_lyapunov(self):
-        self.lyapunov_label.setText("")
-        self.lyapunov_container.setVisible(False)
+        self.lyapunov_overlay.clear()
 
     def save_view_as_png(self):
         filename, _ = QtWidgets.QFileDialog.getSaveFileName(
