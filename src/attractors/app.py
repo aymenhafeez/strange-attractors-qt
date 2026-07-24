@@ -8,6 +8,7 @@ from .control_panel import ControlPanel
 from .poincare_panel import PoincarePanel
 from .perf import PerfProfiler, perf_finish, perf_start
 from .projection_panel import ProjectionPanel
+from .grid_overlay import DEFAULT_GRID_HALF_SIZE
 from .presets import (
     PresetError,
     build_preset,
@@ -20,7 +21,7 @@ from .presets import (
 )
 from .registry import ATTRACTORS
 from .session import clear_session, load_session, save_session, session_settings
-from .view_manager import DEFAULT_GRID_HALF_SIZE, ViewManager
+from .view_manager import ViewManager
 from .solve_manager import SolveManager
 from .solution_validation import validate_solutions
 from .style import SPLITTER_HANDLE
