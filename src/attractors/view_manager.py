@@ -3,6 +3,7 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
+from .camera_controller import CameraController
 from .style import CONTAINER, EQUATION_LABEL, LYAPUNOV_PLOT
 
 
@@ -12,8 +13,6 @@ ANIM_RENDER_MAX_POINTS = 30000
 DEFAULT_GRID_HALF_SIZE = 50.0
 GRID_PADDING_FACTOR = 4.0
 MAX_GRID_HALF_SIZE = 750.0
-ORBIT_INTERVAL_MS = 30
-ORBIT_STEP_DEGREES = 0.25
 
 
 def _decimate_indices(n_points, max_points):
@@ -53,7 +52,6 @@ class ViewManager(QtCore.QObject):
         self._traj_tail_length = 5000
         self._traj_tail_enabled = False
         self._anim_step = 100
-        self._orbit_speed = 100
         self._grid_visible = True
         self.grid_half_size = DEFAULT_GRID_HALF_SIZE
         self.grid_items = []
@@ -70,6 +68,7 @@ class ViewManager(QtCore.QObject):
         container_layout.setSpacing(0)
 
         self.view = gl.GLViewWidget()
+        self.camera_controller = CameraController(self.view, self)
         container_layout.addWidget(self.view, 0, 0)
         container_layout.setRowStretch(0, 1)
         container_layout.setColumnStretch(0, 1)
@@ -117,8 +116,6 @@ class ViewManager(QtCore.QObject):
 
         self._timer = QtCore.QTimer()
         self._timer.timeout.connect(self._animate_frame)
-        self._orbit_timer = QtCore.QTimer()
-        self._orbit_timer.timeout.connect(self._orbit_frame)
 
     def get_solutions(self):
         return self._solutions
@@ -337,23 +334,13 @@ class ViewManager(QtCore.QObject):
         self._anim_step = max(1, int(step))
 
     def set_orbit_mode(self, enabled):
-        if enabled:
-            if not self._orbit_timer.isActive():
-                self._orbit_timer.start(ORBIT_INTERVAL_MS)
-        else:
-            self._orbit_timer.stop()
+        self.camera_controller.set_orbit_mode(enabled)
 
     def set_orbit_speed(self, speed):
-        self._orbit_speed = max(1, int(speed))
+        self.camera_controller.set_orbit_speed(speed)
 
     def _orbit_frame(self):
-        step = ORBIT_STEP_DEGREES * (self._orbit_speed / 100.0)
-        azimuth = float(self.view.opts.get("azimuth", 0.0)) + step
-        if hasattr(self.view, "orbit"):
-            self.view.orbit(step, 0)
-        else:
-            self.view.setCameraPosition(azimuth=azimuth)
-        self.view.opts["azimuth"] = azimuth
+        self.camera_controller._orbit_frame()
 
     def set_trajectories(self, trajectories):
         self._trajectories = trajectories
@@ -458,68 +445,16 @@ class ViewManager(QtCore.QObject):
             self.build_grid(new_half)
 
     def set_camera(self, config):
-        self.view.setCameraPosition(
-            pos=QtGui.QVector3D(0, 0, 0),
-            distance=config.camera_distance,
-            elevation=config.camera_elevation,
-            azimuth=config.camera_azimuth,
-        )
-        self.view.opts["center"] = QtGui.QVector3D(0, 0, config.pan)
+        self.camera_controller.set_camera(config)
 
     def get_camera_state(self):
-        center = self.view.opts.get("center", QtGui.QVector3D(0, 0, 0))
-        return {
-            "distance": float(self.view.opts.get("distance", 0.0)),
-            "elevation": float(self.view.opts.get("elevation", 0.0)),
-            "azimuth": float(self.view.opts.get("azimuth", 0.0)),
-            "center": [float(center.x()), float(center.y()), float(center.z())],
-        }
+        return self.camera_controller.get_camera_state()
 
     def set_camera_state(self, state):
-        try:
-            center = state["center"]
-            x, y, z = (float(center[0]), float(center[1]), float(center[2]))
-            distance = float(state["distance"])
-            elevation = float(state["elevation"])
-            azimuth = float(state["azimuth"])
-        except (KeyError, TypeError, ValueError, IndexError):
-            return False
-
-        self.view.setCameraPosition(
-            pos=QtGui.QVector3D(x, y, z),
-            distance=distance,
-            elevation=elevation,
-            azimuth=azimuth,
-        )
-        self.view.opts["distance"] = distance
-        self.view.opts["elevation"] = elevation
-        self.view.opts["azimuth"] = azimuth
-        self.view.opts["center"] = QtGui.QVector3D(x, y, z)
-        return True
+        return self.camera_controller.set_camera_state(state)
 
     def fit_camera_to_solutions(self):
-        if not self._solutions:
-            return
-
-        points = np.concatenate(self._solutions, axis=0)
-        if points.size == 0:
-            return
-
-        finite = np.all(np.isfinite(points), axis=1)
-        if not np.any(finite):
-            return
-
-        points = points[finite]
-        mins = np.min(points, axis=0)
-        maxs = np.max(points, axis=0)
-        center = 0.5 * (mins + maxs)
-        span = np.max(maxs - mins)
-        distance = max(float(span) * 1.25, 1.0)
-
-        self.view.setCameraPosition(
-            pos=QtGui.QVector3D(float(center[0]), float(center[1]), float(center[2])),
-            distance=distance,
-        )
+        self.camera_controller.fit_camera_to_solutions(self._solutions)
 
     def set_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
         self.lyapunov_label.setText(
