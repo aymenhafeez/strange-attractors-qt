@@ -1,10 +1,9 @@
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
-from pyqtgraph.Qt.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject
+from pyqtgraph.Qt.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
 from .solver import solve_attractor
-
 
 _PLANE_COLS = {"x": 0, "y": 1, "z": 2}
 _AXIS_DATA = {"x": (1, 2), "y": (0, 2), "z": (0, 1)}
@@ -61,9 +60,9 @@ class _PoincareWorker(QRunnable):
             sol = solve_attractor(self.config, self.values, self.n, t_max=self.t_max)
             if not self._cancel:
                 self.signals.result_ready.emit(sol)
-        except Exception as e:
+        except Exception as exc:  # noqa: BLE001
             if not self._cancel:
-                self.signals.error.emit(str(e))
+                self.signals.error.emit(str(exc))
         finally:
             self.signals.finished.emit()
 

@@ -29,7 +29,7 @@ class GridOverlay:
         spacing = max(
             1.0, round(ideal_spacing, -int(np.floor(np.log10(ideal_spacing))))
         )
-        num_divisions = max(4, int(round(half_size * 2 / spacing)))
+        num_divisions = max(4, round(half_size * 2 / spacing))
         spacing = half_size * 2 / num_divisions
 
         grid_faces = [
@@ -196,8 +196,5 @@ class GridOverlay:
             ),
             MAX_GRID_HALF_SIZE,
         )
-        if (
-            abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6)
-            > 0.1
-        ):
+        if abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6) > 0.1:
             self.build_grid(new_half)

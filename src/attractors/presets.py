@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .expression_parser import compile_system, format_equations
@@ -28,7 +28,7 @@ def preset_path(directory, name):
 
 
 def _utc_timestamp():
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def _param_to_dict(param):

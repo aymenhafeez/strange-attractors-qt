@@ -1,5 +1,5 @@
 import numpy as np
-from pyqtgraph.Qt.QtCore import QRunnable, pyqtSignal, QObject
+from pyqtgraph.Qt.QtCore import QObject, QRunnable, pyqtSignal
 
 from .solver import solve_rk4
 
@@ -118,8 +118,10 @@ class BifurcationWorker(QRunnable):
                         self.signals.chunk_ready.emit(np.array(all_vals), all_peaks)
                         last_emitted_count = len(all_vals)
 
-                except Exception as e:
-                    self.signals.error.emit(f"Failed at {self.sweep_param}={val}: {e}")
+                except Exception as exc:  # noqa: BLE001
+                    self.signals.error.emit(
+                        f"Failed at {self.sweep_param}={val}: {exc}"
+                    )
                     cancelled = True
                     break
 

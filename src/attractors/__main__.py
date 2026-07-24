@@ -1,8 +1,9 @@
 import sys
 
-from .app import Window, WINDOW_WIDTH, WINDOW_HEIGHT
-from .perf import configure_perf_logging
 import pyqtgraph as pg
+
+from .app import WINDOW_HEIGHT, WINDOW_WIDTH, Window
+from .perf import configure_perf_logging
 
 
 def main():

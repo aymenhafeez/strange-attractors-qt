@@ -164,7 +164,7 @@ class CustomPanel(QtWidgets.QWidget):
         except ParseError as exc:
             self._show_status(f"Syntax error: {exc}", error=True)
             return
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self._show_status(f"Compilation failed: {exc}", error=True)
             return
 

@@ -1,6 +1,5 @@
 import numpy as np
 
-
 MAX_TRAJECTORY_ABS = 1e6
 
 

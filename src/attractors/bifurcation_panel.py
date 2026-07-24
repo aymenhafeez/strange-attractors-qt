@@ -1,8 +1,8 @@
 import numpy as np
 import pyqtgraph as pg
+from pyqtgraph.exporters import ImageExporter
 from pyqtgraph.Qt import QtCore, QtWidgets
 from pyqtgraph.Qt.QtCore import QThreadPool
-from pyqtgraph.exporters import ImageExporter
 
 from .bifurcation_worker import BifurcationWorker
 

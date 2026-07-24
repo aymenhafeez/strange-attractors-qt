@@ -10,7 +10,7 @@ STEP = 1000
 
 
 def _slider_index(value, min_val, step):
-    return int(round((value - min_val) / step))
+    return round((value - min_val) / step)
 
 
 def _slider_value(index, min_val, step):
@@ -57,7 +57,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.panel_layout.setContentsMargins(8, 8, 8, 8)
         self.panel_layout.setSpacing(7)
 
-        self.current_name = list(ATTRACTORS.keys())[0]
+        self.current_name = next(iter(ATTRACTORS.keys()))
         self.slider_rows = []
         self.n_slider_row = None
         self.n_slider_wrapper = None
@@ -66,7 +66,7 @@ class ControlPanel(QtWidgets.QWidget):
 
         options = QtWidgets.QHBoxLayout()
 
-        self.dropdown = QtWidgets.QPushButton(list(ATTRACTORS.keys())[0])
+        self.dropdown = QtWidgets.QPushButton(next(iter(ATTRACTORS.keys())))
         menu = QtWidgets.QMenu(self.dropdown)
         for name in ATTRACTORS:
             action = menu.addAction(name)

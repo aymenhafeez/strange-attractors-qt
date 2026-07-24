@@ -1,6 +1,6 @@
 import math
-
 from dataclasses import dataclass
+
 import numba
 import numpy as np
 
@@ -435,7 +435,7 @@ def compile_system(equations: tuple[str, str, str]) -> tuple[callable, list[str]
     )
 
     namespace = {"np": np, "__builtins__": {}}
-    exec(compile(source, "<custom_atractor>", "exec"), namespace)
+    exec(compile(source, "<custom_attractor>", "exec"), namespace)  # noqa: S102
 
     func = namespace["_custom"]
 
