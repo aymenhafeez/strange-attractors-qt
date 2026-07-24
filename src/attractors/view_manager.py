@@ -1,15 +1,14 @@
-import numpy as np
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .animation_controller import AnimationController
 from .camera_controller import CameraController
 from .grid_overlay import GridOverlay
 from .lyapunov_overlay import LyapunovOverlay
-from .style import CONTAINER, EQUATION_LABEL
+from .projection_emitter import ProjectionEmitter
+from .style import CONTAINER
 from .trajectory_renderer import TrajectoryRenderer
-
-
-N_BINS = 96
+from .viewport_overlay import ViewportOverlay
 
 
 class ViewManager(QtCore.QObject):
@@ -20,8 +19,6 @@ class ViewManager(QtCore.QObject):
         super().__init__(parent)
 
         self._repositioning = False
-        self._anim_frame = 0
-        self._anim_step = 100
 
         self.container = QtWidgets.QWidget()
         self.container.setStyleSheet(CONTAINER)
@@ -36,22 +33,24 @@ class ViewManager(QtCore.QObject):
         container_layout.setRowStretch(0, 1)
         container_layout.setColumnStretch(0, 1)
 
-        self.equation_label = QtWidgets.QLabel("")
-        self.equation_label.setStyleSheet(EQUATION_LABEL)
-        container_layout.addWidget(
-            self.equation_label,
-            0,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignBottom,
+        self.viewport_overlay = ViewportOverlay(
+            self.container,
+            container_layout,
+            self.view,
         )
+        self.equation_label = self.viewport_overlay.equation_label
 
         self.lyapunov_overlay = LyapunovOverlay(container_layout)
+        self.projection_emitter = ProjectionEmitter(self.projections_data)
 
-        self._timer = QtCore.QTimer()
-        self._timer.timeout.connect(self._animate_frame)
+        self.animation_controller = AnimationController(
+            self._render_animation_frame,
+            self._sync_head_visibility,
+            parent=self,
+        )
         self.trajectory_renderer = TrajectoryRenderer(
             self.view,
-            self._timer.isActive,
+            self.animation_controller.is_active,
         )
 
     def get_solutions(self):
@@ -69,7 +68,6 @@ class ViewManager(QtCore.QObject):
         if self._repositioning:
             return
         self._repositioning = True
-        margin = 8
         self.view.lower()
         self._repositioning = False
 
@@ -101,7 +99,7 @@ class ViewManager(QtCore.QObject):
         self.trajectory_renderer.set_alpha(val)
 
     def set_anim_step(self, step):
-        self._anim_step = max(1, int(step))
+        self.animation_controller.set_step(step)
 
     def set_orbit_mode(self, enabled):
         self.camera_controller.set_orbit_mode(enabled)
@@ -116,17 +114,7 @@ class ViewManager(QtCore.QObject):
         self.trajectory_renderer.set_trajectories(trajectories)
 
     def set_info(self, config, values):
-        formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
-        equations = config.equation_text.replace("\n", "<br>")
-        text = (
-            f"<b>SYSTEM</b>: {config.name}<br>"
-            f"{equations}<br>"
-            f"<b>IC</b>: {config.initial_conditions}<br>"
-            f"<b>PARAMS</b>: {formatted_params}"
-        )
-        self.equation_label.setText(text)
-        self.equation_label.setVisible(True)
-        self.equation_label.setToolTip(config.description)
+        self.viewport_overlay.set_info(config, values)
 
     def _get_traj_colour_alpha(self, i):
         return self.trajectory_renderer.get_traj_colour_alpha(i)
@@ -144,7 +132,7 @@ class ViewManager(QtCore.QObject):
         self.trajectory_renderer.display_solutions(solutions, is_partial)
 
     def clear_solutions(self):
-        self._anim_frame = 0
+        self.animation_controller.reset_frame()
         self.trajectory_renderer.clear_solutions()
 
     def auto_adjust_grid(self, solutions):
@@ -169,31 +157,16 @@ class ViewManager(QtCore.QObject):
         self.lyapunov_overlay.clear()
 
     def save_view_as_png(self):
-        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.container, "Save View as PNG", "", "PNG Files (*.png)"
-        )
-        if not filename:
-            return
-
-        img = self.view.grabFramebuffer()
-        img.save(filename)
+        return self.viewport_overlay.save_view_as_png()
 
     def toggle_animation(self):
-        if self._timer.isActive():
-            self._timer.stop()
-            self._sync_head_visibility()
-            return False
-        else:
-            self._anim_frame = 0
-            self._timer.start(16)
-            self._sync_head_visibility()
-            return True
+        return self.animation_controller.toggle()
 
     def stop_animation(self):
-        self._timer.stop()
+        self.animation_controller.stop()
 
     def is_animating(self):
-        return self._timer.isActive()
+        return self.animation_controller.is_active()
 
     def _get_traj_tail_data(self, i, sol):
         return self.trajectory_renderer.get_traj_tail_data(i, sol)
@@ -207,25 +180,23 @@ class ViewManager(QtCore.QObject):
     def _update_display(self):
         self.trajectory_renderer.update_display()
 
-    def _animate_frame(self):
+    def _render_animation_frame(self, current_frame, step):
         solutions = self.get_solutions()
         if not solutions:
-            return
+            return None
 
         sol0 = solutions[0]
-        frame = min(self._anim_frame + self._anim_step, len(sol0))
-        self._anim_frame = frame
+        frame = min(current_frame + step, len(sol0))
 
         all_segments = self.trajectory_renderer.render_animation_frame(frame)
 
-        if all_segments:
-            all_pts = np.concatenate(all_segments, axis=0)
-            finite = np.all(np.isfinite(all_pts), axis=1)
-            if np.any(finite):
-                x, y, z = all_pts[finite].T
-                self.projections_data.emit(x, y, z)
+        self.projection_emitter.emit_segments(all_segments)
 
-        if frame >= len(sol0):
-            self._timer.stop()
-            self._sync_head_visibility()
+        done = frame >= len(sol0)
+        if done:
             self.animation_finished.emit()
+
+        return {"frame": frame, "done": done}
+
+    def _animate_frame(self):
+        self.animation_controller.advance()
