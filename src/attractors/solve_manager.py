@@ -6,6 +6,7 @@ from .worker import LyapunovWorker, SolveWorker
 class SolveManager(QtCore.QObject):
     solutions_ready = QtCore.pyqtSignal(int, object, bool)
     lyapunov_ready = QtCore.pyqtSignal(int, object, float, object, object)
+    lyapunov_failed = QtCore.pyqtSignal(int, str)
     _solve_request = QtCore.pyqtSignal(int, object, dict, list, int, bool, float)
     _lyapunov_request = QtCore.pyqtSignal(int, object, dict)
 
@@ -28,6 +29,7 @@ class SolveManager(QtCore.QObject):
         self._lyapunov_thread.start()
         self._lyapunov_request.connect(self._lyapunov_worker.compute)
         self._lyapunov_worker.lyapunov_ready.connect(self.lyapunov_ready)
+        self._lyapunov_worker.lyapunov_failed.connect(self.lyapunov_failed)
 
     def request_solve(self, config, values, ics, n, is_partial, t_max):
         self._solve_request_id += 1

@@ -36,6 +36,7 @@ class SolveWorker(QObject):
 
 class LyapunovWorker(QObject):
     lyapunov_ready = pyqtSignal(int, object, float, object, object)
+    lyapunov_failed = pyqtSignal(int, str)
 
     def __init__(self):
         super().__init__()
@@ -63,6 +64,7 @@ class LyapunovWorker(QObject):
 
             if not self._cancel:
                 self.lyapunov_ready.emit(request_id, lyap, ky_dim, t_hist, lyap_hist)
-        except Exception:
+        except Exception as exc:
             logger.exception("Lyapunov computation failed")
-            pass
+            if not self._cancel:
+                self.lyapunov_failed.emit(request_id, str(exc))

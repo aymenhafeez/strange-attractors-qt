@@ -114,6 +114,7 @@ class Window(QtWidgets.QMainWindow):
         self.solver = SolveManager(self)
         self.solver.solutions_ready.connect(self._on_solve_result)
         self.solver.lyapunov_ready.connect(self._on_lyapunov_result)
+        self.solver.lyapunov_failed.connect(self._on_lyapunov_failed)
 
         self.scene = ViewManager(self)
         self.scene.animation_finished.connect(self._on_anim_finished)
@@ -725,6 +726,14 @@ class Window(QtWidgets.QMainWindow):
         perf_finish(self, token)
         self.scene.set_lyapunov_result(lyap, ky_dim, t_hist, lyap_hist)
         self.controls.clear_status()
+
+    def _on_lyapunov_failed(self, request_id, message):
+        if request_id != self._active_lyapunov_request_id:
+            return
+
+        token = getattr(self, "_lyapunov_perf_tokens", {}).pop(request_id, None)
+        perf_finish(self, token, status="failed")
+        self.controls.set_status(f"Lyapunov failed: {message}", error=True)
 
     def _close_projections(self):
         self.projection_panel.hide()
