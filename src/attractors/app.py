@@ -178,12 +178,24 @@ class Window(QtWidgets.QMainWindow):
 
         self._bifurcation_splitter_size = 500
 
+        self.jupyter_console_panel = JupyterConsolePanel(
+            self._jupyter_console_namespace
+        )
+        self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
+        self.jupyter_console_panel.hide()
+
+        self._normal_splitter_sizes = None
+
+        self._build_toolbar()
+
         self.inner_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
         self.inner_splitter.addWidget(self.scene.container)
         self.inner_splitter.addWidget(self.projection_panel)
         self.inner_splitter.addWidget(self.poincare_panel)
         self.inner_splitter.addWidget(self.bifurcation_panel)
-        self.inner_splitter.setSizes([600, 0, 0, 0])
+        self.inner_splitter.addWidget(self.scene.container)
+        self.inner_splitter.addWidget(self.projection_panel)
+        self.inner_splitter.setSizes([0, 0, 0, 600, 0])
         self.inner_splitter.setStyleSheet(SPLITTER_HANDLE)
 
         main_area = QtWidgets.QWidget()
@@ -194,14 +206,17 @@ class Window(QtWidgets.QMainWindow):
             MAIN_VIEW_MARGIN,
             MAIN_VIEW_MARGIN,
         )
-        main_area_layout.addWidget(self.inner_splitter)
+        self.main_stack = QtWidgets.QStackedWidget()
+        self.main_stack.addWidget(self.inner_splitter)
+        self.main_stack.addWidget(self.jupyter_console_panel)
+        main_area_layout.addWidget(self.main_stack)
 
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
-        splitter.addWidget(self.controls)
-        splitter.addWidget(main_area)
-        splitter.setSizes([int(WINDOW_WIDTH * 0.3), int(WINDOW_WIDTH * 0.7)])
-        splitter.setStyleSheet(SPLITTER_HANDLE)
-        layout.addWidget(splitter)
+        self.main_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        self.main_splitter.addWidget(self.controls)
+        self.main_splitter.addWidget(main_area)
+        self.main_splitter.setSizes([int(WINDOW_WIDTH * 0.3), int(WINDOW_WIDTH * 0.7)])
+        self.main_splitter.setStyleSheet(SPLITTER_HANDLE)
+        layout.addWidget(self.main_splitter)
 
         self.scene.container.installEventFilter(self)
 
@@ -434,6 +449,25 @@ class Window(QtWidgets.QMainWindow):
         self.controls.set_saved_presets(list_presets(self._preset_directory), selected)
         self._update_preset_summary(selected or self.controls.current_preset_name())
 
+
+    def _set_jupyter_console_mode(self, enabled):
+        if enabled:
+            if self._normal_splitter_sizes is None:
+                self._normal_splitter_sizes = self.main_splitter.sizes()
+            self.scene.stop_animation()
+            self.scene.set_orbit_mode(False)
+            self.controls.set_anim_playing(False)
+            _sync_animation_toolbar(self, False)
+            self.controls.hide()
+            self.main_stack.setCurrentWidget(self.jupyter_console_panel)
+            return
+
+        self.main_stack.setCurrentWidget(self.inner_splitter)
+        self.controls.show()
+        if self._normal_splitter_sizes is not None:
+            self.main_splitter.setSizes(self._normal_splitter_sizes)
+            self._normal_splitter_sizes = None
+
     def _open_preset_folder(self):
         Path(self._preset_directory).mkdir(parents=True, exist_ok=True)
         opened = QtGui.QDesktopServices.openUrl(
@@ -547,6 +581,21 @@ class Window(QtWidgets.QMainWindow):
             return None, {}
         values = self.controls.get_current_values()
         return config, values
+
+    def _jupyter_console_namespace(self):
+        return {
+            "np": np,
+            "window": self,
+            "scene": self.scene,
+            "view": self.scene.view,
+            "controls": self.controls,
+            "plot_widget": self.jupyter_console_panel.plot_widget,
+            "pw": self.jupyter_console_panel.plot_widget,
+            "get_solutions": self.scene.get_solutions,
+            "current_config": lambda: self._get_current_config_and_values()[0],
+            "current_values": lambda: self._get_current_config_and_values()[1],
+            "pg": pg,
+        }
 
     def _update_plot(self):
         self.scene.stop_animation()
@@ -840,12 +889,10 @@ class Window(QtWidgets.QMainWindow):
     def _close_bifurcation(self):
         self.bifurcation_panel.cancel_sweep()
         self.bifurcation_panel.hide()
-        sizes = self.inner_splitter.sizes()
-        idx = self.inner_splitter.indexOf(self.bifurcation_panel)
-        if idx >= 0:
-            self._bifurcation_splitter_size = sizes[idx]
-            sizes[idx] = 0
-        self.inner_splitter.setSizes(sizes)
+        size = self._close_split_panel(self.bifurcation_panel)
+        if size > 0:
+            self._bifurcation_splitter_size = size
+        _sync_panel_toolbar(self)
 
     def _toggle_bifurcation(self):
         if self.bifurcation_panel.isVisible():
@@ -856,16 +903,27 @@ class Window(QtWidgets.QMainWindow):
                 return
             self.bifurcation_panel.set_config(config, values)
             self.bifurcation_panel.show()
-            sizes = self.inner_splitter.sizes()
-            total = sum(sizes)
             h = max(self._bifurcation_splitter_size, 120)
-            idx = self.inner_splitter.indexOf(self.bifurcation_panel)
-            sizes[0] = max(total - h, 100)
-            sizes[idx] = h
-            self.inner_splitter.setSizes(sizes)
+            self._set_split_panel_size(self.bifurcation_panel, h)
+            _sync_panel_toolbar(self)
+
+    def _close_jupyter_console(self):
+        self.jupyter_console_panel.hide()
+        self._set_jupyter_console_mode(False)
+        _sync_panel_toolbar(self)
+
+    def _toggle_jupyter_console(self):
+        if self.jupyter_console_panel.isVisible():
+            self._close_jupyter_console()
+        else:
+            self.jupyter_console_panel.ensure_console()
+            self.jupyter_console_panel.show()
+            self._set_jupyter_console_mode(True)
+            _sync_panel_toolbar(self)
 
     def closeEvent(self, a0):
         self._save_session_on_close()
+        self.jupyter_console_panel.shutdown_kernel()
         self.scene.set_orbit_mode(False)
         self.scene.stop_animation()
         self.solver.shutdown()
