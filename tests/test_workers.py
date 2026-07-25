@@ -159,23 +159,28 @@ def test_lyapunov_worker_emits_computation_result(qapp, monkeypatch):
     assert captured["time"] == (0, 10, 1000)
 
 
-def test_lyapunov_worker_suppresses_exception(qapp, monkeypatch):
+def test_lyapunov_worker_emits_failure_on_exception(qapp, monkeypatch):
     def fake_compute_lyapunov(*args):
         raise RuntimeError("boom")
 
     monkeypatch.setattr("attractors.worker.compute_lyapunov", fake_compute_lyapunov)
 
     worker = LyapunovWorker()
-    emitted = []
+    results = []
+    failures = []
     worker.lyapunov_ready.connect(
-        lambda request_id, lyap, ky, t_hist, lyap_hist: emitted.append(
+        lambda request_id, lyap, ky, t_hist, lyap_hist: results.append(
             (request_id, lyap, ky, t_hist, lyap_hist)
         )
+    )
+    worker.lyapunov_failed.connect(
+        lambda request_id, message: failures.append((request_id, message))
     )
 
     worker.compute(12, _config(), {"a": 1.5})
 
-    assert emitted == []
+    assert results == []
+    assert failures == [(12, "boom")]
 
 
 def test_window_ignores_stale_solve_results():
@@ -197,14 +202,10 @@ def test_window_displays_stale_partial_solve_as_preview():
     class Scene:
         def __init__(self):
             self.displayed = False
-            self.refreshed = False
 
         def display_solutions(self, solutions, is_partial):
             self.displayed = True
             self.is_partial = is_partial
-
-        def refresh_colours(self):
-            self.refreshed = True
 
     window = SimpleNamespace(_active_solve_request_id=2, scene=Scene())
 
@@ -212,7 +213,6 @@ def test_window_displays_stale_partial_solve_as_preview():
 
     assert window.scene.displayed is True
     assert window.scene.is_partial is True
-    assert window.scene.refreshed is True
 
 
 def test_window_ignores_stale_lyapunov_results():
