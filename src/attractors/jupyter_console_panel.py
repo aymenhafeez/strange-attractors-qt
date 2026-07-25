@@ -44,21 +44,8 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.setMinimumHeight(180)
 
         self._layout = QtWidgets.QVBoxLayout(self)
-        self._layout.setContentsMargins(5, 4, 5, 5)
-        self._layout.setSpacing(4)
-
-        header = QtWidgets.QHBoxLayout()
-        header.setSpacing(6)
-        header.addWidget(QtWidgets.QLabel("Jupyter console"))
-        header.addStretch(1)
-
-        self.close_button = QtWidgets.QToolButton()
-        self.close_button.setText("×")
-        self.close_button.setAutoRaise(True)
-        self.close_button.setFixedSize(18, 18)
-        self.close_button.clicked.connect(self.close_requested.emit)
-        header.addWidget(self.close_button)
-        self._layout.addLayout(header)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(0)
 
         self.dock_area = DockArea()
         self._layout.addWidget(self.dock_area)

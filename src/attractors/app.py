@@ -690,7 +690,6 @@ class Window(QtWidgets.QMainWindow):
             "Lyapunov spectrum",
             self._toggle_lyapunov_panel,
         )
-        tools_menu.addSeparator()
         self.toolbar_projection_action = self._add_panel_menu_action(
             tools_menu,
             "Projection heatmaps",
@@ -772,7 +771,6 @@ class Window(QtWidgets.QMainWindow):
 
     def _build_jupyter_toolbar_actions(self, toolbar):
         self._jupyter_toolbar_actions = []
-        self._jupyter_toolbar_actions.append(toolbar.addSeparator())
 
         plot_item = self.jupyter_console_panel.plot_widget.getPlotItem()
         view_box = plot_item.getViewBox()
@@ -822,6 +820,26 @@ class Window(QtWidgets.QMainWindow):
                     self, toolbar, "ViewBox options", view_menu
                 )
             )
+
+        spacer = QtWidgets.QWidget()
+        spacer.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
+        self._jupyter_toolbar_actions.append(toolbar.addWidget(spacer))
+
+        self.close_button = QtWidgets.QToolButton()
+        self.close_button.setIcon(
+            self._icon(QtWidgets.QStyle.StandardPixmap.SP_TitleBarCloseButton)
+        )
+        self.close_button.setText("")
+        self.close_button.setToolTip("Close Jupyter console")
+        self.close_button.setAutoRaise(True)
+        self.close_button.setFixedSize(16, 16)
+        self.close_button.clicked.connect(
+            self.jupyter_console_panel.close_requested.emit
+        )
+        self._jupyter_toolbar_actions.append(toolbar.addWidget(self.close_button))
 
         Window._set_toolbar_actions_visible(self, self._jupyter_toolbar_actions, False)
 
