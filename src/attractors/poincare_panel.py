@@ -112,13 +112,6 @@ class PoincarePanel(QtWidgets.QWidget):
         self.auto_check.setToolTip("Auto solve when attractor parameters change")
         param_row.addWidget(self.auto_check)
 
-        self.close_button = QtWidgets.QToolButton()
-        self.close_button.setText("×")
-        self.close_button.setAutoRaise(True)
-        self.close_button.setFixedSize(18, 18)
-        self.close_button.clicked.connect(self.close_requested.emit)
-        param_row.addWidget(self.close_button)
-
         layout.addLayout(param_row)
 
         ctrl_row = QtWidgets.QHBoxLayout()

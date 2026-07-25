@@ -2,6 +2,8 @@ from pathlib import Path
 
 import numpy as np
 import pyqtgraph as pg
+from pyqtgraph.dockarea.Dock import Dock
+from pyqtgraph.dockarea.DockArea import DockArea
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .bifurcation_panel import BifurcationPanel
@@ -139,13 +141,18 @@ def _set_lyapunov_display(window, lyap, ky_dim, t_hist, lyap_hist):
 
 
 def _panel_visible(window, panel_name):
+    panel_docks = getattr(window, "_panel_docks", {})
+    dock = panel_docks.get(panel_name)
+    if dock is not None:
+        return dock.container() is not None
+
     panel = getattr(window, panel_name, None)
     return bool(panel is not None and panel.isVisible())
 
 
 def _has_hidden_lyapunov_panel(window):
     panel = getattr(window, "lyapunov_panel", None)
-    return bool(panel is not None and not panel.isVisible())
+    return bool(panel is not None and not _panel_visible(window, "lyapunov_panel"))
 
 
 class Window(QtWidgets.QMainWindow):
@@ -231,26 +238,18 @@ class Window(QtWidgets.QMainWindow):
         self.poincare_panel.close_requested.connect(self._close_poincare)
         self.poincare_panel.hide()
 
-        self._poincare_splitter_size = 400
-
         self.lyapunov_panel = LyapunovPanel()
         self.lyapunov_panel.compute_requested.connect(self._on_lyapunov_requested)
         self.lyapunov_panel.close_requested.connect(self._close_lyapunov_panel)
         self.lyapunov_panel.hide()
 
-        self._lyapunov_splitter_size = 260
-
         self.projection_panel = ProjectionPanel()
         self.projection_panel.close_requested.connect(self._close_projections)
         self.projection_panel.hide()
 
-        self._projection_splitter_size = 260
-
         self.bifurcation_panel = BifurcationPanel()
         self.bifurcation_panel.close_requested.connect(self._close_bifurcation)
         self.bifurcation_panel.hide()
-
-        self._bifurcation_splitter_size = 500
 
         self.jupyter_console_panel = JupyterConsolePanel(
             self._jupyter_console_namespace
@@ -262,14 +261,39 @@ class Window(QtWidgets.QMainWindow):
 
         self._build_toolbar()
 
-        self.inner_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
-        self.inner_splitter.addWidget(self.lyapunov_panel)
-        self.inner_splitter.addWidget(self.poincare_panel)
-        self.inner_splitter.addWidget(self.bifurcation_panel)
-        self.inner_splitter.addWidget(self.scene.container)
-        self.inner_splitter.addWidget(self.projection_panel)
-        self.inner_splitter.setSizes([0, 0, 0, 600, 0])
-        self.inner_splitter.setStyleSheet(SPLITTER_HANDLE)
+        self.workspace_dock_area = DockArea()
+        self.viewport_dock = Dock("Viewport", size=(10, 12), hideTitle=True)
+        self.viewport_dock.addWidget(self.scene.container)
+        self.workspace_dock_area.addDock(self.viewport_dock)
+        self.lyapunov_dock = self._build_panel_dock("Lyapunov", self.lyapunov_panel)
+        self.poincare_dock = self._build_panel_dock("Poincare", self.poincare_panel)
+        self.bifurcation_dock = self._build_panel_dock(
+            "Bifurcation",
+            self.bifurcation_panel,
+        )
+        self.projection_dock = self._build_panel_dock(
+            "Projection heatmaps",
+            self.projection_panel,
+        )
+        self._panel_docks = {
+            "lyapunov_panel": self.lyapunov_dock,
+            "poincare_panel": self.poincare_dock,
+            "bifurcation_panel": self.bifurcation_dock,
+            "projection_panel": self.projection_dock,
+        }
+        self._panel_dock_titles = {
+            "lyapunov_panel": "Lyapunov",
+            "poincare_panel": "Poincare",
+            "bifurcation_panel": "Bifurcation",
+            "projection_panel": "Projection heatmaps",
+        }
+        self._panel_dock_defaults = {
+            "lyapunov_panel": ("top", self.viewport_dock),
+            "poincare_panel": ("top", self.viewport_dock),
+            "bifurcation_panel": ("bottom", self.viewport_dock),
+            "projection_panel": ("bottom", self.viewport_dock),
+        }
+        self._closing_panel_dock = None
 
         main_area = QtWidgets.QWidget()
         main_area_layout = QtWidgets.QVBoxLayout(main_area)
@@ -280,7 +304,7 @@ class Window(QtWidgets.QMainWindow):
             MAIN_VIEW_MARGIN,
         )
         self.main_stack = QtWidgets.QStackedWidget()
-        self.main_stack.addWidget(self.inner_splitter)
+        self.main_stack.addWidget(self.workspace_dock_area)
         self.main_stack.addWidget(self.jupyter_console_panel)
         main_area_layout.addWidget(self.main_stack)
 
@@ -416,7 +440,7 @@ class Window(QtWidgets.QMainWindow):
             except PresetError:
                 custom_data = None
 
-        return {
+        state = {
             "attractor": (
                 self.current_name
                 if self.current_name in ATTRACTORS or custom_data is not None
@@ -432,6 +456,10 @@ class Window(QtWidgets.QMainWindow):
             "camera": self.scene.get_camera_state(),
             "selected_preset": self.controls.current_preset_name(),
         }
+        dock_layout = Window._collect_workspace_dock_layout(self)
+        if dock_layout is not None:
+            state["workspace_dock_layout"] = dock_layout
+        return state
 
     def _collect_panel_state(self):
         panels = {
@@ -444,6 +472,16 @@ class Window(QtWidgets.QMainWindow):
         if hasattr(self, "jupyter_console_panel"):
             panels["jupyter_console"] = _panel_visible(self, "jupyter_console_panel")
         return panels
+
+    def _collect_workspace_dock_layout(self):
+        dock_area = getattr(self, "workspace_dock_area", None)
+        if dock_area is None:
+            return None
+
+        try:
+            return dock_area.saveState()
+        except (AttributeError, TypeError, ValueError):
+            return None
 
     def _restore_session(self, state):
         if not state or not _can_restore_session(state):
@@ -535,6 +573,10 @@ class Window(QtWidgets.QMainWindow):
                 self._toggle_bifurcation()
             if panels.get("jupyter_console"):
                 self._toggle_jupyter_console()
+
+        dock_layout = state.get("workspace_dock_layout")
+        if isinstance(dock_layout, dict):
+            Window._restore_workspace_dock_layout(self, dock_layout)
 
         self._update_plot()
 
@@ -689,6 +731,12 @@ class Window(QtWidgets.QMainWindow):
         checkbox.toggled.connect(action.setChecked)
         return action
 
+    def _build_panel_dock(self, title, panel):
+        dock = Dock(title, size=(10, 4), closable=True)
+        dock.addWidget(panel)
+        dock.sigClosed.connect(lambda _dock: self._on_panel_dock_closed(panel))
+        return dock
+
     def _add_panel_menu_action(self, menu, text, callback):
         action = menu.addAction(text)
         action.setCheckable(True)
@@ -812,7 +860,7 @@ class Window(QtWidgets.QMainWindow):
             self.main_stack.setCurrentWidget(self.jupyter_console_panel)
             return
 
-        self.main_stack.setCurrentWidget(self.inner_splitter)
+        self.main_stack.setCurrentWidget(self.workspace_dock_area)
         Window._set_toolbar_actions_visible(self, self._jupyter_toolbar_actions, False)
         Window._set_toolbar_actions_visible(self, self._main_toolbar_actions, True)
         self.controls.show()
@@ -1086,12 +1134,15 @@ class Window(QtWidgets.QMainWindow):
             self._latest_projection_solutions = solutions
             config, values = self._get_current_config_and_values()
             if config is not None:
-                if self.poincare_panel.isVisible():
+                if _panel_visible(self, "poincare_panel"):
                     self.poincare_panel.set_attractor(config, values)
                 if self._auto_lyapunov_enabled():
                     self._request_lyapunov(config, values)
             self._update_projection_panel_from_solutions(solutions)
-            if self.projection_panel.isVisible() and self._initial_full_solves == 0:
+            if (
+                _panel_visible(self, "projection_panel")
+                and self._initial_full_solves == 0
+            ):
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
             self.scene.auto_adjust_grid(solutions)
@@ -1107,7 +1158,7 @@ class Window(QtWidgets.QMainWindow):
         self.projection_panel.reapply_projections(solutions)
 
     def _update_projection_panel_from_solutions(self, solutions):
-        if not self.projection_panel.isVisible():
+        if not _panel_visible(self, "projection_panel"):
             return
 
         all_sol = np.concatenate(solutions, axis=0)
@@ -1123,7 +1174,7 @@ class Window(QtWidgets.QMainWindow):
         self._last_projection_update_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
 
     def _on_projections_data(self, x, y, z):
-        if not self.projection_panel.isVisible():
+        if not _panel_visible(self, "projection_panel"):
             return
 
         now_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
@@ -1204,31 +1255,89 @@ class Window(QtWidgets.QMainWindow):
         perf_finish(self, token, status="failed")
         self.controls.set_status(f"Lyapunov failed: {message}", error=True)
 
-    def _main_view_splitter_index(self):
-        return self.inner_splitter.indexOf(self.scene.container)
+    def _panel_dock_for(self, panel):
+        for dock in getattr(self, "_panel_docks", {}).values():
+            if panel in dock.widgets:
+                return dock
+        return None
 
-    def _set_split_panel_size(self, panel, height):
-        sizes = self.inner_splitter.sizes()
-        panel_idx = self.inner_splitter.indexOf(panel)
-        main_idx = self._main_view_splitter_index()
-        if panel_idx < 0 or main_idx < 0:
+    def _restore_workspace_dock_layout(self, dock_layout):
+        dock_area = getattr(self, "workspace_dock_area", None)
+        if dock_area is None:
             return
 
-        total = sum(sizes)
-        sizes[main_idx] = max(total - height, 100)
-        sizes[panel_idx] = height
-        self.inner_splitter.setSizes(sizes)
+        try:
+            dock_area.restoreState(dock_layout, missing="ignore", extra="bottom")
+        except Exception:  # noqa: BLE001
+            return
 
-    def _close_split_panel(self, panel):
-        sizes = self.inner_splitter.sizes()
-        idx = self.inner_splitter.indexOf(panel)
-        if idx >= 0:
-            size = sizes[idx]
-            sizes[idx] = 0
-            self.inner_splitter.setSizes(sizes)
-            return size
+    def _panel_name_for_panel(self, panel):
+        for panel_name, dock in getattr(self, "_panel_docks", {}).items():
+            if panel in dock.widgets:
+                return panel_name
+        return None
 
+    def _replace_closed_panel_dock(self, panel_name, panel):
+        titles = getattr(self, "_panel_dock_titles", {})
+        title = titles.get(panel_name)
+        if title is None:
+            return
+
+        self._panel_docks[panel_name] = Window._build_panel_dock(self, title, panel)
+
+    def _open_panel_dock(self, panel, panel_name):
+        dock = getattr(self, "_panel_docks", {}).get(panel_name)
+        if dock is None:
+            panel.show()
+            return
+
+        if dock.container() is None:
+            position, relative_to = self._panel_dock_defaults[panel_name]
+            self.workspace_dock_area.addDock(
+                dock,
+                position=position,
+                relativeTo=relative_to,
+            )
+        panel.show()
+        container = dock.container()
+        if hasattr(container, "raiseDock"):
+            dock.raiseDock()
+
+    def _close_panel_dock(self, panel):
+        dock = Window._panel_dock_for(self, panel)
+        if dock is None:
+            close_split_panel = getattr(self, "_close_split_panel", None)
+            if close_split_panel is not None:
+                return close_split_panel(panel)
+            return 0
+
+        if dock.container() is not None and self._closing_panel_dock is not dock:
+            self._closing_panel_dock = dock
+            try:
+                dock.close()
+            finally:
+                self._closing_panel_dock = None
         return 0
+
+    def _on_panel_dock_closed(self, panel):
+        panel_name = Window._panel_name_for_panel(self, panel)
+        dock = Window._panel_dock_for(self, panel)
+        if getattr(self, "_closing_panel_dock", None) is dock:
+            if panel_name is not None:
+                Window._replace_closed_panel_dock(self, panel_name, panel)
+            return
+
+        if panel is self.lyapunov_panel:
+            self._close_lyapunov_panel()
+        elif panel is self.projection_panel:
+            self._close_projections()
+        elif panel is self.poincare_panel:
+            self._close_poincare()
+        elif panel is self.bifurcation_panel:
+            self._close_bifurcation()
+
+        if panel_name is not None:
+            Window._replace_closed_panel_dock(self, panel_name, panel)
 
     def _cancel_lyapunov_analysis(self):
         cancel = getattr(self.solver, "cancel_lyapunov", None)
@@ -1245,36 +1354,32 @@ class Window(QtWidgets.QMainWindow):
     def _close_lyapunov_panel(self):
         Window._cancel_lyapunov_analysis(self)
         self.lyapunov_panel.hide()
-        size = self._close_split_panel(self.lyapunov_panel)
+        size = Window._close_panel_dock(self, self.lyapunov_panel)
         if size > 0:
             self._lyapunov_splitter_size = size
         _sync_panel_toolbar(self)
 
     def _toggle_lyapunov_panel(self):
-        if self.lyapunov_panel.isVisible():
+        if _panel_visible(self, "lyapunov_panel"):
             self._close_lyapunov_panel()
         else:
-            self.lyapunov_panel.show()
-            h = max(self._lyapunov_splitter_size, 150)
-            self._set_split_panel_size(self.lyapunov_panel, h)
+            Window._open_panel_dock(self, self.lyapunov_panel, "lyapunov_panel")
             if self.lyapunov_panel.auto_enabled():
                 self._request_lyapunov()
             _sync_panel_toolbar(self)
 
     def _close_projections(self):
         self.projection_panel.hide()
-        size = self._close_split_panel(self.projection_panel)
+        size = Window._close_panel_dock(self, self.projection_panel)
         if size > 0:
             self._projection_splitter_size = size
         _sync_panel_toolbar(self)
 
     def _toggle_projections(self):
-        if self.projection_panel.isVisible():
+        if _panel_visible(self, "projection_panel"):
             self._close_projections()
         else:
-            self.projection_panel.show()
-            h = max(self._projection_splitter_size, 140)
-            self._set_split_panel_size(self.projection_panel, h)
+            Window._open_panel_dock(self, self.projection_panel, "projection_panel")
             QtCore.QTimer.singleShot(0, self._reapply_projections)
             QtCore.QTimer.singleShot(50, self._reapply_projections)
             _sync_panel_toolbar(self)
@@ -1283,18 +1388,16 @@ class Window(QtWidgets.QMainWindow):
         self.poincare_panel.cancel_solve()
         self.scene.remove_poincare_plane()
         self.poincare_panel.hide()
-        size = self._close_split_panel(self.poincare_panel)
+        size = Window._close_panel_dock(self, self.poincare_panel)
         if size > 0:
             self._poincare_splitter_size = size
         _sync_panel_toolbar(self)
 
     def _toggle_poincare(self):
-        if self.poincare_panel.isVisible():
+        if _panel_visible(self, "poincare_panel"):
             self._close_poincare()
         else:
-            self.poincare_panel.show()
-            h = max(self._poincare_splitter_size, 120)
-            self._set_split_panel_size(self.poincare_panel, h)
+            Window._open_panel_dock(self, self.poincare_panel, "poincare_panel")
             self.scene.set_poincare_plane(
                 self.poincare_panel.plane_combo.currentText(),
                 self.poincare_panel.value_spin.value(),
@@ -1308,22 +1411,24 @@ class Window(QtWidgets.QMainWindow):
     def _close_bifurcation(self):
         self.bifurcation_panel.cancel_sweep()
         self.bifurcation_panel.hide()
-        size = self._close_split_panel(self.bifurcation_panel)
+        size = Window._close_panel_dock(self, self.bifurcation_panel)
         if size > 0:
             self._bifurcation_splitter_size = size
         _sync_panel_toolbar(self)
 
     def _toggle_bifurcation(self):
-        if self.bifurcation_panel.isVisible():
+        if _panel_visible(self, "bifurcation_panel"):
             self._close_bifurcation()
         else:
             config, values = self._get_current_config_and_values()
             if config is None:
                 return
             self.bifurcation_panel.set_config(config, values)
-            self.bifurcation_panel.show()
-            h = max(self._bifurcation_splitter_size, 120)
-            self._set_split_panel_size(self.bifurcation_panel, h)
+            Window._open_panel_dock(
+                self,
+                self.bifurcation_panel,
+                "bifurcation_panel",
+            )
             _sync_panel_toolbar(self)
 
     def _close_jupyter_console(self):

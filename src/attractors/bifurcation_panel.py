@@ -32,14 +32,6 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.var_combo.addItems(["x", "y", "z"])
         row1.addWidget(self.var_combo)
 
-        row1.addStretch()
-        self.close_button = QtWidgets.QToolButton()
-        self.close_button.setText("×")
-        self.close_button.setAutoRaise(True)
-        self.close_button.setFixedSize(18, 18)
-        self.close_button.clicked.connect(self.close_requested.emit)
-        row1.addWidget(self.close_button)
-
         layout.addLayout(row1)
 
         row2 = QtWidgets.QHBoxLayout()

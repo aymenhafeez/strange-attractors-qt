@@ -16,7 +16,6 @@ class LyapunovPanel(QtWidgets.QWidget):
 
         header = QtWidgets.QHBoxLayout()
         header.setSpacing(6)
-        header.addWidget(QtWidgets.QLabel("Lyapunov"))
 
         self.auto_check = QtWidgets.QCheckBox("Auto")
         self.auto_check.setChecked(True)
@@ -28,18 +27,11 @@ class LyapunovPanel(QtWidgets.QWidget):
 
         header.addStretch(1)
 
-        self.close_button = QtWidgets.QToolButton()
-        self.close_button.setText("×")
-        self.close_button.setAutoRaise(True)
-        self.close_button.setFixedSize(18, 18)
-        self.close_button.clicked.connect(self.close_requested.emit)
-        header.addWidget(self.close_button)
-
-        layout.addLayout(header)
-
         self.result_label = QtWidgets.QLabel("No Lyapunov result")
         self.result_label.setWordWrap(True)
-        layout.addWidget(self.result_label)
+        header.addWidget(self.result_label)
+
+        layout.addLayout(header)
 
         self.plot = pg.PlotWidget()
         self.plot.setBackground("k")

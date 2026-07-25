@@ -17,18 +17,6 @@ class ProjectionPanel(QtWidgets.QWidget):
         layout.setContentsMargins(4, 2, 4, 4)
         layout.setSpacing(2)
 
-        header = QtWidgets.QHBoxLayout()
-        header.setContentsMargins(0, 0, 0, 0)
-        header.setSpacing(0)
-        header.addStretch()
-        self.close_btn = QtWidgets.QToolButton()
-        self.close_btn.setText("×")
-        self.close_btn.setAutoRaise(True)
-        self.close_btn.setFixedSize(18, 18)
-        self.close_btn.clicked.connect(self.close_requested.emit)
-        header.addWidget(self.close_btn)
-        layout.addLayout(header)
-
         plots_layout = QtWidgets.QHBoxLayout()
         plots_layout.setContentsMargins(0, 0, 0, 0)
         plots_layout.setSpacing(4)
