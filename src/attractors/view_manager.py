@@ -4,7 +4,6 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 from .animation_controller import AnimationController
 from .camera_controller import CameraController
 from .grid_overlay import GridOverlay
-from .lyapunov_overlay import LyapunovOverlay
 from .projection_emitter import ProjectionEmitter
 from .style import CONTAINER
 from .trajectory_renderer import TrajectoryRenderer
@@ -40,7 +39,6 @@ class ViewManager(QtCore.QObject):
         )
         self.equation_label = self.viewport_overlay.equation_label
 
-        self.lyapunov_overlay = LyapunovOverlay(container_layout)
         self.projection_emitter = ProjectionEmitter(self.projections_data)
 
         self.animation_controller = AnimationController(
@@ -150,12 +148,6 @@ class ViewManager(QtCore.QObject):
 
     def fit_camera_to_solutions(self):
         self.camera_controller.fit_camera_to_solutions(self.get_solutions())
-
-    def set_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
-        self.lyapunov_overlay.set_result(lyap, ky_dim, t_hist, lyap_hist)
-
-    def clear_lyapunov(self):
-        self.lyapunov_overlay.clear()
 
     def save_view_as_png(self):
         return self.viewport_overlay.save_view_as_png()
