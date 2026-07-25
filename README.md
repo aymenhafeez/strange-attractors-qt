@@ -40,22 +40,26 @@ With uv:
 
 ```bash
 uv sync
-uv run strange-attractors
+# uv sync --extra jupyter-console
+
+uv run strange-attractors  # --fullscreen
 ```
 
 With pip:
 
 ```bash
 pip install -e .
-python -m attractors
+# pip install -e ".[jupyter-console]"
+
+python -m attractors  # --fullscreen
 ```
 
-Optionally use the `--fullscreen` flag to launch the app in fullscreen mode.
+`ipykernel` and `qtconsole` are optional dependencies for the integrated Jupyter console, so use the extras install flags to install them.
 
 ## Development
 
 ```bash
-uv sync
+uv sync --extra jupyter-console
 uv run strange-attractors
 ```
 
