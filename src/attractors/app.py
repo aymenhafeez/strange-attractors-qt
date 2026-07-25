@@ -1,13 +1,14 @@
+import weakref
 from pathlib import Path
 
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph.dockarea.Dock import Dock
-from pyqtgraph.dockarea.DockArea import DockArea
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .bifurcation_panel import BifurcationPanel
 from .control_panel import ControlPanel
+from .docking import AreaBoundDock as Dock
+from .docking import AreaBoundDockArea as DockArea
 from .grid_overlay import DEFAULT_GRID_HALF_SIZE
 from .jupyter_console_panel import JupyterConsolePanel
 from .lyapunov_panel import LyapunovPanel
@@ -150,6 +151,29 @@ def _panel_visible(window, panel_name):
     return bool(panel is not None and panel.isVisible())
 
 
+def _dock_branch_is_current(dock):
+    item = dock
+    container = dock.container()
+    while container is not None:
+        container_type = getattr(container, "type", lambda: None)()
+        if container_type == "tab":
+            stack = getattr(container, "stack", None)
+            if stack is not None and stack.currentWidget() is not item:
+                return False
+        item = container
+        container = container.container() if hasattr(container, "container") else None
+    return True
+
+
+def _panel_visible_to_user(window, panel_name):
+    panel_docks = getattr(window, "_panel_docks", {})
+    dock = panel_docks.get(panel_name)
+    if dock is not None:
+        return dock.container() is not None and _dock_branch_is_current(dock)
+
+    return _panel_visible(window, panel_name)
+
+
 def _has_hidden_lyapunov_panel(window):
     panel = getattr(window, "lyapunov_panel", None)
     return bool(panel is not None and not _panel_visible(window, "lyapunov_panel"))
@@ -257,12 +281,10 @@ class Window(QtWidgets.QMainWindow):
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
         self.jupyter_console_panel.hide()
 
-        self._normal_splitter_sizes = None
-
         self._build_toolbar()
 
         self.workspace_dock_area = DockArea()
-        self.viewport_dock = Dock("Viewport", size=(10, 12), hideTitle=True)
+        self.viewport_dock = Dock("Viewport", size=(10, 12))
         self.viewport_dock.addWidget(self.scene.container)
         self.workspace_dock_area.addDock(self.viewport_dock)
         self.lyapunov_dock = self._build_panel_dock("Lyapunov", self.lyapunov_panel)
@@ -275,25 +297,34 @@ class Window(QtWidgets.QMainWindow):
             "Projection heatmaps",
             self.projection_panel,
         )
+        self.jupyter_console_dock = self._build_panel_dock(
+            "Console",
+            self.jupyter_console_panel,
+        )
         self._panel_docks = {
             "lyapunov_panel": self.lyapunov_dock,
             "poincare_panel": self.poincare_dock,
             "bifurcation_panel": self.bifurcation_dock,
             "projection_panel": self.projection_dock,
+            "jupyter_console_panel": self.jupyter_console_dock,
         }
         self._panel_dock_titles = {
             "lyapunov_panel": "Lyapunov",
             "poincare_panel": "Poincare",
             "bifurcation_panel": "Bifurcation",
             "projection_panel": "Projection heatmaps",
+            "jupyter_console_panel": "Console",
         }
         self._panel_dock_defaults = {
             "lyapunov_panel": ("top", self.viewport_dock),
             "poincare_panel": ("top", self.viewport_dock),
             "bifurcation_panel": ("bottom", self.viewport_dock),
             "projection_panel": ("bottom", self.viewport_dock),
+            "jupyter_console_panel": ("above", self.viewport_dock),
         }
         self._closing_panel_dock = None
+        self._workspace_tab_stacks = weakref.WeakSet()
+        self._connect_workspace_dock_signals()
 
         main_area = QtWidgets.QWidget()
         main_area_layout = QtWidgets.QVBoxLayout(main_area)
@@ -303,10 +334,7 @@ class Window(QtWidgets.QMainWindow):
             MAIN_VIEW_MARGIN,
             MAIN_VIEW_MARGIN,
         )
-        self.main_stack = QtWidgets.QStackedWidget()
-        self.main_stack.addWidget(self.workspace_dock_area)
-        self.main_stack.addWidget(self.jupyter_console_panel)
-        main_area_layout.addWidget(self.main_stack)
+        main_area_layout.addWidget(self.workspace_dock_area)
 
         self.main_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         self.main_splitter.addWidget(self.controls)
@@ -316,6 +344,9 @@ class Window(QtWidgets.QMainWindow):
         layout.addWidget(self.main_splitter)
 
         self.scene.container.installEventFilter(self)
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.focusChanged.connect(self._on_focus_changed)
 
         self.scene.build_grid(DEFAULT_GRID_HALF_SIZE)
         self._refresh_presets()
@@ -328,6 +359,9 @@ class Window(QtWidgets.QMainWindow):
             self.scene.reposition_overlays()
 
         return super().eventFilter(obj, event)
+
+    def _on_focus_changed(self, _old, _now):
+        Window._sync_jupyter_workspace_state(self)
 
     def on_attractor_change(self, name):
         self.current_name = name
@@ -717,7 +751,6 @@ class Window(QtWidgets.QMainWindow):
         reset_session_action.triggered.connect(self._reset_saved_session)
         self.tools_button.setMenu(tools_menu)
         toolbar.addWidget(self.tools_button)
-        self._main_toolbar_actions = list(toolbar.actions())
         self._build_jupyter_toolbar_actions(toolbar)
         self._sync_toolbar_panel_actions()
 
@@ -768,9 +801,11 @@ class Window(QtWidgets.QMainWindow):
             self.toolbar_jupyter_console_action.setChecked(
                 _panel_visible(self, "jupyter_console_panel")
             )
+        Window._sync_jupyter_workspace_state(self)
 
     def _build_jupyter_toolbar_actions(self, toolbar):
         self._jupyter_toolbar_actions = []
+        toolbar.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
         plot_item = self.jupyter_console_panel.plot_widget.getPlotItem()
         view_box = plot_item.getViewBox()
@@ -779,6 +814,7 @@ class Window(QtWidgets.QMainWindow):
         view_all_action.setToolTip("Fit all plot data")
         view_all_action.triggered.connect(view_box.autoRange)
         self._jupyter_toolbar_actions.append(view_all_action)
+        Window._keep_toolbar_action_from_taking_focus(self, toolbar, view_all_action)
 
         mouse_group = QtGui.QActionGroup(toolbar)
         mouse_group.setExclusive(True)
@@ -794,6 +830,8 @@ class Window(QtWidgets.QMainWindow):
         pan_action.triggered.connect(lambda: view_box.setLeftButtonAction("pan"))
         zoom_action.triggered.connect(lambda: view_box.setLeftButtonAction("rect"))
         self._jupyter_toolbar_actions.extend([pan_action, zoom_action])
+        Window._keep_toolbar_action_from_taking_focus(self, toolbar, pan_action)
+        Window._keep_toolbar_action_from_taking_focus(self, toolbar, zoom_action)
 
         self._jupyter_toolbar_actions.append(toolbar.addSeparator())
         for text, widget in [
@@ -828,20 +866,18 @@ class Window(QtWidgets.QMainWindow):
         )
         self._jupyter_toolbar_actions.append(toolbar.addWidget(spacer))
 
-        self.close_button = QtWidgets.QToolButton()
-        self.close_button.setIcon(
-            self._icon(QtWidgets.QStyle.StandardPixmap.SP_TitleBarCloseButton)
-        )
-        self.close_button.setText("")
-        self.close_button.setToolTip("Close Jupyter console")
-        self.close_button.setAutoRaise(True)
-        self.close_button.setFixedSize(16, 16)
-        self.close_button.clicked.connect(
-            self.jupyter_console_panel.close_requested.emit
-        )
-        self._jupyter_toolbar_actions.append(toolbar.addWidget(self.close_button))
-
         Window._set_toolbar_actions_visible(self, self._jupyter_toolbar_actions, False)
+
+    def _standard_icon(self, standard_icon):
+        icon = getattr(self, "_icon", None)
+        if icon is not None:
+            return icon(standard_icon)
+        return QtWidgets.QApplication.style().standardIcon(standard_icon)
+
+    def _keep_toolbar_action_from_taking_focus(self, toolbar, action):
+        widget = toolbar.widgetForAction(action)
+        if widget is not None:
+            widget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
     def _add_plot_option_action(self, toolbar, text, widget):
         action = toolbar.addAction(text)
@@ -849,6 +885,7 @@ class Window(QtWidgets.QMainWindow):
         action.setChecked(widget.isChecked())
         action.toggled.connect(widget.setChecked)
         widget.toggled.connect(action.setChecked)
+        Window._keep_toolbar_action_from_taking_focus(self, toolbar, action)
         return action
 
     def _add_toolbar_menu_button(self, toolbar, text, menu):
@@ -856,35 +893,56 @@ class Window(QtWidgets.QMainWindow):
         button.setText(text)
         button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
         button.setMenu(menu)
+        button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         return toolbar.addWidget(button)
 
     def _set_toolbar_actions_visible(self, actions, visible):
         for action in actions:
             action.setVisible(visible)
 
-    def _set_jupyter_console_mode(self, enabled):
-        if enabled:
-            if self._normal_splitter_sizes is None:
-                self._normal_splitter_sizes = self.main_splitter.sizes()
-            self.scene.stop_animation()
-            self.scene.set_orbit_mode(False)
-            self.controls.set_anim_playing(False)
-            _sync_animation_toolbar(self, False)
-            self.controls.hide()
-            Window._set_toolbar_actions_visible(self, self._main_toolbar_actions, False)
-            Window._set_toolbar_actions_visible(
-                self, self._jupyter_toolbar_actions, True
-            )
-            self.main_stack.setCurrentWidget(self.jupyter_console_panel)
-            return
+    def _jupyter_toolbar_should_be_visible(self):
+        return _panel_visible_to_user(self, "jupyter_console_panel")
 
-        self.main_stack.setCurrentWidget(self.workspace_dock_area)
-        Window._set_toolbar_actions_visible(self, self._jupyter_toolbar_actions, False)
-        Window._set_toolbar_actions_visible(self, self._main_toolbar_actions, True)
-        self.controls.show()
-        if self._normal_splitter_sizes is not None:
-            self.main_splitter.setSizes(self._normal_splitter_sizes)
-            self._normal_splitter_sizes = None
+    def _jupyter_console_has_focus(self):
+        if not _panel_visible_to_user(self, "jupyter_console_panel"):
+            return False
+
+        panel = getattr(self, "jupyter_console_panel", None)
+        focused = QtWidgets.QApplication.focusWidget()
+        return bool(
+            panel is not None
+            and focused is not None
+            and (focused is panel or panel.isAncestorOf(focused))
+        )
+
+    def _sync_jupyter_toolbar_visibility(self):
+        actions = getattr(self, "_jupyter_toolbar_actions", None)
+        if actions is None:
+            return
+        Window._set_toolbar_actions_visible(
+            self,
+            actions,
+            Window._jupyter_toolbar_should_be_visible(self),
+        )
+
+    def _sync_non_jupyter_controls_enabled(self):
+        enabled = not Window._jupyter_console_has_focus(self)
+        controls = getattr(self, "controls", None)
+        if controls is not None and hasattr(controls, "setEnabled"):
+            controls.setEnabled(enabled)
+
+        toolbar = getattr(self, "scene_toolbar", None)
+        jupyter_actions = set(getattr(self, "_jupyter_toolbar_actions", []))
+        if toolbar is None:
+            return
+        for action in toolbar.actions():
+            if action not in jupyter_actions:
+                action.setEnabled(enabled)
+
+    def _sync_jupyter_workspace_state(self):
+        Window._watch_workspace_tab_stacks(self)
+        Window._sync_jupyter_toolbar_visibility(self)
+        Window._sync_non_jupyter_controls_enabled(self)
 
     def _sync_toolbar_animation_action(self, playing):
         if not hasattr(self, "toolbar_anim_action"):
@@ -1279,6 +1337,41 @@ class Window(QtWidgets.QMainWindow):
                 return dock
         return None
 
+    def _connect_workspace_dock_signals(self):
+        docks = [getattr(self, "viewport_dock", None)]
+        docks.extend(getattr(self, "_panel_docks", {}).values())
+        for dock in docks:
+            signal = getattr(dock, "container_changed", None)
+            if signal is not None:
+                signal.connect(self._on_workspace_layout_changed)
+
+    def _on_workspace_layout_changed(self):
+        QtCore.QTimer.singleShot(0, self._sync_jupyter_workspace_state)
+
+    def _watch_workspace_tab_stacks(self):
+        dock_area = getattr(self, "workspace_dock_area", None)
+        if dock_area is None:
+            return
+
+        watched = getattr(self, "_workspace_tab_stacks", None)
+        if watched is None:
+            watched = weakref.WeakSet()
+            self._workspace_tab_stacks = watched
+
+        try:
+            containers, _docks = dock_area.findAll()
+        except (AttributeError, RuntimeError):
+            return
+
+        for container in containers:
+            stack = getattr(container, "stack", None)
+            if stack is None or stack in watched:
+                continue
+            stack.currentChanged.connect(
+                lambda _index: Window._sync_jupyter_workspace_state(self)
+            )
+            watched.add(stack)
+
     def _restore_workspace_dock_layout(self, dock_layout):
         dock_area = getattr(self, "workspace_dock_area", None)
         if dock_area is None:
@@ -1288,6 +1381,7 @@ class Window(QtWidgets.QMainWindow):
             dock_area.restoreState(dock_layout, missing="ignore", extra="bottom")
         except Exception:  # noqa: BLE001
             return
+        Window._sync_jupyter_workspace_state(self)
 
     def _panel_name_for_panel(self, panel):
         for panel_name, dock in getattr(self, "_panel_docks", {}).items():
@@ -1301,7 +1395,12 @@ class Window(QtWidgets.QMainWindow):
         if title is None:
             return
 
-        self._panel_docks[panel_name] = Window._build_panel_dock(self, title, panel)
+        dock = Window._build_panel_dock(self, title, panel)
+        signal = getattr(dock, "container_changed", None)
+        on_layout_changed = getattr(self, "_on_workspace_layout_changed", None)
+        if signal is not None and on_layout_changed is not None:
+            signal.connect(on_layout_changed)
+        self._panel_docks[panel_name] = dock
 
     def _open_panel_dock(self, panel, panel_name):
         dock = getattr(self, "_panel_docks", {}).get(panel_name)
@@ -1320,6 +1419,7 @@ class Window(QtWidgets.QMainWindow):
         container = dock.container()
         if hasattr(container, "raiseDock"):
             dock.raiseDock()
+        Window._sync_jupyter_workspace_state(self)
 
     def _close_panel_dock(self, panel):
         dock = Window._panel_dock_for(self, panel)
@@ -1345,14 +1445,16 @@ class Window(QtWidgets.QMainWindow):
                 Window._replace_closed_panel_dock(self, panel_name, panel)
             return
 
-        if panel is self.lyapunov_panel:
+        if panel is getattr(self, "lyapunov_panel", None):
             self._close_lyapunov_panel()
-        elif panel is self.projection_panel:
+        elif panel is getattr(self, "projection_panel", None):
             self._close_projections()
-        elif panel is self.poincare_panel:
+        elif panel is getattr(self, "poincare_panel", None):
             self._close_poincare()
-        elif panel is self.bifurcation_panel:
+        elif panel is getattr(self, "bifurcation_panel", None):
             self._close_bifurcation()
+        elif panel is getattr(self, "jupyter_console_panel", None):
+            self._close_jupyter_console()
 
         if panel_name is not None:
             Window._replace_closed_panel_dock(self, panel_name, panel)
@@ -1451,16 +1553,22 @@ class Window(QtWidgets.QMainWindow):
 
     def _close_jupyter_console(self):
         self.jupyter_console_panel.hide()
-        self._set_jupyter_console_mode(False)
+        Window._close_panel_dock(self, self.jupyter_console_panel)
+        Window._sync_jupyter_workspace_state(self)
         _sync_panel_toolbar(self)
 
     def _toggle_jupyter_console(self):
-        if self.jupyter_console_panel.isVisible():
+        if _panel_visible(self, "jupyter_console_panel"):
             self._close_jupyter_console()
         else:
             self.jupyter_console_panel.ensure_console()
-            self.jupyter_console_panel.show()
-            self._set_jupyter_console_mode(True)
+            Window._open_panel_dock(
+                self,
+                self.jupyter_console_panel,
+                "jupyter_console_panel",
+            )
+            self.jupyter_console_panel.focus_console()
+            Window._sync_jupyter_workspace_state(self)
             _sync_panel_toolbar(self)
 
     def closeEvent(self, a0):

@@ -1,9 +1,10 @@
 """Adapted from the Rich Jupyter Console pyqtgraph example"""
 
 import pyqtgraph as pg
-from pyqtgraph.dockarea.Dock import Dock
-from pyqtgraph.dockarea.DockArea import DockArea
 from pyqtgraph.Qt import QtCore, QtWidgets
+
+from .docking import AreaBoundDock as Dock
+from .docking import AreaBoundDockArea as DockArea
 
 try:
     from qtconsole import inprocess
@@ -51,6 +52,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self._layout.addWidget(self.dock_area)
 
         self.plot_widget = pg.PlotWidget()
+        self.plot_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self.plot_widget.showGrid(x=True, y=True, alpha=0.25)
         self.plot_widget.setLabel("bottom", "x")
         self.plot_widget.setLabel("left", "y")
@@ -83,6 +85,12 @@ class JupyterConsolePanel(QtWidgets.QWidget):
 
         self._console = _RichJupyterConsole(self._namespace_factory(), self)
         self._console_layout.addWidget(self._console)
+
+    def focus_console(self):
+        if self._console is not None:
+            self._console.setFocus()
+        else:
+            self.plot_widget.setFocus()
 
     def shutdown_kernel(self):
         if self._console is not None:
