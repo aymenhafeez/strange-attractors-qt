@@ -751,7 +751,16 @@ class Window(QtWidgets.QMainWindow):
         reset_session_action.triggered.connect(self._reset_saved_session)
         self.tools_button.setMenu(tools_menu)
         toolbar.addWidget(self.tools_button)
+
+        toolbar.addSeparator()
+        spacer = QtWidgets.QWidget()
+        spacer.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
+        toolbar.addWidget(spacer)
         self._build_jupyter_toolbar_actions(toolbar)
+
         self._sync_toolbar_panel_actions()
 
     def _add_checked_toolbar_action(self, toolbar, text, checkbox, tooltip):
@@ -858,13 +867,6 @@ class Window(QtWidgets.QMainWindow):
                     self, toolbar, "ViewBox options", view_menu
                 )
             )
-
-        spacer = QtWidgets.QWidget()
-        spacer.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Preferred,
-        )
-        self._jupyter_toolbar_actions.append(toolbar.addWidget(spacer))
 
         Window._set_toolbar_actions_visible(self, self._jupyter_toolbar_actions, False)
 
