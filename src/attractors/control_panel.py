@@ -85,15 +85,16 @@ class ControlPanel(QtWidgets.QWidget):
         bifurcation_action = tools_menu.addAction("Bifurcation diagram")
         bifurcation_action.triggered.connect(self.bifurcation_requested)
         poincare_action = tools_menu.addAction("Poincaré section")
+        poincare_action.triggered.connect(self.poincare_requested)
         jupyter_console_action = tools_menu.addAction("Jupyter console")
         jupyter_console_action.triggered.connect(self.jupyter_console_requested)
-        poincare_action.triggered.connect(self.poincare_requested)
         tools_menu.addSeparator()
         open_preset_folder_action = tools_menu.addAction("Open preset folder")
         open_preset_folder_action.triggered.connect(self.preset_folder_requested)
         reset_session_action = tools_menu.addAction("Reset saved session")
         reset_session_action.triggered.connect(self.session_reset_requested)
         self.tools_button.setMenu(tools_menu)
+        self.tools_button.setVisible(False)
 
         options.addWidget(self.dropdown)
         options.addWidget(self.tools_button)
@@ -110,6 +111,7 @@ class ControlPanel(QtWidgets.QWidget):
 
         self.anim_button = QtWidgets.QPushButton("▶ Play")
         self.anim_button.clicked.connect(self.animation_toggled)
+        self.anim_button.setVisible(False)
         self.controls_layout.addWidget(self.anim_button)
 
         options_row = QtWidgets.QHBoxLayout()
@@ -137,7 +139,10 @@ class ControlPanel(QtWidgets.QWidget):
         self.orbit_mode.toggled.connect(self.orbit_toggled.emit)
         options_row.addWidget(self.orbit_mode)
 
-        self.controls_layout.addLayout(options_row)
+        self.scene_options_wrapper = QtWidgets.QWidget()
+        self.scene_options_wrapper.setLayout(options_row)
+        self.scene_options_wrapper.setVisible(False)
+        self.controls_layout.addWidget(self.scene_options_wrapper)
 
         alpha_row = QtWidgets.QHBoxLayout()
         alpha_row.setSpacing(10)
@@ -239,9 +244,10 @@ class ControlPanel(QtWidgets.QWidget):
         self.compute_lyapunov_button.clicked.connect(self.lyapunov_requested.emit)
         lyapunov_row.addWidget(self.auto_lyapunov_check)
         lyapunov_row.addWidget(self.compute_lyapunov_button)
-        lyapunov_wrapper = QtWidgets.QWidget()
-        lyapunov_wrapper.setLayout(lyapunov_row)
-        self.controls_layout.addWidget(lyapunov_wrapper)
+        self.lyapunov_wrapper = QtWidgets.QWidget()
+        self.lyapunov_wrapper.setLayout(lyapunov_row)
+        self.lyapunov_wrapper.setVisible(False)
+        self.controls_layout.addWidget(self.lyapunov_wrapper)
 
         self.controls_grid = QtWidgets.QGridLayout()
         self.controls_grid.setSpacing(6)
@@ -257,6 +263,9 @@ class ControlPanel(QtWidgets.QWidget):
         self.controls_grid.addWidget(self.reset_camera_button, 0, 1)
         self.controls_grid.addWidget(self.fit_camera_button, 1, 0)
         self.controls_grid.addWidget(self.save_button, 1, 1)
+        self.scene_actions_wrapper = QtWidgets.QWidget()
+        self.scene_actions_wrapper.setLayout(self.controls_grid)
+        self.scene_actions_wrapper.setVisible(False)
 
         self.preset_toggle_btn = QtWidgets.QPushButton("Presets ▸")
         self.preset_toggle_btn.clicked.connect(self._toggle_preset_content)
@@ -304,7 +313,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.custom_panel = CustomPanel()
         self.custom_panel.setVisible(False)
 
-        self.controls_layout.addLayout(self.controls_grid)
+        self.controls_layout.addWidget(self.scene_actions_wrapper)
         self.controls_layout.addWidget(self.preset_toggle_btn)
         self.controls_layout.addWidget(self.preset_content)
         self.controls_layout.addWidget(self.status_label)
