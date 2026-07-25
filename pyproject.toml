@@ -21,6 +21,12 @@ dependencies = [
     "scipy>=1.18.0",
 ]
 
+[project.optional-dependencies]
+jupyter-console = [
+    "ipykernel>=7.1.0",
+    "qtconsole>=5.7.0",
+]
+
 [project.scripts]
 strange-attractors = "attractors.__main__:main"
 
