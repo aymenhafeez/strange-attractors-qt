@@ -3,26 +3,26 @@ import numpy as np
 
 
 @numba.njit(nogil=True)
-def _numerical_jacobian(x, y, z, eq, params, eps=1e-6):
+def _numerical_jacobian(x, y, z, eq, params, t=0.0, eps=1e-6):
     xyz = np.array([x, y, z])
-    f0 = eq(xyz, 0.0, params)
+    f0 = eq(xyz, t, params)
     J = np.zeros((3, 3))
     xyz0 = np.array([x + eps, y, z])
     xyz1 = np.array([x, y + eps, z])
     xyz2 = np.array([x, y, z + eps])
-    J[:, 0] = (eq(xyz0, 0.0, params) - f0) / eps
-    J[:, 1] = (eq(xyz1, 0.0, params) - f0) / eps
-    J[:, 2] = (eq(xyz2, 0.0, params) - f0) / eps
+    J[:, 0] = (eq(xyz0, t, params) - f0) / eps
+    J[:, 1] = (eq(xyz1, t, params) - f0) / eps
+    J[:, 2] = (eq(xyz2, t, params) - f0) / eps
 
     return J
 
 
 @numba.njit(nogil=True)
-def _augmented_rhs(state, params, eq):
+def _augmented_rhs(state, t, params, eq):
     x, y, z = state[0], state[1], state[2]
     xyz = np.array([x, y, z])
-    dxdydz = eq(xyz, 0.0, params)
-    J = _numerical_jacobian(x, y, z, eq, params)
+    dxdydz = eq(xyz, t, params)
+    J = _numerical_jacobian(x, y, z, eq, params, t)
     theta = state[3:].reshape(3, 3)
     d_theta = J @ theta
     out = np.zeros(12)
@@ -33,11 +33,11 @@ def _augmented_rhs(state, params, eq):
 
 
 @numba.njit(nogil=True)
-def _rk4_step(state, dt, params, eq):
-    k1 = _augmented_rhs(state, params, eq)
-    k2 = _augmented_rhs(state + 0.5 * dt * k1, params, eq)
-    k3 = _augmented_rhs(state + 0.5 * dt * k2, params, eq)
-    k4 = _augmented_rhs(state + dt * k3, params, eq)
+def _rk4_step(state, t, dt, params, eq):
+    k1 = _augmented_rhs(state, t, params, eq)
+    k2 = _augmented_rhs(state + 0.5 * dt * k1, t + 0.5 * dt, params, eq)
+    k3 = _augmented_rhs(state + 0.5 * dt * k2, t + 0.5 * dt, params, eq)
+    k4 = _augmented_rhs(state + dt * k3, t + dt, params, eq)
 
     return state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
@@ -90,7 +90,8 @@ def compute_lyapunov(
     lyap_hist = np.empty((n_gs, 3))
 
     for i in range(n):
-        state = _rk4_step(state, dt, params, equation)
+        t = t_min + i * dt
+        state = _rk4_step(state, t, dt, params, equation)
 
         if (i + 1) % gs_interval == 0:
             state[3:], sums = _gram_schmidt(state[3:])

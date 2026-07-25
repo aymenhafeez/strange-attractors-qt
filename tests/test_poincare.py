@@ -1,7 +1,16 @@
 import numpy as np
 import pytest
+from pyqtgraph.Qt import QtWidgets
 
-from attractors.poincare_panel import compute_poincare_crossings
+from attractors.poincare_panel import compute_poincare_crossings, PoincarePanel
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        app = QtWidgets.QApplication([])
+    return app
 
 
 def test_returns_empty_arrays_when_no_crossings():
@@ -125,3 +134,18 @@ def test_plane_z_returns_xy_coordinates():
 
     assert h == pytest.approx([15.0])
     assert v == pytest.approx([150.0])
+
+
+def test_cancel_solve_marks_worker_cancelled_and_clears_reference(qapp):
+    panel = PoincarePanel()
+
+    class Worker:
+        _cancel = False
+
+    worker = Worker()
+    panel._worker = worker
+
+    panel.cancel_solve()
+
+    assert worker._cancel is True
+    assert panel._worker is None

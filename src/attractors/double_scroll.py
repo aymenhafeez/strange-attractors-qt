@@ -25,7 +25,7 @@ _double_scroll_attractor = AttractorConfig(
     ],
     initial_conditions=[0.1, 2, 0.1],
     time_defaults={"t_min": 0, "t_max": 500, "n": 100000},
-    camera_distance=5,
+    camera_distance=13,
     camera_elevation=20,
     camera_azimuth=-40,
     pan=0,

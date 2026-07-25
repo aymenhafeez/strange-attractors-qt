@@ -1,7 +1,9 @@
 import numpy as np
-from pyqtgraph.Qt.QtCore import QRunnable, pyqtSignal, QObject
+from pyqtgraph.Qt.QtCore import QObject, QRunnable, pyqtSignal
 
 from .solver import solve_rk4
+
+SWEEP_DIRECTIONS = 2
 
 
 class _BifurcationSignals(QObject):
@@ -22,6 +24,7 @@ class BifurcationWorker(QRunnable):
         transient_frac,
         axis,
         t_max,
+        t_min=0,
     ):
         super().__init__()
         self.config = config
@@ -32,6 +35,7 @@ class BifurcationWorker(QRunnable):
         self.transient_frac = transient_frac
         self.axis = axis
         self.t_max = t_max
+        self.t_min = t_min
         self.signals = _BifurcationSignals()
         self._cancel = False
 
@@ -39,7 +43,14 @@ class BifurcationWorker(QRunnable):
         all_vals = []
         all_peaks = []
         n_params = len(self.param_values)
+        if n_params == 0:
+            self.signals.finished.emit()
+            return
+
+        emit_interval = max(1, n_params // 20)
+        last_emitted_count = 0
         turnround_ic = None
+        cancelled = False
 
         for sweep_idx, param_seq in enumerate(
             [
@@ -48,14 +59,17 @@ class BifurcationWorker(QRunnable):
             ]
         ):
             ic = turnround_ic
-            cancelled = False
             for i, val in enumerate(param_seq):
                 if self._cancel:
                     cancelled = True
                     break
 
-                if i % max(1, n_params // 20) == 0:
-                    progress = (sweep_idx * n_params + i) / (2 * n_params) * 100
+                if i % emit_interval == 0:
+                    progress = (
+                        (sweep_idx * n_params + i)
+                        / (SWEEP_DIRECTIONS * n_params)
+                        * 100
+                    )
                     self.signals.progress.emit(int(progress))
 
                 try:
@@ -74,7 +88,7 @@ class BifurcationWorker(QRunnable):
                     sol = solve_rk4(
                         self.config.equation,
                         y0,
-                        0,
+                        self.t_min,
                         self.t_max,
                         n_eff,
                         pvals,
@@ -100,8 +114,14 @@ class BifurcationWorker(QRunnable):
                         )
                         all_peaks.append(peaks)
 
-                except Exception as e:
-                    self.signals.error.emit(f"Failed at {self.sweep_param}={val}: {e}")
+                    if len(all_vals) - last_emitted_count >= emit_interval:
+                        self.signals.chunk_ready.emit(np.array(all_vals), all_peaks)
+                        last_emitted_count = len(all_vals)
+
+                except Exception as exc:  # noqa: BLE001
+                    self.signals.error.emit(
+                        f"Failed at {self.sweep_param}={val}: {exc}"
+                    )
                     cancelled = True
                     break
 
@@ -110,5 +130,6 @@ class BifurcationWorker(QRunnable):
             if sweep_idx == 0:
                 turnround_ic = ic
 
-        self.signals.chunk_ready.emit(np.array(all_vals), all_peaks)
+        if not cancelled:
+            self.signals.chunk_ready.emit(np.array(all_vals), all_peaks)
         self.signals.finished.emit()

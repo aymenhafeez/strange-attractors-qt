@@ -1,7 +1,4 @@
-from .style import SLIDER_PARAMS
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
-
-from .style import CUSTOM_PANEL, CUSTOM_TOGGLE, NO_BORDER
 
 DEFAULT_PALETTE = [
     QtGui.QColor("#3b82f6"),
@@ -15,6 +12,8 @@ DEFAULT_PALETTE = [
 ]
 
 MAX_TRAJECTORIES = 8
+SPIN_WIDTH = 64
+ICON_BUTTON_SIZE = 20
 
 
 class _TrajectoryRow(QtWidgets.QWidget):
@@ -37,7 +36,7 @@ class _TrajectoryRow(QtWidgets.QWidget):
 
         self._colour = colour
         self.colour_btn = QtWidgets.QPushButton()
-        self.colour_btn.setFixedSize(24, 24)
+        self.colour_btn.setFixedSize(ICON_BUTTON_SIZE, ICON_BUTTON_SIZE)
         self._apply_colour_btn()
         self.colour_btn.clicked.connect(self._pick_colour)
         layout.addWidget(self.colour_btn)
@@ -49,36 +48,35 @@ class _TrajectoryRow(QtWidgets.QWidget):
             spin.setDecimals(3)
             spin.setSingleStep(0.1)
             spin.setValue(val)
-            spin.setFixedWidth(84)
+            spin.setFixedWidth(SPIN_WIDTH)
             spin.setFixedHeight(28)
             spin.valueChanged.connect(self.changed)
             layout.addWidget(spin)
             self.spins.append(spin)
 
         if removeable:
-            remove_btn = QtWidgets.QPushButton("×")
-            remove_btn.setFixedSize(24, 24)
-            remove_btn.setStyleSheet("color: #888; border: none; font-size: 15px;")
+            remove_btn = QtWidgets.QToolButton()
+            remove_btn.setText("×")
+            remove_btn.setAutoRaise(True)
+            remove_btn.setFixedSize(ICON_BUTTON_SIZE, ICON_BUTTON_SIZE)
             remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
             layout.addWidget(remove_btn)
         else:
-            layout.addSpacing(28)
+            layout.addSpacing(ICON_BUTTON_SIZE + 4)
 
         alpha_row = QtWidgets.QHBoxLayout()
         alpha_row.setContentsMargins(0, 0, 0, 0)
         alpha_row.setSpacing(6)
-        alpha_row.addSpacing(30)
+        alpha_row.addSpacing(ICON_BUTTON_SIZE + 6)
         alpha_label = QtWidgets.QLabel("α")
-        alpha_label.setStyleSheet(NO_BORDER)
         alpha_row.addWidget(alpha_label)
         self.alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.alpha_slider.setRange(0, 100)
         self.alpha_slider.setValue(100)
         self.alpha_slider.setFixedHeight(18)
-        self.alpha_slider.setStyleSheet(NO_BORDER)
         self.alpha_slider.valueChanged.connect(self.style_changed)
         alpha_row.addWidget(self.alpha_slider)
-        alpha_row.addSpacing(28)
+        alpha_row.addSpacing(ICON_BUTTON_SIZE + 4)
         outer.addLayout(alpha_row)
 
     def _apply_colour_btn(self):
@@ -108,6 +106,17 @@ class _TrajectoryRow(QtWidgets.QWidget):
             spin.setValue(val)
             spin.blockSignals(False)
 
+    def set_colour(self, colour: QtGui.QColor):
+        if colour.isValid():
+            self._colour = colour
+            self._apply_colour_btn()
+
+    def set_alpha(self, alpha: float):
+        value = max(0, min(100, round(float(alpha) * 100)))
+        self.alpha_slider.blockSignals(True)
+        self.alpha_slider.setValue(value)
+        self.alpha_slider.blockSignals(False)
+
 
 class TrajectoryPanel(QtWidgets.QWidget):
     trajectories_changed = QtCore.pyqtSignal(list)
@@ -119,21 +128,18 @@ class TrajectoryPanel(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self.toggle_btn = QtWidgets.QPushButton("▶ Trajectories")
-        self.toggle_btn.setStyleSheet(CUSTOM_TOGGLE)
+        self.toggle_btn = QtWidgets.QPushButton("Trajectories ▸")
         self.toggle_btn.clicked.connect(self._toggle_content)
         layout.addWidget(self.toggle_btn)
 
         self._content = QtWidgets.QWidget()
         self._content.setObjectName("customPanelContent")
-        self._content.setStyleSheet(CUSTOM_PANEL)
         content_layout = QtWidgets.QVBoxLayout(self._content)
         content_layout.setContentsMargins(8, 8, 8, 8)
         content_layout.setSpacing(8)
 
         enable_row = QtWidgets.QHBoxLayout()
         self._enable_check = QtWidgets.QCheckBox("Enable multi-trajectory")
-        self._enable_check.setStyleSheet("border: none; color: white;")
         self._enable_check.setChecked(False)
         self._enable_check.toggled.connect(self._on_enable_toggled)
         enable_row.addWidget(self._enable_check)
@@ -148,11 +154,10 @@ class TrajectoryPanel(QtWidgets.QWidget):
 
         header = QtWidgets.QHBoxLayout()
         header.setSpacing(6)
-        header.addSpacing(28)
+        header.addSpacing(ICON_BUTTON_SIZE + 4)
         for axis in ("x₀", "y₀", "z₀"):
             lbl = QtWidgets.QLabel(axis)
-            lbl.setStyleSheet(NO_BORDER)
-            lbl.setFixedWidth(84)
+            lbl.setFixedWidth(SPIN_WIDTH)
             lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             header.addWidget(lbl)
         rows_container_layout.addLayout(header)
@@ -162,6 +167,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         rows_container_layout.addLayout(self._rows_layout)
 
         self._rows: list[_TrajectoryRow] = []
+        self._suppress_emit = False
 
         content_layout.addWidget(self._rows_container)
 
@@ -176,7 +182,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
     def _toggle_content(self):
         visible = not self._content.isVisible()
         self._content.setVisible(visible)
-        self.toggle_btn.setText("▼ Trajectories" if visible else "▶ Trajectories")
+        self.toggle_btn.setText("Trajectories ▾" if visible else "Trajectories ▸")
         self.adjustSize()
 
     def _on_enable_toggled(self, enabled: bool):
@@ -227,9 +233,13 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self.adjustSize()
 
     def _emit(self):
+        if self._suppress_emit:
+            return
         self.trajectories_changed.emit(self.get_trajectories())
 
     def _emit_styles(self):
+        if self._suppress_emit:
+            return
         self.styles_changed.emit(self.get_trajectories())
 
     def get_trajectories(self) -> list[dict]:
@@ -239,3 +249,69 @@ class TrajectoryPanel(QtWidgets.QWidget):
             {"ic": r.get_ic(), "colour": r.get_colour(), "alpha": r.get_alpha()}
             for r in self._rows
         ]
+
+    def get_session_state(self) -> dict:
+        return {
+            "enabled": self._enable_check.isChecked(),
+            "rows": [
+                {
+                    "ic": [float(v) for v in row.get_ic()],
+                    "colour": row.get_colour().name(),
+                    "alpha": float(row.get_alpha()),
+                }
+                for row in self._rows
+            ],
+        }
+
+    def set_session_state(self, state, config):
+        if not isinstance(state, dict):
+            return
+
+        rows = state.get("rows")
+        if not isinstance(rows, list) or not rows:
+            return
+
+        self._suppress_emit = True
+        try:
+            for row in self._rows:
+                self._rows_layout.removeWidget(row)
+                row.deleteLater()
+            self._rows.clear()
+
+            for idx, row_state in enumerate(rows[:MAX_TRAJECTORIES]):
+                ic = _ic_from_session_row(row_state, config.initial_conditions)
+                self._add_row(ic=ic, removeable=idx > 0)
+                row = self._rows[-1]
+                row_data = row_state if isinstance(row_state, dict) else {}
+
+                colour = QtGui.QColor(str(row_data.get("colour", "")))
+                row.set_colour(colour)
+                try:
+                    row.set_alpha(float(row_data.get("alpha", 1.0)))
+                except (TypeError, ValueError):
+                    row.set_alpha(1.0)
+
+            enabled = bool(state.get("enabled", False))
+            with QtCore.QSignalBlocker(self._enable_check):
+                self._enable_check.setChecked(enabled)
+            self._rows_container.setEnabled(enabled)
+            self._add_btn.setEnabled(enabled)
+        finally:
+            self._suppress_emit = False
+
+        self._resize_to_content()
+        self._emit()
+
+
+def _ic_from_session_row(row_state, fallback):
+    if not isinstance(row_state, dict):
+        return list(fallback)
+
+    raw_ic = row_state.get("ic")
+    if not isinstance(raw_ic, list) or len(raw_ic) != 3:
+        return list(fallback)
+
+    try:
+        return [float(v) for v in raw_ic]
+    except (TypeError, ValueError):
+        return list(fallback)

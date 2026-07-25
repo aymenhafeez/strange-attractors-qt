@@ -1,8 +1,8 @@
 import numpy as np
 import pyqtgraph as pg
+from pyqtgraph.exporters import ImageExporter
 from pyqtgraph.Qt import QtCore, QtWidgets
 from pyqtgraph.Qt.QtCore import QThreadPool
-from pyqtgraph.exporters import ImageExporter
 
 from .bifurcation_worker import BifurcationWorker
 
@@ -31,12 +31,6 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.var_combo = QtWidgets.QComboBox()
         self.var_combo.addItems(["x", "y", "z"])
         row1.addWidget(self.var_combo)
-
-        row1.addStretch()
-        close_btn = QtWidgets.QPushButton("\u00d7")
-        close_btn.setFixedWidth(24)
-        close_btn.clicked.connect(self.close_requested.emit)
-        row1.addWidget(close_btn)
 
         layout.addLayout(row1)
 
@@ -176,8 +170,9 @@ class BifurcationPanel(QtWidgets.QWidget):
         self._sweep_gen += 1
         gen = self._sweep_gen
 
-        t_max = self.config.time_defaults["t_max"] * 4
-        n = self.config.time_defaults["n"]
+        t_max = self.config.time_defaults.t_max * 4
+        t_min = self.config.time_defaults.t_min
+        n = self.config.time_defaults.n
 
         worker = BifurcationWorker(
             self.config,
@@ -188,6 +183,7 @@ class BifurcationPanel(QtWidgets.QWidget):
             transient,
             axis,
             t_max,
+            t_min,
         )
         worker.signals.chunk_ready.connect(
             lambda vals, peaks, g=gen: self._on_chunk_ready(vals, peaks, g)
@@ -199,6 +195,9 @@ class BifurcationPanel(QtWidgets.QWidget):
         QThreadPool.globalInstance().start(worker)
 
     def _cancel_sweep(self):
+        self.cancel_sweep()
+
+    def cancel_sweep(self):
         if self._worker:
             self._worker._cancel = True
             self._worker = None

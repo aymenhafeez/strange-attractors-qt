@@ -1,10 +1,9 @@
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
-from pyqtgraph.Qt.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject
+from pyqtgraph.Qt.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
 from .solver import solve_attractor
-
 
 _PLANE_COLS = {"x": 0, "y": 1, "z": 2}
 _AXIS_DATA = {"x": (1, 2), "y": (0, 2), "z": (0, 1)}
@@ -61,9 +60,9 @@ class _PoincareWorker(QRunnable):
             sol = solve_attractor(self.config, self.values, self.n, t_max=self.t_max)
             if not self._cancel:
                 self.signals.result_ready.emit(sol)
-        except Exception as e:
+        except Exception as exc:  # noqa: BLE001
             if not self._cancel:
-                self.signals.error.emit(str(e))
+                self.signals.error.emit(str(exc))
         finally:
             self.signals.finished.emit()
 
@@ -83,7 +82,7 @@ class PoincarePanel(QtWidgets.QWidget):
         self.setMinimumHeight(120)
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(4)
 
         param_row = QtWidgets.QHBoxLayout()
@@ -112,11 +111,6 @@ class PoincarePanel(QtWidgets.QWidget):
         self.auto_check.setChecked(True)
         self.auto_check.setToolTip("Auto solve when attractor parameters change")
         param_row.addWidget(self.auto_check)
-
-        close_btn = QtWidgets.QPushButton("×")
-        close_btn.setFixedWidth(24)
-        close_btn.clicked.connect(self.close_requested.emit)
-        param_row.addWidget(close_btn)
 
         layout.addLayout(param_row)
 
@@ -215,6 +209,9 @@ class PoincarePanel(QtWidgets.QWidget):
         QThreadPool.globalInstance().start(worker)
 
     def _cancel_solve(self):
+        self.cancel_solve()
+
+    def cancel_solve(self):
         if self._worker is not None:
             self._worker._cancel = True
             self._worker = None

@@ -16,6 +16,14 @@ def _linear_diagonal_system(state, t, params):
     return np.array([a * x, b * y, c * z])
 
 
+@numba.njit(nogil=True)
+def _time_dependent_diagonal_system(state, t, params):
+    a, b, c = params
+    x, y, z = state
+
+    return np.array([(a + t) * x, b * y, c * z])
+
+
 def test_numerical_jacobian_matches_known_linear_system():
     params = np.array([0.1, -0.2, 0.3], dtype=np.float64)
 
@@ -74,6 +82,24 @@ def test_compute_lyapunov_recovers_linear_system_exponents():
     assert ky_dim == pytest.approx(0.0)
     assert t_hist.shape == (20,)
     assert lyap_hist.shape == (20, 3)
+
+
+def test_compute_lyapunov_uses_current_time_for_time_dependent_system():
+    params = np.array([-2.0, -3.0, -4.0], dtype=np.float64)
+    initial_conditions = np.array([1.0, 1.0, 1.0], dtype=np.float64)
+
+    lyap, ky_dim, _, _ = compute_lyapunov(
+        _time_dependent_diagonal_system,
+        initial_conditions,
+        params,
+        0.0,
+        2.0,
+        200,
+        gs_interval=10,
+    )
+
+    assert lyap == pytest.approx([-1.0, -3.0, -4.0], abs=1e-6)
+    assert ky_dim == pytest.approx(0.0)
 
 
 def test_compute_lyapunov_history_tracks_convergence():

@@ -1,48 +1,23 @@
-import numpy as np
-import pyqtgraph as pg
 import pyqtgraph.opengl as gl
-from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .custom_panel import CustomPanel
-from .style import CONTAINER, EQUATION_LABEL, LYAPUNOV_PLOT
-from .trajectory_panel import TrajectoryPanel
-
-
-N_BINS = 96
+from .animation_controller import AnimationController
+from .camera_controller import CameraController
+from .grid_overlay import GridOverlay
+from .projection_emitter import ProjectionEmitter
+from .style import CONTAINER
+from .trajectory_renderer import TrajectoryRenderer
+from .viewport_overlay import ViewportOverlay
 
 
 class ViewManager(QtCore.QObject):
     animation_finished = QtCore.pyqtSignal()
-    trajectories_changed = QtCore.pyqtSignal(list)
-    styles_changed = QtCore.pyqtSignal(list)
     projections_data = QtCore.pyqtSignal(object, object, object)
-    custom_compiled = QtCore.pyqtSignal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self._solutions = None
-        self._scatters = []
-        self._lines = []
-        self._trajectories = []
-        self._base_colour = (1.0, 1.0, 1.0)
-        self._current_alpha = 1.0
-        self._line_mode = False
-        self._trail_mode = False
-        self._heads = []
-        self._heads_visible = True
         self._repositioning = False
-        self._anim_frame = 0
-        self._traj_tail_length = 5000
-        self._traj_tail_enabled = False
-        self._anim_step = 200
-        self._grid_visible = True
-        self.grid_half_size = 30.0
-        self.grid_items = []
-
-        self._poincare_axis = None
-        self._poincare_value = 0.0
-        self._poincare_plane_items = []
 
         self.container = QtWidgets.QWidget()
         self.container.setStyleSheet(CONTAINER)
@@ -51,499 +26,166 @@ class ViewManager(QtCore.QObject):
         container_layout.setSpacing(0)
 
         self.view = gl.GLViewWidget()
+        self.camera_controller = CameraController(self.view, self)
+        self.grid_overlay = GridOverlay(self.view)
         container_layout.addWidget(self.view, 0, 0)
         container_layout.setRowStretch(0, 1)
         container_layout.setColumnStretch(0, 1)
 
-        self.equation_label = QtWidgets.QLabel("")
-        self.equation_label.setStyleSheet(EQUATION_LABEL)
-        container_layout.addWidget(
-            self.equation_label,
-            0,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignBottom,
+        self.viewport_overlay = ViewportOverlay(
+            self.container,
+            container_layout,
+            self.view,
         )
+        self.equation_label = self.viewport_overlay.equation_label
 
-        self.lyapunov_label = QtWidgets.QLabel("")
-        self.lyapunov_label.setStyleSheet(EQUATION_LABEL)
+        self.projection_emitter = ProjectionEmitter(self.projections_data)
 
-        self.lyapunov_plot = pg.PlotWidget()
-        self.lyapunov_plot.setFixedSize(300, 150)
-        self.lyapunov_plot.setBackground(None)
-        self.lyapunov_plot.hideAxis("bottom")
-        self.lyapunov_plot.hideAxis("left")
-        self.lyapunov_plot.setStyleSheet(LYAPUNOV_PLOT)
-        self.curve_l1 = self.lyapunov_plot.plot([], [], pen=(255, 100, 100))
-        self.curve_l2 = self.lyapunov_plot.plot([], [], pen=(100, 255, 100))
-        self.curve_l3 = self.lyapunov_plot.plot([], [], pen=(100, 100, 255))
-
-        self.lyapunov_container = QtWidgets.QWidget()
-        self.lyapunov_container.setStyleSheet(LYAPUNOV_PLOT)
-        lyap_layout = QtWidgets.QVBoxLayout(self.lyapunov_container)
-        lyap_layout.setContentsMargins(0, 0, 0, 0)
-        lyap_layout.setSpacing(2)
-        lyap_layout.addWidget(
-            self.lyapunov_plot, alignment=QtCore.Qt.AlignmentFlag.AlignBottom
+        self.animation_controller = AnimationController(
+            self._render_animation_frame,
+            self._sync_head_visibility,
+            self.animation_finished.emit,
+            parent=self,
         )
-        lyap_layout.addWidget(
-            self.lyapunov_label, alignment=QtCore.Qt.AlignmentFlag.AlignRight
+        self.trajectory_renderer = TrajectoryRenderer(
+            self.view,
+            self.animation_controller.is_active,
         )
-        container_layout.addWidget(
-            self.lyapunov_container,
-            0,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignBottom,
-        )
-        self.lyapunov_container.setVisible(False)
-
-        self.custom_panel = CustomPanel(self.container)
-        self.custom_panel.compile_requested.connect(self._on_custom_compiled)
-        self.custom_panel.setVisible(False)
-        self.custom_panel.raise_()
-
-        self.trajectory_panel = TrajectoryPanel(self.container)
-        self.trajectory_panel.trajectories_changed.connect(
-            self._on_trajectories_changed
-        )
-        self.trajectory_panel.styles_changed.connect(self._on_styles_changed)
-        self.trajectory_panel.raise_()
-
-        self._timer = QtCore.QTimer()
-        self._timer.timeout.connect(self._animate_frame)
-
-    def _on_custom_compiled(self, config):
-        self.custom_compiled.emit(config)
-
-    def _on_trajectories_changed(self, trajectories):
-        self._trajectories = trajectories
-        self.trajectories_changed.emit(trajectories)
-
-    def _on_styles_changed(self, trajectories):
-        self._trajectories = trajectories
-        self.styles_changed.emit(trajectories)
 
     def get_solutions(self):
-        return self._solutions
+        return self.trajectory_renderer.solutions
 
-    def get_trajectories(self):
-        return self._trajectories
+    @property
+    def grid_half_size(self):
+        return self.grid_overlay.grid_half_size
+
+    @property
+    def grid_items(self):
+        return self.grid_overlay.grid_items
 
     def reposition_overlays(self):
         if self._repositioning:
             return
         self._repositioning = True
-        margin = 8
         self.view.lower()
-        self.custom_panel.adjustSize()
-        self.custom_panel.move(margin, margin)
-        self.custom_panel.raise_()
-        self.trajectory_panel.adjustSize()
-        x = self.container.width() - self.trajectory_panel.width() - margin
-        self.trajectory_panel.move(x, margin)
-        self.trajectory_panel.raise_()
         self._repositioning = False
 
     def build_grid(self, half_size):
-        for item in self.grid_items:
-            self.view.removeItem(item)
-        self.grid_items.clear()
-
-        is_visible = self._grid_visible
-
-        self.grid_half_size = half_size
-        ideal_spacing = half_size / 4
-        spacing = max(
-            1.0, round(ideal_spacing, -int(np.floor(np.log10(ideal_spacing))))
-        )
-        num_divisions = max(4, int(round(half_size * 2 / spacing)))
-        spacing = half_size * 2 / num_divisions
-
-        grid_faces = [
-            ("XY", [], (0, 0, -half_size)),
-            ("YZ", [(90, 1, 0, 0)], (0, -half_size, 0)),
-            ("XZ", [(90, 0, 1, 0)], (-half_size, 0, 0)),
-            ("YX", [], (0, 0, half_size)),
-            ("ZY", [(90, 1, 0, 0)], (0, half_size, 0)),
-            ("ZX", [(90, 0, 1, 0)], (half_size, 0, 0)),
-        ]
-        tick_positions = np.linspace(-half_size, half_size, num_divisions + 1)
-        tick_values = [round(v, 0) for v in tick_positions]
-
-        for i, (_, rotations, (dx, dy, dz)) in enumerate(grid_faces):
-            g = gl.GLGridItem()
-            g.setSize(x=half_size * 2, y=half_size * 2, z=1)
-            g.setSpacing(x=spacing, y=spacing, z=1)
-            for angle, *axis in rotations:
-                g.rotate(angle, *axis)
-            g.translate(dx, dy, dz)
-            self.view.addItem(g)
-            self.grid_items.append(g)
-            g.setVisible(is_visible)
-
-            if i < 3:
-                for val in tick_values:
-                    if abs(val) < 1e-5:
-                        continue
-                    offset = spacing * 0.3
-                    t1 = gl.GLTextItem(
-                        pos=[val, -offset, 0],
-                        text=str(val),
-                        color=(255, 255, 255, 100),
-                        font=QtGui.QFont("Sans", 10),
-                    )
-                    t2 = gl.GLTextItem(
-                        pos=[-offset, val, 0],
-                        text=str(val),
-                        color=(255, 255, 255, 100),
-                        font=QtGui.QFont("Sans", 10),
-                    )
-                    for angle, *axis in rotations:
-                        t1.rotate(angle, *axis)
-                        t2.rotate(angle, *axis)
-                    t1.translate(dx, dy, dz)
-                    t2.translate(dx, dy, dz)
-                    t1.setVisible(is_visible)
-                    t2.setVisible(is_visible)
-                    self.view.addItem(t1)
-                    self.view.addItem(t2)
-                    self.grid_items.append(t1)
-                    self.grid_items.append(t2)
-
-        if self._poincare_axis is not None:
-            self._update_poincare_plane()
+        self.grid_overlay.build_grid(half_size)
 
     def set_grid_visible(self, visible):
-        self._grid_visible = visible
-        for item in self.grid_items:
-            item.setVisible(visible)
+        self.grid_overlay.set_grid_visible(visible)
 
     def set_poincare_plane(self, axis, value):
-        self._poincare_axis = axis
-        self._poincare_value = value
-        self._update_poincare_plane()
+        self.grid_overlay.set_poincare_plane(axis, value)
 
     def remove_poincare_plane(self):
-        self._poincare_axis = None
-        for item in self._poincare_plane_items:
-            self.view.removeItem(item)
-        self._poincare_plane_items.clear()
-
-    def _update_poincare_plane(self):
-        for item in self._poincare_plane_items:
-            self.view.removeItem(item)
-        self._poincare_plane_items.clear()
-
-        if self._poincare_axis is None:
-            return
-
-        half = self.grid_half_size
-        axis = self._poincare_axis
-        value = self._poincare_value
-
-        if axis == "x":
-            verts = np.array(
-                [
-                    [value, -half, -half],
-                    [value, half, -half],
-                    [value, half, half],
-                    [value, -half, half],
-                ],
-                dtype=np.float64,
-            )
-        elif axis == "y":
-            verts = np.array(
-                [
-                    [-half, value, -half],
-                    [half, value, -half],
-                    [half, value, half],
-                    [-half, value, half],
-                ],
-                dtype=np.float64,
-            )
-        else:
-            verts = np.array(
-                [
-                    [-half, -half, value],
-                    [half, -half, value],
-                    [half, half, value],
-                    [-half, half, value],
-                ],
-                dtype=np.float64,
-            )
-
-        faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int32)
-        vc = np.full((4, 4), [1.0, 0.3, 0.3, 0.35], dtype=np.float32)
-
-        mesh = gl.GLMeshItem(
-            vertexes=verts,
-            faces=faces,
-            vertexColors=vc,
-            smooth=False,
-            glOptions="translucent",
-        )
-        self.view.addItem(mesh)
-        self._poincare_plane_items.append(mesh)
-
-        border_verts = np.array(
-            [
-                verts[0],
-                verts[1],
-                verts[2],
-                verts[3],
-                verts[0],
-            ],
-            dtype=np.float64,
-        )
-        border = gl.GLLinePlotItem(
-            pos=border_verts,
-            color=(1.0, 0.3, 0.3, 0.7),
-            width=1.5,
-            glOptions="translucent",
-        )
-        self.view.addItem(border)
-        self._poincare_plane_items.append(border)
+        self.grid_overlay.remove_poincare_plane()
 
     def sync_gl_items(self, n):
-        while len(self._scatters) < n:
-            scatter = gl.GLScatterPlotItem(size=1.0)
-            scatter.setGLOptions("additive")
-            scatter.setVisible(not self._line_mode)
-            self.view.addItem(scatter)
-            self._scatters.append(scatter)
-            line = gl.GLLinePlotItem()
-            line.setVisible(self._line_mode)
-            self.view.addItem(line)
-            self._lines.append(line)
-        while len(self._scatters) > n:
-            self.view.removeItem(self._scatters.pop())
-            self.view.removeItem(self._lines.pop())
-        while len(self._heads) < n:
-            head = gl.GLScatterPlotItem(size=20.0)
-            head.setGLOptions("additive")
-            self.view.addItem(head)
-            self._heads.append(head)
-        while len(self._heads) > n:
-            self.view.removeItem(self._heads.pop())
-        self._sync_head_visibility()
+        self.trajectory_renderer.sync_gl_items(n)
 
     def set_line_mode(self, checked):
-        self._line_mode = checked
-        for scatter, line in zip(self._scatters, self._lines):
-            line.setVisible(checked)
-            scatter.setVisible(not checked)
+        self.trajectory_renderer.set_line_mode(checked)
 
     def set_point_mode(self, checked):
-        self._heads_visible = checked
-        self._sync_head_visibility()
+        self.trajectory_renderer.set_point_mode(checked)
 
     def _sync_head_visibility(self):
-        visible = self._heads_visible and self._timer.isActive()
-        for h in self._heads:
-            h.setVisible(visible)
+        self.trajectory_renderer.sync_head_visibility()
 
     def set_alpha(self, val):
-        self._current_alpha = val / 100.0 if val > 1 else val
-        self.refresh_colours()
+        self.trajectory_renderer.set_alpha(val)
+
+    def set_anim_step(self, step):
+        self.animation_controller.set_step(step)
+
+    def set_orbit_mode(self, enabled):
+        self.camera_controller.set_orbit_mode(enabled)
+
+    def set_orbit_speed(self, speed):
+        self.camera_controller.set_orbit_speed(speed)
+
+    def _orbit_frame(self):
+        self.camera_controller._orbit_frame()
 
     def set_trajectories(self, trajectories):
-        self._trajectories = trajectories
+        self.trajectory_renderer.set_trajectories(trajectories)
 
     def set_info(self, config, values):
-        formatted_params = "  ".join(f"{k}: {v:.2f}" for k, v in sorted(values.items()))
-        equations = config.equation_text.replace("\n", "<br>")
-        text = (
-            f"<b>SYSTEM</b>: {config.name}<br>"
-            f"{equations}<br>"
-            f"<b>IC</b>: {config.initial_conditions}<br>"
-            f"<b>PARAMS</b>: {formatted_params}"
-        )
-        self.equation_label.setText(text)
-        self.equation_label.setVisible(True)
-        self.equation_label.setToolTip(config.description)
+        self.viewport_overlay.set_info(config, values)
 
     def _get_traj_colour_alpha(self, i):
-        traj = self._trajectories[i] if i < len(self._trajectories) else None
-        if traj is not None:
-            qc = traj["colour"]
-            base_colour = (qc.redF(), qc.greenF(), qc.blueF())
-            alpha = self._current_alpha * traj.get("alpha", 1.0)
-        else:
-            base_colour = self._base_colour
-            alpha = self._current_alpha
-        return base_colour, alpha
+        return self.trajectory_renderer.get_traj_colour_alpha(i)
 
     def _plot_trail(self, n, alpha=1.0, base_colour=None):
-        if base_colour is None:
-            base_colour = self._base_colour
-        colour = np.zeros((n, 4))
-        colour[:, 0] = np.linspace(0.2, base_colour[0], n)
-        colour[:, 1] = np.linspace(0.2, base_colour[1], n)
-        colour[:, 2] = np.linspace(0.5, base_colour[2], n)
-        colour[:, 3] = np.linspace(0.0, alpha, n)
-        return colour
+        return self.trajectory_renderer.plot_trail(n, alpha, base_colour)
+
+    def _get_colour_array(self, n, alpha, base_colour):
+        return self.trajectory_renderer.get_colour_array(n, alpha, base_colour)
 
     def refresh_colours(self):
-        if not self._solutions:
-            return
-        for i, sol in enumerate(self._solutions):
-            if i >= len(self._scatters):
-                break
-            _, c = self._get_traj_tail_data(i, sol)
-            self._scatters[i].setData(color=c)
-            self._scatters[i].setVisible(not self._line_mode)
-            self._lines[i].setData(color=c)
-            self._lines[i].setVisible(self._line_mode)
-            if i < len(self._heads):
-                self._heads[i].setData(color=c[-1:])
+        self.trajectory_renderer.refresh_colours()
 
     def display_solutions(self, solutions, is_partial):
-        if not is_partial:
-            self._solutions = solutions
+        self.trajectory_renderer.display_solutions(solutions, is_partial)
 
-        self.sync_gl_items(len(solutions))
-
-        for i, sol in enumerate(solutions):
-            segment, c = self._get_traj_tail_data(i, sol)
-            self._scatters[i].setData(pos=segment, color=c)
-            self._scatters[i].setVisible(not self._line_mode)
-            self._lines[i].setData(pos=segment, color=c)
-            self._lines[i].setVisible(self._line_mode)
-            if i < len(self._heads):
-                self._heads[i].setData(pos=segment[-1:], color=c[-1:])
+    def clear_solutions(self):
+        self.animation_controller.reset_frame()
+        self.trajectory_renderer.clear_solutions()
 
     def auto_adjust_grid(self, solutions):
-        if not solutions:
-            return
-        new_half = min(float(np.max(np.abs(solutions[0]))) * 3, 500.0)
-        if abs(new_half - self.grid_half_size) / max(self.grid_half_size, 1e-6) > 0.1:
-            self.build_grid(new_half)
+        self.grid_overlay.auto_adjust_grid(solutions)
 
     def set_camera(self, config):
-        self.view.setCameraPosition(
-            pos=QtGui.QVector3D(0, 0, 0),
-            distance=config.camera_distance,
-            elevation=config.camera_elevation,
-            azimuth=config.camera_azimuth,
-        )
-        self.view.opts["center"] = QtGui.QVector3D(
-            self.view.opts["center"].x(),
-            self.view.opts["center"].y(),
-            self.view.opts["center"].z() + config.pan,
-        )
+        self.camera_controller.set_camera(config)
 
-    def set_lyapunov_result(self, lyap, ky_dim, t_hist, lyap_hist):
-        self.lyapunov_label.setText(
-            f"λ = ({lyap[0]:+.2f}, {lyap[1]:+.2f}, {lyap[2]:+.2f})  D_KY = {ky_dim:.2f}"
-        )
-        self.lyapunov_container.setVisible(True)
-        self.curve_l1.setData(t_hist, lyap_hist[:, 0])
-        self.curve_l2.setData(t_hist, lyap_hist[:, 1])
-        self.curve_l3.setData(t_hist, lyap_hist[:, 2])
+    def get_camera_state(self):
+        return self.camera_controller.get_camera_state()
 
-    def clear_lyapunov(self):
-        self.lyapunov_label.setText("")
-        self.lyapunov_container.setVisible(False)
+    def set_camera_state(self, state):
+        return self.camera_controller.set_camera_state(state)
 
-    def reset_trajectory_panel(self, config):
-        self.trajectory_panel.reset(config)
+    def fit_camera_to_solutions(self):
+        self.camera_controller.fit_camera_to_solutions(self.get_solutions())
 
     def save_view_as_png(self):
-        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.container, "Save View as PNG", "", "PNG Files (*.png)"
-        )
-        if not filename:
-            return
-
-        img = self.view.grabFramebuffer()
-        img.save(filename)
+        return self.viewport_overlay.save_view_as_png()
 
     def toggle_animation(self):
-        if self._timer.isActive():
-            self._timer.stop()
-            self._sync_head_visibility()
-            return False
-        else:
-            self._anim_frame = 0
-            self._timer.start(16)
-            self._sync_head_visibility()
-            return True
+        return self.animation_controller.toggle()
 
     def stop_animation(self):
-        self._timer.stop()
+        self.animation_controller.stop()
 
     def is_animating(self):
-        return self._timer.isActive()
+        return self.animation_controller.is_active()
 
     def _get_traj_tail_data(self, i, sol):
-        if self._traj_tail_enabled:
-            segment = sol[-self._traj_tail_length :]
-        else:
-            segment = sol
-
-        base_colour, alpha = self._get_traj_colour_alpha(i)
-        if self._trail_mode:
-            c = self._plot_trail(len(segment), alpha, base_colour)
-        else:
-            c = np.full((len(segment), 4), (*base_colour, alpha))
-
-        return segment, c
+        return self.trajectory_renderer.get_traj_tail_data(i, sol)
 
     def set_trail_mode(self, checked):
-        self._trail_mode = checked
-        self._traj_tail_enabled = checked
-        self._update_display()
+        self.trajectory_renderer.set_trail_mode(checked)
 
     def set_traj_tail_length(self, val):
-        self._traj_tail_length = val
-        self._update_display()
+        self.trajectory_renderer.set_traj_tail_length(val)
 
     def _update_display(self):
-        if not self._solutions:
-            return
-        for i, sol in enumerate(self._solutions):
-            if i >= len(self._scatters):
-                break
-            segment, c = self._get_traj_tail_data(i, sol)
-            self._scatters[i].setData(pos=segment, color=c)
-            self._scatters[i].setVisible(not self._line_mode)
-            self._lines[i].setData(pos=segment, color=c)
-            self._lines[i].setVisible(self._line_mode)
-            if i < len(self._heads):
-                self._heads[i].setData(pos=segment[-1:], color=c[-1:])
+        self.trajectory_renderer.update_display()
+
+    def _render_animation_frame(self, current_frame, step):
+        solutions = self.get_solutions()
+        if not solutions:
+            return None
+
+        sol0 = solutions[0]
+        frame = min(current_frame + step, len(sol0))
+
+        all_segments = self.trajectory_renderer.render_animation_frame(frame)
+
+        self.projection_emitter.emit_segments(all_segments)
+
+        return {"frame": frame, "done": frame >= len(sol0)}
 
     def _animate_frame(self):
-        if not self._solutions:
-            return
-
-        sol0 = self._solutions[0]
-        frame = min(self._anim_frame + self._anim_step, len(sol0))
-        self._anim_frame = frame
-
-        all_segments = []
-        for i, sol in enumerate(self._solutions):
-            if self._traj_tail_enabled:
-                start = max(0, frame - self._traj_tail_length)
-                segment = sol[start:frame]
-            else:
-                segment = sol[:frame]
-            base_colour, alpha = self._get_traj_colour_alpha(i)
-            if self._trail_mode:
-                c = self._plot_trail(len(segment), alpha, base_colour)
-            else:
-                c = np.full((len(segment), 4), (*base_colour, alpha))
-            if i < len(self._scatters):
-                self._scatters[i].setData(pos=segment, color=c)
-                self._lines[i].setData(pos=segment, color=c)
-            if i < len(self._heads):
-                self._heads[i].setData(pos=segment[-1:], color=c[-1:])
-            all_segments.append(segment)
-
-        if all_segments:
-            all_pts = np.concatenate(all_segments, axis=0)
-            x, y, z = all_pts.T
-            self.projections_data.emit(x, y, z)
-
-        if frame >= len(sol0):
-            self._timer.stop()
-            self._sync_head_visibility()
-            self.animation_finished.emit()
+        self.animation_controller.advance()

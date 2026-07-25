@@ -1,6 +1,6 @@
 import numpy as np
 
-from attractors.models import AttractorConfig
+from attractors.models import AttractorConfig, TimeDefaults
 from attractors.registry import ATTRACTORS
 
 
@@ -30,9 +30,21 @@ def test_all_configs_have_three_initial_conditions():
 
 def test_all_configs_have_required_time_defaults():
     for config in ATTRACTORS.values():
+        assert isinstance(config.time_defaults, TimeDefaults)
         assert set(config.time_defaults) == {"t_min", "t_max", "n"}
         assert config.time_defaults["t_max"] > config.time_defaults["t_min"]
         assert config.time_defaults["n"] > 0
+        assert config.time_defaults.t_max > config.time_defaults.t_min
+        assert config.time_defaults.n > 0
+
+
+def test_time_defaults_can_round_trip_as_dict():
+    defaults = TimeDefaults.from_value({"t_min": 0, "t_max": 10, "n": 1000})
+
+    assert defaults.as_dict() == {"t_min": 0, "t_max": 10, "n": 1000}
+    assert defaults == {"t_min": 0, "t_max": 10, "n": 1000}
+    assert dict(defaults) == {"t_min": 0, "t_max": 10, "n": 1000}
+    assert {**defaults} == {"t_min": 0, "t_max": 10, "n": 1000}
 
 
 def test_all_param_names_are_unique_per_config():
