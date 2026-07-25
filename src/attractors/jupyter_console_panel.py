@@ -1,6 +1,8 @@
-"""Adapted from the Rich Jupyter Console example pyqtgraph example"""
+"""Adapted from the Rich Jupyter Console pyqtgraph example"""
 
 import pyqtgraph as pg
+from pyqtgraph.dockarea.Dock import Dock
+from pyqtgraph.dockarea.DockArea import DockArea
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 try:
@@ -58,21 +60,28 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         header.addWidget(self.close_button)
         self._layout.addLayout(header)
 
-        self._body_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
-        self._layout.addWidget(self._body_splitter)
+        self.dock_area = DockArea()
+        self._layout.addWidget(self.dock_area)
 
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.showGrid(x=True, y=True, alpha=0.25)
         self.plot_widget.setLabel("bottom", "x")
         self.plot_widget.setLabel("left", "y")
-        self._body_splitter.addWidget(self.plot_widget)
+        self.plot_dock = Dock("Plot", size=(10, 6))
+        self.plot_dock.addWidget(self.plot_widget)
+        self.dock_area.addDock(self.plot_dock)
 
         self._console_host = QtWidgets.QWidget()
         self._console_layout = QtWidgets.QVBoxLayout(self._console_host)
         self._console_layout.setContentsMargins(0, 0, 0, 0)
         self._console_layout.setSpacing(0)
-        self._body_splitter.addWidget(self._console_host)
-        self._body_splitter.setSizes([260, 320])
+        self.console_dock = Dock("Console", size=(10, 8))
+        self.console_dock.addWidget(self._console_host)
+        self.dock_area.addDock(
+            self.console_dock,
+            position="bottom",
+            relativeTo=self.plot_dock,
+        )
 
         if CONSOLE_IMPORT_ERROR is not None:
             message = QtWidgets.QLabel(
