@@ -30,6 +30,7 @@ from .session import clear_session, load_session, save_session, session_settings
 from .solution_validation import validate_solutions
 from .solve_manager import SolveManager
 from .style import SPLITTER_HANDLE
+from .system import SystemInspector
 from .view_manager import ViewManager
 
 WINDOW_WIDTH = 1100
@@ -204,6 +205,7 @@ class Window(QtWidgets.QMainWindow):
         self.current_name = _session_attractor_name(self._session_state)
         self._custom_config = None
         self._preset_directory = _preset_directory()
+        self.system = SystemInspector(self)
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
@@ -1081,6 +1083,7 @@ class Window(QtWidgets.QMainWindow):
             "scene": self.scene,
             "view": self.scene.view,
             "controls": self.controls,
+            "system": self.system,
             "plot_widget": self.jupyter_console_panel.plot_widget,
             "pw": self.jupyter_console_panel.plot_widget,
             "get_solutions": self.scene.get_solutions,
