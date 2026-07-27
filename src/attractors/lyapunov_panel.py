@@ -25,11 +25,16 @@ class LyapunovPanel(QtWidgets.QWidget):
         self.compute_button.clicked.connect(self.compute_requested.emit)
         header.addWidget(self.compute_button)
 
-        header.addStretch(1)
-
         self.result_label = QtWidgets.QLabel("No Lyapunov result")
-        self.result_label.setWordWrap(True)
-        header.addWidget(self.result_label)
+        self.result_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignRight
+            | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        self.result_label.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
+        header.addWidget(self.result_label, 1)
 
         layout.addLayout(header)
 
