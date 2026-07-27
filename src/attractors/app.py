@@ -1186,10 +1186,6 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_solve_result(self, request_id, solutions, is_partial):
         if request_id != self._active_solve_request_id:
-            if is_partial and solutions is not None:
-                is_valid, _ = validate_solutions(solutions)
-                if is_valid:
-                    self.scene.display_solutions(solutions, is_partial)
             return
 
         solve_token = getattr(self, "_solve_perf_tokens", {}).pop(request_id, None)
