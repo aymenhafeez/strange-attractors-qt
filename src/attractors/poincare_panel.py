@@ -3,6 +3,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from pyqtgraph.Qt.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
+from .solution_validation import validate_solutions
 from .solver import solve_attractor
 
 _PLANE_COLS = {"x": 0, "y": 1, "z": 2}
@@ -219,6 +220,14 @@ class PoincarePanel(QtWidgets.QWidget):
     def _on_solve_result(self, sol, gen):
         if gen != self._solve_gen:
             return
+
+        is_valid, message = validate_solutions([sol])
+        if not is_valid:
+            self._solutions = None
+            self._clear_plot_data()
+            self._show_error(message)
+            return
+
         self._solutions = [sol]
         if sol is not None:
             plane = self.plane_combo.currentText()
@@ -239,10 +248,20 @@ class PoincarePanel(QtWidgets.QWidget):
     def _on_solve_error(self, msg, gen):
         if gen != self._solve_gen:
             return
-        self._error_label.setText(f"Error: {msg}")
-        self._error_label.setVisible(True)
+        self._solutions = None
+        self._clear_plot_data()
+        self._show_error(msg)
         self._set_solve_enabled(True)
         self._worker = None
+
+    def _show_error(self, message):
+        self._error_label.setText(f"Error: {message}")
+        self._error_label.setVisible(True)
+
+    def _clear_plot_data(self):
+        self._scatter.setData([], [])
+        self._img.setVisible(False)
+        self._colourbar.setVisible(False)
 
     def _emit_plane(self):
         if not self.isVisible():
@@ -312,11 +331,14 @@ class PoincarePanel(QtWidgets.QWidget):
                         )
                     )
                     self._img.setVisible(True)
+                    self._colourbar.setVisible(True)
                     self.plot_widget.autoRange()
                     return
             self._img.setVisible(False)
+            self._colourbar.setVisible(False)
         else:
             self._img.setVisible(False)
+            self._colourbar.setVisible(False)
             if all_h:
                 combined = np.concatenate(all_h)
                 if len(combined) > 0:
