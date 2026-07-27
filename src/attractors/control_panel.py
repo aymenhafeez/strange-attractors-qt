@@ -463,14 +463,16 @@ class ControlPanel(QtWidgets.QWidget):
         n_spin.setValue(config.time_defaults.n)
         n_spin.param_step = STEP
         n_slider.valueChanged.connect(
-            lambda val: n_spin.setValue(val * n_slider.param_step)
+            lambda val, slider=n_slider, spin=n_spin: self._on_n_slider_changed(
+                val, slider, spin
+            )
         )
-        n_slider.valueChanged.connect(lambda: self.solve_requested.emit(False))
         n_slider.sliderReleased.connect(lambda: self.solve_requested.emit(True))
         n_spin.valueChanged.connect(
-            lambda val: n_slider.setValue(int(val / n_spin.param_step))
+            lambda val, slider=n_slider, spin=n_spin: self._on_n_spin_changed(
+                val, slider, spin
+            )
         )
-        n_spin.valueChanged.connect(self.n_changed.emit)
         n_row.addWidget(n_slider)
         n_row.addWidget(n_spin)
         self.n_slider_wrapper = QtWidgets.QWidget()
@@ -493,14 +495,16 @@ class ControlPanel(QtWidgets.QWidget):
         t_max_spin.setValue(config.time_defaults.t_max)
         t_max_spin.param_step = 1
         t_max_slider.valueChanged.connect(
-            lambda val: t_max_spin.setValue(val * t_max_slider.param_step)
+            lambda val, slider=t_max_slider, spin=t_max_spin: (
+                self._on_t_max_slider_changed(val, slider, spin)
+            )
         )
-        t_max_slider.valueChanged.connect(lambda: self.solve_requested.emit(False))
         t_max_slider.sliderReleased.connect(lambda: self.solve_requested.emit(True))
         t_max_spin.valueChanged.connect(
-            lambda val: t_max_slider.setValue(int(val / t_max_spin.param_step))
+            lambda val, slider=t_max_slider, spin=t_max_spin: (
+                self._on_t_max_spin_changed(val, slider, spin)
+            )
         )
-        t_max_spin.valueChanged.connect(self.t_max_changed.emit)
         t_max_row.addWidget(t_max_slider)
         t_max_row.addWidget(t_max_spin)
         self.t_max_slider_wrapper = QtWidgets.QWidget()
@@ -525,15 +529,14 @@ class ControlPanel(QtWidgets.QWidget):
             spin.param_min = p.min_val
             spin.param_step = p.step
             s.valueChanged.connect(
-                lambda val, ss=s, sp=spin: sp.setValue(
-                    _slider_value(val, ss.param_min, ss.param_step)
+                lambda val, ss=s, sp=spin: self._on_param_slider_changed(
+                    val, ss, sp
                 )
             )
-            s.valueChanged.connect(lambda: self.solve_requested.emit(False))
             s.sliderReleased.connect(lambda: self.solve_requested.emit(True))
             spin.valueChanged.connect(
-                lambda val, ss=s, sp=spin: ss.setValue(
-                    _slider_index(val, sp.param_min, sp.param_step)
+                lambda val, ss=s, sp=spin: self._on_param_spin_changed(
+                    val, ss, sp
                 )
             )
             row.addWidget(s)
@@ -542,6 +545,45 @@ class ControlPanel(QtWidgets.QWidget):
             wrapper.setLayout(row)
             self.controls_layout.addWidget(wrapper)
             self.slider_rows.append((p, s, row, wrapper))
+
+    def _on_n_slider_changed(self, val, slider, spin):
+        n = val * slider.param_step
+        with QtCore.QSignalBlocker(spin):
+            spin.setValue(n)
+        self.n_changed.emit(n)
+        self.solve_requested.emit(False)
+
+    def _on_n_spin_changed(self, val, slider, spin):
+        slider_value = int(val / spin.param_step)
+        with QtCore.QSignalBlocker(slider):
+            slider.setValue(slider_value)
+        self.n_changed.emit(val)
+        self.solve_requested.emit(True)
+
+    def _on_t_max_slider_changed(self, val, slider, spin):
+        t_max = val * slider.param_step
+        with QtCore.QSignalBlocker(spin):
+            spin.setValue(t_max)
+        self.t_max_changed.emit(t_max)
+        self.solve_requested.emit(False)
+
+    def _on_t_max_spin_changed(self, val, slider, spin):
+        slider_value = int(val / spin.param_step)
+        with QtCore.QSignalBlocker(slider):
+            slider.setValue(slider_value)
+        self.t_max_changed.emit(val)
+        self.solve_requested.emit(True)
+
+    def _on_param_slider_changed(self, val, slider, spin):
+        with QtCore.QSignalBlocker(spin):
+            spin.setValue(_slider_value(val, slider.param_min, slider.param_step))
+        self.solve_requested.emit(False)
+
+    def _on_param_spin_changed(self, val, slider, spin):
+        slider_value = _slider_index(val, spin.param_min, spin.param_step)
+        with QtCore.QSignalBlocker(slider):
+            slider.setValue(slider_value)
+        self.solve_requested.emit(True)
 
     def reset_to_defaults(self):
         for p, s, _, _ in self.slider_rows:
