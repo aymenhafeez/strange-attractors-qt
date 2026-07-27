@@ -341,7 +341,9 @@ class Window(QtWidgets.QMainWindow):
         self.main_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         self.main_splitter.addWidget(self.controls)
         self.main_splitter.addWidget(main_area)
-        self.main_splitter.setSizes([int(WINDOW_WIDTH * 0.3), int(WINDOW_WIDTH * 0.7)])
+        self.main_splitter.setSizes(
+            [int(WINDOW_WIDTH * 0.25), int(WINDOW_WIDTH * 0.75)]
+        )
         self.main_splitter.setStyleSheet(SPLITTER_HANDLE)
         layout.addWidget(self.main_splitter)
 
@@ -666,7 +668,6 @@ class Window(QtWidgets.QMainWindow):
             self.scene.fit_camera_to_solutions,
         )
         fit_camera_action.setToolTip("Fit view to trajectories")
-        fit_camera_action.triggered.connect(self.scene.fit_camera_to_solutions)
 
         save_action = toolbar.addAction(
             self._icon(style_icon.SP_DialogSaveButton),
@@ -1163,12 +1164,19 @@ class Window(QtWidgets.QMainWindow):
 
         self.solver.cancel_lyapunov()
         self.controls.set_status("Computing Lyapunov spectrum")
-        self._active_lyapunov_request_id = self.solver.request_lyapunov(config, values)
+        self._active_lyapunov_request_id = self.solver.request_lyapunov(
+            config,
+            values,
+            self.current_n,
+            self.current_t_max,
+        )
         token = perf_start(
             self,
             "lyapunov",
             key=self._active_lyapunov_request_id,
             attractor=config.name,
+            n=self.current_n,
+            t_max=self.current_t_max,
         )
         if token is not None:
             self._lyapunov_perf_tokens[self._active_lyapunov_request_id] = token
