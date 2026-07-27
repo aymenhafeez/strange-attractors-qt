@@ -224,32 +224,16 @@ class Window(QtWidgets.QMainWindow):
         self.controls = ControlPanel()
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._on_controls_solve_requested)
-        self.controls.lyapunov_requested.connect(self._on_lyapunov_requested)
-        self.controls.projections_requested.connect(self._toggle_projections)
-        self.controls.bifurcation_requested.connect(self._toggle_bifurcation)
-        self.controls.poincare_requested.connect(self._toggle_poincare)
-        self.controls.jupyter_console_requested.connect(self._toggle_jupyter_console)
         self.controls.n_changed.connect(self._on_n_changed)
         self.controls.t_max_changed.connect(self._on_t_max_changed)
-        self.controls.animation_toggled.connect(self._on_anim_toggled)
         self.controls.animation_speed_changed.connect(self.scene.set_anim_step)
-        self.controls.orbit_toggled.connect(self.scene.set_orbit_mode)
         self.controls.orbit_speed_changed.connect(self.scene.set_orbit_speed)
-        self.controls.point_button.toggled.connect(self.scene.set_point_mode)
-        self.controls.line_mode.toggled.connect(self.scene.set_line_mode)
-        self.controls.trail_mode.toggled.connect(self.scene.set_trail_mode)
-        self.controls.show_grid.toggled.connect(self.scene.set_grid_visible)
         self.controls.alpha_slider.valueChanged.connect(self.scene.set_alpha)
         self.controls.alpha_spin.valueChanged.connect(self.scene.set_alpha)
-        self.controls.save_requested.connect(self.scene.save_view_as_png)
-        self.controls.preset_folder_requested.connect(self._open_preset_folder)
-        self.controls.session_reset_requested.connect(self._reset_saved_session)
         self.controls.preset_save_requested.connect(self._save_preset)
         self.controls.preset_load_requested.connect(self._load_preset)
         self.controls.preset_delete_requested.connect(self._delete_preset)
         self.controls.preset_selected.connect(self._update_preset_summary)
-        self.controls.camera_reset_requested.connect(self._reset_camera)
-        self.controls.camera_fit_requested.connect(self.scene.fit_camera_to_solutions)
         self.controls.traj_tail_length_changed.connect(self.scene.set_traj_tail_length)
         self.controls.trajectory_panel.trajectories_changed.connect(
             self._on_trajectories_changed
@@ -379,7 +363,6 @@ class Window(QtWidgets.QMainWindow):
 
     def _rebuild_view_custom(self):
         self.scene.stop_animation()
-        self.controls.set_anim_playing(False)
         _sync_animation_toolbar(self, False)
         self.controls.hide_standard_controls()
         if self._custom_config is not None:
@@ -394,7 +377,6 @@ class Window(QtWidgets.QMainWindow):
 
     def _rebuild_view_from_config(self, config):
         self.scene.stop_animation()
-        self.controls.set_anim_playing(False)
         _sync_animation_toolbar(self, False)
         self.controls.show_standard_controls()
         self._apply_config_to_view(config)
@@ -438,7 +420,6 @@ class Window(QtWidgets.QMainWindow):
                 self.controls.show_standard_controls()
 
             self.scene.stop_animation()
-            self.controls.set_anim_playing(False)
             _sync_animation_toolbar(self, False)
             self.scene.set_camera(config)
             self.controls.configure(config)
@@ -463,9 +444,7 @@ class Window(QtWidgets.QMainWindow):
 
     def _collect_session_state(self):
         values = self.controls.get_current_values()
-        visual_options = self.controls.get_visual_options()
-        if hasattr(self, "lyapunov_panel"):
-            visual_options["auto_lyapunov"] = _lyapunov_auto_enabled(self)
+        visual_options = Window._collect_visual_options(self)
         custom_data = None
         if self.current_name == "Custom" and self._custom_config is not None:
             try:
@@ -511,6 +490,39 @@ class Window(QtWidgets.QMainWindow):
             panels["jupyter_console"] = _panel_visible(self, "jupyter_console_panel")
         return panels
 
+    def _collect_visual_options(self):
+        options = self.controls.get_visual_options()
+        for key, attr in [
+            ("point", "toolbar_point_action"),
+            ("line", "toolbar_line_action"),
+            ("trail", "toolbar_trail_action"),
+            ("grid", "toolbar_grid_action"),
+            ("orbit", "toolbar_orbit_action"),
+        ]:
+            action = getattr(self, attr, None)
+            if action is not None:
+                options[key] = action.isChecked()
+        if hasattr(self, "lyapunov_panel"):
+            options["auto_lyapunov"] = _lyapunov_auto_enabled(self)
+        return options
+
+    def _set_visual_options(self, options):
+        self.controls.set_visual_options(options)
+        for key, action in [
+            ("point", getattr(self, "toolbar_point_action", None)),
+            ("line", getattr(self, "toolbar_line_action", None)),
+            ("trail", getattr(self, "toolbar_trail_action", None)),
+            ("grid", getattr(self, "toolbar_grid_action", None)),
+            ("orbit", getattr(self, "toolbar_orbit_action", None)),
+        ]:
+            if key in options and action is not None:
+                action.setChecked(bool(options[key]))
+        if "auto_lyapunov" in options:
+            _set_lyapunov_auto_enabled(
+                self,
+                bool(options["auto_lyapunov"]),
+            )
+
     def _collect_workspace_dock_layout(self):
         dock_area = getattr(self, "workspace_dock_area", None)
         if dock_area is None:
@@ -540,7 +552,6 @@ class Window(QtWidgets.QMainWindow):
                 self.controls.set_current_attractor("Custom")
                 self.controls.hide_standard_controls()
                 self.scene.stop_animation()
-                self.controls.set_anim_playing(False)
                 _sync_animation_toolbar(self, False)
                 self.scene.set_camera(config)
                 self.controls.configure(config)
@@ -572,12 +583,7 @@ class Window(QtWidgets.QMainWindow):
 
         visual_options = state.get("visual_options", {})
         if isinstance(visual_options, dict):
-            self.controls.set_visual_options(visual_options)
-            if "auto_lyapunov" in visual_options:
-                _set_lyapunov_auto_enabled(
-                    self,
-                    bool(visual_options["auto_lyapunov"]),
-                )
+            Window._set_visual_options(self, visual_options)
 
         trajectory_state = state.get("trajectories")
         if isinstance(trajectory_state, dict):
@@ -681,31 +687,36 @@ class Window(QtWidgets.QMainWindow):
         self.toolbar_point_action = self._add_checked_toolbar_action(
             toolbar,
             "Point",
-            self.controls.point_button,
+            True,
+            self.scene.set_point_mode,
             "Show animation head points",
         )
         self.toolbar_line_action = self._add_checked_toolbar_action(
             toolbar,
             "Line",
-            self.controls.line_mode,
+            False,
+            self.scene.set_line_mode,
             "Show trajectory lines",
         )
         self.toolbar_trail_action = self._add_checked_toolbar_action(
             toolbar,
             "Trail",
-            self.controls.trail_mode,
+            False,
+            self._set_trail_mode,
             "Show animated trajectory trails",
         )
         self.toolbar_grid_action = self._add_checked_toolbar_action(
             toolbar,
             "Grid",
-            self.controls.show_grid,
+            True,
+            self.scene.set_grid_visible,
             "Show reference grid",
         )
         self.toolbar_orbit_action = self._add_checked_toolbar_action(
             toolbar,
             "Orbit",
-            self.controls.orbit_mode,
+            False,
+            self.scene.set_orbit_mode,
             "Orbit camera automatically",
         )
 
@@ -766,14 +777,17 @@ class Window(QtWidgets.QMainWindow):
 
         self._sync_toolbar_panel_actions()
 
-    def _add_checked_toolbar_action(self, toolbar, text, checkbox, tooltip):
+    def _add_checked_toolbar_action(self, toolbar, text, checked, callback, tooltip):
         action = toolbar.addAction(text)
         action.setCheckable(True)
-        action.setChecked(checkbox.isChecked())
+        action.setChecked(bool(checked))
         action.setToolTip(tooltip)
-        action.toggled.connect(checkbox.setChecked)
-        checkbox.toggled.connect(action.setChecked)
+        action.toggled.connect(callback)
         return action
+
+    def _set_trail_mode(self, checked):
+        self.scene.set_trail_mode(checked)
+        self.controls.set_trail_options_visible(checked)
 
     def _build_panel_dock(self, title, panel):
         dock = Dock(title, size=(10, 4), closable=True)
@@ -1095,7 +1109,6 @@ class Window(QtWidgets.QMainWindow):
 
     def _update_plot(self):
         self.scene.stop_animation()
-        self.controls.set_anim_playing(False)
         _sync_animation_toolbar(self, False)
         self.solver.cancel_solve()
         self.solver.cancel_lyapunov()
@@ -1141,7 +1154,6 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_controls_solve_requested(self, full):
         self.scene.stop_animation()
-        self.controls.set_anim_playing(False)
         _sync_animation_toolbar(self, False)
         self.solver.cancel_solve()
         self._solve_pending = False
@@ -1287,11 +1299,9 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_anim_toggled(self):
         playing = self.scene.toggle_animation()
-        self.controls.set_anim_playing(playing)
         _sync_animation_toolbar(self, playing)
 
     def _on_anim_finished(self):
-        self.controls.set_anim_playing(False)
         _sync_animation_toolbar(self, False)
 
     def _on_n_changed(self, val):

@@ -20,22 +20,10 @@ def _slider_value(index, min_val, step):
 class ControlPanel(QtWidgets.QWidget):
     attractor_changed = QtCore.pyqtSignal(str)
     solve_requested = QtCore.pyqtSignal(bool)
-    lyapunov_requested = QtCore.pyqtSignal()
-    projections_requested = QtCore.pyqtSignal()
-    bifurcation_requested = QtCore.pyqtSignal()
-    poincare_requested = QtCore.pyqtSignal()
-    jupyter_console_requested = QtCore.pyqtSignal()
     n_changed = QtCore.pyqtSignal(int)
     t_max_changed = QtCore.pyqtSignal(int)
-    animation_toggled = QtCore.pyqtSignal()
     animation_speed_changed = QtCore.pyqtSignal(int)
-    orbit_toggled = QtCore.pyqtSignal(bool)
     orbit_speed_changed = QtCore.pyqtSignal(int)
-    camera_reset_requested = QtCore.pyqtSignal()
-    camera_fit_requested = QtCore.pyqtSignal()
-    save_requested = QtCore.pyqtSignal()
-    preset_folder_requested = QtCore.pyqtSignal()
-    session_reset_requested = QtCore.pyqtSignal()
     preset_save_requested = QtCore.pyqtSignal(str, str)
     preset_load_requested = QtCore.pyqtSignal(str)
     preset_delete_requested = QtCore.pyqtSignal(str)
@@ -78,26 +66,7 @@ class ControlPanel(QtWidgets.QWidget):
         custom_action.triggered.connect(partial(self._on_attractor_selected, "Custom"))
         self.dropdown.setMenu(menu)
 
-        self.tools_button = QtWidgets.QPushButton("Tools")
-        tools_menu = QtWidgets.QMenu(self.tools_button)
-        projections_action = tools_menu.addAction("Projection heatmaps")
-        projections_action.triggered.connect(self.projections_requested)
-        bifurcation_action = tools_menu.addAction("Bifurcation diagram")
-        bifurcation_action.triggered.connect(self.bifurcation_requested)
-        poincare_action = tools_menu.addAction("Poincaré section")
-        poincare_action.triggered.connect(self.poincare_requested)
-        jupyter_console_action = tools_menu.addAction("Jupyter console")
-        jupyter_console_action.triggered.connect(self.jupyter_console_requested)
-        tools_menu.addSeparator()
-        open_preset_folder_action = tools_menu.addAction("Open preset folder")
-        open_preset_folder_action.triggered.connect(self.preset_folder_requested)
-        reset_session_action = tools_menu.addAction("Reset saved session")
-        reset_session_action.triggered.connect(self.session_reset_requested)
-        self.tools_button.setMenu(tools_menu)
-        self.tools_button.setVisible(False)
-
         options.addWidget(self.dropdown)
-        options.addWidget(self.tools_button)
         self.panel_layout.addLayout(options)
 
         self.controls_scroll = QtWidgets.QScrollArea()
@@ -108,41 +77,6 @@ class ControlPanel(QtWidgets.QWidget):
         self.controls_layout.setSpacing(7)
         self.controls_scroll.setWidget(self.controls_tab)
         self.panel_layout.addWidget(self.controls_scroll)
-
-        self.anim_button = QtWidgets.QPushButton("▶ Play")
-        self.anim_button.clicked.connect(self.animation_toggled)
-        self.anim_button.setVisible(False)
-        self.controls_layout.addWidget(self.anim_button)
-
-        options_row = QtWidgets.QHBoxLayout()
-
-        self.point_button = QtWidgets.QCheckBox("Point")
-        self.point_button.setChecked(True)
-
-        options_row.addWidget(self.point_button)
-        options_row.addStretch(1)
-
-        self.line_mode = QtWidgets.QCheckBox("Line")
-        self.line_mode.setChecked(False)
-        options_row.addWidget(self.line_mode)
-
-        self.trail_mode = QtWidgets.QCheckBox("Trail")
-        self.trail_mode.setChecked(False)
-        options_row.addWidget(self.trail_mode)
-
-        self.show_grid = QtWidgets.QCheckBox("Grid")
-        self.show_grid.setChecked(True)
-        options_row.addWidget(self.show_grid)
-
-        self.orbit_mode = QtWidgets.QCheckBox("Orbit")
-        self.orbit_mode.setChecked(False)
-        self.orbit_mode.toggled.connect(self.orbit_toggled.emit)
-        options_row.addWidget(self.orbit_mode)
-
-        self.scene_options_wrapper = QtWidgets.QWidget()
-        self.scene_options_wrapper.setLayout(options_row)
-        self.scene_options_wrapper.setVisible(False)
-        self.controls_layout.addWidget(self.scene_options_wrapper)
 
         alpha_row = QtWidgets.QHBoxLayout()
         alpha_row.setSpacing(10)
@@ -233,39 +167,8 @@ class ControlPanel(QtWidgets.QWidget):
         traj_tail_wrapper = QtWidgets.QWidget()
         traj_tail_wrapper.setLayout(traj_tail_row)
         traj_tail_wrapper.setVisible(False)
-        self.trail_mode.toggled.connect(traj_tail_wrapper.setVisible)
+        self.traj_tail_wrapper = traj_tail_wrapper
         self.controls_layout.addWidget(traj_tail_wrapper)
-
-        lyapunov_row = QtWidgets.QHBoxLayout()
-        lyapunov_row.setSpacing(10)
-        self.auto_lyapunov_check = QtWidgets.QCheckBox("Auto Lyapunov")
-        self.auto_lyapunov_check.setChecked(True)
-        self.compute_lyapunov_button = QtWidgets.QPushButton("Compute Lyapunov")
-        self.compute_lyapunov_button.clicked.connect(self.lyapunov_requested.emit)
-        lyapunov_row.addWidget(self.auto_lyapunov_check)
-        lyapunov_row.addWidget(self.compute_lyapunov_button)
-        self.lyapunov_wrapper = QtWidgets.QWidget()
-        self.lyapunov_wrapper.setLayout(lyapunov_row)
-        self.lyapunov_wrapper.setVisible(False)
-        self.controls_layout.addWidget(self.lyapunov_wrapper)
-
-        self.controls_grid = QtWidgets.QGridLayout()
-        self.controls_grid.setSpacing(6)
-        self.reset_button = QtWidgets.QPushButton("Reset")
-        self.reset_button.clicked.connect(self.reset_to_defaults)
-        self.reset_camera_button = QtWidgets.QPushButton("Reset camera")
-        self.reset_camera_button.clicked.connect(self.camera_reset_requested.emit)
-        self.fit_camera_button = QtWidgets.QPushButton("Fit view")
-        self.fit_camera_button.clicked.connect(self.camera_fit_requested.emit)
-        self.save_button = QtWidgets.QPushButton("Save view")
-        self.save_button.clicked.connect(self.save_requested.emit)
-        self.controls_grid.addWidget(self.reset_button, 0, 0)
-        self.controls_grid.addWidget(self.reset_camera_button, 0, 1)
-        self.controls_grid.addWidget(self.fit_camera_button, 1, 0)
-        self.controls_grid.addWidget(self.save_button, 1, 1)
-        self.scene_actions_wrapper = QtWidgets.QWidget()
-        self.scene_actions_wrapper.setLayout(self.controls_grid)
-        self.scene_actions_wrapper.setVisible(False)
 
         self.preset_toggle_btn = QtWidgets.QPushButton("Presets ▸")
         self.preset_toggle_btn.clicked.connect(self._toggle_preset_content)
@@ -313,7 +216,6 @@ class ControlPanel(QtWidgets.QWidget):
         self.custom_panel = CustomPanel()
         self.custom_panel.setVisible(False)
 
-        self.controls_layout.addWidget(self.scene_actions_wrapper)
         self.controls_layout.addWidget(self.preset_toggle_btn)
         self.controls_layout.addWidget(self.preset_content)
         self.controls_layout.addWidget(self.status_label)
@@ -360,39 +262,24 @@ class ControlPanel(QtWidgets.QWidget):
 
     def get_visual_options(self):
         return {
-            "point": self.point_button.isChecked(),
-            "line": self.line_mode.isChecked(),
-            "trail": self.trail_mode.isChecked(),
-            "grid": self.show_grid.isChecked(),
-            "orbit": self.orbit_mode.isChecked(),
             "orbit_speed": self.orbit_speed_spin.value(),
-            "auto_lyapunov": self.auto_lyapunov_check.isChecked(),
             "alpha": self.alpha_spin.value(),
             "animation_speed": self.anim_speed_spin.value(),
         }
 
     def set_visual_options(self, options):
-        if "point" in options:
-            self.point_button.setChecked(bool(options["point"]))
-        if "line" in options:
-            self.line_mode.setChecked(bool(options["line"]))
-        if "trail" in options:
-            self.trail_mode.setChecked(bool(options["trail"]))
-        if "grid" in options:
-            self.show_grid.setChecked(bool(options["grid"]))
-        if "orbit" in options:
-            self.orbit_mode.setChecked(bool(options["orbit"]))
         if "orbit_speed" in options:
             self.orbit_speed_spin.setValue(int(options["orbit_speed"]))
-        if "auto_lyapunov" in options:
-            self.auto_lyapunov_check.setChecked(bool(options["auto_lyapunov"]))
         if "alpha" in options:
             self.alpha_spin.setValue(int(options["alpha"]))
         if "animation_speed" in options:
             self.anim_speed_spin.setValue(int(options["animation_speed"]))
 
     def auto_lyapunov_enabled(self):
-        return self.auto_lyapunov_check.isChecked()
+        return True
+
+    def set_trail_options_visible(self, visible):
+        self.traj_tail_wrapper.setVisible(bool(visible))
 
     def _toggle_preset_content(self):
         visible = self.preset_content.isHidden()
@@ -410,9 +297,6 @@ class ControlPanel(QtWidgets.QWidget):
 
     def _emit_preset_delete(self):
         self.preset_delete_requested.emit(self.current_preset_name())
-
-    def set_anim_playing(self, playing):
-        self.anim_button.setText("■ Stop" if playing else "▶ Play")
 
     def configure(self, config):
         self._clear_sliders()
