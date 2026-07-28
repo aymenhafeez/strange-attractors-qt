@@ -3,41 +3,19 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from pyqtgraph.Qt.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
+from .sections import axis_index, plane_crossings
 from .solution_validation import validate_solutions
 from .solver import solve_attractor
 
-_PLANE_COLS = {"x": 0, "y": 1, "z": 2}
-_AXIS_DATA = {"x": (1, 2), "y": (0, 2), "z": (0, 1)}
 _AXIS_LABELS = {"x": ("Y", "Z"), "y": ("X", "Z"), "z": ("X", "Y")}
 DIR_MAP = {"both": "both", "rising": "positive", "falling": "negative"}
 N_BINS = 96
 
 
 def compute_poincare_crossings(sol, plane_axis, plane_value, direction="both"):
-    plane_col = _PLANE_COLS[plane_axis]
-    col_h, col_v = _AXIS_DATA[plane_axis]
+    crossings = plane_crossings(sol, plane_axis, plane_value, direction=direction)
 
-    pv = sol[:, plane_col]
-
-    up = np.where((pv[:-1] < plane_value) & (pv[1:] >= plane_value))[0]
-    down = np.where((pv[:-1] >= plane_value) & (pv[1:] < plane_value))[0]
-
-    if direction == "positive":
-        idx = up
-    elif direction == "negative":
-        idx = down
-    else:
-        idx = np.concatenate([up, down])
-
-    if len(idx) == 0:
-        return np.array([]), np.array([])
-
-    idx.sort()
-    frac = (plane_value - pv[idx]) / (pv[idx + 1] - pv[idx])
-    h = sol[idx, col_h] + frac * (sol[idx + 1, col_h] - sol[idx, col_h])
-    v = sol[idx, col_v] + frac * (sol[idx + 1, col_v] - sol[idx, col_v])
-
-    return h, v
+    return crossings.section_coordinates()
 
 
 class _PoincareSignals(QObject):
@@ -229,14 +207,13 @@ class PoincarePanel(QtWidgets.QWidget):
             return
 
         self._solutions = [sol]
-        if sol is not None:
-            plane = self.plane_combo.currentText()
-            col = _PLANE_COLS[plane]
-            midpoint = (sol[:, col].max() + sol[:, col].min()) / 2
-            self.value_spin.blockSignals(True)
-            self.value_spin.setValue(midpoint)
-            self.value_spin.blockSignals(False)
-            self._emit_plane()
+        plane = self.plane_combo.currentText()
+        col = axis_index(plane)
+        midpoint = (sol[:, col].max() + sol[:, col].min()) / 2
+        self.value_spin.blockSignals(True)
+        self.value_spin.setValue(midpoint)
+        self.value_spin.blockSignals(False)
+        self._emit_plane()
         self._recompute()
 
     def _on_solve_finished(self, gen):
@@ -273,7 +250,7 @@ class PoincarePanel(QtWidgets.QWidget):
         self.plot_widget.setLabel("bottom", lh)
         self.plot_widget.setLabel("left", lv)
         if self._solutions and len(self._solutions) > 0:
-            col = _PLANE_COLS[plane]
+            col = axis_index(plane)
             midpoint = (
                 self._solutions[0][:, col].max() + self._solutions[0][:, col].min()
             ) / 2
