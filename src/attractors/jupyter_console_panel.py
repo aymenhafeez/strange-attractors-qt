@@ -100,6 +100,9 @@ class ConsolePlot:
         item = self._plot_widget.plot(x, y, **kwargs)
         self.set_labels(bottom=bottom, left=left)
         return item
+
+
+
 class JupyterConsolePanel(QtWidgets.QWidget):
     close_requested = QtCore.pyqtSignal()
 
