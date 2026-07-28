@@ -279,7 +279,8 @@ class Window(QtWidgets.QMainWindow):
             self._jupyter_console_namespace
         )
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
-        self.jupyter_console_panel.hide()
+        self.lab_panel = LabPanel(self.jupyter_console_panel)
+        self.lab_panel.follow_requested.connect(self._on_lab_follow_requested)
 
         self._build_toolbar()
 
@@ -810,6 +811,13 @@ class Window(QtWidgets.QMainWindow):
         dock = Dock(title, size=(10, 4), closable=True)
         dock.addWidget(panel)
         dock.sigClosed.connect(lambda _dock: self._on_panel_dock_closed(panel))
+        return dock
+
+    def _build_lab_dock(self):
+        dock = Dock("Console", size=(10, 12), closable=True)
+        dock.addWidget(self.lab_panel)
+        dock.sigClosed.connect(lambda _dock: self._on_lab_dock_closed())
+
         return dock
 
     def _add_panel_menu_action(self, menu, text, callback):
@@ -1619,6 +1627,26 @@ class Window(QtWidgets.QMainWindow):
                 self.bifurcation_panel,
                 "bifurcation_panel",
             )
+
+    def _clear_lab_plot(self):
+        plot_name = self.jupyter_console_panel.plots.current_name
+        self.jupyter_console_panel.plots.clear()
+        Window._clear_lab_live_items(self, plot_name)
+
+
+    def _set_lab_follow(self, kind, *, plot=None, append=False, **options):
+        plot_name = Window._lab_follow_plot_name(self, plot)
+        spec = {"source": "main", "kind": kind, "plot": plot_name, **options}
+        specs = self._lab_live_plots.setdefault(plot_name, [])
+        if append:
+            specs.append(spec)
+        else:
+            self._lab_live_plots[plot_name] = [spec]
+            Window._clear_lab_live_items(self, plot_name)
+        Window._refresh_lab_live_plot(self, plot_name)
+        Window._sync_lab_plots(self)
+        return pd.Series(spec)
+
 
     def _on_lab_dock_closed(self):
         if not getattr(self, "_closing_lab_dock", False):
