@@ -88,6 +88,69 @@ def _read_only_view(solution):
     return view
 
 
+def _solver_sample_times(t_min, t_max, length):
+    if length <= 0:
+        return np.array([], dtype=np.float64)
+
+    dt = (t_max - t_min) / length
+    return t_min + (np.arange(length, dtype=np.float64) + 1.0) * dt
+
+
+def _inspectable_config(config):
+    if config is None:
+        return None
+
+    return replace(
+        config,
+        params=[replace(param) for param in config.params],
+        initial_conditions=list(config.initial_conditions),
+    )
+
+
+def _copy_initial_conditions(initial_conditions):
+    return [[float(coord) for coord in ic] for ic in initial_conditions]
+
+
+def _normalise_initial_conditions(initial_conditions):
+    if initial_conditions is None:
+        return None
+
+    if isinstance(initial_conditions, np.ndarray):
+        array = np.asarray(initial_conditions, dtype=np.float64)
+        if array.ndim == 1:
+            if array.shape[0] != 3:
+                raise ValueError("Initial conditions must contain three coordinates")
+            return [array.tolist()]
+        if array.ndim == 2 and array.shape[1] == 3:
+            return array.tolist()
+        raise ValueError("Initial conditions must have shape (3,) or (n, 3)")
+
+    try:
+        rows = list(initial_conditions)
+    except TypeError as exc:
+        raise ValueError("Initial conditions must contain three coordinates") from exc
+
+    if len(rows) == 3 and all(np.isscalar(value) for value in rows):
+        return [[float(value) for value in rows]]
+
+    normalised = []
+    for row in rows:
+        try:
+            coords = [float(value) for value in row]
+        except TypeError as exc:
+            raise ValueError(
+                "Initial conditions must contain three coordinates"
+            ) from exc
+        if len(coords) != 3:
+            raise ValueError("Initial conditions must contain three coordinates")
+        normalised.append(coords)
+
+    if not normalised:
+        raise ValueError("At least one initial condition is required")
+
+    return normalised
+
+
 class SystemInspector:
     def __init__(self, window):
         self._window = window
