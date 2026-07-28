@@ -30,6 +30,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         row1.addWidget(QtWidgets.QLabel("  Variable:"))
         self.var_combo = QtWidgets.QComboBox()
         self.var_combo.addItems(["x", "y", "z"])
+        self.var_combo.currentTextChanged.connect(self._update_axis_label)
         row1.addWidget(self.var_combo)
 
         layout.addLayout(row1)
@@ -117,6 +118,9 @@ class BifurcationPanel(QtWidgets.QWidget):
         span = p.max_val - p.min_val
         self.min_spin.setValue(p.min_val + 0.01 * span)
         self.max_spin.setValue(p.max_val - 0.01 * span)
+        self._update_axis_label()
+
+    def _update_axis_label(self):
         self.plot_widget.setLabel("left", self.var_combo.currentText())
 
     def set_config(self, config, current_values):
@@ -213,6 +217,12 @@ class BifurcationPanel(QtWidgets.QWidget):
             return
 
         lens = [len(p) for p in peaks_list]
+        if len(vals) != len(lens):
+            usable = min(len(vals), len(lens))
+            vals = vals[:usable]
+            peaks_list = peaks_list[:usable]
+            lens = lens[:usable]
+
         if sum(lens) == 0:
             self.plot_data.setData([], [])
             return

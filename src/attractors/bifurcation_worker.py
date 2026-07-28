@@ -13,6 +13,23 @@ class _BifurcationSignals(QObject):
     progress = pyqtSignal(int)
 
 
+def _sweep_sample_count(n_total):
+    return max(n_total // 10, 5000)
+
+
+def _axis_midplane_crossings(solution, axis):
+    z = solution[:, 2]
+    z_mid = (z.max() + z.min()) / 2
+    crossings = np.where((z[:-1] < z_mid) & (z[1:] >= z_mid))[0]
+    if len(crossings) == 0:
+        return np.array([], dtype=np.float64)
+
+    frac = (z_mid - z[crossings]) / (z[crossings + 1] - z[crossings])
+    return solution[crossings, axis] + frac * (
+        solution[crossings + 1, axis] - solution[crossings, axis]
+    )
+
+
 class BifurcationWorker(QRunnable):
     def __init__(
         self,
@@ -83,39 +100,27 @@ class BifurcationWorker(QRunnable):
                         if ic is not None
                         else np.array(self.config.initial_conditions, dtype=np.float64)
                     )
-                    # see integrator profiling notebook
-                    n_eff = max(self.n_total // 10, 5000)
-                    sol = solve_rk4(
+                    solution = solve_rk4(
                         self.config.equation,
                         y0,
                         self.t_min,
                         self.t_max,
-                        n_eff,
+                        _sweep_sample_count(self.n_total),
                         pvals,
                     )
-                    ic = sol[-1]
+                    ic = solution[-1]
 
-                    start = int(len(sol) * self.transient_frac)
-                    data = sol[start:]
-                    z = data[:, 2]
-                    z_mid = (z.max() + z.min()) / 2
-                    crossings = np.where((z[:-1] < z_mid) & (z[1:] >= z_mid))[0]
+                    start = int(len(solution) * self.transient_frac)
+                    peaks = _axis_midplane_crossings(solution[start:], self.axis)
 
                     all_vals.append(val)
-
-                    if len(crossings) == 0:
-                        all_peaks.append(np.array([]))
-                    else:
-                        frac = (z_mid - z[crossings]) / (
-                            z[crossings + 1] - z[crossings]
-                        )
-                        peaks = data[crossings, self.axis] + frac * (
-                            data[crossings + 1, self.axis] - data[crossings, self.axis]
-                        )
-                        all_peaks.append(peaks)
+                    all_peaks.append(peaks)
 
                     if len(all_vals) - last_emitted_count >= emit_interval:
-                        self.signals.chunk_ready.emit(np.array(all_vals), all_peaks)
+                        self.signals.chunk_ready.emit(
+                            np.array(all_vals, dtype=np.float64),
+                            tuple(peak.copy() for peak in all_peaks),
+                        )
                         last_emitted_count = len(all_vals)
 
                 except Exception as exc:  # noqa: BLE001
@@ -131,5 +136,8 @@ class BifurcationWorker(QRunnable):
                 turnround_ic = ic
 
         if not cancelled:
-            self.signals.chunk_ready.emit(np.array(all_vals), all_peaks)
+            self.signals.chunk_ready.emit(
+                np.array(all_vals, dtype=np.float64),
+                tuple(peak.copy() for peak in all_peaks),
+            )
         self.signals.finished.emit()
