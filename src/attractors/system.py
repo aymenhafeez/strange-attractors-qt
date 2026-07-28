@@ -1,8 +1,84 @@
 import numpy as np
 import pandas as pd
 
-AXES = {"x": 0, "y": 1, "z": 2}
-COORDINATE_COLUMNS = ["x", "y", "z"]
+HELP_ROWS = [
+    ("context", "summary()", "Current system, solve size, bounds and camera"),
+    ("context", "status()", "Solve freshness and last error state"),
+    ("context", "describe()", "System description and equation text"),
+    ("context", "parameters()", "Parameter values, defaults and ranges"),
+    ("control", "set_parameter(name, value, solve=False)", "Update a main parameter"),
+    ("control", "set_parameters(values, solve=False)", "Update main parameters"),
+    ("control", "set_time(n=None, t_max=None, solve=False)", "Update main solve time"),
+    ("control", "set_n(n, solve=False)", "Update main sample count"),
+    ("control", "set_t_max(t_max, solve=False)", "Update main solve duration"),
+    ("control", "solve()", "Run a full solve for the current main state"),
+    ("context", "trajectories()", "Per trajectory length, endpoints and bounds"),
+    ("data", "solutions", "Read only trajectory arrays"),
+    ("data", "solution(index=0, copy=False)", "One trajectory array"),
+    (
+        "data",
+        "solve_variant(values=None, n=None, t_max=None)",
+        "Non mutating solve snapshot for comparison",
+    ),
+    ("data", "to_dataframe(trajectory=None)", "Trajectory samples as a DataFrame"),
+    ("data", "sample(n, trajectory=None)", "Evenly sampled trajectory DataFrame"),
+    ("geometry", "bounds()", "Coordinate min and max values"),
+    ("geometry", "radius(trajectory=None)", "Distance from origin over time"),
+    ("geometry", "speed(trajectory=None)", "Approximate phase space speed"),
+    ("geometry", "displacement(trajectory=None)", "Distance from the starting point"),
+    ("geometry", "extrema(trajectory=None)", "Local minima and maxima by axis"),
+    ("chaos", "separation(a=0, b=1, log=False)", "Distance between trajectories"),
+    ("chaos", "separation_summary(a=0, b=1)", "Quick separation statistics"),
+    ("chaos", "separation_fit(a=0, b=1)", "Linear fit of log separation"),
+    ("recurrence", "nearest_returns()", "Closest lagged sampled returns"),
+    ("recurrence", "return_lags()", "Return durations from nearest returns"),
+    ("recurrence", "return_lag_summary()", "Quick return duration statistics"),
+    (
+        "sections",
+        "crossings(axis='z', value=None, t_max=None)",
+        "Interpolated plane crossings",
+    ),
+    ("plotting", "plot_xy() / plot_xz() / plot_yz()", "Phase projection plots"),
+    ("plotting", "plot_axis(axis)", "Coordinate over time"),
+    ("plotting", "plot_radius() / plot_speed()", "Geometry time series plots"),
+    ("plotting", "plot_displacement()", "Displacement over time"),
+    ("plotting", "plot_separation()", "Trajectory separation over time"),
+    ("plotting", "plot_separation_fit()", "Log separation with fitted line"),
+    ("plotting", "plot_crossings()", "Plane crossings as a 2D section"),
+    ("plotting", "plot_vector_field()", "Vector field on a 2D phase space slice"),
+    ("plotting", "plot_returns() / plot_return_lags()", "Recurrence plots"),
+
+EXAMPLE_ROWS = [
+    (
+        "Inspect current system",
+        "system.summary(); system.parameters(); system.trajectories()",
+    ),
+    ("Plot a phase projection", "system.plot_xz()"),
+    ("Plot a coordinate over time", "system.plot_axis('z')"),
+    ("Set a parameter and solve", "system.set_parameter('rho', 32, solve=True)"),
+    ("Extend solve time", "system.set_time(t_max=120, solve=True)"),
+    (
+        "Compare a parameter variant",
+        "variant = system.solve_variant({'rho': 32}, n=50000); variant.plot_xz()",
+    ),
+    (
+        "Compare nearby trajectories",
+        "system.separation_summary(0, 1); system.plot_separation_fit(0, 1)",
+    ),
+    (
+        "Overlay separation fits",
+        (
+            "system.plot_separation_fit(0, 1, pen='c'); "
+            "system.plot_separation_fit(0, 2, pen='y', clear=False)"
+        ),
+    ),
+    (
+        "Find recurrent states",
+        "system.return_lag_summary(); system.nearest_returns(count=50)",
+    ),
+    ("Plot return durations", "system.plot_return_lags(count=100)"),
+]
+]
 
 
 def _read_only_view(solution):
@@ -63,6 +139,12 @@ class SystemInspector:
     @property
     def has_solutions(self):
         return bool(self.solutions)
+
+    def help(self):
+        return pd.DataFrame(HELP_ROWS, columns=["category", "method", "description"])
+
+    def examples(self):
+        return pd.DataFrame(EXAMPLE_ROWS, columns=["task", "commands"])
 
     def solution(self, index=0, *, copy=False):
         solutions = self.solutions
