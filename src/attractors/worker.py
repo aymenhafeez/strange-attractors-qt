@@ -21,10 +21,24 @@ class SolveWorker(QObject):
         self._cancel = False
         solutions = []
         try:
-            for ic in ics:
+            for entry in ics:
                 if self._cancel:
                     return
-                sol = solve_attractor(config, values, n, t_max=t_max, ic=ic)
+                if isinstance(entry, dict):
+                    ic = entry.get("ic")
+                    solve_n = int(entry.get("n", n))
+                    solve_t_max = float(entry.get("t_max", t_max))
+                else:
+                    ic = entry
+                    solve_n = n
+                    solve_t_max = t_max
+                sol = solve_attractor(
+                    config,
+                    values,
+                    solve_n,
+                    t_max=solve_t_max,
+                    ic=ic,
+                )
                 solutions.append(sol)
             if not self._cancel:
                 self.result_ready.emit(request_id, solutions, is_partial)
@@ -42,11 +56,15 @@ class LyapunovWorker(QObject):
         super().__init__()
         self._cancel = False
 
-    @pyqtSlot(int, object, dict)
-    def compute(self, request_id, config, values):
+    @pyqtSlot(int, object, dict, int, float)
+    def compute(self, request_id, config, values, n=None, t_max=None):
         self._cancel = False
 
         try:
+            solve_n = int(config.time_defaults.n if n is None else n)
+            solve_t_max = float(
+                config.time_defaults.t_max if t_max is None else t_max
+            )
             pvals = np.ascontiguousarray(
                 [values[p.name] for p in config.params], dtype=np.float64
             )
@@ -58,8 +76,8 @@ class LyapunovWorker(QObject):
                 initial_conditions,
                 pvals,
                 config.time_defaults.t_min,
-                config.time_defaults.t_max,
-                config.time_defaults.n,
+                solve_t_max,
+                solve_n,
             )
 
             if not self._cancel:
