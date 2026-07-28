@@ -168,7 +168,8 @@ class SystemInspector:
     @property
     def config(self):
         config, _values = self._window._get_current_config_and_values()
-        return config
+
+        return _inspectable_config(config)
 
     @property
     def values(self):
@@ -224,7 +225,13 @@ class SystemInspector:
 
     def time(self, index=0):
         solution = self.solution(index)
-        return np.linspace(self.t_min, self.t_max, len(solution))
+        spec = self._trajectory_solve_spec(index)
+        
+        return _solver_sample_times(
+            self.t_min,
+            spec.get("t_max", self.t_max),
+            len(solution),
+        )
 
     def bounds(self):
         solutions = self.solutions

@@ -2,6 +2,7 @@ import weakref
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
@@ -11,6 +12,7 @@ from .docking import AreaBoundDock as Dock
 from .docking import AreaBoundDockArea as DockArea
 from .grid_overlay import DEFAULT_GRID_HALF_SIZE
 from .jupyter_console_panel import JupyterConsolePanel
+from .lab_panel import LabPanel
 from .lyapunov_panel import LyapunovPanel
 from .perf import PerfProfiler, perf_finish, perf_start
 from .poincare_panel import PoincarePanel
@@ -180,6 +182,22 @@ def _has_hidden_lyapunov_panel(window):
     return bool(panel is not None and not _panel_visible(window, "lyapunov_panel"))
 
 
+def _lab_visible(window):
+    dock = getattr(window, "lab_dock", None)
+    if dock is not None:
+        return dock.container() is not None
+
+    return _panel_visible(window, "jupyter_console_panel")
+
+
+def _lab_visible_to_user(window):
+    dock = getattr(window, "lab_dock", None)
+    if dock is not None:
+        return dock.container() is not None and _dock_branch_is_current(dock)
+
+    return _lab_visible(window)
+
+
 class Window(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -195,6 +213,7 @@ class Window(QtWidgets.QMainWindow):
         self._solve_perf_tokens = {}
         self._lyapunov_perf_tokens = {}
         self._last_projection_update_ms = None
+        self._last_lab_preview_update_ms = None
         self._latest_projection_solutions = None
         self._settings = session_settings()
         self._session_state = load_session(self._settings)
@@ -206,11 +225,6 @@ class Window(QtWidgets.QMainWindow):
         self._custom_config = None
         self._preset_directory = _preset_directory()
         self.system = SystemInspector(self)
-
-        central = QtWidgets.QWidget()
-        self.setCentralWidget(central)
-        layout = QtWidgets.QHBoxLayout(central)
-        layout.setContentsMargins(0, 0, 0, 0)
 
         self.solver = SolveManager(self)
         self.solver.solutions_ready.connect(self._on_solve_result)
@@ -273,6 +287,7 @@ class Window(QtWidgets.QMainWindow):
         self.viewport_dock = Dock("Viewport", size=(10, 12))
         self.viewport_dock.addWidget(self.scene.container)
         self.workspace_dock_area.addDock(self.viewport_dock)
+        self.lab_dock = self._build_lab_dock()
         self.lyapunov_dock = self._build_panel_dock("Lyapunov", self.lyapunov_panel)
         self.poincare_dock = self._build_panel_dock("Poincare", self.poincare_panel)
         self.bifurcation_dock = self._build_panel_dock(
@@ -283,32 +298,26 @@ class Window(QtWidgets.QMainWindow):
             "Projection heatmaps",
             self.projection_panel,
         )
-        self.jupyter_console_dock = self._build_panel_dock(
-            "Console",
-            self.jupyter_console_panel,
-        )
         self._panel_docks = {
             "lyapunov_panel": self.lyapunov_dock,
             "poincare_panel": self.poincare_dock,
             "bifurcation_panel": self.bifurcation_dock,
             "projection_panel": self.projection_dock,
-            "jupyter_console_panel": self.jupyter_console_dock,
         }
         self._panel_dock_titles = {
             "lyapunov_panel": "Lyapunov",
             "poincare_panel": "Poincare",
             "bifurcation_panel": "Bifurcation",
             "projection_panel": "Projection heatmaps",
-            "jupyter_console_panel": "Console",
         }
         self._panel_dock_defaults = {
             "lyapunov_panel": ("top", self.viewport_dock),
             "poincare_panel": ("top", self.viewport_dock),
             "bifurcation_panel": ("bottom", self.viewport_dock),
             "projection_panel": ("bottom", self.viewport_dock),
-            "jupyter_console_panel": ("above", self.viewport_dock),
         }
         self._closing_panel_dock = None
+        self._closing_lab_dock = False
         self._workspace_tab_stacks = weakref.WeakSet()
         self._connect_workspace_dock_signals()
 
@@ -329,7 +338,11 @@ class Window(QtWidgets.QMainWindow):
             [int(WINDOW_WIDTH * 0.25), int(WINDOW_WIDTH * 0.75)]
         )
         self.main_splitter.setStyleSheet(SPLITTER_HANDLE)
-        layout.addWidget(self.main_splitter)
+        visualiser_page = QtWidgets.QWidget()
+        visualiser_layout = QtWidgets.QHBoxLayout(visualiser_page)
+        visualiser_layout.setContentsMargins(0, 0, 0, 0)
+        visualiser_layout.addWidget(self.main_splitter)
+        self.setCentralWidget(visualiser_page)
 
         self.scene.container.installEventFilter(self)
         app = QtWidgets.QApplication.instance()
@@ -487,7 +500,7 @@ class Window(QtWidgets.QMainWindow):
         if hasattr(self, "lyapunov_panel"):
             panels["lyapunov"] = _panel_visible(self, "lyapunov_panel")
         if hasattr(self, "jupyter_console_panel"):
-            panels["jupyter_console"] = _panel_visible(self, "jupyter_console_panel")
+            panels["jupyter_console"] = _lab_visible(self)
         return panels
 
     def _collect_visual_options(self):
@@ -622,6 +635,10 @@ class Window(QtWidgets.QMainWindow):
         if isinstance(dock_layout, dict):
             Window._restore_workspace_dock_layout(self, dock_layout)
 
+        restore_lab = getattr(self, "_restore_lab_live_plot_state", None)
+        if restore_lab is not None:
+            restore_lab(state.get("lab_live_plots"))
+
         self._update_plot()
 
         camera = state.get("camera")
@@ -755,7 +772,7 @@ class Window(QtWidgets.QMainWindow):
         )
         self.toolbar_jupyter_console_action = self._add_panel_menu_action(
             tools_menu,
-            "Jupyter console",
+            "Console",
             self._toggle_jupyter_console,
         )
         tools_menu.addSeparator()
@@ -824,9 +841,7 @@ class Window(QtWidgets.QMainWindow):
             self.toolbar_bifurcation_action.setChecked(
                 _panel_visible(self, "bifurcation_panel")
             )
-            self.toolbar_jupyter_console_action.setChecked(
-                _panel_visible(self, "jupyter_console_panel")
-            )
+            self.toolbar_jupyter_console_action.setChecked(_lab_visible(self))
         Window._sync_jupyter_workspace_state(self)
 
     def _build_jupyter_toolbar_actions(self, toolbar):
@@ -863,14 +878,13 @@ class Window(QtWidgets.QMainWindow):
         for text, widget in [
             ("X grid", plot_item.ctrl.xGridCheck),
             ("Y grid", plot_item.ctrl.yGridCheck),
-            ("Log X", plot_item.ctrl.logXCheck),
-            ("Log Y", plot_item.ctrl.logYCheck),
-            ("FFT", plot_item.ctrl.fftCheck),
         ]:
             self._jupyter_toolbar_actions.append(
                 Window._add_plot_option_action(self, toolbar, text, widget)
             )
 
+        self._jupyter_toolbar_actions.append(toolbar.addSeparator())
+        Window._add_jupyter_plot_controls(self, toolbar)
         self._jupyter_toolbar_actions.append(toolbar.addSeparator())
         self._jupyter_toolbar_actions.append(
             Window._add_toolbar_menu_button(
@@ -886,6 +900,55 @@ class Window(QtWidgets.QMainWindow):
             )
 
         Window._set_toolbar_actions_visible(self, self._jupyter_toolbar_actions, False)
+
+    def _add_jupyter_plot_controls(self, toolbar):
+        label = QtWidgets.QLabel("Plot")
+        label.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self._jupyter_toolbar_actions.append(toolbar.addWidget(label))
+
+        self.toolbar_lab_plot_combo = QtWidgets.QComboBox()
+        self.toolbar_lab_plot_combo.setFixedWidth(LAB_PLOT_COMBO_WIDTH)
+        self.toolbar_lab_plot_combo.currentIndexChanged.connect(
+            lambda _index: Window._on_toolbar_lab_plot_selected(self)
+        )
+        self._jupyter_toolbar_actions.append(
+            toolbar.addWidget(self.toolbar_lab_plot_combo)
+        )
+
+        self.toolbar_lab_plot_name = QtWidgets.QLineEdit()
+        self.toolbar_lab_plot_name.setPlaceholderText("Plot name")
+        self.toolbar_lab_plot_name.setMaximumWidth(130)
+        self.toolbar_lab_plot_name.returnPressed.connect(
+            lambda: Window._rename_current_lab_plot(self)
+        )
+        self._jupyter_toolbar_actions.append(
+            toolbar.addWidget(self.toolbar_lab_plot_name)
+        )
+
+        for text, callback, tooltip in [
+            ("New", lambda: Window._new_lab_plot(self), "Create a new console plot"),
+            (
+                "Rename",
+                lambda: Window._rename_current_lab_plot(self),
+                "Rename the current console plot",
+            ),
+            (
+                "Clear",
+                lambda: Window._clear_lab_plot(self),
+                "Clear the current console plot",
+            ),
+            (
+                "Clear all",
+                lambda: Window._clear_all_lab_plots(self),
+                "Clear all console plots",
+            ),
+        ]:
+            action = toolbar.addAction(text)
+            action.setToolTip(tooltip)
+            action.triggered.connect(callback)
+            self._jupyter_toolbar_actions.append(action)
+            Window._keep_toolbar_action_from_taking_focus(self, toolbar, action)
+        Window._sync_lab_plots(self)
 
     def _standard_icon(self, standard_icon):
         icon = getattr(self, "_icon", None)
@@ -920,19 +983,7 @@ class Window(QtWidgets.QMainWindow):
             action.setVisible(visible)
 
     def _jupyter_toolbar_should_be_visible(self):
-        return _panel_visible_to_user(self, "jupyter_console_panel")
-
-    def _jupyter_console_has_focus(self):
-        if not _panel_visible_to_user(self, "jupyter_console_panel"):
-            return False
-
-        panel = getattr(self, "jupyter_console_panel", None)
-        focused = QtWidgets.QApplication.focusWidget()
-        return bool(
-            panel is not None
-            and focused is not None
-            and (focused is panel or panel.isAncestorOf(focused))
-        )
+        return _lab_visible_to_user(self)
 
     def _sync_jupyter_toolbar_visibility(self):
         actions = getattr(self, "_jupyter_toolbar_actions", None)
@@ -944,24 +995,9 @@ class Window(QtWidgets.QMainWindow):
             Window._jupyter_toolbar_should_be_visible(self),
         )
 
-    def _sync_non_jupyter_controls_enabled(self):
-        enabled = not Window._jupyter_console_has_focus(self)
-        controls = getattr(self, "controls", None)
-        if controls is not None and hasattr(controls, "setEnabled"):
-            controls.setEnabled(enabled)
-
-        toolbar = getattr(self, "scene_toolbar", None)
-        jupyter_actions = set(getattr(self, "_jupyter_toolbar_actions", []))
-        if toolbar is None:
-            return
-        for action in toolbar.actions():
-            if action not in jupyter_actions:
-                action.setEnabled(enabled)
-
     def _sync_jupyter_workspace_state(self):
         Window._watch_workspace_tab_stacks(self)
         Window._sync_jupyter_toolbar_visibility(self)
-        Window._sync_non_jupyter_controls_enabled(self)
 
     def _sync_toolbar_animation_action(self, playing):
         if not hasattr(self, "toolbar_anim_action"):
@@ -1092,20 +1128,18 @@ class Window(QtWidgets.QMainWindow):
         return config, values
 
     def _jupyter_console_namespace(self):
+        plot = self.jupyter_console_panel.plot
         return {
             "np": np,
-            "window": self,
-            "scene": self.scene,
-            "view": self.scene.view,
-            "controls": self.controls,
-            "system": self.system,
-            "plot_widget": self.jupyter_console_panel.plot_widget,
-            "pw": self.jupyter_console_panel.plot_widget,
-            "get_solutions": self.scene.get_solutions,
-            "current_config": lambda: self._get_current_config_and_values()[0],
-            "current_values": lambda: self._get_current_config_and_values()[1],
+            "pd": pd,
             "pg": pg,
+            "system": self.system,
+            "plot": plot,
+            "plots": self.jupyter_console_panel.plots,
+            "clear_plot": plot.clear,
+            "current_values": lambda: self.system.values,
         }
+
 
     def _update_plot(self):
         self.scene.stop_animation()
@@ -1205,6 +1239,15 @@ class Window(QtWidgets.QMainWindow):
 
         if solutions is None:
             perf_finish(self, solve_token, status="failed", partial=is_partial)
+            _set_solve_state(
+                self,
+                solving=False,
+                valid=False,
+                stale=_has_console_solutions(self),
+                partial=False,
+                last_error="Solve failed",
+                solution_points=[],
+            )
             if self._solve_needed:
                 self._solve_needed = False
                 self._dispatch_solve(full=self._full_needed)
@@ -1215,6 +1258,15 @@ class Window(QtWidgets.QMainWindow):
         is_valid, message = validate_solutions(solutions)
         if not is_valid:
             perf_finish(self, solve_token, status="invalid", partial=is_partial)
+            _set_solve_state(
+                self,
+                solving=False,
+                valid=False,
+                stale=_has_console_solutions(self),
+                partial=False,
+                last_error=message,
+                solution_points=[],
+            )
             self.controls.set_status(message, error=True)
             if self._solve_needed:
                 self._solve_needed = False
@@ -1228,6 +1280,7 @@ class Window(QtWidgets.QMainWindow):
         self.scene.display_solutions(solutions, is_partial)
 
         if not is_partial:
+            self._last_lab_preview_update_ms = None
             self._latest_projection_solutions = solutions
             config, values = self._get_current_config_and_values()
             if config is not None:
@@ -1472,8 +1525,6 @@ class Window(QtWidgets.QMainWindow):
             self._close_poincare()
         elif panel is getattr(self, "bifurcation_panel", None):
             self._close_bifurcation()
-        elif panel is getattr(self, "jupyter_console_panel", None):
-            self._close_jupyter_console()
 
         if panel_name is not None:
             Window._replace_closed_panel_dock(self, panel_name, panel)
@@ -1568,24 +1619,32 @@ class Window(QtWidgets.QMainWindow):
                 self.bifurcation_panel,
                 "bifurcation_panel",
             )
-            _sync_panel_toolbar(self)
+
+    def _on_lab_dock_closed(self):
+        if not getattr(self, "_closing_lab_dock", False):
+            self.lab_panel.hide()
+        Window._replace_closed_lab_dock(self)
+        Window._sync_jupyter_workspace_state(self)
+        _sync_panel_toolbar(self)
 
     def _close_jupyter_console(self):
-        self.jupyter_console_panel.hide()
-        Window._close_panel_dock(self, self.jupyter_console_panel)
+        dock = getattr(self, "lab_dock", None)
+        if dock is not None and dock.container() is not None:
+            self._closing_lab_dock = True
+            try:
+                dock.close()
+            finally:
+                self._closing_lab_dock = False
+        self.lab_panel.hide()
         Window._sync_jupyter_workspace_state(self)
         _sync_panel_toolbar(self)
 
     def _toggle_jupyter_console(self):
-        if _panel_visible(self, "jupyter_console_panel"):
+        if _lab_visible(self):
             self._close_jupyter_console()
         else:
             self.jupyter_console_panel.ensure_console()
-            Window._open_panel_dock(
-                self,
-                self.jupyter_console_panel,
-                "jupyter_console_panel",
-            )
+            Window._open_lab_dock(self)
             self.jupyter_console_panel.focus_console()
             Window._sync_jupyter_workspace_state(self)
             _sync_panel_toolbar(self)
