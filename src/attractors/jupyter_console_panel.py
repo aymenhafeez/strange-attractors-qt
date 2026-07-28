@@ -18,6 +18,11 @@ else:
 _BaseJupyterConsole = (
     inprocess.QtInProcessRichJupyterWidget if inprocess else QtWidgets.QWidget
 )
+LEGEND_OFFSET = (-12, 12)
+LEGEND_BRUSH = (18, 22, 28, 220)
+LEGEND_PEN = (210, 220, 230, 180)
+LEGEND_TEXT = (245, 248, 252)
+LEGEND_TEXT_SIZE = "9pt"
 
 
 class _RichJupyterConsole(_BaseJupyterConsole):
@@ -35,6 +40,66 @@ class _RichJupyterConsole(_BaseJupyterConsole):
         self.kernel_manager.shutdown_kernel()
 
 
+class ConsolePlot:
+    def __init__(self, plot_widget):
+        self._plot_widget = plot_widget
+        self._manager = None
+        self._legend = None
+
+    def __repr__(self):
+        return "ConsolePlot()"
+
+    def set_manager(self, manager):
+        self._manager = manager
+
+    def __call__(self, x, y, **kwargs):
+        return self.line(x, y, **kwargs)
+
+    def clear(self):
+        self._plot_widget.clear()
+        self._legend = None
+
+    def auto_range(self):
+        self._plot_widget.autoRange()
+
+    def set_labels(self, *, bottom=None, left=None):
+        if bottom is not None:
+            self._plot_widget.setLabel("bottom", bottom)
+        if left is not None:
+            self._plot_widget.setLabel("left", left)
+
+    def has_item(self, item):
+        return item in self._plot_widget.listDataItems()
+
+    def line(
+        self,
+        x,
+        y,
+        *,
+        clear=True,
+        bottom=None,
+        left=None,
+        plot_widget=None,
+        **kwargs,
+    ):
+        if plot_widget is not None:
+            target = self._plot_target(plot_widget)
+            return target.line(
+                x,
+                y,
+                clear=clear,
+                bottom=bottom,
+                left=left,
+                **kwargs,
+            )
+
+        if clear:
+            self.clear()
+        if kwargs.get("name"):
+            self.ensure_legend()
+        item = self._plot_widget.plot(x, y, **kwargs)
+        self.set_labels(bottom=bottom, left=left)
+        return item
 class JupyterConsolePanel(QtWidgets.QWidget):
     close_requested = QtCore.pyqtSignal()
 
@@ -56,6 +121,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.plot_widget.showGrid(x=True, y=True, alpha=0.25)
         self.plot_widget.setLabel("bottom", "x")
         self.plot_widget.setLabel("left", "y")
+        self.plot = ConsolePlot(self.plot_widget)
         self.plot_dock = Dock("Plot", size=(10, 6))
         self.plot_dock.addWidget(self.plot_widget)
         self.dock_area.addDock(self.plot_dock)
