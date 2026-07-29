@@ -67,9 +67,10 @@ class TrajectoryRenderer:
 
     def set_line_mode(self, checked):
         self._line_mode = checked
-        for scatter, line in zip(self._scatters, self._lines):
-            line.setVisible(checked)
-            scatter.setVisible(not checked)
+        for index, (scatter, line) in enumerate(zip(self._scatters, self._lines)):
+            line_mode = self._trajectory_line_mode(index)
+            line.setVisible(line_mode)
+            scatter.setVisible(not line_mode)
 
     def set_point_mode(self, checked):
         self._heads_visible = checked
@@ -87,15 +88,27 @@ class TrajectoryRenderer:
     def set_trajectories(self, trajectories):
         self._trajectories = trajectories
 
+    def _trajectory_line_mode(self, i):
+        traj = self._trajectories[i] if i < len(self._trajectories) else None
+        if traj is None:
+            return self._line_mode
+        mode = traj.get("render_mode")
+        if mode is None:
+            return self._line_mode
+        return str(mode).lower() == "line"
+
     def get_traj_colour_alpha(self, i):
         traj = self._trajectories[i] if i < len(self._trajectories) else None
-        if traj is not None:
-            qc = traj["colour"]
+        qc = traj.get("colour") if traj is not None else None
+        if hasattr(qc, "redF"):
             base_colour = (qc.redF(), qc.greenF(), qc.blueF())
             alpha = self._current_alpha * traj.get("alpha", 1.0)
         else:
             base_colour = self._base_colour
-            alpha = self._current_alpha
+            if traj:
+                alpha = self._current_alpha * traj.get("alpha", 1.0)
+            else:
+                alpha = self._current_alpha
         return base_colour, alpha
 
     def plot_trail(self, n, alpha=1.0, base_colour=None):
@@ -133,9 +146,10 @@ class TrajectoryRenderer:
                 break
             _, colour = self.get_traj_tail_data(i, sol)
             self._scatters[i].setData(color=colour)
-            self._scatters[i].setVisible(not self._line_mode)
+            line_mode = self._trajectory_line_mode(i)
+            self._scatters[i].setVisible(not line_mode)
             self._lines[i].setData(color=colour)
-            self._lines[i].setVisible(self._line_mode)
+            self._lines[i].setVisible(line_mode)
             if i < len(self._heads):
                 self._heads[i].setData(color=colour[-1:])
 
@@ -147,10 +161,11 @@ class TrajectoryRenderer:
 
         for i, sol in enumerate(solutions):
             segment, colour = self.get_traj_tail_data(i, sol)
+            line_mode = self._trajectory_line_mode(i)
             self._scatters[i].setData(pos=segment, color=colour)
-            self._scatters[i].setVisible(not self._line_mode)
+            self._scatters[i].setVisible(not line_mode)
             self._lines[i].setData(pos=segment, color=colour)
-            self._lines[i].setVisible(self._line_mode)
+            self._lines[i].setVisible(line_mode)
             if i < len(self._heads):
                 self._heads[i].setData(pos=segment[-1:], color=colour[-1:])
 
@@ -187,10 +202,11 @@ class TrajectoryRenderer:
             if i >= len(self._scatters):
                 break
             segment, colour = self.get_traj_tail_data(i, sol)
+            line_mode = self._trajectory_line_mode(i)
             self._scatters[i].setData(pos=segment, color=colour)
-            self._scatters[i].setVisible(not self._line_mode)
+            self._scatters[i].setVisible(not line_mode)
             self._lines[i].setData(pos=segment, color=colour)
-            self._lines[i].setVisible(self._line_mode)
+            self._lines[i].setVisible(line_mode)
             if i < len(self._heads):
                 self._heads[i].setData(pos=segment[-1:], color=colour[-1:])
 
