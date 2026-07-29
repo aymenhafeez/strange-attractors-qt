@@ -1,5 +1,5 @@
 import pyqtgraph.opengl as gl
-from pyqtgraph.Qt import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .animation_controller import AnimationController
 from .camera_controller import CameraController
@@ -8,6 +8,92 @@ from .projection_emitter import ProjectionEmitter
 from .style import CONTAINER
 from .trajectory_renderer import TrajectoryRenderer
 from .viewport_overlay import ViewportOverlay
+
+VIEWPORT_CORNER_RADIUS = 8
+
+
+def _bottom_rounded_path(width, height, radius):
+    radius = max(0, min(int(radius), int(width) // 2, int(height) // 2))
+    if width <= 0 or height <= 0 or radius <= 0:
+        return None
+
+    right = float(width)
+    bottom = float(height)
+    radius = float(radius)
+
+    path = QtGui.QPainterPath()
+    path.moveTo(0.0, 0.0)
+    path.lineTo(right, 0.0)
+    path.lineTo(right, bottom - radius)
+    path.arcTo(
+        right - radius * 2.0,
+        bottom - radius * 2.0,
+        radius * 2.0,
+        radius * 2.0,
+        0.0,
+        -90.0,
+    )
+    path.lineTo(radius, bottom)
+    path.arcTo(
+        0.0,
+        bottom - radius * 2.0,
+        radius * 2.0,
+        radius * 2.0,
+        270.0,
+        -90.0,
+    )
+    path.lineTo(0.0, 0.0)
+    path.closeSubpath()
+    return path
+
+
+def _bottom_rounded_mask(width, height, radius):
+    path = _bottom_rounded_path(width, height, radius)
+    if path is None:
+        return None
+
+    mask = QtGui.QBitmap(int(width), int(height))
+    mask.fill(QtCore.Qt.GlobalColor.color0)
+    painter = QtGui.QPainter(mask)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+    painter.setPen(QtCore.Qt.PenStyle.NoPen)
+    painter.setBrush(QtCore.Qt.GlobalColor.color1)
+    painter.drawPath(path)
+    painter.end()
+
+    return mask
+
+
+class _BottomRoundedMaskMixin:
+    def _init_bottom_rounded_mask(self, radius):
+        self._corner_radius = int(radius)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._apply_corner_mask()
+
+    def _apply_corner_mask(self):
+        mask = _bottom_rounded_mask(
+            self.width(),
+            self.height(),
+            self._corner_radius,
+        )
+        if mask is None:
+            self.clearMask()
+            return
+        self.setMask(mask)
+
+
+class _RoundedViewportContainer(_BottomRoundedMaskMixin, QtWidgets.QWidget):
+    def __init__(self, parent=None, *, radius=VIEWPORT_CORNER_RADIUS):
+        super().__init__(parent)
+        self._init_bottom_rounded_mask(radius)
+
+
+class _RoundedGLViewWidget(_BottomRoundedMaskMixin, gl.GLViewWidget):
+    def __init__(self, parent=None, *, radius=VIEWPORT_CORNER_RADIUS):
+        super().__init__(parent)
+        self._init_bottom_rounded_mask(radius)
 
 
 class ViewManager(QtCore.QObject):
@@ -19,13 +105,13 @@ class ViewManager(QtCore.QObject):
 
         self._repositioning = False
 
-        self.container = QtWidgets.QWidget()
+        self.container = _RoundedViewportContainer()
         self.container.setStyleSheet(CONTAINER)
         container_layout = QtWidgets.QGridLayout(self.container)
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(0)
 
-        self.view = gl.GLViewWidget()
+        self.view = _RoundedGLViewWidget()
         self.camera_controller = CameraController(self.view, self)
         self.grid_overlay = GridOverlay(self.view)
         container_layout.addWidget(self.view, 0, 0)
