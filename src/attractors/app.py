@@ -222,6 +222,8 @@ class Window(QtWidgets.QMainWindow):
         self._session_state = load_session(self._settings)
         self._session_reset_requested = False
         self._perf = PerfProfiler()
+        self._process_status_visible = PROCESS_STATUS_DEFAULT_VISIBLE
+        self._app_status_message = ""
         self.current_n = 100000
         self.current_t_max = 50
         self.current_name = _session_attractor_name(self._session_state)
@@ -353,7 +355,7 @@ class Window(QtWidgets.QMainWindow):
                 int(WINDOW_WIDTH * 0.23),
             ]
         )
-        self.main_splitter.setStyleSheet(SPLITTER_HANDLE)
+        self.main_splitter.setStyleSheet(SPLITTER_HANDLE_HOVER)
         visualiser_page = QtWidgets.QWidget()
         visualiser_layout = QtWidgets.QHBoxLayout(visualiser_page)
         visualiser_layout.setContentsMargins(0, 0, 0, 0)
@@ -648,6 +650,11 @@ class Window(QtWidgets.QMainWindow):
                 self._toggle_bifurcation()
             if panels.get("jupyter_console"):
                 self._toggle_jupyter_console()
+            if "performance_status" in panels:
+                Window._set_process_status_visible(
+                    self,
+                    bool(panels["performance_status"]),
+                )
 
         dock_layout = state.get("workspace_dock_layout")
         if isinstance(dock_layout, dict):
@@ -676,6 +683,7 @@ class Window(QtWidgets.QMainWindow):
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
         toolbar.setIconSize(QtCore.QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
+        toolbar.setStyleSheet(SCENE_TOOLBAR)
         self.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
         self.scene_toolbar = toolbar
 
@@ -848,6 +856,11 @@ class Window(QtWidgets.QMainWindow):
             "Console",
             self._toggle_jupyter_console,
         )
+        self.toolbar_process_status_action = self._add_panel_menu_action(
+            tools_menu,
+            "Status bar",
+            lambda: Window._toggle_process_status(self),
+        )
         tools_menu.addSeparator()
         open_folder_action = tools_menu.addAction("Open preset folder")
         open_folder_action.triggered.connect(self._open_preset_folder)
@@ -897,7 +910,7 @@ class Window(QtWidgets.QMainWindow):
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         self.app_status_label.setStyleSheet(
-            "border: none; padding: 0 4px; font-size: 12px; color: #178640;"
+            "border: none; padding: 0 4px 1px 4px; font-size: 12px; color: #178640;"
         )
         self.process_status = ProcessUsageStatus()
         status_bar.addWidget(self.app_status_label, 1)
@@ -1033,6 +1046,7 @@ class Window(QtWidgets.QMainWindow):
             QtCore.QSignalBlocker(self.toolbar_poincare_action),
             QtCore.QSignalBlocker(self.toolbar_bifurcation_action),
             QtCore.QSignalBlocker(self.toolbar_jupyter_console_action),
+            QtCore.QSignalBlocker(self.toolbar_process_status_action),
         ):
             self.toolbar_lyapunov_action.setChecked(
                 _panel_visible(self, "lyapunov_panel")
@@ -1047,6 +1061,13 @@ class Window(QtWidgets.QMainWindow):
                 _panel_visible(self, "bifurcation_panel")
             )
             self.toolbar_jupyter_console_action.setChecked(_lab_visible(self))
+            self.toolbar_process_status_action.setChecked(
+                getattr(
+                    self,
+                    "_process_status_visible",
+                    PROCESS_STATUS_DEFAULT_VISIBLE,
+                )
+            )
         Window._sync_jupyter_workspace_state(self)
 
     def _set_process_status_visible(self, visible):
@@ -1085,7 +1106,7 @@ class Window(QtWidgets.QMainWindow):
             colour = "#ff6b6b" if error else "#178640"
             label.setText(self._app_status_message)
             label.setStyleSheet(
-                f"border: none; padding: 0 4px; font-size: 12px; color: {colour};"
+                f"border: none; padding: 0 4px 3px 4px; font-size: 12px; color: {colour};"
             )
         else:
             controls = getattr(self, "controls", None)

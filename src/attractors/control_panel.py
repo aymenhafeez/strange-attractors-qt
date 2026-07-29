@@ -39,7 +39,7 @@ class ControlPanel(QtWidgets.QWidget):
         outer_layout.addWidget(inner)
 
         self.panel_layout = QtWidgets.QVBoxLayout(inner)
-        self.panel_layout.setContentsMargins(4, 2, 2, 4)
+        self.panel_layout.setContentsMargins(4, 2, 0, 4)
         self.panel_layout.setSpacing(7)
 
         self.current_name = next(iter(ATTRACTORS.keys()))
@@ -65,10 +65,10 @@ class ControlPanel(QtWidgets.QWidget):
         self.dropdown.setMenu(menu)
 
         self.controls_scroll = QtWidgets.QScrollArea()
+        self.controls_scroll.setObjectName("sidePanelScroll")
         self.controls_scroll.setWidgetResizable(True)
         self.controls_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.controls_tab = QtWidgets.QWidget()
-        self.controls_tab.setObjectName("sidePanelFrame")
         self.controls_layout = QtWidgets.QVBoxLayout(self.controls_tab)
         self.controls_layout.setContentsMargins(8, 8, 8, 8)
         self.controls_layout.setSpacing(7)
@@ -173,8 +173,8 @@ class ControlPanel(QtWidgets.QWidget):
 
         self.status_label = QtWidgets.QLabel("")
         self.status_label.setWordWrap(True)
-        self.status_label.setMinimumHeight(28)
         self.status_label.setStyleSheet("color: transparent; font-size: 11px;")
+        self.status_label.hide()
 
         self.controls_layout.addWidget(self.status_label)
 
@@ -463,3 +463,4 @@ class ControlPanel(QtWidgets.QWidget):
     def clear_status(self):
         self.status_label.clear()
         self.status_label.setStyleSheet("color: transparent; font-size: 11px;")
+        self.status_label.hide()

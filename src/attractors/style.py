@@ -13,16 +13,7 @@ SLIDER_PARAMS = "color: white; font-weight: bold;"
 
 CONTAINER = "background: #000; border: none;"
 
-SPLITTER_HANDLE = """
-    QSplitter::handle {
-        background-color: transparent;
-    }
-    QSplitter::handle:horizontal {
-        width: 3px;
-    }
-    QSplitter::handle:vertical {
-        height: 3px;
-    }
+SPLITTER_HANDLE_HOVER = """
     QSplitter::handle:hover {
         background-color: palette(highlight);
     }
