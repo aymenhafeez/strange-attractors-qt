@@ -26,6 +26,7 @@ from .presets import (
     preset_metadata,
     save_named_preset,
 )
+from .process_metrics import ProcessUsageStatus
 from .projection_panel import ProjectionPanel
 from .registry import ATTRACTORS
 from .right_panel import RightPanel
@@ -290,6 +291,7 @@ class Window(QtWidgets.QMainWindow):
         self.lab_panel.follow_requested.connect(self._on_lab_follow_requested)
 
         self._build_toolbar()
+        self._build_status_bar()
 
         self.workspace_dock_area = DockArea()
         self.viewport_dock = Dock("Viewport", size=(10, 12))
@@ -858,6 +860,42 @@ class Window(QtWidgets.QMainWindow):
 
         self._sync_toolbar_panel_actions()
 
+    def _build_status_bar(self):
+        status_bar = QtWidgets.QStatusBar()
+        status_bar.setSizeGripEnabled(False)
+        status_bar.setFixedHeight(18)
+        status_bar.setStyleSheet(
+            """
+            QStatusBar {
+                border: none;
+                padding: 0px;
+            }
+            QStatusBar::item {
+                border: none;
+            }
+            """
+        )
+
+        self.app_status_label = QtWidgets.QLabel("")
+        self.app_status_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        self.app_status_label.setStyleSheet(
+            "border: none; padding: 0 4px; font-size: 12px; color: #178640;"
+        )
+        self.process_status = ProcessUsageStatus()
+        status_bar.addWidget(self.app_status_label, 1)
+        status_bar.addPermanentWidget(self.process_status)
+        self.setStatusBar(status_bar)
+        Window._set_process_status_visible(
+            self,
+            getattr(
+                self,
+                "_process_status_visible",
+                PROCESS_STATUS_DEFAULT_VISIBLE,
+            ),
+        )
+
     def _add_checked_toolbar_action(
         self,
         toolbar,
@@ -994,6 +1032,82 @@ class Window(QtWidgets.QMainWindow):
             )
             self.toolbar_jupyter_console_action.setChecked(_lab_visible(self))
         Window._sync_jupyter_workspace_state(self)
+
+    def _set_process_status_visible(self, visible):
+        self._process_status_visible = bool(visible)
+
+        status_bar_getter = getattr(self, "statusBar", None)
+        status_bar = status_bar_getter() if status_bar_getter is not None else None
+        process_status = getattr(self, "process_status", None)
+        if process_status is not None:
+            process_status.setVisible(self._process_status_visible)
+            process_status.set_active(self._process_status_visible)
+        if status_bar is not None:
+            status_bar.setVisible(self._process_status_visible)
+
+        action = getattr(self, "toolbar_process_status_action", None)
+        if action is not None and action.isChecked() != self._process_status_visible:
+            with QtCore.QSignalBlocker(action):
+                action.setChecked(self._process_status_visible)
+
+        Window._sync_status_bar_visibility(self)
+
+    def _toggle_process_status(self):
+        Window._set_process_status_visible(
+            self,
+            not getattr(
+                self,
+                "_process_status_visible",
+                PROCESS_STATUS_DEFAULT_VISIBLE,
+            ),
+        )
+
+    def _set_app_status(self, message, error=False):
+        self._app_status_message = str(message)
+        label = getattr(self, "app_status_label", None)
+        if label is not None:
+            colour = "#ff6b6b" if error else "#178640"
+            label.setText(self._app_status_message)
+            label.setStyleSheet(
+                f"border: none; padding: 0 4px; font-size: 12px; color: {colour};"
+            )
+        else:
+            controls = getattr(self, "controls", None)
+            set_status = getattr(controls, "set_status", None)
+            if set_status is not None:
+                set_status(message, error=error)
+
+        Window._sync_status_bar_visibility(self)
+
+    def _clear_app_status(self):
+        self._app_status_message = ""
+        label = getattr(self, "app_status_label", None)
+        if label is not None:
+            label.clear()
+        else:
+            controls = getattr(self, "controls", None)
+            clear_status = getattr(controls, "clear_status", None)
+            if clear_status is not None:
+                clear_status()
+
+        Window._sync_status_bar_visibility(self)
+
+    def _sync_status_bar_visibility(self):
+        status_bar_getter = getattr(self, "statusBar", None)
+        status_bar = status_bar_getter() if status_bar_getter is not None else None
+        if status_bar is None:
+            return
+
+        status_bar.setVisible(
+            bool(
+                getattr(
+                    self,
+                    "_process_status_visible",
+                    PROCESS_STATUS_DEFAULT_VISIBLE,
+                )
+                or getattr(self, "_app_status_message", "")
+            )
+        )
 
     def _build_jupyter_toolbar_actions(self, toolbar):
         self._jupyter_toolbar_actions = []
