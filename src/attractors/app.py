@@ -33,7 +33,7 @@ from .right_panel import RightPanel
 from .session import clear_session, load_session, save_session, session_settings
 from .solution_validation import validate_solutions
 from .solve_manager import SolveManager
-from .style import SPLITTER_HANDLE
+from .style import SCENE_TOOLBAR, SPLITTER_HANDLE
 from .system import SystemInspector
 from .view_manager import ViewManager
 
@@ -43,6 +43,7 @@ PARTIAL_N = 40000
 PROJECTION_UPDATE_INTERVAL_MS = 100
 MAIN_VIEW_MARGIN = 8
 TOOLBAR_ICON_SIZE = 18
+PROCESS_STATUS_DEFAULT_VISIBLE = True
 
 
 def _should_update_projection(now_ms, last_update_ms, interval_ms):
