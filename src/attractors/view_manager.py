@@ -247,6 +247,9 @@ class ViewManager(QtCore.QObject):
     def is_animating(self):
         return self.animation_controller.is_active()
 
+    def set_loop_animation(self, checked):
+        self.animation_controller.set_loop(checked)
+
     def _get_traj_tail_data(self, i, sol):
         return self.trajectory_renderer.get_traj_tail_data(i, sol)
 

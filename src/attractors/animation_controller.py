@@ -20,6 +20,7 @@ class AnimationController:
             self._timer.timeout.connect(self._tick)
         self._frame = 0
         self._step = 100
+        self._loop = False
 
     @property
     def frame(self):
@@ -51,6 +52,9 @@ class AnimationController:
     def _tick(self):
         self.advance()
 
+    def set_loop(self, checked):
+        self._loop = checked
+
     def advance(self):
         finished = self._on_frame(self._frame, self._step)
         if finished is None:
@@ -58,7 +62,10 @@ class AnimationController:
 
         self._frame = finished["frame"]
         if finished["done"]:
-            self.stop()
-            if self._on_finished is not None:
-                self._on_finished()
+            if self._loop:
+                self._frame = 0
+            else:
+                self.stop()
+                if self._on_finished is not None:
+                    self._on_finished()
         return finished

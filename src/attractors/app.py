@@ -527,6 +527,7 @@ class Window(QtWidgets.QMainWindow):
             ("trail", "toolbar_trail_action"),
             ("grid", "toolbar_grid_action"),
             ("orbit", "toolbar_orbit_action"),
+            ("loop", "toolbar_loop_action"),
         ]:
             action = getattr(self, attr, None)
             if action is not None:
@@ -543,6 +544,7 @@ class Window(QtWidgets.QMainWindow):
             ("trail", getattr(self, "toolbar_trail_action", None)),
             ("grid", getattr(self, "toolbar_grid_action", None)),
             ("orbit", getattr(self, "toolbar_orbit_action", None)),
+            ("loop", getattr(self, "toolbar_loop_action", None)),
         ]:
             if key in options and action is not None:
                 action.setChecked(bool(options[key]))
@@ -695,6 +697,19 @@ class Window(QtWidgets.QMainWindow):
             self._on_anim_toggled,
         )
         self.toolbar_anim_action.setToolTip("Play animation")
+
+        self.toolbar_loop_action = self._add_checked_toolbar_action(
+            toolbar,
+            "Loop",
+            False,
+            self.scene.set_loop_animation,
+            "Loop animation",
+            icon=Window._toolbar_icon(
+                self,
+                "media-playlist-repeat",
+                QtWidgets.QStyle.StandardPixmap.SP_BrowserReload,
+            ),
+        )
 
         toolbar.addSeparator()
 
