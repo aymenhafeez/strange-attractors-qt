@@ -28,6 +28,7 @@ from .presets import (
 )
 from .projection_panel import ProjectionPanel
 from .registry import ATTRACTORS
+from .right_panel import RightPanel
 from .session import clear_session, load_session, save_session, session_settings
 from .solution_validation import validate_solutions
 from .solve_manager import SolveManager
@@ -236,6 +237,8 @@ class Window(QtWidgets.QMainWindow):
         self.scene.projections_data.connect(self._on_projections_data)
 
         self.controls = ControlPanel()
+        self.right_panel = RightPanel()
+        self.controls.set_right_panel(self.right_panel)
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._on_controls_solve_requested)
         self.controls.n_changed.connect(self._on_n_changed)
@@ -244,10 +247,14 @@ class Window(QtWidgets.QMainWindow):
         self.controls.orbit_speed_changed.connect(self.scene.set_orbit_speed)
         self.controls.alpha_slider.valueChanged.connect(self.scene.set_alpha)
         self.controls.alpha_spin.valueChanged.connect(self.scene.set_alpha)
-        self.controls.preset_save_requested.connect(self._save_preset)
-        self.controls.preset_load_requested.connect(self._load_preset)
-        self.controls.preset_delete_requested.connect(self._delete_preset)
-        self.controls.preset_selected.connect(self._update_preset_summary)
+        self.right_panel.preset_panel.preset_save_requested.connect(self._save_preset)
+        self.right_panel.preset_panel.preset_load_requested.connect(self._load_preset)
+        self.right_panel.preset_panel.preset_delete_requested.connect(
+            self._delete_preset
+        )
+        self.right_panel.preset_panel.preset_selected.connect(
+            self._update_preset_summary
+        )
         self.controls.traj_tail_length_changed.connect(self.scene.set_traj_tail_length)
         self.controls.trajectory_panel.trajectories_changed.connect(
             self._on_trajectories_changed
@@ -327,7 +334,7 @@ class Window(QtWidgets.QMainWindow):
         main_area_layout.setContentsMargins(
             0,
             MAIN_VIEW_MARGIN,
-            MAIN_VIEW_MARGIN,
+            0,
             MAIN_VIEW_MARGIN,
         )
         main_area_layout.addWidget(self.workspace_dock_area)
@@ -335,8 +342,13 @@ class Window(QtWidgets.QMainWindow):
         self.main_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         self.main_splitter.addWidget(self.controls)
         self.main_splitter.addWidget(main_area)
+        self.main_splitter.addWidget(self.right_panel)
         self.main_splitter.setSizes(
-            [int(WINDOW_WIDTH * 0.25), int(WINDOW_WIDTH * 0.75)]
+            [
+                int(WINDOW_WIDTH * 0.22),
+                int(WINDOW_WIDTH * 0.55),
+                int(WINDOW_WIDTH * 0.23),
+            ]
         )
         self.main_splitter.setStyleSheet(SPLITTER_HANDLE)
         visualiser_page = QtWidgets.QWidget()
@@ -664,6 +676,16 @@ class Window(QtWidgets.QMainWindow):
 
         style_icon = QtWidgets.QStyle.StandardPixmap
 
+        self.toolbar_left_panel_action = Window._add_checked_icon_toolbar_action(
+            self,
+            toolbar,
+            Window._side_panel_icon(self, "left"),
+            True,
+            lambda checked: Window._set_left_panel_visible(self, checked),
+            "Show left panel",
+        )
+        toolbar.addSeparator()
+
         self.toolbar_anim_action = toolbar.addAction(
             self._icon(style_icon.SP_MediaPlay),
             "Play",
@@ -792,6 +814,14 @@ class Window(QtWidgets.QMainWindow):
         )
         toolbar.addWidget(spacer)
         self._build_jupyter_toolbar_actions(toolbar)
+        self.toolbar_right_panel_action = Window._add_checked_icon_toolbar_action(
+            self,
+            toolbar,
+            Window._side_panel_icon(self, "right"),
+            True,
+            lambda checked: Window._set_right_panel_visible(self, checked),
+            "Show right panel",
+        )
 
         self._sync_toolbar_panel_actions()
 
@@ -803,9 +833,77 @@ class Window(QtWidgets.QMainWindow):
         action.toggled.connect(callback)
         return action
 
+    def _add_checked_icon_toolbar_action(
+        self, toolbar, icon, checked, callback, tooltip
+    ):
+        action = toolbar.addAction(icon, "")
+        action.setCheckable(True)
+        action.setChecked(bool(checked))
+        action.setToolTip(tooltip)
+        action.toggled.connect(callback)
+        Window._keep_toolbar_action_from_taking_focus(self, toolbar, action)
+        return action
+
+    def _side_panel_icon(self, side):
+        icon = QtGui.QIcon.fromTheme(f"sidebar-show-{side}")
+        if icon.isNull():
+            icon = Window._standard_icon(
+                self,
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            )
+        return icon
+
+    def _set_left_panel_visible(self, checked):
+        controls = getattr(self, "controls", None)
+        splitter = getattr(self, "main_splitter", None)
+        if controls is None:
+            return
+
+        if checked:
+            controls.show()
+            if splitter is not None:
+                sizes = splitter.sizes()
+                if len(sizes) >= 3 and sizes[0] == 0:
+                    left_size = getattr(
+                        self, "_left_panel_splitter_size", int(WINDOW_WIDTH * 0.22)
+                    )
+                    sizes[0] = left_size
+                    splitter.setSizes(sizes)
+            return
+
+        if splitter is not None:
+            sizes = splitter.sizes()
+            if len(sizes) >= 3 and sizes[0] > 0:
+                self._left_panel_splitter_size = sizes[0]
+        controls.hide()
+
     def _set_trail_mode(self, checked):
         self.scene.set_trail_mode(checked)
         self.controls.set_trail_options_visible(checked)
+
+    def _set_right_panel_visible(self, checked):
+        right_panel = getattr(self, "right_panel", None)
+        splitter = getattr(self, "main_splitter", None)
+        if right_panel is None:
+            return
+
+        if checked:
+            right_panel.show()
+            if splitter is not None:
+                sizes = splitter.sizes()
+                if len(sizes) >= 3 and sizes[2] == 0:
+                    right_panel_size = getattr(
+                        self, "_right_panel_splitter_size", int(WINDOW_WIDTH * 0.23)
+                    )
+                    sizes[2] = right_panel_size
+                    splitter.setSizes(sizes)
+            return
+
+        if splitter is not None:
+            sizes = splitter.sizes()
+            if len(sizes) >= 3 and sizes[2] > 0:
+                self._right_panel_splitter_size = sizes[2]
+        right_panel.hide()
 
     def _build_panel_dock(self, title, panel):
         dock = Dock(title, size=(10, 4), closable=True)
