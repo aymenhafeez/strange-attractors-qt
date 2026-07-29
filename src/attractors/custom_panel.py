@@ -16,21 +16,30 @@ RANGE_PARAM_WIDTH = 42
 class CustomPanel(QtWidgets.QWidget):
     compile_requested = QtCore.pyqtSignal(object)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, collapsible=True):
         super().__init__(parent)
+        self._collapsible = collapsible
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
+        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
-        self.toggle_btn = QtWidgets.QPushButton("Custom ▾")
-        self.toggle_btn.clicked.connect(self._toggle_content)
-        layout.addWidget(self.toggle_btn)
+        self.toggle_btn = None
+        if self._collapsible:
+            self.toggle_btn = QtWidgets.QPushButton("Custom ▾")
+            self.toggle_btn.clicked.connect(self._toggle_content)
+            layout.addWidget(self.toggle_btn)
 
         self._content = QtWidgets.QWidget()
         self._content.setObjectName("customPanelContent")
+        self._content.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Preferred,
+            QtWidgets.QSizePolicy.Policy.Maximum,
+        )
         content_layout = QtWidgets.QVBoxLayout(self._content)
         content_layout.setContentsMargins(6, 6, 6, 4)
         content_layout.setSpacing(4)
+        content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
         eq_label = QtWidgets.QLabel("Equations")
         content_layout.addWidget(eq_label)
@@ -110,6 +119,8 @@ class CustomPanel(QtWidgets.QWidget):
         layout.addWidget(self._content)
 
     def _toggle_content(self):
+        if self.toggle_btn is None:
+            return
         visible = not self._content.isVisible()
         self._content.setVisible(visible)
         self.toggle_btn.setText("Custom ▾" if visible else "Custom ▸")
@@ -150,7 +161,8 @@ class CustomPanel(QtWidgets.QWidget):
             self.solve_btn.hide()
 
         self._content.setVisible(True)
-        self.toggle_btn.setText("Custom ▾")
+        if self.toggle_btn is not None:
+            self.toggle_btn.setText("Custom ▾")
 
     def _on_compile(self):
         equations = self._get_equations()
@@ -187,7 +199,7 @@ class CustomPanel(QtWidgets.QWidget):
         self.adjustSize()
 
         self._show_status(
-            f"Compiled — {len(detected_params)} parameter(s): "
+            f"Compiled - {len(detected_params)} parameter(s): "
             + ", ".join(detected_params)
             + ". Set ranges and click solve",
             error=False,
@@ -293,7 +305,7 @@ class CustomPanel(QtWidgets.QWidget):
         )
 
         self._show_status(
-            f"Compiled — {len(params)} parameter(s): "
+            f"Compiled - {len(params)} parameter(s): "
             + ", ".join(p.name for p in params),
             error=False,
         )
