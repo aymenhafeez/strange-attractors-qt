@@ -39,15 +39,56 @@ HELP_ROWS = [
         "Interpolated plane crossings",
     ),
     ("plotting", "plot_xy() / plot_xz() / plot_yz()", "Phase projection plots"),
-    ("plotting", "plot_axis(axis)", "Coordinate over time"),
-    ("plotting", "plot_radius() / plot_speed()", "Geometry time series plots"),
-    ("plotting", "plot_displacement()", "Displacement over time"),
-    ("plotting", "plot_separation()", "Trajectory separation over time"),
-    ("plotting", "plot_separation_fit()", "Log separation with fitted line"),
+    ("plotting", "plot_axis(axis, live=False)", "Coordinate over time"),
+    (
+        "plotting",
+        "plot_radius(live=False) / plot_speed(live=False)",
+        "Geometry time series plots",
+    ),
+    ("plotting", "plot_displacement(live=False)", "Displacement over time"),
+    ("plotting", "plot_separation(live=False)", "Trajectory separation over time"),
+    ("plotting", "plot_separation_fit(live=False)", "Log separation with fitted line"),
     ("plotting", "plot_crossings()", "Plane crossings as a 2D section"),
-    ("plotting", "plot_vector_field()", "Vector field on a 2D phase space slice"),
+    (
+        "plotting",
+        "plot_vector_field(live=False)",
+        "Vector field on a 2D phase space slice",
+    ),
     ("plotting", "plot_returns() / plot_return_lags()", "Recurrence plots"),
-
+    (
+        "live",
+        "plot_axis(axis, live=True, append=False)",
+        "Keep an axis time series plot linked to main",
+    ),
+    (
+        "live",
+        "plot_radius(live=True) / plot_speed(live=True)",
+        "Keep geometry time series plots linked to main",
+    ),
+    (
+        "live",
+        "plot_projection(x_axis, y_axis, live=True, append=False)",
+        "Keep a phase plot linked to main",
+    ),
+    (
+        "live",
+        "plot_separation(a=0, b=1, live=True, append=False)",
+        "Keep separation linked to main",
+    ),
+    (
+        "live",
+        "plot_separation_fit(a=0, b=1, live=True, append=False)",
+        "Keep log separation and fit linked to main",
+    ),
+    (
+        "live",
+        "plot_vector_field(x_axis='x', y_axis='y', live=True)",
+        "Keep a vector field slice linked to main parameters",
+    ),
+    ("live", "live_plots()", "List plots linked to the main solution"),
+    ("live", "unfollow(plot=None)", "Stop one live plot from following main"),
+    ("live", "unfollow_all()", "Stop all live plots from following main"),
+]
 EXAMPLE_ROWS = [
     (
         "Inspect current system",
@@ -77,7 +118,35 @@ EXAMPLE_ROWS = [
         "system.return_lag_summary(); system.nearest_returns(count=50)",
     ),
     ("Plot return durations", "system.plot_return_lags(count=100)"),
-]
+    ("Live z while sliders move", "system.plot_axis('z', live=True)"),
+    (
+        "Overlay coordinates",
+        (
+            "system.plot_axis('x', live=True, plot='coords', pen='r', label='x'); "
+            "system.plot_axis("
+            "'y', live=True, plot='coords', append=True, pen='g', label='y'"
+            "); "
+            "system.plot_axis("
+            "'z', live=True, plot='coords', append=True, pen='b', label='z'"
+            ")"
+        ),
+    ),
+    ("Live x-z projection", "system.plot_projection('x', 'z', live=True)"),
+    ("Live separation fit", "system.plot_separation_fit(0, 1, live=True, plot='sep')"),
+    (
+        "Live vector field slice",
+        (
+            "system.plot_vector_field("
+            "'x', 'y', live=True, fixed_axis='z', fixed_value=0, plot='field'"
+            ")"
+        ),
+    ),
+    ("Review live plots", "system.live_plots()"),
+    (
+        "Make a section plot",
+        "system.plot_crossings('z', value=25, t_max=500, n=100000)",
+    ),
+    ("Export manageable data", "df = system.sample(2000)"),
 ]
 
 
