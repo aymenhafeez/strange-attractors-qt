@@ -220,6 +220,82 @@ def _normalise_initial_conditions(initial_conditions):
     return normalised
 
 
+class LivePlotHandle:
+    def __init__(self, window, plot_name, trace_index):
+        self._window = window
+        self.plot_name = str(plot_name)
+        self.trace_index = int(trace_index)
+
+    def __repr__(self):
+        return f"LivePlotHandle(plot={self.plot_name!r}, trace={self.trace_index!r})"
+
+    def __getitem__(self, key):
+        return self.spec[key]
+
+    def get(self, key, default=None):
+        return self.spec.get(key, default)
+
+    @property
+    def spec(self):
+        return self._window._lab_live_plots[self.plot_name][self.trace_index]
+
+    @property
+    def item(self):
+        items = self._window._lab_live_item_cache()
+        return items.get((self.plot_name, self.trace_index))
+
+    @property
+    def items(self):
+        item = self.item
+
+        if item is None:
+            return ()
+        if isinstance(item, tuple):
+            return item
+
+        return (item,)
+
+    def options(self):
+        return pd.Series(dict(self.spec))
+
+    def setPen(self, pen):
+        self.spec["pen"] = pen
+        for item in self.items:
+            if hasattr(item, "setPen"):
+                item.setPen(pen)
+
+        return self
+
+    def setVisible(self, visible):
+        for item in self.items:
+            if hasattr(item, "setVisible"):
+                item.setVisible(bool(visible))
+
+        return self
+
+    def setAlpha(self, alpha, auto=False):
+        for item in self.items:
+            if hasattr(item, "setAlpha"):
+                item.setAlpha(float(alpha), auto=auto)
+
+        return self
+
+    def unfollow(self):
+        remove = self._window._remove_lab_live_trace
+        return remove(self.plot_name, self.trace_index)
+
+    def __getattr__(self, name):
+        item = self.item
+        if item is None:
+            raise AttributeError(name)
+        if isinstance(item, tuple):
+            raise TypeError(
+                f"Live plot has {len(item)} items; use .items or a handle method",
+            )
+
+        return getattr(item, name)
+
+
 class SystemInspector:
     def __init__(self, window):
         self._window = window
