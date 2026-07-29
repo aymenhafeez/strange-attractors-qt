@@ -519,6 +519,13 @@ class Window(QtWidgets.QMainWindow):
             panels["lyapunov"] = _panel_visible(self, "lyapunov_panel")
         if hasattr(self, "jupyter_console_panel"):
             panels["jupyter_console"] = _lab_visible(self)
+        panels["performance_status"] = bool(
+            getattr(
+                self,
+                "_process_status_visible",
+                PROCESS_STATUS_DEFAULT_VISIBLE,
+            )
+        )
         return panels
 
     def _collect_visual_options(self):
@@ -1321,12 +1328,12 @@ class Window(QtWidgets.QMainWindow):
             QtCore.QUrl.fromLocalFile(self._preset_directory)
         )
         if not opened:
-            self.controls.set_status("Could not open preset folder", error=True)
+            Window._set_app_status(self, "Could not open preset folder", error=True)
 
     def _reset_saved_session(self):
         clear_session(self._settings)
         self._session_reset_requested = True
-        self.controls.set_status("Saved session reset")
+        Window._set_app_status(self, "Saved session reset")
 
     def _save_session_on_close(self):
         if not self._session_reset_requested:
@@ -1364,7 +1371,7 @@ class Window(QtWidgets.QMainWindow):
     def _save_preset(self, name, notes):
         config, values = self._get_current_config_and_values()
         if config is None:
-            self.controls.set_status("No attractor selected", error=True)
+            Window._set_app_status(self, "No attractor selected", error=True)
             return
 
         preset_name = name.strip() or self._default_preset_name()
@@ -1380,16 +1387,16 @@ class Window(QtWidgets.QMainWindow):
                 notes,
             )
         except PresetError as exc:
-            self.controls.set_status(str(exc), error=True)
+            Window._set_app_status(self, str(exc), error=True)
             return
 
         self._refresh_presets(preset_name)
-        self.controls.set_status(f"Saved preset: {preset_name}")
+        Window._set_app_status(self, f"Saved preset: {preset_name}")
 
     def _load_preset(self, name):
         preset_name = name.strip()
         if not preset_name:
-            self.controls.set_status("Select a preset to load", error=True)
+            Window._set_app_status(self, "Select a preset to load", error=True)
             return
 
         try:
@@ -1397,27 +1404,27 @@ class Window(QtWidgets.QMainWindow):
                 self._preset_directory, preset_name
             )
         except PresetError as exc:
-            self.controls.set_status(str(exc), error=True)
+            Window._set_app_status(self, str(exc), error=True)
             return
 
         self._apply_loaded_preset(config, values, n, t_max)
         self._refresh_presets(preset_name)
-        self.controls.set_status(f"Loaded preset: {preset_name}")
+        Window._set_app_status(self, f"Loaded preset: {preset_name}")
 
     def _delete_preset(self, name):
         preset_name = name.strip()
         if not preset_name:
-            self.controls.set_status("Select a preset to delete", error=True)
+            Window._set_app_status(self, "Select a preset to delete", error=True)
             return
 
         try:
             delete_named_preset(self._preset_directory, preset_name)
         except PresetError as exc:
-            self.controls.set_status(str(exc), error=True)
+            Window._set_app_status(self, str(exc), error=True)
             return
 
         self._refresh_presets()
-        self.controls.set_status(f"Deleted preset: {preset_name}")
+        Window._set_app_status(self, f"Deleted preset: {preset_name}")
 
     def _get_current_config_and_values(self):
         if self.current_name == "Custom":
@@ -1554,7 +1561,7 @@ class Window(QtWidgets.QMainWindow):
                 self._solve_needed = False
                 self._dispatch_solve(full=self._full_needed)
             else:
-                self.controls.set_status("Solve failed", error=True)
+                Window._set_app_status(self, "Solve failed", error=True)
             return
 
         is_valid, message = validate_solutions(solutions)
@@ -1569,7 +1576,7 @@ class Window(QtWidgets.QMainWindow):
                 last_error=message,
                 solution_points=[],
             )
-            self.controls.set_status(message, error=True)
+            Window._set_app_status(self, message, error=True)
             if self._solve_needed:
                 self._solve_needed = False
                 full = self._full_needed
@@ -1578,7 +1585,7 @@ class Window(QtWidgets.QMainWindow):
             return
 
         perf_finish(self, solve_token, status="ok", partial=is_partial)
-        self.controls.clear_status()
+        Window._clear_app_status(self)
         self.scene.display_solutions(solutions, is_partial)
 
         if not is_partial:
@@ -1692,7 +1699,7 @@ class Window(QtWidgets.QMainWindow):
         token = getattr(self, "_lyapunov_perf_tokens", {}).pop(request_id, None)
         perf_finish(self, token)
         _set_lyapunov_display(self, lyap, ky_dim, t_hist, lyap_hist)
-        self.controls.clear_status()
+        Window._clear_app_status(self)
 
     def _on_lyapunov_failed(self, request_id, message):
         if request_id != self._active_lyapunov_request_id:
@@ -1703,7 +1710,7 @@ class Window(QtWidgets.QMainWindow):
 
         token = getattr(self, "_lyapunov_perf_tokens", {}).pop(request_id, None)
         perf_finish(self, token, status="failed")
-        self.controls.set_status(f"Lyapunov failed: {message}", error=True)
+        Window._set_app_status(self, f"Lyapunov failed: {message}", error=True)
 
     def _panel_dock_for(self, panel):
         for dock in getattr(self, "_panel_docks", {}).values():
@@ -1841,7 +1848,7 @@ class Window(QtWidgets.QMainWindow):
             token = getattr(self, "_lyapunov_perf_tokens", {}).pop(request_id, None)
             perf_finish(self, token, status="cancelled")
         self._active_lyapunov_request_id = None
-        self.controls.clear_status()
+        Window._clear_app_status(self)
 
     def _close_lyapunov_panel(self):
         Window._cancel_lyapunov_analysis(self)
