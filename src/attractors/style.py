@@ -30,11 +30,30 @@ SPLITTER_HANDLE = """
 
 LYAPUNOV_PLOT = "background-color: rgba(0, 0, 0, 0); border: 0px"
 
+SCENE_TOOLBAR = """
+    QToolBar#sceneToolbar {
+        border: 0px;
+        border-bottom: 0px;
+    }
+"""
+
+SIDE_PANEL = """
+    QWidget#sidePanelFrame {
+        background: transparent;
+        border: 1px solid #aaa;
+        border-radius: 6px;
+    }
+    QScrollArea {
+        background: transparent;
+        border: none;
+    }
+"""
+
 CUSTOM_PANEL = """
     QWidget#customPanelContent {
         background-color: rgba(0, 0, 0, 240);
         border: 1px solid #aaa;
-        border-radius: 0px;
+        border-radius: 6px;
     }
     QWidget#rowsContainer {
         border: none;

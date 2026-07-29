@@ -2,9 +2,8 @@ from functools import partial
 
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .custom_panel import CustomPanel
 from .registry import ATTRACTORS
-from .trajectory_panel import TrajectoryPanel
+from .style import SIDE_PANEL
 
 STEP = 1000
 
@@ -24,15 +23,12 @@ class ControlPanel(QtWidgets.QWidget):
     t_max_changed = QtCore.pyqtSignal(int)
     animation_speed_changed = QtCore.pyqtSignal(int)
     orbit_speed_changed = QtCore.pyqtSignal(int)
-    preset_save_requested = QtCore.pyqtSignal(str, str)
-    preset_load_requested = QtCore.pyqtSignal(str)
-    preset_delete_requested = QtCore.pyqtSignal(str)
-    preset_selected = QtCore.pyqtSignal(str)
     traj_tail_length_changed = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("controlPanel")
+        self.setStyleSheet(SIDE_PANEL)
 
         # plain QWidget to work around objectName selector bug on QWidget subclasses
         inner = QtWidgets.QWidget()
@@ -43,17 +39,19 @@ class ControlPanel(QtWidgets.QWidget):
         outer_layout.addWidget(inner)
 
         self.panel_layout = QtWidgets.QVBoxLayout(inner)
-        self.panel_layout.setContentsMargins(8, 8, 8, 8)
+        self.panel_layout.setContentsMargins(4, 2, 2, 4)
         self.panel_layout.setSpacing(7)
 
         self.current_name = next(iter(ATTRACTORS.keys()))
+        self.right_panel = None
+        self.trajectory_panel = None
+        self.custom_panel = None
+        self.preset_panel = None
         self.slider_rows = []
         self.n_slider_row = None
         self.n_slider_wrapper = None
         self.t_max_slider_row = None
         self.t_max_slider_wrapper = None
-
-        options = QtWidgets.QHBoxLayout()
 
         self.dropdown = QtWidgets.QPushButton(next(iter(ATTRACTORS.keys())))
         menu = QtWidgets.QMenu(self.dropdown)
@@ -66,17 +64,20 @@ class ControlPanel(QtWidgets.QWidget):
         custom_action.triggered.connect(partial(self._on_attractor_selected, "Custom"))
         self.dropdown.setMenu(menu)
 
-        options.addWidget(self.dropdown)
-        self.panel_layout.addLayout(options)
-
         self.controls_scroll = QtWidgets.QScrollArea()
         self.controls_scroll.setWidgetResizable(True)
+        self.controls_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.controls_tab = QtWidgets.QWidget()
+        self.controls_tab.setObjectName("sidePanelFrame")
         self.controls_layout = QtWidgets.QVBoxLayout(self.controls_tab)
         self.controls_layout.setContentsMargins(8, 8, 8, 8)
         self.controls_layout.setSpacing(7)
         self.controls_scroll.setWidget(self.controls_tab)
         self.panel_layout.addWidget(self.controls_scroll)
+
+        options = QtWidgets.QHBoxLayout()
+        options.addWidget(self.dropdown)
+        self.controls_layout.addLayout(options)
 
         alpha_row = QtWidgets.QHBoxLayout()
         alpha_row.setSpacing(10)
@@ -170,54 +171,11 @@ class ControlPanel(QtWidgets.QWidget):
         self.traj_tail_wrapper = traj_tail_wrapper
         self.controls_layout.addWidget(traj_tail_wrapper)
 
-        self.preset_toggle_btn = QtWidgets.QPushButton("Presets ▸")
-        self.preset_toggle_btn.clicked.connect(self._toggle_preset_content)
-
-        self.preset_content = QtWidgets.QWidget()
-        self.preset_content.setObjectName("customPanelContent")
-
-        self.preset_label = QtWidgets.QLabel("Preset library")
-        self.preset_name_edit = QtWidgets.QLineEdit()
-        self.preset_name_edit.setPlaceholderText("Preset name")
-        self.preset_notes_edit = QtWidgets.QTextEdit()
-        self.preset_notes_edit.setPlaceholderText("Notes")
-        self.preset_notes_edit.setFixedHeight(54)
-        self.preset_combo = QtWidgets.QComboBox()
-        self.preset_combo.currentTextChanged.connect(self._on_preset_selected)
-        self.preset_summary = QtWidgets.QLabel("No saved presets")
-        self.preset_summary.setWordWrap(True)
-        self.save_preset_button = QtWidgets.QPushButton("Save")
-        self.save_preset_button.clicked.connect(self._emit_preset_save)
-        self.load_preset_button = QtWidgets.QPushButton("Load")
-        self.load_preset_button.clicked.connect(self._emit_preset_load)
-        self.delete_preset_button = QtWidgets.QPushButton("Delete")
-        self.delete_preset_button.clicked.connect(self._emit_preset_delete)
-
-        self.preset_grid = QtWidgets.QGridLayout()
-        self.preset_grid.setContentsMargins(6, 6, 6, 4)
-        self.preset_grid.setSpacing(6)
-        self.preset_grid.addWidget(self.preset_label, 0, 0, 1, 2)
-        self.preset_grid.addWidget(self.preset_combo, 1, 0, 1, 2)
-        self.preset_grid.addWidget(self.preset_name_edit, 2, 0, 1, 2)
-        self.preset_grid.addWidget(self.preset_notes_edit, 3, 0, 1, 2)
-        self.preset_grid.addWidget(self.preset_summary, 4, 0, 1, 2)
-        self.preset_grid.addWidget(self.save_preset_button, 5, 0)
-        self.preset_grid.addWidget(self.load_preset_button, 5, 1)
-        self.preset_grid.addWidget(self.delete_preset_button, 6, 0, 1, 2)
-        self.preset_content.setLayout(self.preset_grid)
-        self.preset_content.setVisible(False)
-
         self.status_label = QtWidgets.QLabel("")
         self.status_label.setWordWrap(True)
         self.status_label.setMinimumHeight(28)
         self.status_label.setStyleSheet("color: transparent; font-size: 11px;")
 
-        self.trajectory_panel = TrajectoryPanel()
-        self.custom_panel = CustomPanel()
-        self.custom_panel.setVisible(False)
-
-        self.controls_layout.addWidget(self.preset_toggle_btn)
-        self.controls_layout.addWidget(self.preset_content)
         self.controls_layout.addWidget(self.status_label)
 
     def _on_attractor_selected(self, name):
@@ -227,38 +185,27 @@ class ControlPanel(QtWidgets.QWidget):
     def set_current_attractor(self, name):
         self.current_name = name
         self.dropdown.setText(name)
-        self.custom_panel.setVisible(name == "Custom")
+        if self.right_panel is not None:
+            self.right_panel.set_current_attractor(name)
+
+    def set_right_panel(self, right_panel):
+        self.right_panel = right_panel
+        self.trajectory_panel = right_panel.trajectory_panel
+        self.custom_panel = right_panel.custom_panel
+        self.preset_panel = right_panel.preset_panel
+        self.right_panel.set_current_attractor(self.current_name)
 
     def set_saved_presets(self, names, selected=None):
-        selected_name = selected or self.current_preset_name()
-        with QtCore.QSignalBlocker(self.preset_combo):
-            self.preset_combo.clear()
-            self.preset_combo.addItems(names)
-            if selected_name in names:
-                self.preset_combo.setCurrentText(selected_name)
-
-        has_presets = self.preset_combo.count() > 0
-        self.load_preset_button.setEnabled(has_presets)
-        self.delete_preset_button.setEnabled(has_presets)
-        self._on_preset_selected(self.preset_combo.currentText())
+        self.preset_panel.set_saved_presets(names, selected)
 
     def current_preset_name(self):
-        return self.preset_combo.currentText().strip()
-
-    def _preset_name_from_edit_or_combo(self):
-        return self.preset_name_edit.text().strip() or self.current_preset_name()
-
-    def _on_preset_selected(self, name):
-        with QtCore.QSignalBlocker(self.preset_name_edit):
-            self.preset_name_edit.setText(name)
-        self.preset_selected.emit(name)
+        return self.preset_panel.current_preset_name()
 
     def set_preset_notes(self, notes):
-        with QtCore.QSignalBlocker(self.preset_notes_edit):
-            self.preset_notes_edit.setPlainText(notes)
+        self.preset_panel.set_preset_notes(notes)
 
     def set_preset_summary(self, summary):
-        self.preset_summary.setText(summary or "No saved presets")
+        self.preset_panel.set_preset_summary(summary)
 
     def get_visual_options(self):
         return {
@@ -281,30 +228,11 @@ class ControlPanel(QtWidgets.QWidget):
     def set_trail_options_visible(self, visible):
         self.traj_tail_wrapper.setVisible(bool(visible))
 
-    def _toggle_preset_content(self):
-        visible = self.preset_content.isHidden()
-        self.preset_content.setVisible(visible)
-        self.preset_toggle_btn.setText("Presets ▾" if visible else "Presets ▸")
-
-    def _emit_preset_save(self):
-        self.preset_save_requested.emit(
-            self._preset_name_from_edit_or_combo(),
-            self.preset_notes_edit.toPlainText().strip(),
-        )
-
-    def _emit_preset_load(self):
-        self.preset_load_requested.emit(self.current_preset_name())
-
-    def _emit_preset_delete(self):
-        self.preset_delete_requested.emit(self.current_preset_name())
-
     def configure(self, config):
         self._clear_sliders()
         self._build_n_slider(config)
         self._build_t_max_slider(config)
         self._build_param_sliders(config)
-        self.controls_layout.addWidget(self.trajectory_panel)
-        self.controls_layout.addWidget(self.custom_panel)
         self.controls_layout.addStretch()
 
     def _clear_sliders(self):
@@ -322,8 +250,6 @@ class ControlPanel(QtWidgets.QWidget):
             self.controls_layout.removeWidget(wrapper)
             wrapper.deleteLater()
         self.slider_rows.clear()
-        self.controls_layout.removeWidget(self.trajectory_panel)
-        self.controls_layout.removeWidget(self.custom_panel)
         while self.controls_layout.count():
             item = self.controls_layout.itemAt(self.controls_layout.count() - 1)
             if item is not None and item.spacerItem():
@@ -413,15 +339,11 @@ class ControlPanel(QtWidgets.QWidget):
             spin.param_min = p.min_val
             spin.param_step = p.step
             s.valueChanged.connect(
-                lambda val, ss=s, sp=spin: self._on_param_slider_changed(
-                    val, ss, sp
-                )
+                lambda val, ss=s, sp=spin: self._on_param_slider_changed(val, ss, sp)
             )
             s.sliderReleased.connect(lambda: self.solve_requested.emit(True))
             spin.valueChanged.connect(
-                lambda val, ss=s, sp=spin: self._on_param_spin_changed(
-                    val, ss, sp
-                )
+                lambda val, ss=s, sp=spin: self._on_param_spin_changed(val, ss, sp)
             )
             row.addWidget(s)
             row.addWidget(spin)
