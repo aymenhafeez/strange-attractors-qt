@@ -730,13 +730,23 @@ class Window(QtWidgets.QMainWindow):
             True,
             self.scene.set_point_mode,
             "Show animation head points",
+            icon=Window._toolbar_icon(
+                self,
+                "media-record",
+                QtWidgets.QStyle.StandardPixmap.SP_DialogYesButton,
+            ),
         )
         self.toolbar_line_action = self._add_checked_toolbar_action(
             toolbar,
             "Line",
             False,
-            self.scene.set_line_mode,
+            lambda checked: Window._set_line_mode(self, checked),
             "Show trajectory lines",
+            icon=Window._toolbar_icon(
+                self,
+                "draw-line",
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogListView,
+            ),
         )
         self.toolbar_trail_action = self._add_checked_toolbar_action(
             toolbar,
@@ -744,13 +754,23 @@ class Window(QtWidgets.QMainWindow):
             False,
             self._set_trail_mode,
             "Show animated trajectory trails",
+            icon=Window._toolbar_icon(
+                self,
+                "draw-path",
+                QtWidgets.QStyle.StandardPixmap.SP_ArrowRight,
+            ),
         )
         self.toolbar_grid_action = self._add_checked_toolbar_action(
             toolbar,
             "Grid",
             True,
             self.scene.set_grid_visible,
-            "Show reference grid",
+            "Show grid",
+            icon=Window._toolbar_icon(
+                self,
+                "view-grid",
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            ),
         )
         self.toolbar_orbit_action = self._add_checked_toolbar_action(
             toolbar,
@@ -758,11 +778,23 @@ class Window(QtWidgets.QMainWindow):
             False,
             self.scene.set_orbit_mode,
             "Orbit camera automatically",
+            icon=Window._toolbar_icon(
+                self,
+                "object-rotate-right",
+                QtWidgets.QStyle.StandardPixmap.SP_BrowserReload,
+            ),
         )
 
         toolbar.addSeparator()
 
-        solve_action = toolbar.addAction("Solve")
+        solve_action = toolbar.addAction(
+            Window._toolbar_icon(
+                self,
+                "system-run",
+                QtWidgets.QStyle.StandardPixmap.SP_MediaPlay,
+            ),
+            "Solve",
+        )
         solve_action.setToolTip("Run a full solve")
         solve_action.triggered.connect(lambda: self._on_controls_solve_requested(True))
 
@@ -813,6 +845,7 @@ class Window(QtWidgets.QMainWindow):
             QtWidgets.QSizePolicy.Policy.Preferred,
         )
         toolbar.addWidget(spacer)
+
         self._build_jupyter_toolbar_actions(toolbar)
         self.toolbar_right_panel_action = Window._add_checked_icon_toolbar_action(
             self,
@@ -825,8 +858,20 @@ class Window(QtWidgets.QMainWindow):
 
         self._sync_toolbar_panel_actions()
 
-    def _add_checked_toolbar_action(self, toolbar, text, checked, callback, tooltip):
-        action = toolbar.addAction(text)
+    def _add_checked_toolbar_action(
+        self,
+        toolbar,
+        text,
+        checked,
+        callback,
+        tooltip,
+        *,
+        icon=None,
+    ):
+        if icon is None:
+            action = toolbar.addAction(text)
+        else:
+            action = toolbar.addAction(icon, text)
         action.setCheckable(True)
         action.setChecked(bool(checked))
         action.setToolTip(tooltip)
