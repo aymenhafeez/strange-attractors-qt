@@ -22,7 +22,17 @@ class ProjectionPanel(QtWidgets.QWidget):
         plots_layout.setSpacing(4)
         layout.addLayout(plots_layout)
 
+        self.dropdown = QtWidgets.QComboBox()
+        colourmaps = pg.colormap.listMaps(source="matplotlib")
+        self.dropdown.addItems(colourmaps)
+        self.dropdown.setCurrentText("CMRmap")
+        self.dropdown.currentTextChanged.connect(self._update_colourmap)
+        self.dropdown.setMaxVisibleItems(12)
+        self.dropdown.setStyleSheet("QComboBox { combobox-popup: 0; }")
+        layout.addWidget(self.dropdown)
+
         self.image_items = {}
+        self.colourbars = {}
         for key, (lh, lv) in [
             ("XY", ("X", "Y")),
             ("XZ", ("X", "Z")),
@@ -38,15 +48,16 @@ class ProjectionPanel(QtWidgets.QWidget):
             pw.getPlotItem().setContentsMargins(0, 10, 0, 0)
             pw.getViewBox().setAspectLocked(True)
             img = pg.ImageItem()
-            cmap = pg.colormap.get("CMRmap", source="matplotlib")
+            selected_cmap = self.dropdown.currentText()
+            cmap = pg.colormap.get(selected_cmap, source="matplotlib")
             img.setLookupTable(cmap.getLookupTable())
             pw.addItem(img)
             self.image_items[key] = (img, pw)
-            pw.getPlotItem().addColorBar(
+            self.colourbars[key] = pw.getPlotItem().addColorBar(
                 img,
                 values=(0, 10),
                 colorMap=cmap,
-                width=10,
+                width=12,
             )
             plots_layout.addWidget(pw)
 
@@ -84,3 +95,12 @@ class ProjectionPanel(QtWidgets.QWidget):
             all_sol = np.concatenate(solutions, axis=0)
             x, y, z = all_sol.T
             self.update_projections(x, y, z)
+
+    def _update_colourmap(self, cmap_name):
+        cmap = pg.colormap.get(cmap_name, source="matplotlib")
+        for img, _ in self.image_items.values():
+            img.setLookupTable(cmap.getLookupTable())
+        for cb in self.colourbars.values():
+            cb.setColorMap(cmap)
+
+        self._render_cached_projection_data()

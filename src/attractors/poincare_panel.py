@@ -139,8 +139,18 @@ class PoincarePanel(QtWidgets.QWidget):
             symbolBrush=(255, 255, 255),
         )
 
+        self.dropdown = QtWidgets.QComboBox()
+        colourmaps = pg.colormap.listMaps(source="matplotlib")
+        self.dropdown.addItems(colourmaps)
+        self.dropdown.setCurrentText("CMRmap")
+        self.dropdown.currentTextChanged.connect(self._update_colourmap)
+        self.dropdown.setMaxVisibleItems(12)
+        self.dropdown.setStyleSheet("QComboBox { combobox-popup: 0; }")
+        layout.addWidget(self.dropdown)
+
         self._img = pg.ImageItem()
-        cmap = pg.colormap.get("CMRmap", source="matplotlib")
+        selected_cmap = self.dropdown.currentText()
+        cmap = pg.colormap.get(selected_cmap, source="matplotlib")
         self._colourbar = self.plot_widget.getPlotItem().addColorBar(
             self._img, colorMap=cmap, values=(0, 10), width=20
         )
@@ -323,3 +333,8 @@ class PoincarePanel(QtWidgets.QWidget):
                     self.plot_widget.autoRange()
                     return
             self._scatter.setData([], [])
+
+    def _update_colourmap(self, cmap_name):
+        cmap = pg.colormap.get(cmap_name, source="matplotlib")
+        self._img.setLookupTable(cmap.getLookupTable())
+        self._colourbar.setColorMap(cmap)

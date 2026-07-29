@@ -1,5 +1,3 @@
-from functools import partial
-
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .registry import ATTRACTORS
@@ -53,16 +51,9 @@ class ControlPanel(QtWidgets.QWidget):
         self.t_max_slider_row = None
         self.t_max_slider_wrapper = None
 
-        self.dropdown = QtWidgets.QPushButton(next(iter(ATTRACTORS.keys())))
-        menu = QtWidgets.QMenu(self.dropdown)
-        for name in ATTRACTORS:
-            action = menu.addAction(name)
-            assert action is not None
-            action.triggered.connect(partial(self._on_attractor_selected, name))
-        custom_action = menu.addAction("Custom")
-        assert custom_action is not None
-        custom_action.triggered.connect(partial(self._on_attractor_selected, "Custom"))
-        self.dropdown.setMenu(menu)
+        self.dropdown = QtWidgets.QComboBox()
+        self.dropdown.addItems([*ATTRACTORS, "Custom"])
+        self.dropdown.currentTextChanged.connect(self._on_attractor_selected)
 
         self.controls_scroll = QtWidgets.QScrollArea()
         self.controls_scroll.setObjectName("sidePanelScroll")
@@ -184,7 +175,10 @@ class ControlPanel(QtWidgets.QWidget):
 
     def set_current_attractor(self, name):
         self.current_name = name
-        self.dropdown.setText(name)
+        with QtCore.QSignalBlocker(self.dropdown):
+            index = self.dropdown.findText(name)
+            if index >= 0:
+                self.dropdown.setCurrentIndex(index)
         if self.right_panel is not None:
             self.right_panel.set_current_attractor(name)
 
