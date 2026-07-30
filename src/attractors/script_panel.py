@@ -2,6 +2,7 @@ from pathlib import Path
 
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .script_browser import ScriptBrowser
 from .syntax import PythonHighlighter
 
 
@@ -65,9 +66,17 @@ class ScriptPanel(QtWidgets.QWidget):
         self._loading = False
         self._dirty = False
 
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(6)
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self.script_browser = ScriptBrowser(self.scripts_dir)
+        self.script_browser.script_selected.connect(self.load_script)
+
+        editor_host = QtWidgets.QWidget()
+        editor_layout = QtWidgets.QVBoxLayout(editor_host)
+        editor_layout.setContentsMargins(6, 6, 6, 6)
+        editor_layout.setSpacing(6)
 
         self.toolbar = QtWidgets.QToolBar(self)
         self.toolbar.setIconSize(QtCore.QSize(16, 16))
@@ -90,8 +99,14 @@ class ScriptPanel(QtWidgets.QWidget):
         )
         self.highlighter = PythonHighlighter(self.editor.document())
 
-        layout.addWidget(self.toolbar)
-        layout.addWidget(self.editor, 1)
+        editor_layout.addWidget(self.toolbar)
+        editor_layout.addWidget(self.editor, 1)
+
+        self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        self.splitter.addWidget(self.script_browser)
+        self.splitter.addWidget(editor_host)
+        self.splitter.setSizes([220, 620])
+        layout.addWidget(self.splitter)
 
         self.editor.textChanged.connect(self._on_editor_text_changed)
 
@@ -120,6 +135,7 @@ class ScriptPanel(QtWidgets.QWidget):
             self._dirty = False
             self._update_status("Loaded")
             self.script_changed.emit(path)
+            self.script_browser.select_script(path)
         finally:
             self._loading = False
 

@@ -2,7 +2,6 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .custom_panel import CustomPanel
 from .preset_panel import PresetPanel
-from .script_browser import ScriptBrowser
 from .style import SIDE_PANEL
 from .trajectory_panel import TrajectoryPanel
 
@@ -52,14 +51,12 @@ class RightPanel(QtWidgets.QWidget):
         layout.setContentsMargins(2, 2, 4, 4)
         layout.setSpacing(0)
 
-        self.tabs = QtWidgets.QTabWidget()
-        layout.addWidget(self.tabs)
-
         self.scroll = QtWidgets.QScrollArea()
         self.scroll.setObjectName("sidePanelScroll")
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.scroll.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self.scroll)
 
         self.content = QtWidgets.QWidget()
         self.content_layout = QtWidgets.QVBoxLayout(self.content)
@@ -81,11 +78,6 @@ class RightPanel(QtWidgets.QWidget):
         self.content_layout.addWidget(self.preset_section)
         self.content_layout.addWidget(self.custom_panel)
         self.content_layout.addStretch(1)
-
-        self.script_browser = ScriptBrowser(scripts_dir)
-
-        self.tabs.addTab(self.scroll, "View controls")
-        self.tabs.addTab(self.script_browser, "Files")
 
         self._set_panel_expanded(self.trajectory_panel, True)
         self._set_panel_expanded(self.custom_panel, False)
