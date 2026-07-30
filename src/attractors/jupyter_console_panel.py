@@ -26,13 +26,15 @@ LEGEND_TEXT_SIZE = "9pt"
 
 
 class _RichJupyterConsole(_BaseJupyterConsole):
-    def __init__(self, namespace, parent=None):
+    def __init__(self, namespace, cwd=None, parent=None):
         super().__init__(parent)
         self.kernel_manager = inprocess.QtInProcessKernelManager()
         self.kernel_manager.start_kernel()
         self.kernel_client = self.kernel_manager.client()
         self.kernel_client.start_channels()
         self.kernel_manager.kernel.shell.push(namespace)
+        if cwd is not None:
+            self.kernel_manager.kernel.shell.run_line_magic("cd", str(cwd))
         self.set_default_style("linux")
 
     def shutdown_kernel(self):
@@ -106,10 +108,11 @@ class ConsolePlot:
 class JupyterConsolePanel(QtWidgets.QWidget):
     close_requested = QtCore.pyqtSignal()
 
-    def __init__(self, namespace_factory, parent=None):
+    def __init__(self, namespace_factory, cwd=None, parent=None):
         super().__init__(parent)
         self._namespace_factory = namespace_factory
         self._console = None
+        self._cwd = cwd
         self.setMinimumHeight(180)
 
         self._layout = QtWidgets.QVBoxLayout(self)
@@ -152,7 +155,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         if self._console is not None or CONSOLE_IMPORT_ERROR is not None:
             return
 
-        self._console = _RichJupyterConsole(self._namespace_factory(), self)
+        self._console = _RichJupyterConsole(
+            self._namespace_factory(), cwd=self._cwd, parent=self
+        )
         self._console_layout.addWidget(self._console)
 
     def focus_console(self):

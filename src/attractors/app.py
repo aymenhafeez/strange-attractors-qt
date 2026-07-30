@@ -229,6 +229,9 @@ class Window(QtWidgets.QMainWindow):
         self.current_name = _session_attractor_name(self._session_state)
         self._custom_config = None
         self._preset_directory = _preset_directory()
+        self._app_data_directory = _app_data_directory()
+        self._scripts_directory = self._app_data_directory / "scripts"
+        self._scripts_directory.mkdir(parents=True, exist_ok=True)
         self.system = SystemInspector(self)
 
         self.solver = SolveManager(self)
@@ -287,7 +290,7 @@ class Window(QtWidgets.QMainWindow):
         self.bifurcation_panel.hide()
 
         self.jupyter_console_panel = JupyterConsolePanel(
-            self._jupyter_console_namespace
+            self._jupyter_console_namespace, cwd=self._scripts_directory
         )
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
         self.lab_panel = LabPanel(self.jupyter_console_panel)
@@ -1447,8 +1450,8 @@ class Window(QtWidgets.QMainWindow):
             "plots": self.jupyter_console_panel.plots,
             "clear_plot": plot.clear,
             "current_values": lambda: self.system.values,
+            "scripts_dir": self._scripts_directory,
         }
-
 
     def _update_plot(self):
         self.scene.stop_animation()
