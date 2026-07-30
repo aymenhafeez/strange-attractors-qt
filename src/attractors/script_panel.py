@@ -1,13 +1,23 @@
 from pathlib import Path
 
-from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .syntax import PythonHighlighter
 
 
+def _default_scripts_dir():
+    app_data = QtCore.QStandardPaths.writableLocation(
+        QtCore.QStandardPaths.StandardLocation.AppDataLocation
+    )
+    if app_data:
+        return Path(app_data) / "scripts"
+
+    return Path(QtCore.QDir.homePath()) / ".strange-attractors" / "scripts"
+
+
 class ScriptStore:
     def __init__(self, root):
-        self.root = Path(root)
+        self.root = Path(root) if root is not None else _default_scripts_dir()
 
     def ensure_root(self):
         self.root.mkdir(parents=True, exist_ok=True)
@@ -29,34 +39,31 @@ class ScriptStore:
     def write(self, path, text):
         path = self.resolve_script(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        QtCore.QSaveFile(str(path))
+        file = QtCore.QSaveFile(str(path))
+        if not file.open(
+            QtCore.QIODevice.OpenModeFlag.WriteOnly | QtCore.QIODevice.OpenModeFlag.Text
+        ):
+            raise OSError(file.errorString())
+
+        file.write(text.encode("utf-8"))
+
+        if not file.commit():
+            raise OSError(file.errorString())
 
 
 class ScriptPanel(QtWidgets.QWidget):
     run_requested = QtCore.pyqtSignal(str)
     status_changed = QtCore.pyqtSignal(str)
+    script_changed = QtCore.pyqtSignal(object)
 
     def __init__(self, scripts_dir, parent=None):
         super().__init__(parent)
-        self.scripts_dir = Path(scripts_dir)
+        self.store = ScriptStore(scripts_dir)
+        self.scripts_dir = self.store.root
         self.script_path = self.scripts_dir / "scratch.py"
-        self.store = ScriptStore(self.scripts_dir)
         self.current_path = None
         self._loading = False
         self._dirty = False
-
-        self.model = QtGui.QFileSystemModel(self)
-        self.model.setRootPath(str(self.store.root))
-        self.model.setNameFilters(["*.py"])
-        self.model.setNameFilterDisables(False)
-
-        self.tree = QtWidgets.QTreeView()
-        self.tree.setModel(self.model)
-        self.tree.setRootIndex(self.model.index(str(self.store.root)))
-        self.tree.setHeaderHidden(True)
-
-        for column in range(1, self.model.columnCount()):
-            self.tree.hideColumn(column)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
@@ -83,13 +90,10 @@ class ScriptPanel(QtWidgets.QWidget):
         )
         self.highlighter = PythonHighlighter(self.editor.document())
 
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
-        splitter.addWidget(self.tree)
-        splitter.addWidget(self.editor)
-        splitter.setSizes([200, 680])
-
         layout.addWidget(self.toolbar)
-        layout.addWidget(splitter, 1)
+        layout.addWidget(self.editor, 1)
+
+        self.editor.textChanged.connect(self._on_editor_text_changed)
 
         self.run_action.triggered.connect(self.run)
         self.save_action.triggered.connect(self.save)
@@ -97,18 +101,71 @@ class ScriptPanel(QtWidgets.QWidget):
         self.load()
 
     def load(self):
-        self.scripts_dir.mkdir(parents=True, exist_ok=True)
+        self.store.ensure_root()
+        if not self.script_path.exists():
+            self.store.write(self.script_path, "")
+        self.load_script(self.script_path)
 
-        if self.script_path.exists():
-            self.editor.setPlainText(self.script_path.read_text(encoding="utf-8"))
-            self.status_label.setText(f"Saved {self.script_path.name}")
+    def load_script(self, path):
+        path = self.store.resolve_script(path)
+        if path == self.current_path:
+            return True
+        if not self._confirm_discard_changes():
+            return False
+
+        self._loading = True
+        try:
+            self.editor.setPlainText(self.store.read(path))
+            self.current_path = path
+            self._dirty = False
+            self._update_status("Loaded")
+            self.script_changed.emit(path)
+        finally:
+            self._loading = False
+
+        return True
 
     def save(self):
-        self.scripts_dir.mkdir(parents=True, exist_ok=True)
-        self.script_path.write_text(self.editor.toPlainText(), encoding="utf-8")
-        self.status_label.setText(f"Saved {self.script_path.name}")
+        if self.current_path is None:
+            self.load()
+        self.store.write(self.current_path, self.editor.toPlainText())
+        self._dirty = False
+        self._update_status("Saved")
+        return True
 
     def run(self):
         self.save()
         self.run_requested.emit(self.editor.toPlainText())
-        self.status_label.setText(f"Ran {self.script_path.name}")
+        self._update_status("Ran")
+
+    def _on_editor_text_changed(self):
+        if self._loading:
+            return
+
+        self._dirty = True
+        self._update_status("Modified")
+
+    def _confirm_discard_changes(self):
+        if not self._dirty:
+            return True
+
+        result = QtWidgets.QMessageBox.question(
+            self,
+            "Unsaved script",
+            "Discard unsaved script changes?",
+            QtWidgets.QMessageBox.StandardButton.Discard
+            | QtWidgets.QMessageBox.StandardButton.Cancel,
+            QtWidgets.QMessageBox.StandardButton.Cancel,
+        )
+
+        return result == QtWidgets.QMessageBox.StandardButton.Discard
+
+    def _update_status(self, action):
+        if self.current_path is None:
+            self.status_label.setText("")
+            return
+
+        marker = "*" if self._dirty else ""
+        text = f"{action} {self.current_path.name}{marker}"
+        self.status_label.setText(text)
+        self.status_changed.emit(text)
