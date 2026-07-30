@@ -2,6 +2,8 @@ from pathlib import Path
 
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .syntax import PythonHighlighter
+
 
 class ScriptPanel(QtWidgets.QWidget):
     run_requested = QtCore.pyqtSignal(str)
@@ -35,6 +37,7 @@ class ScriptPanel(QtWidgets.QWidget):
         self.editor.setTabStopDistance(
             self.editor.fontMetrics().horizontalAdvance(" ") * 4
         )
+        self.highlighter = PythonHighlighter(self.editor.document())
 
         layout.addWidget(self.toolbar)
         layout.addWidget(self.editor, 1)
