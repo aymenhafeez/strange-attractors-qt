@@ -1517,11 +1517,11 @@ class Window(QtWidgets.QMainWindow):
         if config is None or values is None:
             config, values = self._get_current_config_and_values()
         if config is None:
-            self.controls.set_status("No attractor selected", error=True)
+            Window._set_app_status(self, "No attractor selected", error=True)
             return
 
         self.solver.cancel_lyapunov()
-        self.controls.set_status("Computing Lyapunov spectrum")
+        Window._set_app_status(self, "Computing Lyapunov spectrum")
         self._active_lyapunov_request_id = self.solver.request_lyapunov(
             config,
             values,

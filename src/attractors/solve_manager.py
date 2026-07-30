@@ -8,7 +8,7 @@ class SolveManager(QtCore.QObject):
     lyapunov_ready = QtCore.pyqtSignal(int, object, float, object, object)
     lyapunov_failed = QtCore.pyqtSignal(int, str)
     _solve_request = QtCore.pyqtSignal(int, object, dict, list, int, bool, float)
-    _lyapunov_request = QtCore.pyqtSignal(int, object, dict)
+    _lyapunov_request = QtCore.pyqtSignal(int, object, dict, int, float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -35,12 +35,16 @@ class SolveManager(QtCore.QObject):
         self._solve_request_id += 1
         request_id = self._solve_request_id
         self._solve_request.emit(request_id, config, values, ics, n, is_partial, t_max)
+
         return request_id
 
-    def request_lyapunov(self, config, values):
+    def request_lyapunov(self, config, values, n=None, t_max=None):
         self._lyapunov_request_id += 1
         request_id = self._lyapunov_request_id
-        self._lyapunov_request.emit(request_id, config, values)
+        solve_n = int(config.time_defaults.n if n is None else n)
+        solve_t_max = float(config.time_defaults.t_max if t_max is None else t_max)
+        self._lyapunov_request.emit(request_id, config, values, solve_n, solve_t_max)
+
         return request_id
 
     def cancel_solve(self):
