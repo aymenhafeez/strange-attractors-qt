@@ -67,54 +67,6 @@ SIDE_PANEL = """
     QScrollArea#sidePanelScroll > QWidget {
         background: transparent;
     }
-    QScrollArea#sidePanelScroll QScrollBar:vertical {
-        width: 8px;
-        margin: 3px 2px 3px 0px;
-        background: transparent;
-        border: none;
-    }
-    QScrollArea#sidePanelScroll QScrollBar::handle:vertical {
-        background: rgba(160, 160, 160, 120);
-        border-radius: 4px;
-        min-height: 28px;
-    }
-    QScrollArea#sidePanelScroll QScrollBar::handle:vertical:hover {
-        background: rgba(190, 190, 190, 160);
-    }
-    QScrollArea#sidePanelScroll QScrollBar::add-line:vertical,
-    QScrollArea#sidePanelScroll QScrollBar::sub-line:vertical {
-        height: 0px;
-        border: none;
-        background: transparent;
-    }
-    QScrollArea#sidePanelScroll QScrollBar::add-page:vertical,
-    QScrollArea#sidePanelScroll QScrollBar::sub-page:vertical {
-        background: transparent;
-    }
-    QScrollArea#sidePanelScroll QScrollBar:horizontal {
-        height: 8px;
-        margin: 0px 3px 2px 3px;
-        background: transparent;
-        border: none;
-    }
-    QScrollArea#sidePanelScroll QScrollBar::handle:horizontal {
-        background: rgba(160, 160, 160, 120);
-        border-radius: 4px;
-        min-width: 28px;
-    }
-    QScrollArea#sidePanelScroll QScrollBar::handle:horizontal:hover {
-        background: rgba(190, 190, 190, 160);
-    }
-    QScrollArea#sidePanelScroll QScrollBar::add-line:horizontal,
-    QScrollArea#sidePanelScroll QScrollBar::sub-line:horizontal {
-        width: 0px;
-        border: none;
-        background: transparent;
-    }
-    QScrollArea#sidePanelScroll QScrollBar::add-page:horizontal,
-    QScrollArea#sidePanelScroll QScrollBar::sub-page:horizontal {
-        background: transparent;
-    }
 """
 
 CUSTOM_PANEL = """

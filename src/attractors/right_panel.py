@@ -52,13 +52,13 @@ class RightPanel(QtWidgets.QWidget):
         layout.setSpacing(0)
 
         self.scroll = QtWidgets.QScrollArea()
+        self.scroll.setObjectName("sidePanelScroll")
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.scroll.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
         layout.addWidget(self.scroll)
 
         self.content = QtWidgets.QWidget()
-        self.content.setObjectName("sidePanelFrame")
         self.content_layout = QtWidgets.QVBoxLayout(self.content)
         self.content_layout.setContentsMargins(8, 8, 8, 8)
         self.content_layout.setSpacing(8)
