@@ -193,17 +193,20 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.script_panel = ScriptPanel(self._script_dir)
         self.script_panel.run_requested.connect(self.run_script_text)
 
-        self.console_tabs = QtWidgets.QTabWidget()
-        self.console_tabs.addTab(self._console_host, "Console")
-        self.console_tabs.addTab(self.script_panel, "Script")
-
+        self.script_dock = Dock("Script", size=(10, 8), closable=False)
         self.console_dock = Dock("Console", size=(10, 8))
-        self.console_dock.addWidget(self.console_tabs)
+        self.script_dock.addWidget(self.script_panel)
+        self.console_dock.addWidget(self._console_host)
 
         self.dock_area.addDock(
-            self.console_dock,
+            self.script_dock,
             position="bottom",
             relativeTo=self.plot_dock,
+        )
+        self.dock_area.addDock(
+            self.console_dock,
+            position="above",
+            relativeTo=self.script_dock,
         )
 
         if CONSOLE_IMPORT_ERROR is not None:
@@ -238,5 +241,4 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             return
 
         self._console.push_namespace(self._namespace_factory())
-        self.console_tabs.setCurrentWidget(self._console_host)
         self._console.execute(code)
