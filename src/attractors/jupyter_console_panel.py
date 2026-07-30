@@ -43,6 +43,9 @@ class _RichJupyterConsole(_BaseJupyterConsole):
         self.kernel_client.stop_channels()
         self.kernel_manager.shutdown_kernel()
 
+    def push_namespace(self, namespace):
+        self.kernel_manager.kernel.shell.push(namespace)
+
 
 class ConsolePlot:
     def __init__(self, plot_widget):
@@ -234,5 +237,6 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         if self._console is None:
             return
 
+        self._console.push_namespace(self._namespace_factory())
         self.console_tabs.setCurrentWidget(self._console_host)
         self._console.execute(code)
