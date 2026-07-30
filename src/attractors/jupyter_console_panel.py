@@ -5,6 +5,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .docking import AreaBoundDock as Dock
 from .docking import AreaBoundDockArea as DockArea
+from .script_panel import ScriptPanel
 
 try:
     from qtconsole import inprocess
@@ -26,15 +27,16 @@ LEGEND_TEXT_SIZE = "9pt"
 
 
 class _RichJupyterConsole(_BaseJupyterConsole):
-    def __init__(self, namespace, cwd=None, parent=None):
+    def __init__(self, namespace, script_dir=None, parent=None):
         super().__init__(parent)
         self.kernel_manager = inprocess.QtInProcessKernelManager()
         self.kernel_manager.start_kernel()
         self.kernel_client = self.kernel_manager.client()
         self.kernel_client.start_channels()
         self.kernel_manager.kernel.shell.push(namespace)
-        if cwd is not None:
-            self.kernel_manager.kernel.shell.run_line_magic("cd", str(cwd))
+
+        if script_dir is not None:
+            self.kernel_manager.kernel.shell.run_line_magic("cd", str(script_dir))
         self.set_default_style("linux")
 
     def shutdown_kernel(self):
@@ -156,11 +158,11 @@ class ConsolePlot:
 class JupyterConsolePanel(QtWidgets.QWidget):
     close_requested = QtCore.pyqtSignal()
 
-    def __init__(self, namespace_factory, cwd=None, parent=None):
+    def __init__(self, namespace_factory, script_dir=None, parent=None):
         super().__init__(parent)
         self._namespace_factory = namespace_factory
         self._console = None
-        self._cwd = cwd
+        self._script_dir = script_dir
         self.setMinimumHeight(180)
 
         self._layout = QtWidgets.QVBoxLayout(self)
@@ -184,8 +186,17 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self._console_layout = QtWidgets.QVBoxLayout(self._console_host)
         self._console_layout.setContentsMargins(0, 0, 0, 0)
         self._console_layout.setSpacing(0)
+
+        self.script_panel = ScriptPanel(self._script_dir)
+        self.script_panel.run_requested.connect(self.run_script_text)
+
+        self.console_tabs = QtWidgets.QTabWidget()
+        self.console_tabs.addTab(self._console_host, "Console")
+        self.console_tabs.addTab(self.script_panel, "Script")
+
         self.console_dock = Dock("Console", size=(10, 8))
-        self.console_dock.addWidget(self._console_host)
+        self.console_dock.addWidget(self.console_tabs)
+
         self.dock_area.addDock(
             self.console_dock,
             position="bottom",
@@ -204,7 +215,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             return
 
         self._console = _RichJupyterConsole(
-            self._namespace_factory(), cwd=self._cwd, parent=self
+            self._namespace_factory(), script_dir=self._script_dir, parent=self
         )
         self._console_layout.addWidget(self._console)
 
@@ -217,3 +228,11 @@ class JupyterConsolePanel(QtWidgets.QWidget):
     def shutdown_kernel(self):
         if self._console is not None:
             self._console.shutdown_kernel()
+
+    def run_script_text(self, code):
+        self.ensure_console()
+        if self._console is None:
+            return
+
+        self.console_tabs.setCurrentWidget(self._console_host)
+        self._console.execute(code)
