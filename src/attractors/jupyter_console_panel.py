@@ -103,6 +103,54 @@ class ConsolePlot:
         self.set_labels(bottom=bottom, left=left)
         return item
 
+    def scatter(
+        self,
+        x,
+        y,
+        *,
+        clear=True,
+        bottom=None,
+        left=None,
+        plot_widget=None,
+        symbol="o",
+        symbol_size=None,
+        **kwargs,
+    ):
+        kwargs.setdefault("pen", None)
+        kwargs.setdefault("symbol", symbol)
+        if symbol_size is not None:
+            kwargs.setdefault("symbolSize", symbol_size)
+        return self.line(
+            x,
+            y,
+            clear=clear,
+            bottom=bottom,
+            left=left,
+            plot_widget=plot_widget,
+            **kwargs,
+        )
+
+    def ensure_legend(self):
+        if self._legend is None:
+            self._legend = self._plot_widget.addLegend(
+                offset=LEGEND_OFFSET,
+                brush=LEGEND_BRUSH,
+                pen=LEGEND_PEN,
+                labelTextColor=LEGEND_TEXT,
+                labelTextSize=LEGEND_TEXT_SIZE,
+            )
+        return self._legend
+
+    def _plot_target(self, plot_widget):
+        if isinstance(plot_widget, str):
+            if self._manager is None:
+                raise ValueError("Named plot targets require a plot manager")
+            try:
+                return self._manager.get(plot_widget)
+            except KeyError:
+                return self._manager.new(plot_widget)
+
+        return plot_widget
 
 
 class JupyterConsolePanel(QtWidgets.QWidget):
