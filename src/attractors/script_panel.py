@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from pyqtgraph.Qt import QtCore, QtWidgets
+from PyQt6.Qsci import QsciLexerPython, QsciScintilla
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .script_browser import ScriptBrowser
-from .syntax import PythonHighlighter
 
 
 def _default_scripts_dir():
@@ -93,11 +93,23 @@ class ScriptPanel(QtWidgets.QWidget):
         self.status_label.setMinimumWidth(120)
         self.toolbar.addWidget(self.status_label)
 
-        self.editor = QtWidgets.QPlainTextEdit()
-        self.editor.setTabStopDistance(
-            self.editor.fontMetrics().horizontalAdvance(" ") * 4
-        )
-        self.highlighter = PythonHighlighter(self.editor.document())
+        self.editor = QsciScintilla()
+        font = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.SystemFont.FixedFont)
+        self.editor.setFont(font)
+        self.editor.setMarginsFont(font)
+        self.editor.setReadOnly(False)
+        self.editor.setIndentationsUseTabs(False)
+        self.editor.setTabWidth(4)
+        self.editor.setIndentationWidth(4)
+        self.editor.setAutoIndent(True)
+        self.editor.setBraceMatching(QsciScintilla.BraceMatch.SloppyBraceMatch)
+        self.editor.setCaretLineVisible(True)
+        self.editor.setMarginType(0, QsciScintilla.MarginType.NumberMargin)
+        self.editor.setMarginWidth(0, "0000")
+
+        self.lexer = QsciLexerPython(self.editor)
+        self.lexer.setDefaultFont(font)
+        self.editor.setLexer(self.lexer)
 
         editor_layout.addWidget(self.toolbar)
         editor_layout.addWidget(self.editor, 1)
@@ -117,22 +129,29 @@ class ScriptPanel(QtWidgets.QWidget):
 
     def load(self):
         self.store.ensure_root()
+
         if not self.script_path.exists():
             self.store.write(self.script_path, "")
+
         self.load_script(self.script_path)
 
     def load_script(self, path):
         path = self.store.resolve_script(path)
+
         if path == self.current_path:
             return True
+
         if not self._confirm_discard_changes():
             return False
 
         self._loading = True
         try:
-            self.editor.setPlainText(self.store.read(path))
+            self.editor.setText(self.store.read(path))
+            self.editor.setModified(False)
+
             self.current_path = path
             self._dirty = False
+
             self._update_status("Loaded")
             self.script_changed.emit(path)
             self.script_browser.select_script(path)
@@ -144,14 +163,21 @@ class ScriptPanel(QtWidgets.QWidget):
     def save(self):
         if self.current_path is None:
             self.load()
-        self.store.write(self.current_path, self.editor.toPlainText())
+
+        self.store.write(
+            self.current_path,
+            self.editor.text(),
+        )
+
+        self.editor.setModified(False)
         self._dirty = False
         self._update_status("Saved")
+
         return True
 
     def run(self):
         self.save()
-        self.run_requested.emit(self.editor.toPlainText())
+        self.run_requested.emit(self.editor.text())
         self._update_status("Ran")
 
     def _on_editor_text_changed(self):
