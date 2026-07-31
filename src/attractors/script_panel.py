@@ -140,13 +140,20 @@ class ScriptPanel(QtWidgets.QWidget):
 
         self.toolbar = QtWidgets.QToolBar(self)
         self.toolbar.setIconSize(QtCore.QSize(16, 16))
+        self.toolbar.setToolButtonStyle(
+            QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
         self.toolbar.setMovable(False)
         self.toolbar.setFloatable(False)
         self.toolbar.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
-        self.run_action = self.toolbar.addAction("Run")
+        self.run_action = self.toolbar.addAction(
+            QtGui.QIcon.fromTheme("system-run"), "Run"
+        )
         self.run_action.setToolTip("Run script")
-        self.save_action = self.toolbar.addAction("Save")
+        self.save_action = self.toolbar.addAction(
+            QtGui.QIcon.fromTheme("document-save"), "Save"
+        )
         self.save_action.setToolTip("Save script")
 
         self.status_label = QtWidgets.QLabel()

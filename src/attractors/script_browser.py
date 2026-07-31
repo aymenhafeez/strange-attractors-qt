@@ -30,13 +30,20 @@ class ScriptBrowser(QtWidgets.QWidget):
 
         self.toolbar = QtWidgets.QToolBar()
         self.toolbar.setIconSize(QtCore.QSize(16, 16))
+        self.toolbar.setToolButtonStyle(
+            QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
         self.toolbar.setMovable(False)
         self.toolbar.setFloatable(False)
         self.toolbar.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
-        self.new_script_action = self.toolbar.addAction("New")
+        self.new_script_action = self.toolbar.addAction(
+            QtGui.QIcon.fromTheme("document-new"), "New"
+        )
         self.new_script_action.setToolTip("Create a new script")
-        self.new_folder_action = self.toolbar.addAction("New Folder")
+        self.new_folder_action = self.toolbar.addAction(
+            QtGui.QIcon.fromTheme("folder-new"), "New Folder"
+        )
         self.new_folder_action.setToolTip("Create a new folder")
 
         self.model = QtGui.QFileSystemModel(self)
