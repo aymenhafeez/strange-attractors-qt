@@ -641,6 +641,13 @@ class Window(QtWidgets.QMainWindow):
         )
         return panels
 
+    def _lab_plot_controller(self):
+        controller = getattr(self, "lab_plot_controller", None)
+        if controller is None:
+            controller = LabPlotController(self)
+            self.lab_plot_controller = controller
+        return controller
+
     def _collect_visual_options(self):
         options = self.controls.get_visual_options()
         for key, attr in [
@@ -1295,7 +1302,14 @@ class Window(QtWidgets.QMainWindow):
         plot_item = self.jupyter_console_panel.plot_widget.getPlotItem()
         view_box = plot_item.getViewBox()
 
-        view_all_action = toolbar.addAction("View all")
+        view_all_action = toolbar.addAction(
+            Window._toolbar_icon(
+                self,
+                "zoom-fit-best",
+                QtWidgets.QStyle.StandardPixmap.SP_TitleBarMaxButton,
+            ),
+            "View all",
+        )
         view_all_action.setToolTip("Fit all plot data")
         view_all_action.triggered.connect(view_box.autoRange)
         self._jupyter_toolbar_actions.append(view_all_action)
@@ -1303,11 +1317,25 @@ class Window(QtWidgets.QMainWindow):
 
         mouse_group = QtGui.QActionGroup(toolbar)
         mouse_group.setExclusive(True)
-        pan_action = toolbar.addAction("Pan")
+        pan_action = toolbar.addAction(
+            Window._toolbar_icon(
+                self,
+                "transform-move",
+                QtWidgets.QStyle.StandardPixmap.SP_ArrowUp,
+            ),
+            "Pan",
+        )
         pan_action.setCheckable(True)
         pan_action.setChecked(True)
         pan_action.setToolTip("Pan with left mouse button")
-        zoom_action = toolbar.addAction("Zoom")
+        zoom_action = toolbar.addAction(
+            Window._toolbar_icon(
+                self,
+                "zoom-in",
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogContentsView,
+            ),
+            "Zoom",
+        )
         zoom_action.setCheckable(True)
         zoom_action.setToolTip("Zoom to rectangle with left mouse button")
         mouse_group.addAction(pan_action)
@@ -1332,14 +1360,14 @@ class Window(QtWidgets.QMainWindow):
         self._jupyter_toolbar_actions.append(toolbar.addSeparator())
         self._jupyter_toolbar_actions.append(
             Window._add_toolbar_menu_button(
-                self, toolbar, "Plot options", plot_item.getMenu()
+                self, toolbar, "Plot", plot_item.getMenu(), "Plot options"
             )
         )
         view_menu = getattr(view_box, "menu", None)
         if view_menu is not None:
             self._jupyter_toolbar_actions.append(
                 Window._add_toolbar_menu_button(
-                    self, toolbar, "ViewBox options", view_menu
+                    self, toolbar, "View", view_menu, "ViewBox options"
                 )
             )
 
@@ -1369,25 +1397,41 @@ class Window(QtWidgets.QMainWindow):
             toolbar.addWidget(self.toolbar_lab_plot_name)
         )
 
-        for text, callback, tooltip in [
-            ("New", lambda: Window._new_lab_plot(self), "Create a new console plot"),
+        icon_specs = [
+            (
+                "New",
+                "list-add",
+                QtWidgets.QStyle.StandardPixmap.SP_FileIcon,
+                lambda: Window._new_lab_plot(self),
+                "Create a new console plot",
+            ),
             (
                 "Rename",
+                "edit-rename",
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
                 lambda: Window._rename_current_lab_plot(self),
                 "Rename the current console plot",
             ),
             (
                 "Clear",
+                "edit-clear-history",
+                QtWidgets.QStyle.StandardPixmap.SP_DialogDiscardButton,
                 lambda: Window._clear_lab_plot(self),
                 "Clear the current console plot",
             ),
             (
                 "Clear all",
+                "edit-delete",
+                QtWidgets.QStyle.StandardPixmap.SP_TrashIcon,
                 lambda: Window._clear_all_lab_plots(self),
                 "Clear all console plots",
             ),
-        ]:
-            action = toolbar.addAction(text)
+        ]
+        for text, theme_name, fallback_icon, callback, tooltip in icon_specs:
+            action = toolbar.addAction(
+                Window._toolbar_icon(self, theme_name, fallback_icon),
+                text,
+            )
             action.setToolTip(tooltip)
             action.triggered.connect(callback)
             self._jupyter_toolbar_actions.append(action)
@@ -1399,6 +1443,12 @@ class Window(QtWidgets.QMainWindow):
         if icon is not None:
             return icon(standard_icon)
         return QtWidgets.QApplication.style().standardIcon(standard_icon)
+
+    def _toolbar_icon(self, theme_name, fallback_icon):
+        icon = QtGui.QIcon.fromTheme(theme_name)
+        if icon.isNull():
+            icon = Window._standard_icon(self, fallback_icon)
+        return icon
 
     def _keep_toolbar_action_from_taking_focus(self, toolbar, action):
         widget = toolbar.widgetForAction(action)
@@ -1414,9 +1464,10 @@ class Window(QtWidgets.QMainWindow):
         Window._keep_toolbar_action_from_taking_focus(self, toolbar, action)
         return action
 
-    def _add_toolbar_menu_button(self, toolbar, text, menu):
+    def _add_toolbar_menu_button(self, toolbar, text, menu, tooltip=None):
         button = QtWidgets.QToolButton()
         button.setText(text)
+        button.setToolTip(tooltip or text)
         button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
         button.setMenu(menu)
         button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
@@ -2105,25 +2156,47 @@ class Window(QtWidgets.QMainWindow):
                 self.bifurcation_panel,
                 "bifurcation_panel",
             )
+            _sync_panel_toolbar(self)
+
+    def _new_lab_plot(self):
+        self.jupyter_console_panel.plots.new()
+        Window._sync_jupyter_workspace_state(self)
+
+    def _rename_current_lab_plot(self):
+        old_name = self.jupyter_console_panel.plots.current_name
+        new_name = self.toolbar_lab_plot_name.text().strip()
+        if new_name:
+            Window._rename_lab_plot(self, old_name, new_name)
+
+    def _rename_lab_plot(self, old_name, new_name):
+        return Window._lab_plot_controller(self)._rename_lab_plot(old_name, new_name)
+
+    def _sync_lab_plots(self):
+        return Window._lab_plot_controller(self)._sync_lab_plots()
+
+    def _lab_plot_combo_label(self, plot_name):
+        return Window._lab_plot_controller(self)._lab_plot_combo_label(plot_name)
+
+    def _lab_plot_combo_tooltip(self, plot_name):
+        return Window._lab_plot_controller(self)._lab_plot_combo_tooltip(plot_name)
+
+
+    def _run_console_plot_request(self, kind, *, plot=None, **options):
+        return Window._lab_plot_controller(self)._run_console_plot_request(
+            kind, plot=plot, **options
+        )
+
+    def _on_lab_plots_changed(self):
+        return Window._lab_plot_controller(self)._on_lab_plots_changed()
 
     def _clear_lab_plot(self):
-        plot_name = self.jupyter_console_panel.plots.current_name
-        self.jupyter_console_panel.plots.clear()
-        Window._clear_lab_live_items(self, plot_name)
+        return Window._lab_plot_controller(self)._clear_lab_plot()
 
+    def _clear_all_lab_plots(self):
+        return Window._lab_plot_controller(self)._clear_all_lab_plots()
 
-    def _set_lab_follow(self, kind, *, plot=None, append=False, **options):
-        plot_name = Window._lab_follow_plot_name(self, plot)
-        spec = {"source": "main", "kind": kind, "plot": plot_name, **options}
-        specs = self._lab_live_plots.setdefault(plot_name, [])
-        if append:
-            specs.append(spec)
-        else:
-            self._lab_live_plots[plot_name] = [spec]
-            Window._clear_lab_live_items(self, plot_name)
-        Window._refresh_lab_live_plot(self, plot_name)
-        Window._sync_lab_plots(self)
-        return pd.Series(spec)
+    def _close_lab_plot(self):
+        return Window._lab_plot_controller(self)._close_lab_plot()
 
 
     def _on_lab_dock_closed(self):
