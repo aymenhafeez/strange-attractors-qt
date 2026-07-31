@@ -15,12 +15,11 @@ class CameraController:
 
     def set_camera(self, config):
         self.view.setCameraPosition(
-            pos=QtGui.QVector3D(0, 0, 0),
+            pos=QtGui.QVector3D(0, 0, config.pan),
             distance=config.camera_distance,
             elevation=config.camera_elevation,
             azimuth=config.camera_azimuth,
         )
-        self.view.opts["center"] = QtGui.QVector3D(0, 0, config.pan)
 
     def get_camera_state(self):
         center = self.view.opts.get("center", QtGui.QVector3D(0, 0, 0))
@@ -47,10 +46,6 @@ class CameraController:
             elevation=elevation,
             azimuth=azimuth,
         )
-        self.view.opts["distance"] = distance
-        self.view.opts["elevation"] = elevation
-        self.view.opts["azimuth"] = azimuth
-        self.view.opts["center"] = QtGui.QVector3D(x, y, z)
         return True
 
     def fit_camera_to_solutions(self, solutions):
@@ -89,9 +84,4 @@ class CameraController:
 
     def _orbit_frame(self):
         step = ORBIT_STEP_DEGREES * (self._orbit_speed / 100.0)
-        azimuth = float(self.view.opts.get("azimuth", 0.0)) + step
-        if hasattr(self.view, "orbit"):
-            self.view.orbit(step, 0)
-        else:
-            self.view.setCameraPosition(azimuth=azimuth)
-        self.view.opts["azimuth"] = azimuth
+        self.view.orbit(step, 0)
