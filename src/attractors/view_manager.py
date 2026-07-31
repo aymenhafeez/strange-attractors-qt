@@ -98,6 +98,7 @@ class _RoundedGLViewWidget(_BottomRoundedMaskMixin, gl.GLViewWidget):
 
 class ViewManager(QtCore.QObject):
     animation_finished = QtCore.pyqtSignal()
+    animation_segments_data = QtCore.pyqtSignal(object)
     projections_data = QtCore.pyqtSignal(object, object, object)
 
     def __init__(self, parent=None):
@@ -272,6 +273,7 @@ class ViewManager(QtCore.QObject):
 
         all_segments = self.trajectory_renderer.render_animation_frame(frame)
 
+        self.animation_segments_data.emit(all_segments)
         self.projection_emitter.emit_segments(all_segments)
 
         return {"frame": frame, "done": frame >= len(sol0)}

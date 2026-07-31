@@ -43,7 +43,7 @@ class ProcessUsageStatus(QtWidgets.QLabel):
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         self.setMinimumWidth(132)
-        self.setStyleSheet("border: none; padding: 0 4px; font-size: 13px;")
+        self.setStyleSheet("border: none; padding: 0 4px 3px 4px; font-size: 12px;")
         self.setToolTip("Process CPU and RAM usage")
 
     def set_active(self, active):
