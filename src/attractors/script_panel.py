@@ -12,7 +12,7 @@ except ImportError:
     QsciScintilla = None
 
 # dark mode palette derived from KDE Breeze Dark
-# https://www.riverbankcomputing.com/static/Docs/QScintilla/classQsciLexer.html
+# https://qscintilla.com/#syntax_highlighting/custom_lexer_example
 # https://lxr.kde.org/source/frameworks/syntax-highlighting/data/themes/breeze-dark.theme
 EDITOR_BACKGROUND = "#232629"
 EDITOR_TEXT = "#cfcfc2"
@@ -147,6 +147,22 @@ class ScriptPanel(QtWidgets.QWidget):
         self.toolbar.setFloatable(False)
         self.toolbar.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
+        self.toggle_browser_action = self.toolbar.addAction(
+            QtGui.QIcon.fromTheme("view-list-tree"),
+            "Files",
+        )
+        self.toggle_browser_action.setCheckable(True)
+        self.toggle_browser_action.setChecked(True)
+        self.toggle_browser_action.setToolTip("Show file browser")
+        self.toggle_browser_action.toggled.connect(self._set_script_browser_visible)
+
+        spacer = QtWidgets.QWidget()
+        spacer.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
+        self.toolbar.addWidget(spacer)
+
         self.run_action = self.toolbar.addAction(
             QtGui.QIcon.fromTheme("system-run"), "Run"
         )
@@ -157,7 +173,6 @@ class ScriptPanel(QtWidgets.QWidget):
         self.save_action.setToolTip("Save script")
 
         self.status_label = QtWidgets.QLabel()
-        self.status_label.setMinimumWidth(120)
         self.toolbar.addWidget(self.status_label)
 
         self.editor = self._build_editor()
@@ -168,6 +183,8 @@ class ScriptPanel(QtWidgets.QWidget):
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         self.splitter.addWidget(self.script_browser)
         self.splitter.addWidget(editor_host)
+        self.splitter.setCollapsible(0, True)
+        self.splitter.setCollapsible(1, False)
         self.splitter.setSizes([220, 620])
         layout.addWidget(self.splitter)
 
@@ -325,9 +342,23 @@ class ScriptPanel(QtWidgets.QWidget):
             return
 
         if self._dirty:
-            self.status_label.setText(f"Modified {self.current_path.name}")
+            self.status_label.setText(f"*{self.current_path.name}")
         else:
             self.status_label.clear()
 
         if action != "Modified":
             self.status_changed.emit(f"{action} {self.current_path.name}")
+
+    def _set_script_browser_visible(self, visible):
+        sizes = self.splitter.sizes()
+        total = max(sum(sizes), 1)
+
+        if visible:
+            width = getattr(self, "_script_browser_width", 220)
+            self.splitter.setSizes([width, max(total - width, 1)])
+            return
+
+        if sizes and sizes[0] > 0:
+            self._script_browser_width = sizes[0]
+
+        self.splitter.setSizes([0, total])
