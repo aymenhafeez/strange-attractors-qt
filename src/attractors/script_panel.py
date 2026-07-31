@@ -1,9 +1,15 @@
 from pathlib import Path
 
-from PyQt6.Qsci import QsciLexerPython, QsciScintilla
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .script_browser import ScriptBrowser
+from .syntax import PythonHighlighter
+
+try:
+    from PyQt6.Qsci import QsciLexerPython, QsciScintilla
+except ImportError:
+    QsciLexerPython = None
+    QsciScintilla = None
 
 # dark mode palette derived from KDE Breeze Dark
 # https://www.riverbankcomputing.com/static/Docs/QScintilla/classQsciLexer.html
@@ -15,27 +21,30 @@ EDITOR_MARGIN_TEXT = "#7a7c7d"
 EDITOR_SELECTION = "#2d5c76"
 EDITOR_CARET_LINE = "#2a2e32"
 
-PYTHON_STYLE_COLOURS = {
-    QsciLexerPython.ClassName: "#2980b9",
-    QsciLexerPython.Comment: "#7a7c7d",
-    QsciLexerPython.CommentBlock: "#7a7c7d",
-    QsciLexerPython.Decorator: "#3f8058",
-    QsciLexerPython.DoubleQuotedFString: "#da4453",
-    QsciLexerPython.DoubleQuotedString: "#f44f4f",
-    QsciLexerPython.FunctionMethodName: "#8e44ad",
-    QsciLexerPython.HighlightedIdentifier: "#27aeae",
-    QsciLexerPython.Identifier: EDITOR_TEXT,
-    QsciLexerPython.Keyword: EDITOR_TEXT,
-    QsciLexerPython.Number: "#f67400",
-    QsciLexerPython.Operator: "#3f8058",
-    QsciLexerPython.SingleQuotedFString: "#da4453",
-    QsciLexerPython.SingleQuotedString: "#f44f4f",
-    QsciLexerPython.TripleDoubleQuotedFString: "#da4453",
-    QsciLexerPython.TripleDoubleQuotedString: "#da4453",
-    QsciLexerPython.TripleSingleQuotedFString: "#da4453",
-    QsciLexerPython.TripleSingleQuotedString: "#da4453",
-    QsciLexerPython.UnclosedString: "#da4453",
-}
+if QsciLexerPython is not None:
+    PYTHON_STYLE_COLOURS = {
+        QsciLexerPython.ClassName: "#2980b9",
+        QsciLexerPython.Comment: "#7a7c7d",
+        QsciLexerPython.CommentBlock: "#7a7c7d",
+        QsciLexerPython.Decorator: "#3f8058",
+        QsciLexerPython.DoubleQuotedFString: "#da4453",
+        QsciLexerPython.DoubleQuotedString: "#f44f4f",
+        QsciLexerPython.FunctionMethodName: "#8e44ad",
+        QsciLexerPython.HighlightedIdentifier: "#27aeae",
+        QsciLexerPython.Identifier: EDITOR_TEXT,
+        QsciLexerPython.Keyword: EDITOR_TEXT,
+        QsciLexerPython.Number: "#f67400",
+        QsciLexerPython.Operator: "#3f8058",
+        QsciLexerPython.SingleQuotedFString: "#da4453",
+        QsciLexerPython.SingleQuotedString: "#f44f4f",
+        QsciLexerPython.TripleDoubleQuotedFString: "#da4453",
+        QsciLexerPython.TripleDoubleQuotedString: "#da4453",
+        QsciLexerPython.TripleSingleQuotedFString: "#da4453",
+        QsciLexerPython.TripleSingleQuotedString: "#da4453",
+        QsciLexerPython.UnclosedString: "#da4453",
+    }
+else:
+    PYTHON_STYLE_COLOURS = {}
 
 
 def _is_dark_mode():
@@ -144,27 +153,7 @@ class ScriptPanel(QtWidgets.QWidget):
         self.status_label.setMinimumWidth(120)
         self.toolbar.addWidget(self.status_label)
 
-        self.editor = QsciScintilla()
-        font = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.SystemFont.FixedFont)
-        self.editor.setFont(font)
-        self.editor.setMarginsFont(font)
-        self.editor.setReadOnly(False)
-        self.editor.setIndentationsUseTabs(False)
-        self.editor.setTabWidth(4)
-        self.editor.setIndentationWidth(4)
-        self.editor.setAutoIndent(True)
-        self.editor.setBraceMatching(QsciScintilla.BraceMatch.SloppyBraceMatch)
-        self.editor.setCaretLineVisible(True)
-        self.editor.setMarginType(0, QsciScintilla.MarginType.NumberMargin)
-        self.editor.setMarginWidth(0, "0000")
-
-        self.lexer = QsciLexerPython(self.editor)
-        self.lexer.setDefaultFont(font)
-
-        if _is_dark_mode():
-            self._apply_dark_editor_colours()
-
-        self.editor.setLexer(self.lexer)
+        self.editor = self._build_editor()
 
         editor_layout.addWidget(self.toolbar)
         editor_layout.addWidget(self.editor, 1)
@@ -182,21 +171,53 @@ class ScriptPanel(QtWidgets.QWidget):
 
         self.load()
 
-    def _apply_dark_editor_colours(self):
-        self.editor.setCaretForegroundColor(QtGui.QColor(EDITOR_TEXT))
-        self.editor.setCaretLineBackgroundColor(QtGui.QColor(EDITOR_CARET_LINE))
-        self.editor.setColor(QtGui.QColor(EDITOR_TEXT))
-        self.editor.setPaper(QtGui.QColor(EDITOR_BACKGROUND))
-        self.editor.setSelectionBackgroundColor(QtGui.QColor(EDITOR_SELECTION))
-        self.editor.setSelectionForegroundColor(QtGui.QColor(EDITOR_TEXT))
-        self.editor.setMarginsBackgroundColor(QtGui.QColor(EDITOR_MARGIN))
-        self.editor.setMarginsForegroundColor(QtGui.QColor(EDITOR_MARGIN_TEXT))
+    def _apply_dark_editor_colours(self, editor):
+        editor.setCaretForegroundColor(QtGui.QColor(EDITOR_TEXT))
+        editor.setCaretLineBackgroundColor(QtGui.QColor(EDITOR_CARET_LINE))
+        editor.setColor(QtGui.QColor(EDITOR_TEXT))
+        editor.setPaper(QtGui.QColor(EDITOR_BACKGROUND))
+        editor.setSelectionBackgroundColor(QtGui.QColor(EDITOR_SELECTION))
+        editor.setSelectionForegroundColor(QtGui.QColor(EDITOR_TEXT))
+        editor.setMarginsBackgroundColor(QtGui.QColor(EDITOR_MARGIN))
+        editor.setMarginsForegroundColor(QtGui.QColor(EDITOR_MARGIN_TEXT))
         self.lexer.setDefaultColor(QtGui.QColor(EDITOR_TEXT))
         self.lexer.setDefaultPaper(QtGui.QColor(EDITOR_BACKGROUND))
 
         for style, colour in PYTHON_STYLE_COLOURS.items():
             self.lexer.setColor(QtGui.QColor(colour), style)
             self.lexer.setPaper(QtGui.QColor(EDITOR_BACKGROUND), style)
+
+    def _build_editor(self):
+        if QsciScintilla is None:
+            editor = QtWidgets.QPlainTextEdit()
+            editor.setTabStopDistance(editor.fontMetrics().horizontalAdvance(" ") * 4)
+            self.highlighter = PythonHighlighter(editor.document())
+            self.lexer = None
+            return editor
+
+        editor = QsciScintilla()
+        font = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.SystemFont.FixedFont)
+        editor.setFont(font)
+        editor.setMarginsFont(font)
+        editor.setReadOnly(False)
+        editor.setIndentationsUseTabs(False)
+        editor.setTabWidth(4)
+        editor.setIndentationWidth(4)
+        editor.setAutoIndent(True)
+        editor.setBraceMatching(QsciScintilla.BraceMatch.SloppyBraceMatch)
+        editor.setCaretLineVisible(True)
+        editor.setMarginType(0, QsciScintilla.MarginType.NumberMargin)
+        editor.setMarginWidth(0, "0000")
+
+        self.lexer = QsciLexerPython(editor)
+        self.lexer.setDefaultFont(font)
+
+        if _is_dark_mode():
+            self._apply_dark_editor_colours(editor)
+
+        editor.setLexer(self.lexer)
+        self.highlighter = None
+        return editor
 
     def load(self):
         self.store.ensure_root()
@@ -217,8 +238,8 @@ class ScriptPanel(QtWidgets.QWidget):
 
         self._loading = True
         try:
-            self.editor.setText(self.store.read(path))
-            self.editor.setModified(False)
+            self._set_editor_text(self.store.read(path))
+            self._set_editor_modified(False)
 
             self.current_path = path
             self._dirty = False
@@ -237,10 +258,10 @@ class ScriptPanel(QtWidgets.QWidget):
 
         self.store.write(
             self.current_path,
-            self.editor.text(),
+            self._editor_text(),
         )
 
-        self.editor.setModified(False)
+        self._set_editor_modified(False)
         self._dirty = False
         self._update_status("Saved")
 
@@ -248,8 +269,25 @@ class ScriptPanel(QtWidgets.QWidget):
 
     def run(self):
         self.save()
-        self.run_requested.emit(self.editor.text())
+        self.run_requested.emit(self._editor_text())
         self._update_status("Ran")
+
+    def _set_editor_text(self, text):
+        if QsciScintilla is not None and isinstance(self.editor, QsciScintilla):
+            self.editor.setText(text)
+            return
+
+        self.editor.setPlainText(text)
+
+    def _editor_text(self):
+        if QsciScintilla is not None and isinstance(self.editor, QsciScintilla):
+            return self.editor.text()
+
+        return self.editor.toPlainText()
+
+    def _set_editor_modified(self, modified):
+        if hasattr(self.editor, "setModified"):
+            self.editor.setModified(bool(modified))
 
     def _on_editor_text_changed(self):
         if self._loading:
