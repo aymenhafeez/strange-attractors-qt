@@ -5,6 +5,57 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .script_browser import ScriptBrowser
 
+# dark mode palette derived from KDE Breeze Dark
+# https://www.riverbankcomputing.com/static/Docs/QScintilla/classQsciLexer.html
+# https://lxr.kde.org/source/frameworks/syntax-highlighting/data/themes/breeze-dark.theme
+EDITOR_BACKGROUND = "#232629"
+EDITOR_TEXT = "#cfcfc2"
+EDITOR_MARGIN = "#31363b"
+EDITOR_MARGIN_TEXT = "#7a7c7d"
+EDITOR_SELECTION = "#2d5c76"
+EDITOR_CARET_LINE = "#2a2e32"
+
+PYTHON_STYLE_COLOURS = {
+    QsciLexerPython.ClassName: "#2980b9",
+    QsciLexerPython.Comment: "#7a7c7d",
+    QsciLexerPython.CommentBlock: "#7a7c7d",
+    QsciLexerPython.Decorator: "#3f8058",
+    QsciLexerPython.DoubleQuotedFString: "#da4453",
+    QsciLexerPython.DoubleQuotedString: "#f44f4f",
+    QsciLexerPython.FunctionMethodName: "#8e44ad",
+    QsciLexerPython.HighlightedIdentifier: "#27aeae",
+    QsciLexerPython.Identifier: EDITOR_TEXT,
+    QsciLexerPython.Keyword: EDITOR_TEXT,
+    QsciLexerPython.Number: "#f67400",
+    QsciLexerPython.Operator: "#3f8058",
+    QsciLexerPython.SingleQuotedFString: "#da4453",
+    QsciLexerPython.SingleQuotedString: "#f44f4f",
+    QsciLexerPython.TripleDoubleQuotedFString: "#da4453",
+    QsciLexerPython.TripleDoubleQuotedString: "#da4453",
+    QsciLexerPython.TripleSingleQuotedFString: "#da4453",
+    QsciLexerPython.TripleSingleQuotedString: "#da4453",
+    QsciLexerPython.UnclosedString: "#da4453",
+}
+
+
+def _is_dark_mode():
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return False
+
+    style_hints = app.styleHints()
+    colour_scheme = getattr(style_hints, "colorScheme", None)
+    if colour_scheme is not None:
+        scheme = colour_scheme()
+        if scheme != QtCore.Qt.ColorScheme.Unknown:
+            return scheme == QtCore.Qt.ColorScheme.Dark
+
+    palette = app.palette()
+    window = palette.color(QtGui.QPalette.ColorRole.Window)
+    text = palette.color(QtGui.QPalette.ColorRole.WindowText)
+
+    return window.lightness() < text.lightness()
+
 
 def _default_scripts_dir():
     app_data = QtCore.QStandardPaths.writableLocation(
@@ -109,6 +160,10 @@ class ScriptPanel(QtWidgets.QWidget):
 
         self.lexer = QsciLexerPython(self.editor)
         self.lexer.setDefaultFont(font)
+
+        if _is_dark_mode():
+            self._apply_dark_editor_colours()
+
         self.editor.setLexer(self.lexer)
 
         editor_layout.addWidget(self.toolbar)
@@ -126,6 +181,22 @@ class ScriptPanel(QtWidgets.QWidget):
         self.save_action.triggered.connect(self.save)
 
         self.load()
+
+    def _apply_dark_editor_colours(self):
+        self.editor.setCaretForegroundColor(QtGui.QColor(EDITOR_TEXT))
+        self.editor.setCaretLineBackgroundColor(QtGui.QColor(EDITOR_CARET_LINE))
+        self.editor.setColor(QtGui.QColor(EDITOR_TEXT))
+        self.editor.setPaper(QtGui.QColor(EDITOR_BACKGROUND))
+        self.editor.setSelectionBackgroundColor(QtGui.QColor(EDITOR_SELECTION))
+        self.editor.setSelectionForegroundColor(QtGui.QColor(EDITOR_TEXT))
+        self.editor.setMarginsBackgroundColor(QtGui.QColor(EDITOR_MARGIN))
+        self.editor.setMarginsForegroundColor(QtGui.QColor(EDITOR_MARGIN_TEXT))
+        self.lexer.setDefaultColor(QtGui.QColor(EDITOR_TEXT))
+        self.lexer.setDefaultPaper(QtGui.QColor(EDITOR_BACKGROUND))
+
+        for style, colour in PYTHON_STYLE_COLOURS.items():
+            self.lexer.setColor(QtGui.QColor(colour), style)
+            self.lexer.setPaper(QtGui.QColor(EDITOR_BACKGROUND), style)
 
     def load(self):
         self.store.ensure_root()
