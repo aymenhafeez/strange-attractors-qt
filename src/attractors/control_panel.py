@@ -1,5 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .data_view_panel import DataViewPanel
 from .registry import ATTRACTORS
 from .style import SIDE_PANEL
 
@@ -55,8 +56,20 @@ class ControlPanel(QtWidgets.QWidget):
         self.dropdown.addItems([*ATTRACTORS, "Custom"])
         self.dropdown.currentTextChanged.connect(self._on_attractor_selected)
 
+        self.content_frame = QtWidgets.QFrame()
+        self.content_frame.setObjectName("sidePanelFrame")
+        content_layout = QtWidgets.QVBoxLayout(self.content_frame)
+        content_layout.setContentsMargins(2, 2, 2, 2)
+        content_layout.setSpacing(0)
+
+        self.content_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+        self.content_splitter.setObjectName("sidePanelSplitter")
+        self.content_splitter.setChildrenCollapsible(False)
+        content_layout.addWidget(self.content_splitter)
+        self.panel_layout.addWidget(self.content_frame)
+
         self.controls_scroll = QtWidgets.QScrollArea()
-        self.controls_scroll.setObjectName("sidePanelScroll")
+        self.controls_scroll.setObjectName("sidePanelControlsScroll")
         self.controls_scroll.setWidgetResizable(True)
         self.controls_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.controls_tab = QtWidgets.QWidget()
@@ -64,7 +77,12 @@ class ControlPanel(QtWidgets.QWidget):
         self.controls_layout.setContentsMargins(8, 8, 8, 8)
         self.controls_layout.setSpacing(7)
         self.controls_scroll.setWidget(self.controls_tab)
-        self.panel_layout.addWidget(self.controls_scroll)
+        self.content_splitter.addWidget(self.controls_scroll)
+
+        self.data_view = DataViewPanel()
+        self.data_view.setMinimumHeight(190)
+        self.content_splitter.addWidget(self.data_view)
+        self.content_splitter.setSizes([360, 240])
 
         options = QtWidgets.QHBoxLayout()
         options.addWidget(self.dropdown)
@@ -162,13 +180,6 @@ class ControlPanel(QtWidgets.QWidget):
         self.traj_tail_wrapper = traj_tail_wrapper
         self.controls_layout.addWidget(traj_tail_wrapper)
 
-        self.status_label = QtWidgets.QLabel("")
-        self.status_label.setWordWrap(True)
-        self.status_label.setStyleSheet("color: transparent; font-size: 11px;")
-        self.status_label.hide()
-
-        self.controls_layout.addWidget(self.status_label)
-
     def _on_attractor_selected(self, name):
         self.set_current_attractor(name)
         self.attractor_changed.emit(name)
@@ -189,18 +200,6 @@ class ControlPanel(QtWidgets.QWidget):
         self.preset_panel = right_panel.preset_panel
         self.right_panel.set_current_attractor(self.current_name)
 
-    def set_saved_presets(self, names, selected=None):
-        self.preset_panel.set_saved_presets(names, selected)
-
-    def current_preset_name(self):
-        return self.preset_panel.current_preset_name()
-
-    def set_preset_notes(self, notes):
-        self.preset_panel.set_preset_notes(notes)
-
-    def set_preset_summary(self, summary):
-        self.preset_panel.set_preset_summary(summary)
-
     def get_visual_options(self):
         return {
             "orbit_speed": self.orbit_speed_spin.value(),
@@ -215,9 +214,6 @@ class ControlPanel(QtWidgets.QWidget):
             self.alpha_spin.setValue(int(options["alpha"]))
         if "animation_speed" in options:
             self.anim_speed_spin.setValue(int(options["animation_speed"]))
-
-    def auto_lyapunov_enabled(self):
-        return True
 
     def set_trail_options_visible(self, visible):
         self.traj_tail_wrapper.setVisible(bool(visible))
@@ -445,16 +441,3 @@ class ControlPanel(QtWidgets.QWidget):
             with QtCore.QSignalBlocker(slider), QtCore.QSignalBlocker(spin):
                 slider.setValue(slider_value)
                 spin.setValue(t_max)
-
-    def set_status(self, message, error=False):
-        colour = "#ff6b6b" if error else "#178640"
-        self.status_label.setText(message)
-        self.status_label.setStyleSheet(
-            f"color: {colour}; font-size: 11px; font-weight: bold;"
-        )
-        self.status_label.show()
-
-    def clear_status(self):
-        self.status_label.clear()
-        self.status_label.setStyleSheet("color: transparent; font-size: 11px;")
-        self.status_label.hide()
