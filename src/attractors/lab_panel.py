@@ -1,6 +1,27 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 STATUS_BUTTON_WIDTH = 58
+CONSOLE_PLOT_KINDS = [
+    "Axis",
+    "Projection",
+    "Separation",
+    "Separation fit",
+    "Radius",
+    "Speed",
+    "Displacement",
+    "Crossings",
+    "Returns",
+    "Return lags",
+]
+LIVE_CONSOLE_PLOT_KINDS = {
+    "Axis",
+    "Projection",
+    "Separation",
+    "Separation fit",
+    "Radius",
+    "Speed",
+    "Displacement",
+}
 
 
 class _StatusButton:
@@ -65,7 +86,7 @@ class LabPanel(QtWidgets.QWidget):
         self.status_label = _StatusButton(self.status_button)
 
         self.follow_kind_combo = QtWidgets.QComboBox()
-        self.follow_kind_combo.addItems(["Axis", "Projection", "Separation"])
+        self.follow_kind_combo.addItems(CONSOLE_PLOT_KINDS)
         self.follow_kind_combo.currentTextChanged.connect(self._sync_follow_controls)
 
         self.live_button = QtWidgets.QToolButton()
@@ -99,14 +120,74 @@ class LabPanel(QtWidgets.QWidget):
         self.label_edit = QtWidgets.QLineEdit()
         self.label_edit.setPlaceholderText("Label")
         self.label_edit.setMinimumWidth(130)
+
+        self.return_samples_spin = QtWidgets.QSpinBox()
+        self.return_samples_spin.setRange(10, 200000)
+        self.return_samples_spin.setValue(2000)
+        self.return_samples_spin.setSingleStep(100)
+        self.return_samples_spin.setToolTip("Samples used for return analysis")
+        self.return_min_lag_spin = QtWidgets.QSpinBox()
+        self.return_min_lag_spin.setRange(1, 200000)
+        self.return_min_lag_spin.setValue(50)
+        self.return_min_lag_spin.setToolTip("Minimum lag in samples")
+        self.return_count_spin = QtWidgets.QSpinBox()
+        self.return_count_spin.setRange(1, 10000)
+        self.return_count_spin.setValue(20)
+        self.return_count_spin.setToolTip("Number of return matches")
+        self.return_unique_check = QtWidgets.QCheckBox("Unique")
+        self.return_unique_check.setChecked(True)
+        self.return_unique_check.setToolTip("Keep unique return pairs")
+
+        self.crossing_auto_value_check = QtWidgets.QCheckBox("Auto value")
+        self.crossing_auto_value_check.setChecked(True)
+        self.crossing_auto_value_check.setToolTip("Use the current default section value")
+        self.crossing_value_spin = QtWidgets.QDoubleSpinBox()
+        self.crossing_value_spin.setRange(-1_000_000.0, 1_000_000.0)
+        self.crossing_value_spin.setDecimals(4)
+        self.crossing_value_spin.setSingleStep(0.5)
+        self.crossing_value_spin.setEnabled(False)
+        self.crossing_value_spin.setToolTip("Manual crossing plane value")
+        self.crossing_auto_value_check.toggled.connect(
+            lambda checked: self.crossing_value_spin.setEnabled(not checked)
+        )
+        self.crossing_direction_combo = QtWidgets.QComboBox()
+        self.crossing_direction_combo.addItems(["Both", "Positive", "Negative"])
+        self.crossing_direction_combo.setToolTip("Crossing direction")
+
+        self.fit_time_range_check = QtWidgets.QCheckBox("Use t range")
+        self.fit_time_range_check.setToolTip("Limit the fit by time")
+        self.fit_t_min_spin = QtWidgets.QDoubleSpinBox()
+        self.fit_t_min_spin.setRange(-1_000_000.0, 1_000_000.0)
+        self.fit_t_min_spin.setDecimals(4)
+        self.fit_t_min_spin.setToolTip("Fit start time")
+        self.fit_t_max_spin = QtWidgets.QDoubleSpinBox()
+        self.fit_t_max_spin.setRange(-1_000_000.0, 1_000_000.0)
+        self.fit_t_max_spin.setDecimals(4)
+        self.fit_t_max_spin.setValue(100.0)
+        self.fit_t_max_spin.setToolTip("Fit end time")
+        self.fit_time_range_check.toggled.connect(self._sync_fit_option_enabled)
+
+        self.fit_step_range_check = QtWidgets.QCheckBox("Use step range")
+        self.fit_step_range_check.setToolTip("Limit the fit by sample step")
+        self.fit_step_min_spin = QtWidgets.QSpinBox()
+        self.fit_step_min_spin.setRange(0, 1_000_000_000)
+        self.fit_step_min_spin.setToolTip("First fit sample step")
+        self.fit_step_max_spin = QtWidgets.QSpinBox()
+        self.fit_step_max_spin.setRange(0, 1_000_000_000)
+        self.fit_step_max_spin.setValue(1000)
+        self.fit_step_max_spin.setToolTip("Last fit sample step")
+        self.fit_step_range_check.toggled.connect(self._sync_fit_option_enabled)
+        self._sync_fit_option_enabled()
+
         self.options_button = QtWidgets.QToolButton()
         self.options_button.setText("Options")
-        self.options_button.setToolTip("Follow options")
+        self.options_button.setToolTip("Plot options")
         self.options_button.setPopupMode(
             QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
         )
-        self.options_button.setMenu(self._build_options_menu())
-        self.follow_button = QtWidgets.QPushButton("Follow")
+        self.options_menu = self._build_options_menu()
+        self.options_button.setMenu(self.options_menu)
+        self.follow_button = QtWidgets.QPushButton("Run")
         self.follow_button.clicked.connect(self._emit_follow)
 
         toolbar_layout.addWidget(self.status_button)
@@ -159,17 +240,65 @@ class LabPanel(QtWidgets.QWidget):
 
     def _build_options_menu(self):
         menu = QtWidgets.QMenu(self)
+        menu.aboutToShow.connect(self._prepare_options_menu)
         widget = QtWidgets.QWidget(menu)
+        widget.setMinimumWidth(220)
+        self.options_widget = widget
         layout = QtWidgets.QFormLayout(widget)
+        self.options_form_layout = layout
         layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(6)
+        layout.setHorizontalSpacing(10)
+        layout.setVerticalSpacing(8)
+        layout.setFieldGrowthPolicy(
+            QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
         layout.addRow(self.append_check)
         layout.addRow("Label", self.label_edit)
+        self.return_option_rows = [
+            self.return_samples_spin,
+            self.return_min_lag_spin,
+            self.return_count_spin,
+            self.return_unique_check,
+        ]
+        layout.addRow("Samples", self.return_samples_spin)
+        layout.addRow("Min lag", self.return_min_lag_spin)
+        layout.addRow("Count", self.return_count_spin)
+        layout.addRow(self.return_unique_check)
+        self.crossing_option_rows = [
+            self.crossing_auto_value_check,
+            self.crossing_value_spin,
+            self.crossing_direction_combo,
+        ]
+        layout.addRow(self.crossing_auto_value_check)
+        layout.addRow("Value", self.crossing_value_spin)
+        layout.addRow("Direction", self.crossing_direction_combo)
+        self.fit_option_rows = [
+            self.fit_time_range_check,
+            self.fit_t_min_spin,
+            self.fit_t_max_spin,
+            self.fit_step_range_check,
+            self.fit_step_min_spin,
+            self.fit_step_max_spin,
+        ]
+        layout.addRow(self.fit_time_range_check)
+        layout.addRow("t min", self.fit_t_min_spin)
+        layout.addRow("t max", self.fit_t_max_spin)
+        layout.addRow(self.fit_step_range_check)
+        layout.addRow("Step min", self.fit_step_min_spin)
+        layout.addRow("Step max", self.fit_step_max_spin)
 
         action = QtWidgets.QWidgetAction(menu)
+        self.options_action = action
         action.setDefaultWidget(widget)
         menu.addAction(action)
         return menu
+
+    def _prepare_options_menu(self):
+        self._sync_follow_controls()
+        self.options_widget.updateGeometry()
+        self.options_widget.adjustSize()
+        self.options_menu.updateGeometry()
+        self.options_menu.adjustSize()
 
     def set_solve_state(self, state):
         if state.get("solving"):
@@ -201,30 +330,99 @@ class LabPanel(QtWidgets.QWidget):
         kind = self.follow_kind_combo.currentText()
         is_axis = kind == "Axis"
         is_projection = kind == "Projection"
-        is_separation = kind == "Separation"
-        self.axis_combo.setVisible(is_axis)
+        is_separation = kind in {"Separation", "Separation fit"}
+        uses_axis = is_axis or kind == "Crossings"
+        uses_trajectory = (
+            is_axis
+            or is_projection
+            or kind in {"Crossings", "Displacement", "Radius", "Return lags", "Returns", "Speed"}
+        )
+        self.axis_combo.setVisible(uses_axis)
         self.x_axis_combo.setVisible(is_projection)
         self.y_axis_combo.setVisible(is_projection)
-        self.trajectory_spin.setVisible(is_axis or is_projection)
+        self.trajectory_spin.setVisible(uses_trajectory)
         self.separation_a_spin.setVisible(is_separation)
         self.separation_b_spin.setVisible(is_separation)
-        self.log_check.setVisible(is_separation)
+        self.log_check.setVisible(kind == "Separation")
+        show_return_options = kind in {"Return lags", "Returns"}
+        for widget in self.return_option_rows:
+            self._set_options_row_visible(widget, show_return_options)
+        show_crossing_options = kind == "Crossings"
+        for widget in self.crossing_option_rows:
+            self._set_options_row_visible(widget, show_crossing_options)
+        show_fit_options = kind == "Separation fit"
+        for widget in self.fit_option_rows:
+            self._set_options_row_visible(widget, show_fit_options)
+        self._sync_fit_option_enabled()
+
+    def _set_options_row_visible(self, widget, visible):
+        self.options_form_layout.setRowVisible(widget, visible)
+        widget.setVisible(visible)
+        label = self.options_form_layout.labelForField(widget)
+        if label is not None:
+            label.setVisible(visible)
+
+    def _sync_fit_option_enabled(self):
+        use_time = self.fit_time_range_check.isChecked()
+        self.fit_t_min_spin.setEnabled(use_time)
+        self.fit_t_max_spin.setEnabled(use_time)
+        use_steps = self.fit_step_range_check.isChecked()
+        self.fit_step_min_spin.setEnabled(use_steps)
+        self.fit_step_max_spin.setEnabled(use_steps)
 
     def _emit_follow(self):
-        kind = self.follow_kind_combo.currentText().lower()
+        display_kind = self.follow_kind_combo.currentText()
+        kind = display_kind.lower().replace(" ", "_")
         options = {
-            "append": self.append_check.isChecked(),
+            "mode": "overlay" if self.append_check.isChecked() else "replace",
             "label": self.label_edit.text().strip() or None,
         }
-        if kind == "axis":
+        if kind in {"axis", "crossings"}:
             options["axis"] = self.axis_combo.currentText()
             options["trajectory"] = self.trajectory_spin.value()
+            if kind == "crossings":
+                options["value"] = (
+                    None
+                    if self.crossing_auto_value_check.isChecked()
+                    else self.crossing_value_spin.value()
+                )
+                options["direction"] = self.crossing_direction_combo.currentText().lower()
         elif kind == "projection":
             options["x_axis"] = self.x_axis_combo.currentText()
             options["y_axis"] = self.y_axis_combo.currentText()
             options["trajectory"] = self.trajectory_spin.value()
-        else:
+        elif kind == "separation":
             options["a"] = self.separation_a_spin.value()
             options["b"] = self.separation_b_spin.value()
             options["log"] = self.log_check.isChecked()
+        elif kind == "separation_fit":
+            options["a"] = self.separation_a_spin.value()
+            options["b"] = self.separation_b_spin.value()
+            options["t_min"] = (
+                self.fit_t_min_spin.value()
+                if self.fit_time_range_check.isChecked()
+                else None
+            )
+            options["t_max"] = (
+                self.fit_t_max_spin.value()
+                if self.fit_time_range_check.isChecked()
+                else None
+            )
+            options["step_min"] = (
+                self.fit_step_min_spin.value()
+                if self.fit_step_range_check.isChecked()
+                else None
+            )
+            options["step_max"] = (
+                self.fit_step_max_spin.value()
+                if self.fit_step_range_check.isChecked()
+                else None
+            )
+        else:
+            options["trajectory"] = self.trajectory_spin.value()
+            if kind in {"return_lags", "returns"}:
+                options["samples"] = self.return_samples_spin.value()
+                options["min_lag"] = self.return_min_lag_spin.value()
+                options["count"] = self.return_count_spin.value()
+                options["unique"] = self.return_unique_check.isChecked()
         self.follow_requested.emit(kind, options)
