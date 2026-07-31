@@ -33,16 +33,17 @@ from .right_panel import RightPanel
 from .session import clear_session, load_session, save_session, session_settings
 from .solution_validation import validate_solutions
 from .solve_manager import SolveManager
-from .style import SCENE_TOOLBAR, SPLITTER_HANDLE
-from .system import SystemInspector
+from .style import SCENE_TOOLBAR, SPLITTER_HANDLE_HOVER
+from .system import PLOT_MODE_REPLACE, SystemInspector
 from .view_manager import ViewManager
 
 WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 850
 PARTIAL_N = 40000
 PROJECTION_UPDATE_INTERVAL_MS = 100
-MAIN_VIEW_MARGIN = 8
+MAIN_VIEW_MARGIN = 4
 TOOLBAR_ICON_SIZE = 18
+LAB_PLOT_COMBO_WIDTH = 132
 PROCESS_STATUS_DEFAULT_VISIBLE = True
 
 
@@ -57,6 +58,101 @@ def _solve_status_text(n_trajectories):
     if n_trajectories == 1:
         return "Solving trajectory"
     return f"Solving {n_trajectories} trajectories"
+
+
+def _copy_solve_values(values):
+    return {str(key): float(value) for key, value in values.items()}
+
+
+def _parameter_by_name(config):
+    return {param.name: param for param in config.params}
+
+
+def _solve_signature(config, values, n, t_max, trajectory_specs):
+    return {
+        "attractor": config.name,
+        "parameters": _copy_solve_values(values),
+        "n": int(n),
+        "t_max": float(t_max),
+        "trajectories": [
+            [float(coord) for coord in spec["ic"]] for spec in trajectory_specs
+        ],
+        "trajectory_specs": [
+            {
+                "ic": [float(coord) for coord in spec["ic"]],
+                "n": int(spec["n"]),
+                "t_max": float(spec["t_max"]),
+            }
+            for spec in trajectory_specs
+        ],
+    }
+
+
+def _solution_lengths(solutions):
+    return [len(solution) for solution in solutions or []]
+
+
+def _trajectory_solve_specs(config, trajectories, n, t_max, *, full):
+    if not trajectories:
+        solve_n = int(n if full else min(n, PARTIAL_N))
+        return [
+            {
+                "ic": [float(coord) for coord in config.initial_conditions],
+                "n": solve_n,
+                "t_max": float(t_max),
+            }
+        ]
+
+    specs = []
+    for trajectory in trajectories:
+        trajectory_n = int(trajectory.get("n", n))
+        solve_n = trajectory_n if full else min(trajectory_n, PARTIAL_N)
+        specs.append(
+            {
+                "ic": [float(coord) for coord in trajectory["ic"]],
+                "n": solve_n,
+                "t_max": float(trajectory.get("t_max", t_max)),
+            }
+        )
+
+    return specs
+
+
+def _has_console_solutions(window):
+    scene = getattr(window, "scene", None)
+    if scene is None or not hasattr(scene, "get_solutions"):
+        return False
+
+    return bool(scene.get_solutions())
+
+
+def _set_solve_state(window, **updates):
+    state = dict(getattr(window, "_solve_state", {}))
+    state.update(updates)
+    window._solve_state = state
+    lab_panel = getattr(window, "lab_panel", None)
+
+    if lab_panel is not None:
+        lab_panel.set_solve_state(state)
+
+    return state
+
+
+def _initial_solve_state():
+    return {
+        "solving": False,
+        "valid": False,
+        "stale": False,
+        "partial": False,
+        "last_error": None,
+        "request_id": None,
+        "attractor": None,
+        "parameters": {},
+        "n": None,
+        "t_max": None,
+        "trajectories": 0,
+        "solution_points": [],
+    }
 
 
 def _attractor_name_for_config(config):
@@ -78,6 +174,16 @@ def _preset_directory():
         return app_data + "/presets"
 
     return str(QtCore.QDir.homePath() + "/.strange-attractors/presets")
+
+
+def _app_data_directory():
+    app_data = QtCore.QStandardPaths.writableLocation(
+        QtCore.QStandardPaths.StandardLocation.AppDataLocation
+    )
+    if app_data:
+        return Path(app_data)
+
+    return Path(QtCore.QDir.homePath() + "/.strange-attractors")
 
 
 def _session_attractor_name(state):
@@ -241,6 +347,7 @@ class Window(QtWidgets.QMainWindow):
 
         self.scene = ViewManager(self)
         self.scene.animation_finished.connect(self._on_anim_finished)
+        self.scene.animation_segments_data.connect(self._on_animation_segments_data)
         self.scene.projections_data.connect(self._on_projections_data)
 
         self.controls = ControlPanel()
@@ -1517,8 +1624,8 @@ class Window(QtWidgets.QMainWindow):
             full=full,
             partial=not full,
             n=dispatch_n,
-            t_max=t_max,
-            trajectories=len(ic_list),
+            t_max=dispatch_t_max,
+            trajectories=len(trajectory_specs),
         )
         if token is not None:
             self._solve_perf_tokens[self._active_solve_request_id] = token
@@ -1526,6 +1633,16 @@ class Window(QtWidgets.QMainWindow):
     def _on_controls_solve_requested(self, full):
         self.scene.stop_animation()
         _sync_animation_toolbar(self, False)
+        if (
+            not full
+            and self._solve_pending
+            and getattr(self, "_solve_state", {}).get("partial", False)
+        ):
+            self._solve_needed = True
+            self._full_needed = False
+
+            return
+
         self.solver.cancel_solve()
         self._solve_pending = False
         self._solve_needed = full
@@ -1633,6 +1750,9 @@ class Window(QtWidgets.QMainWindow):
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
             self.scene.auto_adjust_grid(solutions)
+            refresh_lab = getattr(self, "_refresh_lab_live_plots", None)
+            if refresh_lab is not None:
+                refresh_lab()
 
         if self._solve_needed:
             self._solve_needed = False
@@ -1748,8 +1868,11 @@ class Window(QtWidgets.QMainWindow):
 
     def _connect_workspace_dock_signals(self):
         docks = [getattr(self, "viewport_dock", None)]
+        docks.append(getattr(self, "lab_dock", None))
         docks.extend(getattr(self, "_panel_docks", {}).values())
         for dock in docks:
+            if dock is None:
+                continue
             signal = getattr(dock, "container_changed", None)
             if signal is not None:
                 signal.connect(self._on_workspace_layout_changed)
@@ -1790,6 +1913,32 @@ class Window(QtWidgets.QMainWindow):
             dock_area.restoreState(dock_layout, missing="ignore", extra="bottom")
         except Exception:  # noqa: BLE001
             return
+        Window._sync_jupyter_workspace_state(self)
+
+    def _replace_closed_lab_dock(self):
+        dock = Window._build_lab_dock(self)
+        signal = getattr(dock, "container_changed", None)
+        on_layout_changed = getattr(self, "_on_workspace_layout_changed", None)
+        if signal is not None and on_layout_changed is not None:
+            signal.connect(on_layout_changed)
+        self.lab_dock = dock
+
+    def _open_lab_dock(self):
+        dock = getattr(self, "lab_dock", None)
+        if dock is None:
+            self.lab_panel.show()
+            return
+
+        if dock.container() is None:
+            self.workspace_dock_area.addDock(
+                dock,
+                position="above",
+                relativeTo=self.viewport_dock,
+            )
+        self.lab_panel.show()
+        container = dock.container()
+        if hasattr(container, "raiseDock"):
+            dock.raiseDock()
         Window._sync_jupyter_workspace_state(self)
 
     def _panel_name_for_panel(self, panel):
