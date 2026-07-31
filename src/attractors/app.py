@@ -290,7 +290,10 @@ class Window(QtWidgets.QMainWindow):
         self.bifurcation_panel.hide()
 
         self.jupyter_console_panel = JupyterConsolePanel(
-            self._jupyter_console_namespace, cwd=self._scripts_directory
+            self._jupyter_console_namespace, script_dir=self._scripts_directory
+        )
+        self.jupyter_console_panel.script_panel.status_changed.connect(
+            lambda message: Window._set_temporary_app_status(self, message)
         )
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
         self.lab_panel = LabPanel(self.jupyter_console_panel)
@@ -1125,6 +1128,28 @@ class Window(QtWidgets.QMainWindow):
                 set_status(message, error=error)
 
         Window._sync_status_bar_visibility(self)
+
+    def _set_temporary_app_status(self, message, *, timeout_ms=3000, error=False):
+        message = str(message)
+        Window._set_app_status(self, message, error=error)
+
+        if not hasattr(self, "_app_status_clear_timer"):
+            self._app_status_clear_timer = QtCore.QTimer(self)
+            self._app_status_clear_timer.setSingleShot(True)
+
+        try:
+            self._app_status_clear_timer.timeout.disconnect()
+        except TypeError:
+            pass
+
+        self._app_status_clear_timer.timeout.connect(
+            lambda expected=message: (
+                Window._clear_app_status(self)
+                if getattr(self, "_app_status_message", "") == expected
+                else None
+            )
+        )
+        self._app_status_clear_timer.start(int(timeout_ms))
 
     def _clear_app_status(self):
         self._app_status_message = ""

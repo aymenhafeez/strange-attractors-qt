@@ -275,10 +275,14 @@ class ScriptPanel(QtWidgets.QWidget):
 
     def _update_status(self, action):
         if self.current_path is None:
-            self.status_label.setText("")
+            self.status_label.clear()
+            self.status_changed.emit("")
             return
 
-        marker = "*" if self._dirty else ""
-        text = f"{action} {self.current_path.name}{marker}"
-        self.status_label.setText(text)
-        self.status_changed.emit(text)
+        if self._dirty:
+            self.status_label.setText(f"Modified {self.current_path.name}")
+        else:
+            self.status_label.clear()
+
+        if action != "Modified":
+            self.status_changed.emit(f"{action} {self.current_path.name}")
