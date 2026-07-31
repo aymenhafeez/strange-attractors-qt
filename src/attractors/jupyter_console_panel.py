@@ -24,6 +24,8 @@ LEGEND_BRUSH = (18, 22, 28, 220)
 LEGEND_PEN = (210, 220, 230, 180)
 LEGEND_TEXT = (245, 248, 252)
 LEGEND_TEXT_SIZE = "9pt"
+PLOT_MODE_REPLACE = "replace"
+PLOT_MODE_OVERLAY = "overlay"
 
 
 class _RichJupyterConsole(_BaseJupyterConsole):
@@ -83,24 +85,24 @@ class ConsolePlot:
         x,
         y,
         *,
-        clear=True,
         bottom=None,
         left=None,
-        plot_widget=None,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
         **kwargs,
     ):
-        if plot_widget is not None:
-            target = self._plot_target(plot_widget)
+        if plot is not None:
+            target = self._plot_target(plot)
             return target.line(
                 x,
                 y,
-                clear=clear,
+                mode=mode,
                 bottom=bottom,
                 left=left,
                 **kwargs,
             )
 
-        if clear:
+        if self._clear_for_mode(mode):
             self.clear()
         if kwargs.get("name"):
             self.ensure_legend()
@@ -113,10 +115,10 @@ class ConsolePlot:
         x,
         y,
         *,
-        clear=True,
         bottom=None,
         left=None,
-        plot_widget=None,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
         symbol="o",
         symbol_size=None,
         **kwargs,
@@ -128,10 +130,10 @@ class ConsolePlot:
         return self.line(
             x,
             y,
-            clear=clear,
             bottom=bottom,
             left=left,
-            plot_widget=plot_widget,
+            plot=plot,
+            mode=mode,
             **kwargs,
         )
 
@@ -156,6 +158,14 @@ class ConsolePlot:
                 return self._manager.new(plot_widget)
 
         return plot_widget
+
+    def _clear_for_mode(self, mode):
+        mode = str(mode).strip().lower()
+        if mode == PLOT_MODE_REPLACE:
+            return True
+        if mode == PLOT_MODE_OVERLAY:
+            return False
+        raise ValueError("Plot mode must be 'replace' or 'overlay'")
 
 
 class JupyterConsolePanel(QtWidgets.QWidget):
