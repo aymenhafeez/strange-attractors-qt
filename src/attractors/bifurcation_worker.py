@@ -56,6 +56,9 @@ class BifurcationWorker(QRunnable):
         self.signals = _BifurcationSignals()
         self._cancel = False
 
+    def cancel(self):
+        self._cancel = True
+
     def run(self):
         all_vals = []
         all_peaks = []

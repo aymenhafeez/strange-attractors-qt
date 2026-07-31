@@ -69,7 +69,7 @@ class BifurcationPanel(QtWidgets.QWidget):
 
         self.cancel_btn = QtWidgets.QPushButton("\u25a0 Cancel")
         self.cancel_btn.setEnabled(False)
-        self.cancel_btn.clicked.connect(self._cancel_sweep)
+        self.cancel_btn.clicked.connect(self.cancel_sweep)
         row3.addWidget(self.cancel_btn)
 
         self.export_btn = QtWidgets.QPushButton("Export PNG...")
@@ -109,7 +109,7 @@ class BifurcationPanel(QtWidgets.QWidget):
             return
 
         p = next(
-            (p for p in self.config.params if p.name == self.param_combo.currentText()),
+            (p for p in self.config.params if p.name == param_name),
             None,
         )
         if p is None:
@@ -124,7 +124,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.plot_widget.setLabel("left", self.var_combo.currentText())
 
     def set_config(self, config, current_values):
-        self._cancel_sweep()
+        self.cancel_sweep()
         self._sweep_gen += 1
         self._error_label.setVisible(False)
         self.config = config
@@ -198,12 +198,9 @@ class BifurcationPanel(QtWidgets.QWidget):
         self._worker = worker
         QThreadPool.globalInstance().start(worker)
 
-    def _cancel_sweep(self):
-        self.cancel_sweep()
-
     def cancel_sweep(self):
         if self._worker:
-            self._worker._cancel = True
+            self._worker.cancel()
             self._worker = None
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
@@ -217,12 +214,6 @@ class BifurcationPanel(QtWidgets.QWidget):
             return
 
         lens = [len(p) for p in peaks_list]
-        if len(vals) != len(lens):
-            usable = min(len(vals), len(lens))
-            vals = vals[:usable]
-            peaks_list = peaks_list[:usable]
-            lens = lens[:usable]
-
         if sum(lens) == 0:
             self.plot_data.setData([], [])
             return
