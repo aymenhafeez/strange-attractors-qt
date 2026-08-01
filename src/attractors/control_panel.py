@@ -200,21 +200,6 @@ class ControlPanel(QtWidgets.QWidget):
         self.preset_panel = right_panel.preset_panel
         self.right_panel.set_current_attractor(self.current_name)
 
-    def get_visual_options(self):
-        return {
-            "orbit_speed": self.orbit_speed_spin.value(),
-            "alpha": self.alpha_spin.value(),
-            "animation_speed": self.anim_speed_spin.value(),
-        }
-
-    def set_visual_options(self, options):
-        if "orbit_speed" in options:
-            self.orbit_speed_spin.setValue(int(options["orbit_speed"]))
-        if "alpha" in options:
-            self.alpha_spin.setValue(int(options["alpha"]))
-        if "animation_speed" in options:
-            self.anim_speed_spin.setValue(int(options["animation_speed"]))
-
     def set_trail_options_visible(self, visible):
         self.traj_tail_wrapper.setVisible(bool(visible))
 
@@ -280,19 +265,20 @@ class ControlPanel(QtWidgets.QWidget):
         self.controls_layout.addWidget(self.n_slider_wrapper)
 
     def _build_t_max_slider(self, config):
+        t_max = int(config.time_defaults.t_max)
         t_max_row = QtWidgets.QHBoxLayout()
         self.t_max_slider_row = t_max_row
         t_max_label = QtWidgets.QLabel("t_max")
         t_max_row.addWidget(t_max_label)
         t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         t_max_slider.setRange(1, 750)
-        t_max_slider.setValue(config.time_defaults.t_max)
+        t_max_slider.setValue(t_max)
         t_max_slider.param_step = 1
         t_max_spin = QtWidgets.QSpinBox()
         t_max_spin.setKeyboardTracking(False)
         t_max_spin.setRange(1, 750)
         t_max_spin.setSingleStep(1)
-        t_max_spin.setValue(config.time_defaults.t_max)
+        t_max_spin.setValue(t_max)
         t_max_spin.param_step = 1
         t_max_slider.valueChanged.connect(
             lambda val, slider=t_max_slider, spin=t_max_spin: (
