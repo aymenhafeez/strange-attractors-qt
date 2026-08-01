@@ -45,10 +45,12 @@ class _PoincareWorker(QRunnable):
         finally:
             self.signals.finished.emit()
 
+    def cancel(self):
+        self._cancel = True
+
 
 class PoincarePanel(QtWidgets.QWidget):
     plane_changed = QtCore.pyqtSignal(str, float)
-    close_requested = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -161,7 +163,7 @@ class PoincarePanel(QtWidgets.QWidget):
 
         self.plane_combo.currentTextChanged.connect(self._on_plane_changed)
         self.value_spin.editingFinished.connect(self._on_value_changed)
-        self.dir_combo.currentTextChanged.connect(self._recompute)
+        self.dir_combo.currentTextChanged.connect(self.recompute)
         self.heatmap_check.toggled.connect(self._on_mode_changed)
 
         self._on_plane_changed(self.plane_combo.currentText())
@@ -180,7 +182,7 @@ class PoincarePanel(QtWidgets.QWidget):
     def _start_solve(self):
         if self._config is None:
             return
-        self._cancel_solve()
+        self.cancel_solve()
         self._set_solve_enabled(False)
         self._error_label.setVisible(False)
         self._solve_gen += 1
@@ -197,12 +199,9 @@ class PoincarePanel(QtWidgets.QWidget):
         self._worker = worker
         QThreadPool.globalInstance().start(worker)
 
-    def _cancel_solve(self):
-        self.cancel_solve()
-
     def cancel_solve(self):
         if self._worker is not None:
-            self._worker._cancel = True
+            self._worker.cancel()
             self._worker = None
 
     def _on_solve_result(self, sol, gen):
@@ -224,7 +223,7 @@ class PoincarePanel(QtWidgets.QWidget):
         self.value_spin.setValue(midpoint)
         self.value_spin.blockSignals(False)
         self._emit_plane()
-        self._recompute()
+        self.recompute()
 
     def _on_solve_finished(self, gen):
         if gen != self._solve_gen:
@@ -268,23 +267,20 @@ class PoincarePanel(QtWidgets.QWidget):
             self.value_spin.setValue(midpoint)
             self.value_spin.blockSignals(False)
         self._emit_plane()
-        self._recompute()
+        self.recompute()
 
     def _on_value_changed(self):
         self._emit_plane()
-        self._recompute()
+        self.recompute()
 
     def _on_mode_changed(self):
         heatmap = self.heatmap_check.isChecked()
         self._scatter.setVisible(not heatmap)
         self._img.setVisible(heatmap)
         self._colourbar.setVisible(heatmap)
-        self._recompute()
+        self.recompute()
 
     def recompute(self):
-        self._recompute()
-
-    def _recompute(self):
         if self._solutions is None:
             return
 
@@ -300,38 +296,35 @@ class PoincarePanel(QtWidgets.QWidget):
             all_h.append(h)
             all_v.append(v)
 
+        h_all = np.concatenate(all_h) if all_h else np.array([], dtype=np.float64)
+        v_all = np.concatenate(all_v) if all_v else np.array([], dtype=np.float64)
+
         if self.heatmap_check.isChecked():
             self._scatter.setData([], [])
-            if all_h:
-                combined = np.concatenate(all_h)
-                if len(combined) > 0:
-                    h_all = combined
-                    v_all = np.concatenate(all_v)
-                    heatmap, xedges, yedges = np.histogram2d(h_all, v_all, bins=N_BINS)
-                    self._img.setImage(np.log1p(heatmap))
-                    self._img.setRect(
-                        QtCore.QRectF(
-                            xedges[0],
-                            yedges[0],
-                            xedges[-1] - xedges[0],
-                            yedges[-1] - yedges[0],
-                        )
+            if len(h_all) > 0:
+                heatmap, xedges, yedges = np.histogram2d(h_all, v_all, bins=N_BINS)
+                self._img.setImage(np.log1p(heatmap))
+                self._img.setRect(
+                    QtCore.QRectF(
+                        xedges[0],
+                        yedges[0],
+                        xedges[-1] - xedges[0],
+                        yedges[-1] - yedges[0],
                     )
-                    self._img.setVisible(True)
-                    self._colourbar.setVisible(True)
-                    self.plot_widget.autoRange()
-                    return
+                )
+                self._img.setVisible(True)
+                self._colourbar.setVisible(True)
+                self.plot_widget.autoRange()
+                return
             self._img.setVisible(False)
             self._colourbar.setVisible(False)
         else:
             self._img.setVisible(False)
             self._colourbar.setVisible(False)
-            if all_h:
-                combined = np.concatenate(all_h)
-                if len(combined) > 0:
-                    self._scatter.setData(combined, np.concatenate(all_v))
-                    self.plot_widget.autoRange()
-                    return
+            if len(h_all) > 0:
+                self._scatter.setData(h_all, v_all)
+                self.plot_widget.autoRange()
+                return
             self._scatter.setData([], [])
 
     def _update_colourmap(self, cmap_name):
