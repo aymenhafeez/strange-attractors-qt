@@ -47,7 +47,7 @@ def _status_summary(text):
     return text.splitlines()[0]
 
 
-class LabPanel(QtWidgets.QWidget):
+class WorkspacePanel(QtWidgets.QWidget):
     follow_requested = QtCore.pyqtSignal(str, dict)
     live_trace_remove_requested = QtCore.pyqtSignal(str, int)
     live_plot_clear_requested = QtCore.pyqtSignal(str)
