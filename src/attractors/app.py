@@ -19,8 +19,6 @@ from .perf import PerfProfiler, perf_finish, perf_start
 from .poincare_panel import PoincarePanel
 from .presets import (
     PresetError,
-    build_preset,
-    custom_config_from_preset_data,
     delete_named_preset,
     list_presets,
     load_named_preset,
@@ -31,7 +29,6 @@ from .process_metrics import ProcessUsageStatus
 from .projection_panel import ProjectionPanel
 from .registry import ATTRACTORS
 from .right_panel import RightPanel
-from .session import clear_session, load_session, save_session, session_settings
 from .solution_validation import validate_solutions
 from .solve_manager import SolveManager
 from .style import SCENE_TOOLBAR, SPLITTER_HANDLE_HOVER
@@ -48,132 +45,6 @@ LAB_PLOT_COMBO_WIDTH = 132
 PROCESS_STATUS_DEFAULT_VISIBLE = True
 
 
-def _should_update_projection(now_ms, last_update_ms, interval_ms):
-    if last_update_ms is None:
-        return True
-
-    return now_ms - last_update_ms >= interval_ms
-
-
-def _solve_status_text(n_trajectories):
-    if n_trajectories == 1:
-        return "Solving trajectory"
-    return f"Solving {n_trajectories} trajectories"
-
-
-def _copy_solve_values(values):
-    return {str(key): float(value) for key, value in values.items()}
-
-
-def _parameter_by_name(config):
-    return {param.name: param for param in config.params}
-
-
-def _solve_signature(config, values, n, t_max, trajectory_specs):
-    return {
-        "attractor": config.name,
-        "parameters": _copy_solve_values(values),
-        "n": int(n),
-        "t_max": float(t_max),
-        "trajectories": [
-            [float(coord) for coord in spec["ic"]] for spec in trajectory_specs
-        ],
-        "trajectory_specs": [
-            {
-                "ic": [float(coord) for coord in spec["ic"]],
-                "n": int(spec["n"]),
-                "t_max": float(spec["t_max"]),
-            }
-            for spec in trajectory_specs
-        ],
-    }
-
-
-def _solution_lengths(solutions):
-    return [len(solution) for solution in solutions or []]
-
-
-def _trajectory_solve_specs(config, trajectories, n, t_max, *, full):
-    if not trajectories:
-        solve_n = int(n if full else min(n, PARTIAL_N))
-        return [
-            {
-                "ic": [float(coord) for coord in config.initial_conditions],
-                "n": solve_n,
-                "t_max": float(t_max),
-            }
-        ]
-
-    specs = []
-    for trajectory in trajectories:
-        trajectory_n = int(trajectory.get("n", n))
-        solve_n = trajectory_n if full else min(trajectory_n, PARTIAL_N)
-        specs.append(
-            {
-                "ic": [float(coord) for coord in trajectory["ic"]],
-                "n": solve_n,
-                "t_max": float(trajectory.get("t_max", t_max)),
-            }
-        )
-
-    return specs
-
-
-def _initial_solve_state():
-    return {
-        "solving": False,
-        "valid": False,
-        "stale": False,
-        "partial": False,
-        "last_error": None,
-        "request_id": None,
-        "attractor": None,
-        "parameters": {},
-        "n": None,
-        "t_max": None,
-        "trajectories": 0,
-        "solution_points": [],
-    }
-
-
-def _attractor_name_for_config(config):
-    if config.name == "Custom":
-        return "Custom"
-
-    for name, registered_config in ATTRACTORS.items():
-        if registered_config is config:
-            return name
-
-    return config.name
-
-
-def _preset_directory():
-    app_data = QtCore.QStandardPaths.writableLocation(
-        QtCore.QStandardPaths.StandardLocation.AppDataLocation
-    )
-    if app_data:
-        return app_data + "/presets"
-
-    return QtCore.QDir.homePath() + "/.strange-attractors/presets"
-
-
-def _app_data_directory():
-    app_data = QtCore.QStandardPaths.writableLocation(
-        QtCore.QStandardPaths.StandardLocation.AppDataLocation
-    )
-    if app_data:
-        return Path(app_data)
-
-    return Path(QtCore.QDir.homePath() + "/.strange-attractors")
-
-
-def _session_attractor_name(state):
-    name = state.get("attractor")
-    if name in ATTRACTORS:
-        return name
-    return next(iter(ATTRACTORS.keys()))
-
-
 def _panel_visible(window, panel_name):
     dock = window._panel_docks.get(panel_name)
     if dock is not None:
@@ -186,34 +57,8 @@ def _panel_visible(window, panel_name):
         "bifurcation_panel": window.bifurcation_panel,
         "jupyter_console_panel": window.jupyter_console_panel,
     }
+
     return panels[panel_name].isVisible()
-
-
-def _dock_branch_is_current(dock):
-    item = dock
-    container = dock.container()
-    while container is not None:
-        try:
-            container_type = container.type()
-        except AttributeError:
-            container_type = None
-        if container_type == "tab":
-            try:
-                stack = container.stack
-            except AttributeError:
-                stack = None
-            if stack is not None and stack.currentWidget() is not item:
-                return False
-        item = container
-        try:
-            container = container.container()
-        except AttributeError:
-            container = None
-    return True
-
-
-def _has_hidden_lyapunov_panel(window):
-    return not _panel_visible(window, "lyapunov_panel")
 
 
 def _lab_visible(window):
@@ -235,15 +80,27 @@ class Window(QtWidgets.QMainWindow):
         self._restoring_view = False
         self._active_solve_request_id = None
         self._active_lyapunov_request_id = None
-        self._solve_state = _initial_solve_state()
+
+        self._solve_state = {
+            "solving": False,
+            "valid": False,
+            "stale": False,
+            "partial": False,
+            "last_error": None,
+            "request_id": None,
+            "attractor": None,
+            "parameters": {},
+            "n": None,
+            "t_max": None,
+            "trajectories": 0,
+            "solution_points": [],
+        }
+
         self._solve_perf_tokens = {}
         self._lyapunov_perf_tokens = {}
         self._last_projection_update_ms = None
         self._last_lab_preview_update_ms = None
         self._latest_projection_solutions = None
-        self._settings = session_settings()
-        self._session_state = load_session(self._settings)
-        self._session_reset_requested = False
         self._perf = PerfProfiler()
         self._process_status_visible = PROCESS_STATUS_DEFAULT_VISIBLE
         self._app_status_message = ""
@@ -260,10 +117,21 @@ class Window(QtWidgets.QMainWindow):
         self.lab_dock = None
         self.current_n = 100000
         self.current_t_max = 50
-        self.current_name = _session_attractor_name(self._session_state)
+        self.current_name = next(iter(ATTRACTORS.keys()))
         self._custom_config = None
-        self._preset_directory = _preset_directory()
-        self._app_data_directory = _app_data_directory()
+        app_data_location = QtCore.QStandardPaths.writableLocation(
+            QtCore.QStandardPaths.StandardLocation.AppDataLocation
+        )
+        if app_data_location:
+            self._preset_directory = app_data_location + "/presets"
+            self._app_data_directory = Path(app_data_location)
+        else:
+            self._preset_directory = (
+                QtCore.QDir.homePath() + "/.strange-attractors/presets"
+            )
+            self._app_data_directory = Path(
+                QtCore.QDir.homePath() + "/.strange-attractors"
+            )
         self._scripts_directory = self._app_data_directory / "scripts"
         self._scripts_directory.mkdir(parents=True, exist_ok=True)
         self._lab_live_plots = {}
@@ -277,8 +145,14 @@ class Window(QtWidgets.QMainWindow):
         self.solver.lyapunov_failed.connect(self._on_lyapunov_failed)
 
         self.scene = ViewManager(self)
-        self.scene.animation_finished.connect(self._on_anim_finished)
-        self.scene.animation_segments_data.connect(self._on_animation_segments_data)
+        self.scene.animation_finished.connect(
+            lambda: self._sync_toolbar_animation_action(False)
+        )
+        self.scene.animation_segments_data.connect(
+            lambda segments: self.lab_plot_controller._refresh_lab_live_preview(
+                segments, kinds={"projection"}
+            )
+        )
         self.scene.projections_data.connect(self._on_projections_data)
 
         self.controls = ControlPanel()
@@ -287,7 +161,9 @@ class Window(QtWidgets.QMainWindow):
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._on_controls_solve_requested)
         self.controls.n_changed.connect(self._on_n_changed)
-        self.controls.t_max_changed.connect(self._on_t_max_changed)
+        self.controls.t_max_changed.connect(
+            lambda val: setattr(self, "current_t_max", val)
+        )
         self.controls.animation_speed_changed.connect(
             self.scene.animation_controller.set_step
         )
@@ -323,11 +199,10 @@ class Window(QtWidgets.QMainWindow):
         self.poincare_panel.plane_changed.connect(
             self.scene.grid_overlay.set_poincare_plane
         )
-        self.poincare_panel.close_requested.connect(self._close_poincare)
         self.poincare_panel.hide()
 
         self.lyapunov_panel = LyapunovPanel()
-        self.lyapunov_panel.compute_requested.connect(self._on_lyapunov_requested)
+        self.lyapunov_panel.compute_requested.connect(self._request_lyapunov)
         self.lyapunov_panel.close_requested.connect(self._close_lyapunov_panel)
         self.lyapunov_panel.hide()
 
@@ -437,7 +312,6 @@ class Window(QtWidgets.QMainWindow):
         self._refresh_presets()
         self.controls.set_current_attractor(self.current_name)
         self._rebuild_view(self.current_name)
-        self._restore_session(self._session_state)
 
     def eventFilter(self, obj, event):
         if event.type() == QtCore.QEvent.Type.Resize and obj is self.scene.container:
@@ -515,7 +389,10 @@ class Window(QtWidgets.QMainWindow):
                 self.controls.set_current_attractor("Custom")
                 self.controls.hide_standard_controls()
             else:
-                name = _attractor_name_for_config(config)
+                name = next(
+                    (name for name, con in ATTRACTORS.items() if con is config),
+                    config.name,
+                )
                 self.current_name = name
                 self.controls.set_current_attractor(name)
                 self.controls.show_standard_controls()
@@ -546,197 +423,6 @@ class Window(QtWidgets.QMainWindow):
             self._restoring_view = False
         self._update_plot()
 
-    def _collect_session_state(self):
-        values = self.controls.get_current_values()
-        visual_options = self._collect_visual_options()
-        custom_data = None
-        if self.current_name == "Custom" and self._custom_config is not None:
-            try:
-                custom_data = build_preset(
-                    self._custom_config,
-                    values,
-                    self.current_n,
-                    self.current_t_max,
-                )
-            except PresetError:
-                custom_data = None
-
-        state = {
-            "attractor": (
-                self.current_name
-                if self.current_name in ATTRACTORS or custom_data is not None
-                else None
-            ),
-            "custom": custom_data,
-            "values": values,
-            "n": int(self.current_n),
-            "t_max": int(self.current_t_max),
-            "visual_options": visual_options,
-            "trajectories": self.controls.trajectory_panel.get_session_state(),
-            "panels": self._collect_panel_state(),
-            "camera": self.scene.camera_controller.get_camera_state(),
-            "selected_preset": self.controls.preset_panel.current_preset_name(),
-            "lab_live_plots": self.lab_plot_controller._collect_lab_live_plot_state(),
-        }
-        dock_layout = self._collect_workspace_dock_layout()
-        if dock_layout is not None:
-            state["workspace_dock_layout"] = dock_layout
-        return state
-
-    def _collect_panel_state(self):
-        panels = {
-            "projections": _panel_visible(self, "projection_panel"),
-            "poincare": _panel_visible(self, "poincare_panel"),
-            "bifurcation": _panel_visible(self, "bifurcation_panel"),
-            "lyapunov": _panel_visible(self, "lyapunov_panel"),
-            "jupyter_console": _lab_visible(self),
-        }
-        panels["performance_status"] = self._process_status_visible
-        return panels
-
-    def _collect_visual_options(self):
-        options = self.controls.get_visual_options()
-        for key, action in [
-            ("point", self.toolbar_point_action),
-            ("line", self.toolbar_line_action),
-            ("trail", self.toolbar_trail_action),
-            ("grid", self.toolbar_grid_action),
-            ("orbit", self.toolbar_orbit_action),
-            ("loop", self.toolbar_loop_action),
-        ]:
-            options[key] = action.isChecked()
-        options["auto_lyapunov"] = (
-            self.lyapunov_panel.isVisible() and self.lyapunov_panel.auto_enabled()
-        )
-        return options
-
-    def _set_visual_options(self, options):
-        self.controls.set_visual_options(options)
-        for key, action in [
-            ("point", self.toolbar_point_action),
-            ("line", self.toolbar_line_action),
-            ("trail", self.toolbar_trail_action),
-            ("grid", self.toolbar_grid_action),
-            ("orbit", self.toolbar_orbit_action),
-            ("loop", self.toolbar_loop_action),
-        ]:
-            if key in options:
-                action.setChecked(bool(options[key]))
-        if "auto_lyapunov" in options:
-            self.lyapunov_panel.set_auto_enabled(bool(options["auto_lyapunov"]))
-
-    def _collect_workspace_dock_layout(self):
-        try:
-            return self.workspace_dock_area.saveState()
-        except (AttributeError, TypeError, ValueError):
-            return None
-
-    def _restore_session(self, state):
-        if not state or (
-            state.get("attractor") not in ATTRACTORS
-            and state.get("attractor") != "Custom"
-        ):
-            return
-
-        if state.get("attractor") == "Custom":
-            custom_data = state.get("custom")
-            if not isinstance(custom_data, dict):
-                return
-            try:
-                config = custom_config_from_preset_data(custom_data)
-            except PresetError:
-                return
-            self._restoring_view = True
-            try:
-                self._custom_config = config
-                self.current_name = "Custom"
-                self.controls.set_current_attractor("Custom")
-                self.controls.hide_standard_controls()
-                self.scene.animation_controller.stop()
-                self._sync_toolbar_animation_action(False)
-                self.scene.camera_controller.set_camera(config)
-                self.controls.configure(config)
-                self.controls.custom_panel.set_from_config(config)
-                self.controls.set_current_values(state.get("values", {}))
-                self.lyapunov_panel.clear()
-                self.controls.trajectory_panel.reset(config)
-                self.bifurcation_panel.set_config(
-                    config, self.controls.get_current_values()
-                )
-            finally:
-                self._restoring_view = False
-
-        values = state.get("values", {})
-        if isinstance(values, dict):
-            self.controls.set_current_values(values)
-
-        n = state.get("n")
-        t_max = state.get("t_max")
-        if n is not None and t_max is not None:
-            try:
-                self.current_n = int(n)
-                self.current_t_max = int(t_max)
-            except (TypeError, ValueError):
-                pass
-            else:
-                self.controls.set_time_values(self.current_n, self.current_t_max)
-                self.controls.set_traj_tail_max(self.current_n)
-
-        visual_options = state.get("visual_options", {})
-        if isinstance(visual_options, dict):
-            self._set_visual_options(visual_options)
-
-        trajectory_state = state.get("trajectories")
-        if isinstance(trajectory_state, dict):
-            config, _ = self._get_current_config_and_values()
-            if config is not None:
-                restoring_view = self._restoring_view
-                self._restoring_view = True
-                try:
-                    self.controls.trajectory_panel.set_session_state(
-                        trajectory_state, config
-                    )
-                finally:
-                    self._restoring_view = restoring_view
-                self.scene.trajectory_renderer.set_trajectories(
-                    self.controls.trajectory_panel.get_trajectories()
-                )
-
-        selected_preset = state.get("selected_preset")
-        if selected_preset:
-            self._refresh_presets(str(selected_preset))
-
-        panels = state.get("panels", {})
-        if isinstance(panels, dict):
-            if panels.get("lyapunov"):
-                self._toggle_lyapunov_panel()
-            if panels.get("projections"):
-                self._toggle_projections()
-            if panels.get("poincare"):
-                self._toggle_poincare()
-            if panels.get("bifurcation"):
-                self._toggle_bifurcation()
-            if panels.get("jupyter_console"):
-                self._toggle_jupyter_console()
-            if "performance_status" in panels:
-                self._set_process_status_visible(
-                    bool(panels["performance_status"]),
-                )
-
-        dock_layout = state.get("workspace_dock_layout")
-        if isinstance(dock_layout, dict):
-            self._restore_workspace_dock_layout(dock_layout)
-
-        self.lab_plot_controller._restore_lab_live_plot_state(
-            state.get("lab_live_plots")
-        )
-
-        self._update_plot()
-
-        camera = state.get("camera")
-        if isinstance(camera, dict):
-            self.scene.camera_controller.set_camera_state(camera)
-
     def _refresh_presets(self, selected=None):
         preset_panel = self.controls.preset_panel
         preset_panel.set_saved_presets(list_presets(self._preset_directory), selected)
@@ -766,7 +452,9 @@ class Window(QtWidgets.QMainWindow):
         self.toolbar_anim_action = toolbar.addAction(
             self.style().standardIcon(style_icon.SP_MediaPlay),
             "Play",
-            self._on_anim_toggled,
+            lambda: self._sync_toolbar_animation_action(
+                self.scene.animation_controller.toggle()
+            ),
         )
         self.toolbar_anim_action.setToolTip("Play animation")
 
@@ -800,7 +488,9 @@ class Window(QtWidgets.QMainWindow):
         fit_camera_action = toolbar.addAction(
             QtGui.QIcon.fromTheme("view-fullscreen"),
             "Fit",
-            self._fit_camera_to_solutions,
+            lambda: self.scene.camera_controller.fit_camera_to_solutions(
+                self.scene.trajectory_renderer.solutions
+            ),
         )
         fit_camera_action.setToolTip("Fit view to trajectories")
 
@@ -921,8 +611,6 @@ class Window(QtWidgets.QMainWindow):
         tools_menu.addSeparator()
         open_folder_action = tools_menu.addAction("Open preset folder")
         open_folder_action.triggered.connect(self._open_preset_folder)
-        reset_session_action = tools_menu.addAction("Reset saved session")
-        reset_session_action.triggered.connect(self._reset_saved_session)
         self.tools_button.setMenu(tools_menu)
         toolbar.addWidget(self.tools_button)
 
@@ -1101,7 +789,10 @@ class Window(QtWidgets.QMainWindow):
         self.process_status.set_active(self._process_status_visible)
         self.statusBar().setVisible(self._process_status_visible)
 
-        if self.toolbar_process_status_action.isChecked() != self._process_status_visible:
+        if (
+            self.toolbar_process_status_action.isChecked()
+            != self._process_status_visible
+        ):
             with QtCore.QSignalBlocker(self.toolbar_process_status_action):
                 self.toolbar_process_status_action.setChecked(
                     self._process_status_visible
@@ -1327,10 +1018,28 @@ class Window(QtWidgets.QMainWindow):
 
     def _sync_jupyter_toolbar_visibility(self):
         if self.lab_dock is not None:
-            visible = (
-                self.lab_dock.container() is not None
-                and _dock_branch_is_current(self.lab_dock)
-            )
+            visible = self.lab_dock.container() is not None
+            if visible:
+                item = self.lab_dock
+                container = item.container()
+                while container is not None:
+                    try:
+                        container_type = container.type()
+                    except AttributeError:
+                        container_type = None
+                    if container_type == "tab":
+                        try:
+                            stack = container.stack
+                        except AttributeError:
+                            stack = None
+                        if stack is not None and stack.currentWidget() is not item:
+                            visible = False
+                            break
+                    item = container
+                    try:
+                        container = container.container()
+                    except AttributeError:
+                        container = None
         else:
             visible = _lab_visible(self)
 
@@ -1364,15 +1073,6 @@ class Window(QtWidgets.QMainWindow):
         if not opened:
             self._set_app_status("Could not open preset folder", error=True)
 
-    def _reset_saved_session(self):
-        clear_session(self._settings)
-        self._session_reset_requested = True
-        self._set_app_status("Saved session reset")
-
-    def _save_session_on_close(self):
-        if not self._session_reset_requested:
-            save_session(self._settings, self._collect_session_state())
-
     def _update_preset_summary(self, name):
         preset_name = name.strip()
         if not preset_name:
@@ -1399,16 +1099,13 @@ class Window(QtWidgets.QMainWindow):
         self.controls.preset_panel.set_preset_notes(metadata["notes"])
         self.controls.preset_panel.set_preset_summary(summary)
 
-    def _default_preset_name(self):
-        return f"{self.current_name} preset"
-
     def _save_preset(self, name, notes):
         config, values = self._get_current_config_and_values()
         if config is None:
             self._set_app_status("No attractor selected", error=True)
             return
 
-        preset_name = name.strip() or self._default_preset_name()
+        preset_name = name.strip() or f"{self.current_name} preset"
 
         try:
             save_named_preset(
@@ -1542,7 +1239,7 @@ class Window(QtWidgets.QMainWindow):
         if not isinstance(values, dict):
             raise TypeError("Parameter updates must be a dictionary")
 
-        params = _parameter_by_name(config)
+        params = {param.name: param for param in config.params}
         updates = {}
         for name, value in values.items():
             key = str(name)
@@ -1630,28 +1327,58 @@ class Window(QtWidgets.QMainWindow):
         user_n = self.current_n or config.time_defaults.n
         t_max = self.current_t_max
         trajectories = self.controls.trajectory_panel.get_trajectories()
-        trajectory_specs = _trajectory_solve_specs(
-            config,
-            trajectories,
-            user_n,
-            t_max,
-            full=full,
-        )
+        if trajectories:
+            trajectory_specs = []
+            for trajectory in trajectories:
+                trajectory_n = int(trajectory.get("n", user_n))
+                solve_n = trajectory_n if full else min(trajectory_n, PARTIAL_N)
+                trajectory_specs.append(
+                    {
+                        "ic": [float(coord) for coord in trajectory["ic"]],
+                        "n": solve_n,
+                        "t_max": float(trajectory.get("t_max", t_max)),
+                    }
+                )
+        else:
+            solve_n = int(user_n if full else min(user_n, PARTIAL_N))
+            trajectory_specs = [
+                {
+                    "ic": [float(coord) for coord in config.initial_conditions],
+                    "n": solve_n,
+                    "t_max": float(t_max),
+                }
+            ]
         dispatch_n = max(spec["n"] for spec in trajectory_specs)
         dispatch_t_max = max(spec["t_max"] for spec in trajectory_specs)
         self.solver.cancel_lyapunov()
         if full:
-            self._set_app_status(_solve_status_text(len(trajectory_specs)))
+            n_trajectories = len(trajectory_specs)
+            status_text = (
+                "Solving trajectory"
+                if n_trajectories == 1
+                else f"Solving {n_trajectories} trajectories"
+            )
+            self._set_app_status(status_text)
         self._active_solve_request_id = self.solver.request_solve(
             config, values, trajectory_specs, dispatch_n, not full, dispatch_t_max
         )
-        signature = _solve_signature(
-            config,
-            values,
-            dispatch_n,
-            dispatch_t_max,
-            trajectory_specs,
-        )
+        signature = {
+            "attractor": config.name,
+            "parameters": {str(key): float(value) for key, value in values.items()},
+            "n": int(dispatch_n),
+            "t_max": float(dispatch_t_max),
+            "trajectories": [
+                [float(coord) for coord in spec["ic"]] for spec in trajectory_specs
+            ],
+            "trajectory_specs": [
+                {
+                    "ic": [float(coord) for coord in spec["ic"]],
+                    "n": int(spec["n"]),
+                    "t_max": float(spec["t_max"]),
+                }
+                for spec in trajectory_specs
+            ],
+        }
         self._set_solve_state(
             solving=True,
             valid=False,
@@ -1684,11 +1411,7 @@ class Window(QtWidgets.QMainWindow):
     def _on_controls_solve_requested(self, full):
         self.scene.animation_controller.stop()
         self._sync_toolbar_animation_action(False)
-        if (
-            not full
-            and self._solve_pending
-            and self._solve_state.get("partial", False)
-        ):
+        if not full and self._solve_pending and self._solve_state.get("partial", False):
             self._solve_needed = True
             self._full_needed = False
 
@@ -1700,11 +1423,8 @@ class Window(QtWidgets.QMainWindow):
         self._full_needed = full
         self._dispatch_solve(full=full)
 
-    def _auto_lyapunov_enabled(self):
-        return self.lyapunov_panel.isVisible() and self.lyapunov_panel.auto_enabled()
-
     def _request_lyapunov(self, config=None, values=None):
-        if _has_hidden_lyapunov_panel(self):
+        if not _panel_visible(self, "lyapunov_panel"):
             return
 
         if config is None or values is None:
@@ -1731,9 +1451,6 @@ class Window(QtWidgets.QMainWindow):
         )
         if token is not None:
             self._lyapunov_perf_tokens[self._active_lyapunov_request_id] = token
-
-    def _on_lyapunov_requested(self):
-        self._request_lyapunov()
 
     def _on_solve_result(self, request_id, solutions, is_partial):
         if request_id != self._active_solve_request_id:
@@ -1792,7 +1509,7 @@ class Window(QtWidgets.QMainWindow):
             stale=is_partial or bool(self._solve_needed),
             partial=is_partial,
             last_error=None,
-            solution_points=_solution_lengths(solutions),
+            solution_points=[len(solution) for solution in solutions or []],
         )
 
         if is_partial:
@@ -1805,7 +1522,10 @@ class Window(QtWidgets.QMainWindow):
             if config is not None:
                 if _panel_visible(self, "poincare_panel"):
                     self.poincare_panel.set_attractor(config, values)
-                if self._auto_lyapunov_enabled():
+                if (
+                    self.lyapunov_panel.isVisible()
+                    and self.lyapunov_panel.auto_enabled()
+                ):
                     self._request_lyapunov(config, values)
             self._update_projection_panel_from_solutions(solutions)
             if (
@@ -1851,10 +1571,10 @@ class Window(QtWidgets.QMainWindow):
             return
 
         now_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
-        if not _should_update_projection(
-            now_ms,
-            self._last_projection_update_ms,
-            PROJECTION_UPDATE_INTERVAL_MS,
+        last_update_ms = self._last_projection_update_ms
+        if (
+            last_update_ms is not None
+            and now_ms - last_update_ms < PROJECTION_UPDATE_INTERVAL_MS
         ):
             return
 
@@ -1868,34 +1588,14 @@ class Window(QtWidgets.QMainWindow):
         self.projection_panel.update_projections(x, y, z)
         perf_finish(self, token)
 
-    def _on_animation_segments_data(self, segments):
-        self.lab_plot_controller._refresh_lab_live_preview(
-            segments, kinds={"projection"}
-        )
-
     def _reset_camera(self):
         config, _ = self._get_current_config_and_values()
         if config is not None:
             self.scene.camera_controller.set_camera(config)
 
-    def _fit_camera_to_solutions(self):
-        self.scene.camera_controller.fit_camera_to_solutions(
-            self.scene.trajectory_renderer.solutions
-        )
-
-    def _on_anim_toggled(self):
-        playing = self.scene.animation_controller.toggle()
-        self._sync_toolbar_animation_action(playing)
-
-    def _on_anim_finished(self):
-        self._sync_toolbar_animation_action(False)
-
     def _on_n_changed(self, val):
         self.current_n = val
         self.controls.set_traj_tail_max(val)
-
-    def _on_t_max_changed(self, val):
-        self.current_t_max = val
 
     def _on_trajectories_changed(self, trajectories):
         self.scene.trajectory_renderer.set_trajectories(trajectories)
@@ -1919,7 +1619,7 @@ class Window(QtWidgets.QMainWindow):
     def _on_lyapunov_result(self, request_id, lyap, ky_dim, t_hist, lyap_hist):
         if request_id != self._active_lyapunov_request_id:
             return
-        if _has_hidden_lyapunov_panel(self):
+        if not _panel_visible(self, "lyapunov_panel"):
             return
 
         token = self._lyapunov_perf_tokens.pop(request_id, None)
@@ -1930,7 +1630,7 @@ class Window(QtWidgets.QMainWindow):
     def _on_lyapunov_failed(self, request_id, message):
         if request_id != self._active_lyapunov_request_id:
             return
-        if _has_hidden_lyapunov_panel(self):
+        if not _panel_visible(self, "lyapunov_panel"):
             self._cancel_lyapunov_analysis()
             return
 
@@ -1973,22 +1673,6 @@ class Window(QtWidgets.QMainWindow):
             )
             self._workspace_tab_stacks.add(stack)
 
-    def _restore_workspace_dock_layout(self, dock_layout):
-        try:
-            self.workspace_dock_area.restoreState(
-                dock_layout,
-                missing="ignore",
-                extra="bottom",
-            )
-        except Exception:  # noqa: BLE001
-            return
-        self._sync_jupyter_workspace_state()
-
-    def _replace_closed_lab_dock(self):
-        dock = self._build_lab_dock()
-        dock.container_changed.connect(self._on_workspace_layout_changed)
-        self.lab_dock = dock
-
     def _open_lab_dock(self):
         if self.lab_dock is None:
             self.lab_panel.show()
@@ -2007,12 +1691,6 @@ class Window(QtWidgets.QMainWindow):
             except AttributeError:
                 pass
         self._sync_jupyter_workspace_state()
-
-    def _panel_name_for_panel(self, panel):
-        for panel_name, dock in self._panel_docks.items():
-            if panel in dock.widgets:
-                return panel_name
-        return None
 
     def _replace_closed_panel_dock(self, panel_name, panel):
         title = self._panel_dock_titles.get(panel_name)
@@ -2058,7 +1736,11 @@ class Window(QtWidgets.QMainWindow):
         return 0
 
     def _on_panel_dock_closed(self, panel):
-        panel_name = self._panel_name_for_panel(panel)
+        panel_name = None
+        for candidate_name, dock in self._panel_docks.items():
+            if panel in dock.widgets:
+                panel_name = candidate_name
+                break
         dock = self._panel_dock_for(panel)
         if self._closing_panel_dock is dock:
             if panel_name is not None:
@@ -2179,7 +1861,9 @@ class Window(QtWidgets.QMainWindow):
     def _on_lab_dock_closed(self):
         if not self._closing_lab_dock:
             self.lab_panel.hide()
-        self._replace_closed_lab_dock()
+        dock = self._build_lab_dock()
+        dock.container_changed.connect(self._on_workspace_layout_changed)
+        self.lab_dock = dock
         self._sync_jupyter_workspace_state()
         self._sync_toolbar_panel_actions()
 
@@ -2205,7 +1889,6 @@ class Window(QtWidgets.QMainWindow):
             self._sync_toolbar_panel_actions()
 
     def closeEvent(self, a0):
-        self._save_session_on_close()
         self.jupyter_console_panel.shutdown_kernel()
         self.scene.camera_controller.set_orbit_mode(False)
         self.scene.animation_controller.stop()
