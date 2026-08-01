@@ -9,15 +9,13 @@ class AnimationController:
         on_frame,
         on_visibility_changed,
         on_finished=None,
-        timer=None,
         parent=None,
     ):
         self._on_frame = on_frame
         self._on_visibility_changed = on_visibility_changed
         self._on_finished = on_finished
-        self._timer = timer or QtCore.QTimer(parent)
-        if timer is None:
-            self._timer.timeout.connect(self.advance)
+        self._timer = QtCore.QTimer(parent)
+        self._timer.timeout.connect(self.advance)
         self._frame = 0
         self._step = 100
         self._loop = False

@@ -39,34 +39,34 @@ class _TrajectoryRow(QtCore.QObject):
             {
                 "name": "N",
                 "type": "int",
-                "value": int(n),
+                "value": n,
                 "limits": (1000, 500000),
                 "step": 1000,
             },
             {
                 "name": "t_max",
                 "type": "int",
-                "value": int(t_max),
+                "value": t_max,
                 "limits": (1, 750),
             },
             {
                 "name": "x₀",
                 "type": "float",
-                "value": float(ic[0]),
+                "value": ic[0],
                 "limits": (-1000.0, 1000.0),
                 "step": 0.1,
             },
             {
                 "name": "y₀",
                 "type": "float",
-                "value": float(ic[1]),
+                "value": ic[1],
                 "limits": (-1000.0, 1000.0),
                 "step": 0.1,
             },
             {
                 "name": "z₀",
                 "type": "float",
-                "value": float(ic[2]),
+                "value": ic[2],
                 "limits": (-1000.0, 1000.0),
                 "step": 0.1,
             },
@@ -92,7 +92,7 @@ class _TrajectoryRow(QtCore.QObject):
 
     def set_enabled(self, enabled: bool):
         for child in self.param.children():
-            child.setOpts(enabled=bool(enabled))
+            child.setOpts(enabled=enabled)
 
     def set_identity(self, index: int):
         label = f"T{index}"
@@ -130,7 +130,7 @@ class _TrajectoryRow(QtCore.QObject):
         return self.param.child("Render").value()
 
     def set_render_mode(self, mode: str):
-        value = "line" if str(mode).lower() == "line" else "points"
+        value = "line" if mode.lower() == "line" else "points"
         self.param.child("Render").setValue(value)
 
 
@@ -165,13 +165,6 @@ class TrajectoryPanel(QtWidgets.QWidget):
         content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
         self._rows_container = ParameterTree(showHeader=True)
-        self._rows_container.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self._rows_container.setVerticalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self._rows_container.setHorizontalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
         self._rows_container.itemExpanded.connect(
             lambda _item: self._resize_to_content()
         )
@@ -225,7 +218,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self.layout_changed.emit()
 
     def _on_enable_toggled(self, enabled: bool):
-        self._add_param.setOpts(enabled=bool(enabled))
+        self._add_param.setOpts(enabled=enabled)
         for row in self._rows:
             row.set_enabled(enabled)
         self._emit()
