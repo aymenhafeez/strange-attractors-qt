@@ -30,24 +30,6 @@ class CameraController:
             "center": [float(center.x()), float(center.y()), float(center.z())],
         }
 
-    def set_camera_state(self, state):
-        try:
-            center = state["center"]
-            x, y, z = (float(center[0]), float(center[1]), float(center[2]))
-            distance = float(state["distance"])
-            elevation = float(state["elevation"])
-            azimuth = float(state["azimuth"])
-        except (KeyError, TypeError, ValueError, IndexError):
-            return False
-
-        self.view.setCameraPosition(
-            pos=QtGui.QVector3D(x, y, z),
-            distance=distance,
-            elevation=elevation,
-            azimuth=azimuth,
-        )
-        return True
-
     def fit_camera_to_solutions(self, solutions):
         if not solutions:
             return
