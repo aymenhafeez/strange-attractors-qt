@@ -47,9 +47,11 @@ class ControlPanel(QtWidgets.QWidget):
         self.custom_panel = None
         self.preset_panel = None
         self.slider_rows = []
-        self.n_slider_row = None
+        self.n_slider = None
+        self.n_spin = None
         self.n_slider_wrapper = None
-        self.t_max_slider_row = None
+        self.t_max_slider = None
+        self.t_max_spin = None
         self.t_max_slider_wrapper = None
 
         self.dropdown = QtWidgets.QComboBox()
@@ -103,6 +105,9 @@ class ControlPanel(QtWidgets.QWidget):
         alpha_row.addWidget(alpha_label)
         alpha_row.addWidget(self.alpha_slider)
         alpha_row.addWidget(self.alpha_spin)
+
+        # put alpha speed and orbit speed sliders in wrapper widgets so they're so
+        # spaced out nicer
         alpha_wrapper = QtWidgets.QWidget()
         alpha_wrapper.setLayout(alpha_row)
         self.controls_layout.addWidget(alpha_wrapper)
@@ -174,11 +179,12 @@ class ControlPanel(QtWidgets.QWidget):
         traj_tail_row.addWidget(traj_tail_label)
         traj_tail_row.addWidget(self.traj_tail_slider)
         traj_tail_row.addWidget(self.traj_tail_spin)
-        traj_tail_wrapper = QtWidgets.QWidget()
-        traj_tail_wrapper.setLayout(traj_tail_row)
-        traj_tail_wrapper.setVisible(False)
-        self.traj_tail_wrapper = traj_tail_wrapper
-        self.controls_layout.addWidget(traj_tail_wrapper)
+
+        # put in a wrapper widget so it's visibility can be toggled
+        self.traj_tail_wrapper = QtWidgets.QWidget()
+        self.traj_tail_wrapper.setLayout(traj_tail_row)
+        self.traj_tail_wrapper.setVisible(False)
+        self.controls_layout.addWidget(self.traj_tail_wrapper)
 
     def _on_attractor_selected(self, name):
         self.set_current_attractor(name)
@@ -214,12 +220,14 @@ class ControlPanel(QtWidgets.QWidget):
         if self.n_slider_wrapper is not None:
             self.controls_layout.removeWidget(self.n_slider_wrapper)
             self.n_slider_wrapper.deleteLater()
-            self.n_slider_row = None
+            self.n_slider = None
+            self.n_spin = None
             self.n_slider_wrapper = None
         if self.t_max_slider_wrapper is not None:
             self.controls_layout.removeWidget(self.t_max_slider_wrapper)
             self.t_max_slider_wrapper.deleteLater()
-            self.t_max_slider_row = None
+            self.t_max_slider = None
+            self.t_max_spin = None
             self.t_max_slider_wrapper = None
         for *_, wrapper in self.slider_rows:
             self.controls_layout.removeWidget(wrapper)
@@ -234,32 +242,30 @@ class ControlPanel(QtWidgets.QWidget):
 
     def _build_n_slider(self, config):
         n_row = QtWidgets.QHBoxLayout()
-        self.n_slider_row = n_row
         n_label = QtWidgets.QLabel("N")
         n_row.addWidget(n_label)
-        n_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        n_slider.setRange(1, 500)
-        n_slider.setValue(int(config.time_defaults.n / STEP))
-        n_slider.param_step = STEP
-        n_spin = QtWidgets.QSpinBox()
-        n_spin.setKeyboardTracking(False)
-        n_spin.setRange(1000, 500000)
-        n_spin.setSingleStep(STEP)
-        n_spin.setValue(config.time_defaults.n)
-        n_spin.param_step = STEP
-        n_slider.valueChanged.connect(
-            lambda val, slider=n_slider, spin=n_spin: self._on_n_slider_changed(
-                val, slider, spin
-            )
+        self.n_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.n_slider.setRange(1, 500)
+        self.n_slider.setValue(int(config.time_defaults.n / STEP))
+        self.n_slider.param_step = STEP
+        self.n_spin = QtWidgets.QSpinBox()
+        self.n_spin.setKeyboardTracking(False)
+        self.n_spin.setRange(1000, 500000)
+        self.n_spin.setSingleStep(STEP)
+        self.n_spin.setValue(config.time_defaults.n)
+        self.n_spin.param_step = STEP
+        self.n_slider.valueChanged.connect(
+            lambda val: self._on_n_slider_changed(val, self.n_slider, self.n_spin)
         )
-        n_slider.sliderReleased.connect(lambda: self.solve_requested.emit(True))
-        n_spin.valueChanged.connect(
-            lambda val, slider=n_slider, spin=n_spin: self._on_n_spin_changed(
-                val, slider, spin
-            )
+        self.n_slider.sliderReleased.connect(lambda: self.solve_requested.emit(True))
+        self.n_spin.valueChanged.connect(
+            lambda val: self._on_n_spin_changed(val, self.n_slider, self.n_spin)
         )
-        n_row.addWidget(n_slider)
-        n_row.addWidget(n_spin)
+        n_row.addWidget(self.n_slider)
+        n_row.addWidget(self.n_spin)
+
+        # put n_slider and t_max sliders in wrappers so because they need to be deleted
+        # and rebuilt on attractor change
         self.n_slider_wrapper = QtWidgets.QWidget()
         self.n_slider_wrapper.setLayout(n_row)
         self.controls_layout.addWidget(self.n_slider_wrapper)
@@ -267,32 +273,33 @@ class ControlPanel(QtWidgets.QWidget):
     def _build_t_max_slider(self, config):
         t_max = int(config.time_defaults.t_max)
         t_max_row = QtWidgets.QHBoxLayout()
-        self.t_max_slider_row = t_max_row
         t_max_label = QtWidgets.QLabel("t_max")
         t_max_row.addWidget(t_max_label)
-        t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        t_max_slider.setRange(1, 750)
-        t_max_slider.setValue(t_max)
-        t_max_slider.param_step = 1
-        t_max_spin = QtWidgets.QSpinBox()
-        t_max_spin.setKeyboardTracking(False)
-        t_max_spin.setRange(1, 750)
-        t_max_spin.setSingleStep(1)
-        t_max_spin.setValue(t_max)
-        t_max_spin.param_step = 1
-        t_max_slider.valueChanged.connect(
-            lambda val, slider=t_max_slider, spin=t_max_spin: (
-                self._on_t_max_slider_changed(val, slider, spin)
+        self.t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.t_max_slider.setRange(1, 750)
+        self.t_max_slider.setValue(t_max)
+        self.t_max_slider.param_step = 1
+        self.t_max_spin = QtWidgets.QSpinBox()
+        self.t_max_spin.setKeyboardTracking(False)
+        self.t_max_spin.setRange(1, 750)
+        self.t_max_spin.setSingleStep(1)
+        self.t_max_spin.setValue(t_max)
+        self.t_max_spin.param_step = 1
+        self.t_max_slider.valueChanged.connect(
+            lambda val: self._on_t_max_slider_changed(
+                val, self.t_max_slider, self.t_max_spin
             )
         )
-        t_max_slider.sliderReleased.connect(lambda: self.solve_requested.emit(True))
-        t_max_spin.valueChanged.connect(
-            lambda val, slider=t_max_slider, spin=t_max_spin: (
-                self._on_t_max_spin_changed(val, slider, spin)
+        self.t_max_slider.sliderReleased.connect(
+            lambda: self.solve_requested.emit(True)
+        )
+        self.t_max_spin.valueChanged.connect(
+            lambda val: self._on_t_max_spin_changed(
+                val, self.t_max_slider, self.t_max_spin
             )
         )
-        t_max_row.addWidget(t_max_slider)
-        t_max_row.addWidget(t_max_spin)
+        t_max_row.addWidget(self.t_max_slider)
+        t_max_row.addWidget(self.t_max_spin)
         self.t_max_slider_wrapper = QtWidgets.QWidget()
         self.t_max_slider_wrapper.setLayout(t_max_row)
         self.controls_layout.addWidget(self.t_max_slider_wrapper)
@@ -326,7 +333,7 @@ class ControlPanel(QtWidgets.QWidget):
             wrapper = QtWidgets.QWidget()
             wrapper.setLayout(row)
             self.controls_layout.addWidget(wrapper)
-            self.slider_rows.append((p, s, row, wrapper))
+            self.slider_rows.append((p, s, spin, wrapper))
 
     def _on_n_slider_changed(self, val, slider, spin):
         n = val * slider.param_step
@@ -403,27 +410,28 @@ class ControlPanel(QtWidgets.QWidget):
         }
 
     def set_current_values(self, values):
-        for p, s, row, _ in self.slider_rows:
+        for p, s, spin, _ in self.slider_rows:
             if p.name not in values:
                 continue
-            spin = row.itemAt(2).widget()
             slider_value = _slider_index(values[p.name], p.min_val, p.step)
             with QtCore.QSignalBlocker(s), QtCore.QSignalBlocker(spin):
                 s.setValue(slider_value)
                 spin.setValue(_slider_value(slider_value, p.min_val, p.step))
 
     def set_time_values(self, n, t_max):
-        if self.n_slider_row is not None:
-            slider = self.n_slider_row.itemAt(1).widget()
-            spin = self.n_slider_row.itemAt(2).widget()
-            slider_value = int(n / spin.param_step)
-            with QtCore.QSignalBlocker(slider), QtCore.QSignalBlocker(spin):
-                slider.setValue(slider_value)
-                spin.setValue(n)
-        if self.t_max_slider_row is not None:
-            slider = self.t_max_slider_row.itemAt(1).widget()
-            spin = self.t_max_slider_row.itemAt(2).widget()
-            slider_value = int(t_max / spin.param_step)
-            with QtCore.QSignalBlocker(slider), QtCore.QSignalBlocker(spin):
-                slider.setValue(slider_value)
-                spin.setValue(t_max)
+        if self.n_slider is not None:
+            slider_value = int(n / self.n_spin.param_step)
+            with (
+                QtCore.QSignalBlocker(self.n_slider),
+                QtCore.QSignalBlocker(self.n_spin),
+            ):
+                self.n_slider.setValue(slider_value)
+                self.n_spin.setValue(n)
+        if self.t_max_slider is not None:
+            slider_value = int(t_max / self.t_max_spin.param_step)
+            with (
+                QtCore.QSignalBlocker(self.t_max_slider),
+                QtCore.QSignalBlocker(self.t_max_spin),
+            ):
+                self.t_max_slider.setValue(slider_value)
+                self.t_max_spin.setValue(t_max)
