@@ -6,11 +6,8 @@ HELP_ROWS = [
     ("context", "status()", "Solve freshness and last error state"),
     ("context", "describe()", "System description and equation text"),
     ("context", "parameters()", "Parameter values, defaults and ranges"),
-    ("control", "set_parameter(name, value, solve=False)", "Update a main parameter"),
     ("control", "set_parameters(values, solve=False)", "Update main parameters"),
     ("control", "set_time(n=None, t_max=None, solve=False)", "Update main solve time"),
-    ("control", "set_n(n, solve=False)", "Update main sample count"),
-    ("control", "set_t_max(t_max, solve=False)", "Update main solve duration"),
     ("control", "solve()", "Run a full solve for the current main state"),
     ("context", "trajectories()", "Per trajectory length, endpoints and bounds"),
     ("data", "solutions", "Read only trajectory arrays"),
@@ -57,7 +54,7 @@ HELP_ROWS = [
     ("plotting", "plot_returns() / plot_return_lags()", "Recurrence plots"),
     (
         "live",
-        "plot_axis(axis, live=True, append=False)",
+        "plot_axis(axis, live=True, mode='replace')",
         "Keep an axis time series plot linked to main",
     ),
     (
@@ -67,17 +64,17 @@ HELP_ROWS = [
     ),
     (
         "live",
-        "plot_projection(x_axis, y_axis, live=True, append=False)",
+        "plot_projection(x_axis, y_axis, live=True, mode='replace')",
         "Keep a phase plot linked to main",
     ),
     (
         "live",
-        "plot_separation(a=0, b=1, live=True, append=False)",
+        "plot_separation(a=0, b=1, live=True, mode='replace')",
         "Keep separation linked to main",
     ),
     (
         "live",
-        "plot_separation_fit(a=0, b=1, live=True, append=False)",
+        "plot_separation_fit(a=0, b=1, live=True, mode='replace')",
         "Keep log separation and fit linked to main",
     ),
     (
@@ -96,7 +93,7 @@ EXAMPLE_ROWS = [
     ),
     ("Plot a phase projection", "system.plot_xz()"),
     ("Plot a coordinate over time", "system.plot_axis('z')"),
-    ("Set a parameter and solve", "system.set_parameter('rho', 32, solve=True)"),
+    ("Set a parameter and solve", "system.set_parameters({'rho': 32}, solve=True)"),
     ("Extend solve time", "system.set_time(t_max=120, solve=True)"),
     (
         "Compare a parameter variant",
@@ -110,7 +107,7 @@ EXAMPLE_ROWS = [
         "Overlay separation fits",
         (
             "system.plot_separation_fit(0, 1, pen='c'); "
-            "system.plot_separation_fit(0, 2, pen='y', clear=False)"
+            "system.plot_separation_fit(0, 2, pen='y', mode='overlay')"
         ),
     ),
     (
@@ -124,10 +121,10 @@ EXAMPLE_ROWS = [
         (
             "system.plot_axis('x', live=True, plot='coords', pen='r', label='x'); "
             "system.plot_axis("
-            "'y', live=True, plot='coords', append=True, pen='g', label='y'"
+            "'y', live=True, plot='coords', mode='overlay', pen='g', label='y'"
             "); "
             "system.plot_axis("
-            "'z', live=True, plot='coords', append=True, pen='b', label='z'"
+            "'z', live=True, plot='coords', mode='overlay', pen='b', label='z'"
             ")"
         ),
     ),
@@ -237,11 +234,11 @@ class LivePlotHandle:
 
     @property
     def spec(self):
-        return self._window._lab_live_plots[self.plot_name][self.trace_index]
+        return self._window._live_plots[self.plot_name][self.trace_index]
 
     @property
     def item(self):
-        items = self._window._lab_live_item_cache()
+        items = self._window.live_plot_controller.live_items
         return items.get((self.plot_name, self.trace_index))
 
     @property
@@ -261,37 +258,28 @@ class LivePlotHandle:
     def setPen(self, pen):
         self.spec["pen"] = pen
         for item in self.items:
-            if hasattr(item, "setPen"):
-                item.setPen(pen)
+            item.setPen(pen)
 
         return self
 
     def setVisible(self, visible):
         for item in self.items:
-            if hasattr(item, "setVisible"):
-                item.setVisible(bool(visible))
+            item.setVisible(bool(visible))
 
         return self
 
     def setAlpha(self, alpha, auto=False):
         for item in self.items:
-            if hasattr(item, "setAlpha"):
-                item.setAlpha(float(alpha), auto=auto)
+            item.setAlpha(float(alpha), auto=auto)
 
         return self
 
     def unfollow(self):
-        remove = self._window._remove_lab_live_trace
-        return remove(self.plot_name, self.trace_index)
+        return self._window.live_plot_controller._remove_live_trace(
+            self.plot_name,
+            self.trace_index,
+        )
 
-    def __getattr__(self, name):
-        item = self.item
-        if item is None:
-            raise AttributeError(name)
-        if isinstance(item, tuple):
-            raise TypeError(
-                f"Live plot has {len(item)} items; use .items or a handle method",
-            )
 
         return getattr(item, name)
 
@@ -338,22 +326,159 @@ class SystemInspector:
 
     @property
     def camera(self):
-        return self._window.scene.get_camera_state()
+        return self._window.scene.camera_controller.get_camera_state()
 
     @property
     def solutions(self):
-        solutions = self._window.scene.get_solutions() or []
+        solutions = self._window.scene.trajectory_renderer.solutions or []
         return tuple(_read_only_view(solution) for solution in solutions)
 
     @property
     def has_solutions(self):
-        return bool(self.solutions)
+        return bool(self._window.scene.trajectory_renderer.solutions)
 
     def help(self):
         return pd.DataFrame(HELP_ROWS, columns=["category", "method", "description"])
 
     def examples(self):
         return pd.DataFrame(EXAMPLE_ROWS, columns=["task", "commands"])
+
+    def summary(self):
+        bounds = self.bounds()
+        result = {
+            "name": self.name,
+            "parameters": len(self.values),
+            "trajectories": len(self.solutions),
+            "has_solutions": self.has_solutions,
+            "n": self.n,
+            "t_min": self.t_min,
+            "t_max": self.t_max,
+            "camera": self.camera,
+        }
+        for axis in COORDINATE_COLUMNS:
+            result[f"{axis}_min"] = (
+                None if axis not in bounds.index else bounds.loc[axis, "min"]
+            )
+            result[f"{axis}_max"] = (
+                None if axis not in bounds.index else bounds.loc[axis, "max"]
+            )
+        return pd.Series(result)
+
+    def status(self):
+        state = dict(self._window._solve_state)
+        result = {
+            "solving": bool(state.get("solving", False)),
+            "valid": bool(state.get("valid", self.has_solutions)),
+            "stale": bool(state.get("stale", False)),
+            "partial": bool(state.get("partial", False)),
+            "last_error": state.get("last_error"),
+            "request_id": state.get("request_id"),
+            "attractor": state.get("attractor", self.name),
+            "parameters": dict(state.get("parameters", self.values)),
+            "n": state.get("n", self.n),
+            "t_max": state.get("t_max", self.t_max),
+            "trajectories": state.get("trajectories", len(self.solutions)),
+            "solution_points": list(
+                state.get(
+                    "solution_points",
+                    [len(solution) for solution in self.solutions],
+                )
+            ),
+            "console_solution_count": len(self.solutions),
+        }
+        return pd.Series(result)
+
+    def describe(self):
+        config = self.config
+        if config is None:
+            return pd.Series({"name": self.name, "description": ""})
+
+        return pd.Series(
+            {
+                "name": self.name,
+                "config_name": config.name,
+                "description": config.description,
+                "equation": config.equation_text,
+            }
+        )
+
+    def parameters(self):
+        config = self.config
+        if config is None:
+            return pd.DataFrame(
+                columns=["value", "default", "min", "max", "step"],
+                index=pd.Index([], name="name"),
+            )
+
+        rows = []
+        values = self.values
+        for param in config.params:
+            rows.append(
+                {
+                    "name": param.name,
+                    "value": values.get(param.name),
+                    "default": param.default,
+                    "min": param.min_val,
+                    "max": param.max_val,
+                    "step": param.step,
+                }
+            )
+        if not rows:
+            return pd.DataFrame(
+                columns=["value", "default", "min", "max", "step"],
+                index=pd.Index([], name="name"),
+            )
+
+        return pd.DataFrame(rows).set_index("name")
+
+    # these three are controls for updating the main viewport plot from the console
+    def set_parameters(self, values, *, solve=False):
+        return self._window._set_console_parameters(dict(values), solve=solve)
+
+    def set_time(self, *, n=None, t_max=None, solve=False):
+        return self._window._set_console_time(n=n, t_max=t_max, solve=solve)
+
+    def solve(self):
+        return self._window._solve_from_console()
+
+    def trajectories(self):
+        """Inspect plotted trajectories"""
+        rows = []
+        initial_conditions = self._initial_conditions()
+        metadata = self._trajectory_metadata()
+        for i, solution in enumerate(self.solutions):
+            finite = solution[np.isfinite(solution).all(axis=1)]
+            trajectory_meta = metadata[i] if i < len(metadata) else {}
+            row = {
+                "trajectory": i,
+                "label": trajectory_meta.get("label", f"T{i}"),
+                "colour": trajectory_meta.get("colour"),
+                "alpha": trajectory_meta.get("alpha"),
+                "render_mode": trajectory_meta.get("render_mode"),
+                "n": trajectory_meta.get("n", self._trajectory_solve_spec(i).get("n")),
+                "t_max": trajectory_meta.get(
+                    "t_max",
+                    self._trajectory_solve_spec(i).get("t_max"),
+                ),
+                "length": len(solution),
+                "initial_x": self._coordinate(initial_conditions, i, 0),
+                "initial_y": self._coordinate(initial_conditions, i, 1),
+                "initial_z": self._coordinate(initial_conditions, i, 2),
+                "final_x": solution[-1, 0] if len(solution) else None,
+                "final_y": solution[-1, 1] if len(solution) else None,
+                "final_z": solution[-1, 2] if len(solution) else None,
+            }
+            for axis, col in AXES.items():
+                row[f"{axis}_min"] = finite[:, col].min() if len(finite) else None
+                row[f"{axis}_max"] = finite[:, col].max() if len(finite) else None
+            rows.append(row)
+
+        if not rows:
+            return pd.DataFrame(columns=self._trajectory_columns()).set_index(
+                "trajectory"
+            )
+
+        return pd.DataFrame(rows).set_index("trajectory")
 
     def solution(self, index=0, *, copy=False):
         solutions = self.solutions
@@ -371,7 +496,7 @@ class SystemInspector:
     def time(self, index=0):
         solution = self.solution(index)
         spec = self._trajectory_solve_spec(index)
-        
+
         return _solver_sample_times(
             self.t_min,
             spec.get("t_max", self.t_max),
@@ -385,6 +510,7 @@ class SystemInspector:
 
         points = np.concatenate(solutions, axis=0)
         finite = points[np.isfinite(points).all(axis=1)]
+
         if len(finite) == 0:
             return pd.DataFrame(columns=["min", "max"], index=COORDINATE_COLUMNS)
 
@@ -396,6 +522,7 @@ class SystemInspector:
     def to_dataframe(self, trajectory=None):
         rows = []
         solutions = self.solutions
+
         selected = range(len(solutions)) if trajectory is None else [trajectory]
         for i in selected:
             solution = self.solution(i)
@@ -407,6 +534,7 @@ class SystemInspector:
 
         if not rows:
             return pd.DataFrame(
+
                 columns=["trajectory", "step", "t", *COORDINATE_COLUMNS]
             )
         return pd.concat(rows, ignore_index=True)
