@@ -185,13 +185,13 @@ class GridOverlay:
         if points.size == 0:
             return
 
-        finite = np.isfinite(points)
-        if not np.any(finite):
+        finite_points = points[np.isfinite(points).all(axis=1)]
+        if len(finite_points) == 0:
             return
 
         new_half = min(
             max(
-                float(np.max(np.abs(points[finite]))) * GRID_PADDING_FACTOR,
+                float(np.max(np.abs(finite_points))) * GRID_PADDING_FACTOR,
                 DEFAULT_GRID_HALF_SIZE,
             ),
             MAX_GRID_HALF_SIZE,
