@@ -11,6 +11,9 @@ STEP = 0.01
 DEFAULT_RANGE = (0.0, 50.0)
 SPIN_WIDTH = 72
 RANGE_PARAM_WIDTH = 42
+EQUATION_MIN_HEIGHT = 32
+EQUATION_MAX_HEIGHT = 120
+EQUATION_HEIGHT_PADDING = 8
 
 
 class CustomPanel(QtWidgets.QWidget):
@@ -62,10 +65,14 @@ class CustomPanel(QtWidgets.QWidget):
 
             te = QtWidgets.QTextEdit()
             te.setPlaceholderText(placeholder)
-            te.setFixedHeight(32)
+            te.setMinimumHeight(EQUATION_MIN_HEIGHT)
+            te.setMaximumHeight(EQUATION_MAX_HEIGHT)
             te.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             te.setHorizontalScrollBarPolicy(
                 QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            )
+            te.document().documentLayout().documentSizeChanged.connect(
+                lambda _size, edit=te: self._resize_equation_edit(edit)
             )
             self.text_edits.append(te)
             row.addWidget(te)
@@ -117,6 +124,8 @@ class CustomPanel(QtWidgets.QWidget):
         self._equation_text = ""
 
         layout.addWidget(self._content)
+        for edit in self.text_edits:
+            self._resize_equation_edit(edit)
 
     def _toggle_content(self):
         if self.toggle_btn is None:
@@ -129,6 +138,19 @@ class CustomPanel(QtWidgets.QWidget):
     def _get_equations(self) -> tuple[str, str, str]:
         return tuple(te.toPlainText().strip() for te in self.text_edits)
 
+    def _resize_equation_edit(self, edit):
+        """Adapt equation input to size of the text with some padding"""
+        document_height = edit.document().size().height()
+        margins = edit.contentsMargins()
+        height = round(
+            document_height + margins.top() + margins.bottom() + EQUATION_HEIGHT_PADDING
+        )
+        height = max(EQUATION_MIN_HEIGHT, min(EQUATION_MAX_HEIGHT, height))
+        if edit.height() != height:
+            edit.setFixedHeight(height)
+            self._content.adjustSize()
+            self.adjustSize()
+
     def set_from_config(self, config):
         equations = []
         for line in config.equation_text.splitlines():
@@ -137,6 +159,7 @@ class CustomPanel(QtWidgets.QWidget):
 
         for text_edit, equation in zip(self.text_edits, equations):
             text_edit.setPlainText(equation)
+            self._resize_equation_edit(text_edit)
 
         for spin, value in zip(self.ic_spins, config.initial_conditions):
             spin.setValue(float(value))
@@ -270,7 +293,6 @@ class CustomPanel(QtWidgets.QWidget):
         self.solve_btn.hide()
         self.compile_btn.show()
         self.adjustSize()
-        # self._emit_config()
 
     def _emit_config(self):
         params = []

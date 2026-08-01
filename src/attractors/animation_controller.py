@@ -17,7 +17,7 @@ class AnimationController:
         self._on_finished = on_finished
         self._timer = timer or QtCore.QTimer(parent)
         if timer is None:
-            self._timer.timeout.connect(self._tick)
+            self._timer.timeout.connect(self.advance)
         self._frame = 0
         self._step = 100
         self._loop = False
@@ -48,9 +48,6 @@ class AnimationController:
 
     def is_active(self):
         return self._timer.isActive()
-
-    def _tick(self):
-        self.advance()
 
     def set_loop(self, checked):
         self._loop = checked
