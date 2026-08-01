@@ -71,10 +71,12 @@ class LabPanel(QtWidgets.QWidget):
         self.status_button.setToolTip("No solution")
         self.status_button.setFixedWidth(STATUS_BUTTON_WIDTH)
         self._status_text = ""
+        toolbar_layout.addWidget(self.status_button)
 
         self.follow_kind_combo = QtWidgets.QComboBox()
         self.follow_kind_combo.addItems(CONSOLE_PLOT_KINDS)
         self.follow_kind_combo.currentTextChanged.connect(self._sync_follow_controls)
+        toolbar_layout.addWidget(self.follow_kind_combo)
 
         self.live_button = QtWidgets.QToolButton()
         self.live_button.setText("Live: 0")
@@ -83,6 +85,7 @@ class LabPanel(QtWidgets.QWidget):
             QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
         )
         self.live_button.setMenu(QtWidgets.QMenu(self.live_button))
+        toolbar_layout.addWidget(self.live_button)
 
         self.axis_combo = QtWidgets.QComboBox()
         self.axis_combo.addItems(["x", "y", "z"])
@@ -91,10 +94,14 @@ class LabPanel(QtWidgets.QWidget):
         self.y_axis_combo = QtWidgets.QComboBox()
         self.y_axis_combo.addItems(["x", "y", "z"])
         self.y_axis_combo.setCurrentText("z")
+        toolbar_layout.addWidget(self.axis_combo)
+        toolbar_layout.addWidget(self.x_axis_combo)
+        toolbar_layout.addWidget(self.y_axis_combo)
 
         self.trajectory_spin = QtWidgets.QSpinBox()
         self.trajectory_spin.setRange(0, 99)
         self.trajectory_spin.setToolTip("Trajectory index")
+        toolbar_layout.addWidget(self.trajectory_spin)
 
         self.separation_a_spin = QtWidgets.QSpinBox()
         self.separation_a_spin.setRange(0, 99)
@@ -104,6 +111,9 @@ class LabPanel(QtWidgets.QWidget):
         self.separation_b_spin.setValue(1)
         self.separation_b_spin.setToolTip("Second trajectory")
         self.log_check = QtWidgets.QCheckBox("Log")
+        toolbar_layout.addWidget(self.separation_a_spin)
+        toolbar_layout.addWidget(self.separation_b_spin)
+        toolbar_layout.addWidget(self.log_check)
 
         self.live_check = QtWidgets.QCheckBox("Live")
         self.live_check.setChecked(True)
@@ -112,6 +122,7 @@ class LabPanel(QtWidgets.QWidget):
         self.label_edit = QtWidgets.QLineEdit()
         self.label_edit.setPlaceholderText("Label")
         self.label_edit.setMinimumWidth(130)
+        toolbar_layout.addWidget(self.live_check)
 
         self.return_samples_spin = QtWidgets.QSpinBox()
         self.return_samples_spin.setRange(10, 200000)
@@ -184,17 +195,6 @@ class LabPanel(QtWidgets.QWidget):
         self.follow_button = QtWidgets.QPushButton("Run")
         self.follow_button.clicked.connect(self._emit_follow)
 
-        toolbar_layout.addWidget(self.status_button)
-        toolbar_layout.addWidget(self.follow_kind_combo)
-        toolbar_layout.addWidget(self.live_button)
-        toolbar_layout.addWidget(self.axis_combo)
-        toolbar_layout.addWidget(self.x_axis_combo)
-        toolbar_layout.addWidget(self.y_axis_combo)
-        toolbar_layout.addWidget(self.trajectory_spin)
-        toolbar_layout.addWidget(self.separation_a_spin)
-        toolbar_layout.addWidget(self.separation_b_spin)
-        toolbar_layout.addWidget(self.log_check)
-        toolbar_layout.addWidget(self.live_check)
         toolbar_layout.addWidget(self.options_button)
         toolbar_layout.addWidget(self.follow_button)
 
