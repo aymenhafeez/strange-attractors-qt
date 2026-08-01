@@ -168,6 +168,180 @@ class ConsolePlot:
         raise ValueError("Plot mode must be 'replace' or 'overlay'")
 
 
+class ConsolePlotManager(QtCore.QObject):
+    plots_changed = QtCore.pyqtSignal()
+    current_changed = QtCore.pyqtSignal(str)
+
+    def __init__(self, dock_area, default_name, default_plot, default_dock):
+        super().__init__(dock_area)
+        self._dock_area = dock_area
+        self._plots = {default_name: default_plot}
+        self._docks = {default_name: default_dock}
+        self._current_name = default_name
+        self._default_name = default_name
+        default_plot.set_manager(self)
+
+    def __repr__(self):
+        return f"ConsolePlotManager(current={self._current_name!r})"
+
+    def __call__(self, x, y, **kwargs):
+        return self.current(x, y, **kwargs)
+
+    @property
+    def current(self):
+        return self._plots[self._current_name]
+
+    @property
+    def current_name(self):
+        return self._current_name
+
+    def names(self):
+        return list(self._plots)
+
+    def get(self, name, *, activate=True):
+        key = self._plot_name(name)
+        try:
+            plot = self._plots[key]
+        except KeyError as exc:
+            raise KeyError(f"No console plot named {key!r}") from exc
+        if activate:
+            self._set_current_name(key)
+            dock = self._docks[key]
+            self._raise_dock(dock)
+
+        return plot
+
+    def rename(self, old_name, new_name):
+        old_key = self._plot_name(old_name)
+        new_key = self._plot_name(new_name)
+        if old_key not in self._plots:
+            raise KeyError(f"No console plot named {old_key!r}")
+        if new_key != old_key and new_key in self._plots:
+            raise ValueError(f"Console plot {new_key!r} already exists")
+
+        if new_key == old_key:
+            self._set_current_name(new_key)
+            return self._plots[new_key]
+
+        plot = self._plots.pop(old_key)
+        dock = self._docks.pop(old_key)
+        self._plots[new_key] = plot
+        self._docks[new_key] = dock
+        if old_key == self._default_name:
+            self._default_name = new_key
+        if old_key == self._current_name:
+            self._current_name = new_key
+        dock.setTitle(new_key)
+        self.plots_changed.emit()
+        self.current_changed.emit(self._current_name)
+
+        return plot
+
+    def _set_current_name(self, key):
+        if self._current_name == key:
+            return
+
+        self._current_name = key
+        self.current_changed.emit(key)
+
+    def new(self, name=None, *, activate=True):
+        key = self._next_name() if name is None else self._plot_name(name)
+        if key in self._plots:
+            return self.get(key, activate=activate)
+
+        plot_widget = self._build_plot_widget()
+        plot = ConsolePlot(plot_widget)
+        plot.set_manager(self)
+        dock = Dock(key, size=(10, 6), closable=True)
+        dock.addWidget(plot_widget)
+        dock.sigClosed.connect(lambda _dock, plot_name=key: self._forget(plot_name))
+        self._dock_area.addDock(
+            dock,
+            position="above",
+            relativeTo=self._docks[self._default_name],
+        )
+        self._plots[key] = plot
+        self._docks[key] = dock
+        if activate:
+            self._set_current_name(key)
+            dock.raiseDock()
+        self.plots_changed.emit()
+
+        return plot
+
+    def close(self, name=None):
+        key = self._current_name if name is None else self._plot_name(name)
+        if key == self._default_name:
+            self._plots[key].clear()
+            self._set_current_name(key)
+
+            return
+
+        dock = self._docks.get(key)
+        if dock is not None and dock.container() is not None:
+            dock.close()
+        self._forget(key)
+
+    def clear_all(self):
+        for plot in self._plots.values():
+            plot.clear()
+
+    def clear(self):
+        self.current.clear()
+
+    def auto_range(self):
+        self.current.auto_range()
+
+    def set_labels(self, **kwargs):
+        self.current.set_labels(**kwargs)
+
+    def line(self, *args, **kwargs):
+        return self.current.line(*args, **kwargs)
+
+    def scatter(self, *args, **kwargs):
+        return self.current.scatter(*args, **kwargs)
+
+    def _raise_dock(self, dock):
+        container = dock.container()
+        raise_dock = getattr(container, "raiseDock", None)
+        if raise_dock is not None:
+            raise_dock(dock)
+
+    def _forget(self, name):
+        if name == self._default_name:
+            return
+        if name not in self._plots:
+            return
+
+        self._plots.pop(name)
+        self._docks.pop(name, None)
+        if self._current_name == name:
+            self._set_current_name(self._default_name)
+        self.plots_changed.emit()
+
+    def _next_name(self):
+        index = 2
+        while True:
+            name = f"Plot {index}"
+            if name not in self._plots:
+                return name
+            index += 1
+
+    def _plot_name(self, name):
+        key = str(name).strip()
+        if not key:
+            raise ValueError("Plot name cannot be empty")
+        return key
+
+    def _build_plot_widget(self):
+        plot_widget = pg.PlotWidget()
+        plot_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+        plot_widget.showGrid(x=True, y=True, alpha=0.25)
+        plot_widget.setLabel("bottom", "x")
+        plot_widget.setLabel("left", "y")
+
+        return plot_widget
+
 class JupyterConsolePanel(QtWidgets.QWidget):
     close_requested = QtCore.pyqtSignal()
 
@@ -194,6 +368,12 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.plot_dock = Dock("Plot", size=(10, 6))
         self.plot_dock.addWidget(self.plot_widget)
         self.dock_area.addDock(self.plot_dock)
+        self.plots = ConsolePlotManager(
+            self.dock_area,
+            "Plot",
+            self.plot,
+            self.plot_dock,
+        )
 
         self._console_host = QtWidgets.QWidget()
         self._console_layout = QtWidgets.QVBoxLayout(self._console_host)
