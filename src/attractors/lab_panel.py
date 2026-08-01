@@ -24,40 +24,27 @@ LIVE_CONSOLE_PLOT_KINDS = {
 }
 
 
-class _StatusButton:
-    def __init__(self, button):
-        self._button = button
-        self._text = ""
+STATUS_SUMMARIES = (
+    ("Fresh", "Fresh"),
+    ("Stale", "Stale"),
+    ("Solving", "Solving"),
+    ("Solve failed", "Error"),
+    ("Following", "Live"),
+    ("Cleared", "Clear"),
+    ("No live", "Live: 0"),
+    ("No solution", "No sol"),
+)
 
-    def setText(self, text):
-        self._text = str(text)
-        summary = self._summary(self._text)
-        self._button.setText(summary)
-        self._button.setToolTip(self._text)
 
-    def text(self):
-        return self._text
+def _status_summary(text):
+    if not text:
+        return "Status"
 
-    def _summary(self, text):
-        if text.startswith("Fresh"):
-            return "Fresh"
-        if text.startswith("Stale"):
-            return "Stale"
-        if text.startswith("Solving"):
-            return "Solving"
-        if text.startswith("Solve failed"):
-            return "Error"
-        if text.startswith("Following"):
-            return "Live"
-        if text.startswith("Cleared"):
-            return "Clear"
-        if text.startswith("No live"):
-            return "Live: 0"
-        if text.startswith("No solution"):
-            return "No sol"
-        if not text:
-            return "Status"
-        return text.splitlines()[0]
+    for prefix, summary in STATUS_SUMMARIES:
+        if text.startswith(prefix):
+            return summary
+
+    return text.splitlines()[0]
 
 
 class LabPanel(QtWidgets.QWidget):
@@ -83,7 +70,7 @@ class LabPanel(QtWidgets.QWidget):
         self.status_button.setText("Status")
         self.status_button.setToolTip("No solution")
         self.status_button.setFixedWidth(STATUS_BUTTON_WIDTH)
-        self.status_label = _StatusButton(self.status_button)
+        self._status_text = ""
 
         self.follow_kind_combo = QtWidgets.QComboBox()
         self.follow_kind_combo.addItems(CONSOLE_PLOT_KINDS)
@@ -92,7 +79,9 @@ class LabPanel(QtWidgets.QWidget):
         self.live_button = QtWidgets.QToolButton()
         self.live_button.setText("Live: 0")
         self.live_button.setToolTip("Live traces for the current plot")
-        self.live_button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.live_button.setPopupMode(
+            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
+        )
         self.live_button.setMenu(QtWidgets.QMenu(self.live_button))
 
         self.axis_combo = QtWidgets.QComboBox()
@@ -116,7 +105,10 @@ class LabPanel(QtWidgets.QWidget):
         self.separation_b_spin.setToolTip("Second trajectory")
         self.log_check = QtWidgets.QCheckBox("Log")
 
-        self.append_check = QtWidgets.QCheckBox("Append")
+        self.live_check = QtWidgets.QCheckBox("Live")
+        self.live_check.setChecked(True)
+        self.live_check.setToolTip("Keep this plot linked to parameter changes")
+        self.append_check = QtWidgets.QCheckBox("Overlay")
         self.label_edit = QtWidgets.QLineEdit()
         self.label_edit.setPlaceholderText("Label")
         self.label_edit.setMinimumWidth(130)
@@ -140,7 +132,9 @@ class LabPanel(QtWidgets.QWidget):
 
         self.crossing_auto_value_check = QtWidgets.QCheckBox("Auto value")
         self.crossing_auto_value_check.setChecked(True)
-        self.crossing_auto_value_check.setToolTip("Use the current default section value")
+        self.crossing_auto_value_check.setToolTip(
+            "Use the current default section value"
+        )
         self.crossing_value_spin = QtWidgets.QDoubleSpinBox()
         self.crossing_value_spin.setRange(-1_000_000.0, 1_000_000.0)
         self.crossing_value_spin.setDecimals(4)
@@ -200,6 +194,7 @@ class LabPanel(QtWidgets.QWidget):
         toolbar_layout.addWidget(self.separation_a_spin)
         toolbar_layout.addWidget(self.separation_b_spin)
         toolbar_layout.addWidget(self.log_check)
+        toolbar_layout.addWidget(self.live_check)
         toolbar_layout.addWidget(self.options_button)
         toolbar_layout.addWidget(self.follow_button)
 
@@ -322,9 +317,16 @@ class LabPanel(QtWidgets.QWidget):
         if state.get("last_error"):
             details.append(str(state["last_error"]))
 
-        self.status_label.setText(
-            text if not details else f"{text}\n" + " | ".join(details)
-        )
+        status = text
+        if details:
+            status = f"{text}\n" + " | ".join(details)
+
+        self.set_status(status)
+
+    def set_status(self, text):
+        self._status_text = str(text)
+        self.status_button.setText(_status_summary(self._status_text))
+        self.status_button.setToolTip(self._status_text)
 
     def _sync_follow_controls(self):
         kind = self.follow_kind_combo.currentText()
@@ -335,7 +337,15 @@ class LabPanel(QtWidgets.QWidget):
         uses_trajectory = (
             is_axis
             or is_projection
-            or kind in {"Crossings", "Displacement", "Radius", "Return lags", "Returns", "Speed"}
+            or kind
+            in {
+                "Crossings",
+                "Displacement",
+                "Radius",
+                "Return lags",
+                "Returns",
+                "Speed",
+            }
         )
         self.axis_combo.setVisible(uses_axis)
         self.x_axis_combo.setVisible(is_projection)
@@ -354,6 +364,16 @@ class LabPanel(QtWidgets.QWidget):
         for widget in self.fit_option_rows:
             self._set_options_row_visible(widget, show_fit_options)
         self._sync_fit_option_enabled()
+
+        live_supported = kind in LIVE_CONSOLE_PLOT_KINDS
+        self.live_check.setEnabled(live_supported)
+        if not live_supported:
+            self.live_check.setChecked(False)
+        self.live_check.setToolTip(
+            "Keep this plot linked to parameter changes"
+            if live_supported
+            else "This plot runs as a snapshot"
+        )
 
     def _set_options_row_visible(self, widget, visible):
         self.options_form_layout.setRowVisible(widget, visible)
@@ -374,6 +394,7 @@ class LabPanel(QtWidgets.QWidget):
         display_kind = self.follow_kind_combo.currentText()
         kind = display_kind.lower().replace(" ", "_")
         options = {
+            "live": self.live_check.isChecked(),
             "mode": "overlay" if self.append_check.isChecked() else "replace",
             "label": self.label_edit.text().strip() or None,
         }
@@ -386,7 +407,9 @@ class LabPanel(QtWidgets.QWidget):
                     if self.crossing_auto_value_check.isChecked()
                     else self.crossing_value_spin.value()
                 )
-                options["direction"] = self.crossing_direction_combo.currentText().lower()
+                options["direction"] = (
+                    self.crossing_direction_combo.currentText().lower()
+                )
         elif kind == "projection":
             options["x_axis"] = self.x_axis_combo.currentText()
             options["y_axis"] = self.y_axis_combo.currentText()
