@@ -3,7 +3,7 @@ from pathlib import Path
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 
-def _default_scripts_dir():
+def default_scripts_dir():
     app_data = QtCore.QStandardPaths.writableLocation(
         QtCore.QStandardPaths.StandardLocation.AppDataLocation
     )
@@ -19,7 +19,7 @@ class ScriptBrowser(QtWidgets.QWidget):
     def __init__(self, scripts_dir, parent=None):
         super().__init__(parent)
         self.scripts_dir = (
-            Path(scripts_dir) if scripts_dir is not None else _default_scripts_dir()
+            Path(scripts_dir) if scripts_dir is not None else default_scripts_dir()
         )
         self.scripts_dir.mkdir(parents=True, exist_ok=True)
         self._selecting = False

@@ -1,15 +1,9 @@
 from pathlib import Path
 
+from PyQt6.Qsci import QsciLexerPython, QsciScintilla
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from .script_browser import ScriptBrowser
-from .syntax import PythonHighlighter
-
-try:
-    from PyQt6.Qsci import QsciLexerPython, QsciScintilla
-except ImportError:
-    QsciLexerPython = None
-    QsciScintilla = None
+from .script_browser import ScriptBrowser, default_scripts_dir
 
 # dark mode palette derived from KDE Breeze Dark
 # https://qscintilla.com/#syntax_highlighting/custom_lexer_example
@@ -21,30 +15,27 @@ EDITOR_MARGIN_TEXT = "#7a7c7d"
 EDITOR_SELECTION = "#2d5c76"
 EDITOR_CARET_LINE = "#2a2e32"
 
-if QsciLexerPython is not None:
-    PYTHON_STYLE_COLOURS = {
-        QsciLexerPython.ClassName: "#2980b9",
-        QsciLexerPython.Comment: "#7a7c7d",
-        QsciLexerPython.CommentBlock: "#7a7c7d",
-        QsciLexerPython.Decorator: "#3f8058",
-        QsciLexerPython.DoubleQuotedFString: "#da4453",
-        QsciLexerPython.DoubleQuotedString: "#f44f4f",
-        QsciLexerPython.FunctionMethodName: "#8e44ad",
-        QsciLexerPython.HighlightedIdentifier: "#27aeae",
-        QsciLexerPython.Identifier: EDITOR_TEXT,
-        QsciLexerPython.Keyword: EDITOR_TEXT,
-        QsciLexerPython.Number: "#f67400",
-        QsciLexerPython.Operator: "#3f8058",
-        QsciLexerPython.SingleQuotedFString: "#da4453",
-        QsciLexerPython.SingleQuotedString: "#f44f4f",
-        QsciLexerPython.TripleDoubleQuotedFString: "#da4453",
-        QsciLexerPython.TripleDoubleQuotedString: "#da4453",
-        QsciLexerPython.TripleSingleQuotedFString: "#da4453",
-        QsciLexerPython.TripleSingleQuotedString: "#da4453",
-        QsciLexerPython.UnclosedString: "#da4453",
-    }
-else:
-    PYTHON_STYLE_COLOURS = {}
+PYTHON_STYLE_COLOURS = {
+    QsciLexerPython.ClassName: "#2980b9",
+    QsciLexerPython.Comment: "#7a7c7d",
+    QsciLexerPython.CommentBlock: "#7a7c7d",
+    QsciLexerPython.Decorator: "#3f8058",
+    QsciLexerPython.DoubleQuotedFString: "#da4453",
+    QsciLexerPython.DoubleQuotedString: "#f44f4f",
+    QsciLexerPython.FunctionMethodName: "#8e44ad",
+    QsciLexerPython.HighlightedIdentifier: "#27aeae",
+    QsciLexerPython.Identifier: EDITOR_TEXT,
+    QsciLexerPython.Keyword: EDITOR_TEXT,
+    QsciLexerPython.Number: "#f67400",
+    QsciLexerPython.Operator: "#3f8058",
+    QsciLexerPython.SingleQuotedFString: "#da4453",
+    QsciLexerPython.SingleQuotedString: "#f44f4f",
+    QsciLexerPython.TripleDoubleQuotedFString: "#da4453",
+    QsciLexerPython.TripleDoubleQuotedString: "#da4453",
+    QsciLexerPython.TripleSingleQuotedFString: "#da4453",
+    QsciLexerPython.TripleSingleQuotedString: "#da4453",
+    QsciLexerPython.UnclosedString: "#da4453",
+}
 
 
 def _is_dark_mode():
@@ -52,12 +43,9 @@ def _is_dark_mode():
     if app is None:
         return False
 
-    style_hints = app.styleHints()
-    colour_scheme = getattr(style_hints, "colorScheme", None)
-    if colour_scheme is not None:
-        scheme = colour_scheme()
-        if scheme != QtCore.Qt.ColorScheme.Unknown:
-            return scheme == QtCore.Qt.ColorScheme.Dark
+    scheme = app.styleHints().colorScheme()
+    if scheme != QtCore.Qt.ColorScheme.Unknown:
+        return scheme == QtCore.Qt.ColorScheme.Dark
 
     palette = app.palette()
     window = palette.color(QtGui.QPalette.ColorRole.Window)
@@ -66,19 +54,9 @@ def _is_dark_mode():
     return window.lightness() < text.lightness()
 
 
-def _default_scripts_dir():
-    app_data = QtCore.QStandardPaths.writableLocation(
-        QtCore.QStandardPaths.StandardLocation.AppDataLocation
-    )
-    if app_data:
-        return Path(app_data) / "scripts"
-
-    return Path(QtCore.QDir.homePath()) / ".strange-attractors" / "scripts"
-
-
 class ScriptStore:
     def __init__(self, root):
-        self.root = Path(root) if root is not None else _default_scripts_dir()
+        self.root = Path(root) if root is not None else default_scripts_dir()
 
     def ensure_root(self):
         self.root.mkdir(parents=True, exist_ok=True)
@@ -125,6 +103,7 @@ class ScriptPanel(QtWidgets.QWidget):
         self.current_path = None
         self._loading = False
         self._dirty = False
+        self._script_browser_width = 220
 
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -163,6 +142,9 @@ class ScriptPanel(QtWidgets.QWidget):
         )
         self.toolbar.addWidget(spacer)
 
+        self.status_label = QtWidgets.QLabel()
+        self.toolbar.addWidget(self.status_label)
+
         self.run_action = self.toolbar.addAction(
             QtGui.QIcon.fromTheme("system-run"), "Run"
         )
@@ -171,9 +153,6 @@ class ScriptPanel(QtWidgets.QWidget):
             QtGui.QIcon.fromTheme("document-save"), "Save"
         )
         self.save_action.setToolTip("Save script")
-
-        self.status_label = QtWidgets.QLabel()
-        self.toolbar.addWidget(self.status_label)
 
         self.editor = self._build_editor()
 
@@ -212,13 +191,6 @@ class ScriptPanel(QtWidgets.QWidget):
             self.lexer.setPaper(QtGui.QColor(EDITOR_BACKGROUND), style)
 
     def _build_editor(self):
-        if QsciScintilla is None:
-            editor = QtWidgets.QPlainTextEdit()
-            editor.setTabStopDistance(editor.fontMetrics().horizontalAdvance(" ") * 4)
-            self.highlighter = PythonHighlighter(editor.document())
-            self.lexer = None
-            return editor
-
         editor = QsciScintilla()
         font = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.SystemFont.FixedFont)
         editor.setFont(font)
@@ -240,7 +212,6 @@ class ScriptPanel(QtWidgets.QWidget):
             self._apply_dark_editor_colours(editor)
 
         editor.setLexer(self.lexer)
-        self.highlighter = None
         return editor
 
     def load(self):
@@ -297,21 +268,13 @@ class ScriptPanel(QtWidgets.QWidget):
         self._update_status("Ran")
 
     def _set_editor_text(self, text):
-        if QsciScintilla is not None and isinstance(self.editor, QsciScintilla):
-            self.editor.setText(text)
-            return
-
-        self.editor.setPlainText(text)
+        self.editor.setText(text)
 
     def _editor_text(self):
-        if QsciScintilla is not None and isinstance(self.editor, QsciScintilla):
-            return self.editor.text()
-
-        return self.editor.toPlainText()
+        return self.editor.text()
 
     def _set_editor_modified(self, modified):
-        if hasattr(self.editor, "setModified"):
-            self.editor.setModified(bool(modified))
+        self.editor.setModified(bool(modified))
 
     def _on_editor_text_changed(self):
         if self._loading:
@@ -354,8 +317,9 @@ class ScriptPanel(QtWidgets.QWidget):
         total = max(sum(sizes), 1)
 
         if visible:
-            width = getattr(self, "_script_browser_width", 220)
-            self.splitter.setSizes([width, max(total - width, 1)])
+            self.splitter.setSizes(
+                [self._script_browser_width, max(total - self._script_browser_width, 1)]
+            )
             return
 
         if sizes and sizes[0] > 0:
