@@ -3,8 +3,6 @@ from pyqtgraph.dockarea.DockArea import DockArea
 from pyqtgraph.dockarea.DockDrop import DockDrop
 from pyqtgraph.Qt import QtCore
 
-from .style import DOCK_HORIZONTAL, DOCK_NO_TITLE, DOCK_VERTICAL
-
 
 class AreaBoundDockDrop(DockDrop):
     def _source_matches_target_area(self, event):
@@ -41,10 +39,6 @@ class AreaBoundDock(Dock):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.hStyle = DOCK_HORIZONTAL
-        self.vStyle = DOCK_VERTICAL
-        self.nStyle = DOCK_NO_TITLE
-        self.updateStyle()
         self.dockdrop.overlay.setParent(None)
         self.dockdrop.overlay.deleteLater()
         self.dockdrop = AreaBoundDockDrop(self)

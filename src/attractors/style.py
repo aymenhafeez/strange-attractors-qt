@@ -58,6 +58,22 @@ DOCK_NO_TITLE = f"""
 """
 
 SIDE_PANEL = """
+    QFrame#sidePanelFrame {
+        background: transparent;
+        border: 1px solid palette(mid);
+        border-radius: 6px;
+        padding: 2px;
+    }
+    QSplitter#sidePanelSplitter::handle:hover {
+        background: palette(highlight);
+    }
+    QScrollArea#sidePanelControlsScroll {
+        background: transparent;
+        border: none;
+    }
+    QScrollArea#sidePanelControlsScroll > QWidget {
+        background: transparent;
+    }
     QScrollArea#sidePanelScroll {
         background: transparent;
         border: 1px solid palette(mid);
@@ -74,10 +90,6 @@ CUSTOM_PANEL = """
         background-color: rgba(0, 0, 0, 240);
         border: 1px solid #aaa;
         border-radius: 6px;
-    }
-    QWidget#rowsContainer {
-        border: none;
-        background: transparent;
     }
     QLabel {
         color: white;
