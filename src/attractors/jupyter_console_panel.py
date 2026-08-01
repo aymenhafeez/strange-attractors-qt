@@ -28,6 +28,16 @@ PLOT_MODE_REPLACE = "replace"
 PLOT_MODE_OVERLAY = "overlay"
 
 
+def _build_console_plot_widget():
+    plot_widget = pg.PlotWidget()
+    plot_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+    plot_widget.showGrid(x=True, y=True, alpha=0.25)
+    plot_widget.setLabel("bottom", "x")
+    plot_widget.setLabel("left", "y")
+
+    return plot_widget
+
+
 class _RichJupyterConsole(_BaseJupyterConsole):
     def __init__(self, namespace, script_dir=None, parent=None):
         super().__init__(parent)
@@ -249,7 +259,7 @@ class ConsolePlotManager(QtCore.QObject):
         if key in self._plots:
             return self.get(key, activate=activate)
 
-        plot_widget = self._build_plot_widget()
+        plot_widget = _build_console_plot_widget()
         plot = ConsolePlot(plot_widget)
         plot.set_manager(self)
         dock = Dock(key, size=(10, 6), closable=True)
@@ -279,8 +289,10 @@ class ConsolePlotManager(QtCore.QObject):
 
         dock = self._docks.get(key)
         if dock is not None and dock.container() is not None:
+            # closing the dock triggers sigClosed, which calls _forget itself
             dock.close()
-        self._forget(key)
+        else:
+            self._forget(key)
 
     def clear_all(self):
         for plot in self._plots.values():
@@ -333,14 +345,6 @@ class ConsolePlotManager(QtCore.QObject):
             raise ValueError("Plot name cannot be empty")
         return key
 
-    def _build_plot_widget(self):
-        plot_widget = pg.PlotWidget()
-        plot_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-        plot_widget.showGrid(x=True, y=True, alpha=0.25)
-        plot_widget.setLabel("bottom", "x")
-        plot_widget.setLabel("left", "y")
-
-        return plot_widget
 
 class JupyterConsolePanel(QtWidgets.QWidget):
     close_requested = QtCore.pyqtSignal()
@@ -359,11 +363,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.dock_area = DockArea()
         self._layout.addWidget(self.dock_area)
 
-        self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-        self.plot_widget.showGrid(x=True, y=True, alpha=0.25)
-        self.plot_widget.setLabel("bottom", "x")
-        self.plot_widget.setLabel("left", "y")
+        self.plot_widget = _build_console_plot_widget()
         self.plot = ConsolePlot(self.plot_widget)
         self.plot_dock = Dock("Plot", size=(10, 6))
         self.plot_dock.addWidget(self.plot_widget)
