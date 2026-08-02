@@ -152,13 +152,6 @@ EXAMPLE_ROWS = [
 ]
 
 
-def _read_only_view(solution):
-    view = np.asarray(solution).view()
-    view.setflags(write=False)
-
-    return view
-
-
 def _solver_sample_times(t_min, t_max, length):
     if length <= 0:
         return np.array([], dtype=np.float64)
@@ -176,10 +169,6 @@ def _inspectable_config(config):
         params=[replace(param) for param in config.params],
         initial_conditions=list(config.initial_conditions),
     )
-
-
-def _copy_initial_conditions(initial_conditions):
-    return [[float(coord) for coord in ic] for ic in initial_conditions]
 
 
 def _normalise_initial_conditions(initial_conditions):
@@ -400,7 +389,14 @@ class SystemInspector:
     @property
     def solutions(self):
         solutions = self._window.scene.trajectory_renderer.solutions or []
-        return tuple(_read_only_view(solution) for solution in solutions)
+        views = []
+        for solution in solutions:
+            # make the view read only so it can't accidentally get modified
+            view = np.asarray(solution).view()
+            view.setflags(write=False)
+            views.append(view)
+
+        return tuple(views)
 
     @property
     def has_solutions(self):
