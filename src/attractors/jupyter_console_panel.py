@@ -551,8 +551,16 @@ class ConsolePlotZoom(QtWidgets.QWidget):
 
             if x_max > x_min and self.x_bounds != (x_min, x_max):
                 self.x_bounds = (x_min, x_max)
+                region_min, region_max = self.region.getRegion()
                 self.region.setBounds((x_min, x_max))
-                self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
+                # check if the old region is outside the new range and reset it to the first 10% of the new range
+                if region_max <= x_min or region_min >= x_max:
+                    self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
+                else:
+                    # keep the old region if it overlaps with the new range
+                    self.region.setRegion(
+                        (max(region_min, x_min), min(region_max, x_max))
+                    )
 
     def region_changed(self):
         if self.updating:
