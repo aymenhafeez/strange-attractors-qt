@@ -131,6 +131,7 @@ class ConsolePlot:
         left=None,
         plot=None,
         mode=PLOT_MODE_REPLACE,
+        zoom_region=False,
         **kwargs,
     ):
         if plot is not None:
@@ -141,11 +142,16 @@ class ConsolePlot:
                 mode=mode,
                 bottom=bottom,
                 left=left,
+                zoom_region=zoom_region,
                 **kwargs,
             )
 
         if self._clear_for_mode(mode):
             self.clear()
+        if zoom_region:
+            self.zoom_region(True)
+        elif mode == PLOT_MODE_REPLACE:
+            self.zoom_region(False)
         if kwargs.get("name"):
             self.ensure_legend()
         item = self._plot_widget.plot(x, y, **kwargs)
@@ -166,6 +172,7 @@ class ConsolePlot:
         left=None,
         plot=None,
         mode=PLOT_MODE_REPLACE,
+        zoom_region=False,
         symbol="o",
         symbol_size=None,
         **kwargs,
@@ -181,6 +188,7 @@ class ConsolePlot:
             left=left,
             plot=plot,
             mode=mode,
+            zoom_region=zoom_region,
             **kwargs,
         )
 
@@ -345,11 +353,11 @@ class ConsolePlotManager(QtCore.QObject):
     def set_labels(self, **kwargs):
         self.current.set_labels(**kwargs)
 
-    def line(self, *args, **kwargs):
-        return self.current.line(*args, **kwargs)
+    def line(self, *args, zoom_region=False, **kwargs):
+        return self.current.line(*args, zoom_region=zoom_region, **kwargs)
 
-    def scatter(self, *args, **kwargs):
-        return self.current.scatter(*args, **kwargs)
+    def scatter(self, *args, zoom_region=False, **kwargs):
+        return self.current.scatter(*args, zoom_region=zoom_region, **kwargs)
 
     def _raise_dock(self, dock):
         container = dock.container()
@@ -479,6 +487,8 @@ class ConsolePlotZoom(QtWidgets.QWidget):
         self.zoom_widget = pg.PlotWidget()
         self.region = pg.LinearRegionItem()
         self.items = {}
+        self.x_bounds = None
+        self.updating = False
 
         self.zoom_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self.zoom_widget.showGrid(x=True, y=True, alpha=0.25)
@@ -507,10 +517,26 @@ class ConsolePlotZoom(QtWidgets.QWidget):
             x_max = float(x[-1])
 
             if x_max > x_min:
+                self.x_bounds = (x_min, x_max)
                 self.region.setBounds((x_min, x_max))
                 self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
 
         item.sigPlotChanged.connect(lambda: self.item_changed(item))
+
+    def clear(self):
+        self.items.clear()
+        self.x_bounds = None
+        self.zoom_widget.clear()
+
+    def auto_range(self):
+        self.plot_widget.autoRange()
+        self.zoom_widget.autoRange()
+
+    def set_labels(self, *, bottom=None, left=None):
+        if bottom is not None:
+            self.zoom_widget.setLabel("bottom", bottom)
+        if left is not None:
+            self.zoom_widget.setLabel("left", left)
 
     def item_changed(self, item):
         clone = self.items.get(item)
@@ -519,10 +545,28 @@ class ConsolePlotZoom(QtWidgets.QWidget):
 
         x, y = item.getData()
         clone.setData(x, y)
+        if x is not None and len(x):
+            x_min = float(x[0])
+            x_max = float(x[-1])
+
+            if x_max > x_min and self.x_bounds != (x_min, x_max):
+                self.x_bounds = (x_min, x_max)
+                self.region.setBounds((x_min, x_max))
+                self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
 
     def region_changed(self):
+        if self.updating:
+            return
+
+        self.updating = True
         x_min, x_max = self.region.getRegion()
         self.zoom_widget.setXRange(x_min, x_max, padding=0)
+        self.updating = False
 
-    def zoom_range_changed(self, _plot, view_range):
-        self.region.setRegion(view_range[0])
+    def zoom_range_changed(self, *_args):
+        if self.updating:
+            return
+
+        self.updating = True
+        self.region.setRegion(self.zoom_widget.getViewBox().viewRange()[0])
+        self.updating = False
