@@ -1,6 +1,11 @@
+from dataclasses import replace
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 
+from .solution_validation import validate_solutions
+from .solver import solve_attractor
 HELP_ROWS = [
     ("context", "summary()", "Current system, solve size, bounds and camera"),
     ("context", "status()", "Solve freshness and last error state"),
@@ -217,6 +222,29 @@ def _normalise_initial_conditions(initial_conditions):
     return normalised
 
 
+class _SnapshotScene:
+    """Give the scene state of the current system"""
+
+    def __init__(self, solutions, camera, plot):
+        self.trajectory_renderer = SimpleNamespace(
+            solutions=tuple(np.asarray(solution) for solution in solutions),
+        )
+        self.camera_controller = SimpleNamespace(
+            get_camera_state=lambda: dict(camera or {}),
+        )
+        self._plot = plot
+
+
+class _SnapshotTrajectoryPanel:
+    """Give the initial conditions of the current system"""
+
+    def __init__(self, initial_conditions):
+        self._initial_conditions = _copy_initial_conditions(initial_conditions)
+
+    def get_trajectories(self):
+        return [{"ic": list(ic)} for ic in self._initial_conditions]
+
+
 class LivePlotHandle:
     def __init__(self, window, plot_name, trace_index):
         self._window = window
@@ -281,7 +309,48 @@ class LivePlotHandle:
         )
 
 
-        return getattr(item, name)
+class _SnapshotWindow:
+    """
+    Give window state and methods to SystemInspector, keep the data read only separate from the live view
+    """
+
+    def __init__(
+        self,
+        *,
+        name,
+        config,
+        values,
+        n,
+        t_max,
+        initial_conditions,
+        solutions,
+        camera,
+        plot,
+        status,
+    ):
+        self.current_name = name
+        self.current_n = int(n)
+        self.current_t_max = float(t_max)
+        self._config = config
+        self._values = dict(values)
+        self._solve_state = dict(status)
+        self.scene = _SnapshotScene(solutions, camera, plot)
+        self.controls = SimpleNamespace(
+            trajectory_panel=_SnapshotTrajectoryPanel(initial_conditions),
+        )
+        self.jupyter_console_panel = SimpleNamespace(plot=plot)
+
+    def _get_current_config_and_values(self):
+        return self._config, dict(self._values)
+
+    def _set_console_parameters(self, values, *, solve=False):
+        raise RuntimeError("Snapshot parameters are read-only")
+
+    def _set_console_time(self, *, n=None, t_max=None, solve=False):
+        raise RuntimeError("Snapshot solve time is read-only")
+
+    def _solve_from_console(self):
+        raise RuntimeError("Snapshot solves are read-only")
 
 
 class SystemInspector:
@@ -488,10 +557,75 @@ class SystemInspector:
             raise IndexError(f"No trajectory at index {index}") from exc
         if copy:
             return solution.copy()
+
         return solution
 
-    def current_solution(self, *, copy=False):
-        return self.solution(0, copy=copy)
+    def solve_variant(
+        self,
+        values=None,
+        *,
+        n=None,
+        t_max=None,
+        initial_conditions=None,
+    ):
+        config = self.config
+        if config is None:
+            raise ValueError("No attractor selected")
+
+        variant_values = self._variant_values(values)
+        solve_n = self._positive_int(self.n if n is None else n, "n")
+        solve_t_max = self.t_max if t_max is None else float(t_max)
+        if solve_t_max <= self.t_min:
+            raise ValueError("t_max must be greater than t_min")
+
+        solve_ics = _normalise_initial_conditions(initial_conditions)
+        if solve_ics is None:
+            solve_ics = _copy_initial_conditions(self._initial_conditions())
+        if not solve_ics:
+            raise ValueError("At least one initial condition is required")
+
+        solutions = [
+            solve_attractor(
+                config,
+                variant_values,
+                solve_n,
+                t_max=solve_t_max,
+                ic=ic,
+            )
+            for ic in solve_ics
+        ]
+        is_valid, message = validate_solutions(solutions)
+        if not is_valid:
+            raise ValueError(message)
+
+        status = {
+            "solving": False,
+            "valid": True,
+            "stale": False,
+            "partial": False,
+            "last_error": None,
+            "request_id": None,
+            "attractor": self.name,
+            "parameters": dict(variant_values),
+            "n": solve_n,
+            "t_max": solve_t_max,
+            "trajectories": len(solutions),
+            "solution_points": [len(solution) for solution in solutions],
+        }
+        return SystemInspector(
+            _SnapshotWindow(
+                name=f"{self.name} variant",
+                config=config,
+                values=variant_values,
+                n=solve_n,
+                t_max=solve_t_max,
+                initial_conditions=solve_ics,
+                solutions=solutions,
+                camera=self.camera,
+                plot=self._plot_target(None),
+                status=status,
+            )
+        )
 
     def time(self, index=0):
         solution = self.solution(index)
