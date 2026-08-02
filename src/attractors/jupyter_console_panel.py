@@ -64,28 +64,60 @@ class ConsolePlot:
         self._plot_widget = plot_widget
         self._manager = None
         self._legend = None
+        self._zoom = None
+
+        self.host = QtWidgets.QWidget()
+        self.layout = QtWidgets.QVBoxLayout(self.host)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+        self.layout.addWidget(self._plot_widget)
 
     def __repr__(self):
         return "ConsolePlot()"
-
-    def set_manager(self, manager):
-        self._manager = manager
 
     def __call__(self, x, y, **kwargs):
         return self.line(x, y, **kwargs)
 
     def clear(self):
         self._plot_widget.clear()
+
+        if self._zoom is not None:
+            self._zoom.clear()
+            self._plot_widget.addItem(self._zoom.region, ignoreBounds=True)
+
         self._legend = None
 
+    def zoom_region(self, enabled=True):
+        if enabled and self._zoom is None:
+            self.layout.removeWidget(self._plot_widget)
+            self._zoom = ConsolePlotZoom(self._plot_widget)
+
+            for item in self._plot_widget.listDataItems():
+                self._zoom.add_item(item)
+
+            self.layout.addWidget(self._zoom)
+
+        elif not enabled and self._zoom is not None:
+            self.layout.removeWidget(self._zoom)
+            self._zoom.setParent(None)
+            self._zoom = None
+            self.layout.addWidget(self._plot_widget)
+
+        return self.host
+
     def auto_range(self):
-        self._plot_widget.autoRange()
+        if self._zoom is not None:
+            self._zoom.auto_range()
+        else:
+            self._plot_widget.autoRange()
 
     def set_labels(self, *, bottom=None, left=None):
         if bottom is not None:
             self._plot_widget.setLabel("bottom", bottom)
         if left is not None:
             self._plot_widget.setLabel("left", left)
+        if self._zoom is not None:
+            self._zoom.set_labels(bottom=bottom, left=left)
 
     def has_item(self, item):
         return item in self._plot_widget.listDataItems()
@@ -117,7 +149,12 @@ class ConsolePlot:
         if kwargs.get("name"):
             self.ensure_legend()
         item = self._plot_widget.plot(x, y, **kwargs)
+
+        if self._zoom is not None:
+            self._zoom.add_item(item)
+
         self.set_labels(bottom=bottom, left=left)
+
         return item
 
     def scatter(
@@ -189,7 +226,7 @@ class ConsolePlotManager(QtCore.QObject):
         self._docks = {default_name: default_dock}
         self._current_name = default_name
         self._default_name = default_name
-        default_plot.set_manager(self)
+        default_plot._manager = self
 
     def __repr__(self):
         return f"ConsolePlotManager(current={self._current_name!r})"
@@ -261,9 +298,10 @@ class ConsolePlotManager(QtCore.QObject):
 
         plot_widget = _build_console_plot_widget()
         plot = ConsolePlot(plot_widget)
-        plot.set_manager(self)
+        # i can't remember why this is needed
+        plot._manager = self
         dock = Dock(key, size=(10, 6), closable=True)
-        dock.addWidget(plot_widget)
+        dock.addWidget(plot.host)
         dock.sigClosed.connect(lambda _dock, plot_name=key: self._forget(plot_name))
         self._dock_area.addDock(
             dock,
@@ -366,7 +404,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.plot_widget = _build_console_plot_widget()
         self.plot = ConsolePlot(self.plot_widget)
         self.plot_dock = Dock("Plot", size=(10, 6))
-        self.plot_dock.addWidget(self.plot_widget)
+        self.plot_dock.addWidget(self.plot.host)
         self.dock_area.addDock(self.plot_dock)
         self.plots = ConsolePlotManager(
             self.dock_area,
@@ -432,3 +470,59 @@ class JupyterConsolePanel(QtWidgets.QWidget):
 
         self._console.push_namespace(self._namespace_factory())
         self._console.execute(code)
+
+
+class ConsolePlotZoom(QtWidgets.QWidget):
+    def __init__(self, plot_widget, parent=None):
+        super().__init__(parent)
+        self.plot_widget = plot_widget
+        self.zoom_widget = pg.PlotWidget()
+        self.region = pg.LinearRegionItem()
+        self.items = {}
+
+        self.zoom_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+        self.zoom_widget.showGrid(x=True, y=True, alpha=0.25)
+        self.zoom_widget.setLabel("bottom", "x")
+        self.zoom_widget.setLabel("left", "y")
+
+        self.region.setZValue(10)
+        self.plot_widget.addItem(self.region, ignoreBounds=True)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addWidget(self.zoom_widget, 2)
+        layout.addWidget(self.plot_widget, 1)
+
+        self.region.sigRegionChanged.connect(self.region_changed)
+        self.zoom_widget.sigXRangeChanged.connect(self.zoom_range_changed)
+
+    def add_item(self, item):
+        x, y = item.getData()
+        clone = self.zoom_widget.plot(x, y, pen=item.opts.get("pen"))
+        self.items[item] = clone
+
+        if x is not None and len(x):
+            x_min = float(x[0])
+            x_max = float(x[-1])
+
+            if x_max > x_min:
+                self.region.setBounds((x_min, x_max))
+                self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
+
+        item.sigPlotChanged.connect(lambda: self.item_changed(item))
+
+    def item_changed(self, item):
+        clone = self.items.get(item)
+        if clone is None:
+            return
+
+        x, y = item.getData()
+        clone.setData(x, y)
+
+    def region_changed(self):
+        x_min, x_max = self.region.getRegion()
+        self.zoom_widget.setXRange(x_min, x_max, padding=0)
+
+    def zoom_range_changed(self, _plot, view_range):
+        self.region.setRegion(view_range[0])
