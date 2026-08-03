@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore
 
-ANIMATION_INTERVAL_MS = 16
+ANIMATION_INTERVAL = 16  # ms
 
 
 class AnimationController:
@@ -36,7 +36,7 @@ class AnimationController:
             return False
 
         self._frame = 0
-        self._timer.start(ANIMATION_INTERVAL_MS)
+        self._timer.start(ANIMATION_INTERVAL)
         self._on_visibility_changed()
         return True
 

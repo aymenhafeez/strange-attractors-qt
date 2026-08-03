@@ -107,7 +107,7 @@ class LivePlotController:
             plot_name = self.window.jupyter_console_panel.plots.current_name
         plot_name = str(plot_name).strip()
         specs = self.live_plots.get(plot_name, [])
-
+        traces = [
             {
                 "index": index,
                 "label": self._live_trace_label(spec),
@@ -115,7 +115,7 @@ class LivePlotController:
             }
             for index, spec in enumerate(specs)
         ]
-
+        self.window.workspace_panel.set_live_traces(plot_name, traces)
 
     def _live_trace_label(self, spec):
         label = spec.get("label")
@@ -246,12 +246,37 @@ class LivePlotController:
                 },
                 False,
             )
-        if kind in {"returns", "return_lags"}:
-            plotter = (
-                self.window.system.plot_returns
-                if kind == "returns"
-                else self.window.system.plot_return_lags
-            )
+
+        raise ValueError(f"Unknown console plot kind: {kind}")
+
+    def _on_plots_changed(self):
+        names = set(self.window.jupyter_console_panel.plots.names())
+        live_plots = self.live_plots
+        for name in list(live_plots):
+            if name not in names:
+                live_plots.pop(name, None)
+                self._clear_live_items(name)
+        self._sync_plots()
+
+    def _clear_plot(self):
+        plot_name = self.window.jupyter_console_panel.plots.current_name
+        self.window.jupyter_console_panel.plots.clear()
+        self._clear_live_items(plot_name)
+
+    def _clear_all_plots(self):
+        self.window.jupyter_console_panel.plots.clear_all()
+        self.live_plots.clear()
+        self.live_items.clear()
+        self.window.workspace_panel.set_status("Cleared live plots")
+        self._sync_live_menu()
+
+    def _clear_live_items(self, plot_name):
+        live_items = self.live_items
+        plot_key = str(plot_name)
+        for key in list(live_items):
+            if key[0] == plot_key:
+                live_items.pop(key, None)
+
             return (
                 plotter,
                 (),

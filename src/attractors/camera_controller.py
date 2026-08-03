@@ -1,7 +1,7 @@
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtGui
 
-ORBIT_INTERVAL_MS = 30
+ORBIT_INTERVAL = 30  # ms
 ORBIT_STEP_DEGREES = 0.25
 
 
@@ -57,7 +57,7 @@ class CameraController:
     def set_orbit_mode(self, enabled):
         if enabled:
             if not self._orbit_timer.isActive():
-                self._orbit_timer.start(ORBIT_INTERVAL_MS)
+                self._orbit_timer.start(ORBIT_INTERVAL)
         else:
             self._orbit_timer.stop()
 

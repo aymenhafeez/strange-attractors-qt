@@ -38,7 +38,7 @@ from .workspace_panel import WorkspacePanel
 WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 850
 PARTIAL_N = 40000
-PROJECTION_UPDATE_INTERVAL_MS = 100
+PROJECTION_UPDATE_INTERVAL = 100  # ms
 MAIN_VIEW_MARGIN = 4
 TOOLBAR_ICON_SIZE = 18
 LIVE_PLOT_COMBO_WIDTH = 132
@@ -98,8 +98,8 @@ class Window(QtWidgets.QMainWindow):
 
         self._solve_perf_tokens = {}
         self._lyapunov_perf_tokens = {}
-        self._last_projection_update_ms = None
-        self._last_live_preview_update_ms = None
+        self._last_projection_update = None
+        self._last_live_preview_update = None
         self._latest_projection_solutions = None
         self._perf = PerfProfiler()
         self._process_status_visible = PROCESS_STATUS_DEFAULT_VISIBLE
@@ -1519,7 +1519,7 @@ class Window(QtWidgets.QMainWindow):
             self.live_plot_controller._refresh_live_preview(solutions)
 
         if not is_partial:
-            self._last_live_preview_update_ms = None
+            self._last_live_preview_update = None
             self._latest_projection_solutions = solutions
             config, values = self._get_current_config_and_values()
             if config is not None:
@@ -1567,21 +1567,20 @@ class Window(QtWidgets.QMainWindow):
         )
         self.projection_panel.update_projections(x, y, z)
         perf_finish(self, token)
-        self._last_projection_update_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
+        self._last_projection_update = QtCore.QDateTime.currentMSecsSinceEpoch()
 
     def _on_projections_data(self, x, y, z):
         if not _panel_visible(self, "projection_panel"):
             return
 
         now_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
-        last_update_ms = self._last_projection_update_ms
         if (
-            last_update_ms is not None
-            and now_ms - last_update_ms < PROJECTION_UPDATE_INTERVAL_MS
+            self._last_projection_update is not None
+            and now_ms - self._last_projection_update < PROJECTION_UPDATE_INTERVAL
         ):
             return
 
-        self._last_projection_update_ms = now_ms
+        self._last_projection_update = now_ms
         token = perf_start(
             self,
             "projection_update",
@@ -1873,7 +1872,10 @@ class Window(QtWidgets.QMainWindow):
         self._sync_toolbar_panel_actions()
 
     def _close_jupyter_console(self):
-        if self.workspace_dock is not None and self.workspace_dock.container() is not None:
+        if (
+            self.workspace_dock is not None
+            and self.workspace_dock.container() is not None
+        ):
             self._closing_workspace_dock = True
             try:
                 self.workspace_dock.close()
