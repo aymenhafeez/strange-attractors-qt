@@ -27,7 +27,7 @@ class _PanelTree(QtWidgets.QTreeWidget):
         self.itemCollapsed.connect(self._sync_embedded_size)
 
     def add_panel(self, title, widget, *, expanded=True):
-        root = QtWidgets.QTreeWidgetItem([str(title)])
+        root = QtWidgets.QTreeWidgetItem([title])
         root.setFlags(root.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
         root.setSizeHint(0, QtCore.QSize(0, 28))
         self.addTopLevelItem(root)
@@ -39,7 +39,7 @@ class _PanelTree(QtWidgets.QTreeWidget):
         self.setItemWidget(child, 0, widget)
         widget.installEventFilter(self)
         self._panel_items[widget] = child
-        root.setExpanded(bool(expanded))
+        root.setExpanded(expanded)
 
         return root
 

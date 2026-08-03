@@ -1,5 +1,7 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .style import RIGHT_PANEL
+
 
 class PresetPanel(QtWidgets.QWidget):
     preset_save_requested = QtCore.pyqtSignal(str, str)
@@ -9,6 +11,7 @@ class PresetPanel(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setStyleSheet(RIGHT_PANEL)
 
         layout = QtWidgets.QGridLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
