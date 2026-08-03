@@ -4,8 +4,22 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 
+from .jupyter_console_panel import ConsolePlot
+from .sections import (
+    AXES,
+    COORDINATE_COLUMNS,
+    axis_index,
+    crossing_direction,
+    plane_crossings,
+    section_axes,
+)
 from .solution_validation import validate_solutions
 from .solver import solve_attractor
+
+]
+PLOT_MODE_REPLACE = "replace"
+PLOT_MODE_OVERLAY = "overlay"
+
 HELP_ROWS = [
     ("context", "summary()", "Current system, solve size, bounds and camera"),
     ("context", "status()", "Solve freshness and last error state"),
@@ -652,8 +666,8 @@ class SystemInspector:
     def to_dataframe(self, trajectory=None):
         rows = []
         solutions = self.solutions
-
         selected = range(len(solutions)) if trajectory is None else [trajectory]
+
         for i in selected:
             solution = self.solution(i)
             frame = pd.DataFrame(solution, columns=COORDINATE_COLUMNS)
@@ -664,9 +678,37 @@ class SystemInspector:
 
         if not rows:
             return pd.DataFrame(
-
                 columns=["trajectory", "step", "t", *COORDINATE_COLUMNS]
             )
+
+        return pd.concat(rows, ignore_index=True)
+
+    def sample(self, n, trajectory=None):
+        try:
+            sample_size = int(n)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Sample size must be a positive integer") from exc
+        if sample_size <= 0:
+            raise ValueError("Sample size must be a positive integer")
+
+        rows = []
+        solutions = self.solutions
+        selected = range(len(solutions)) if trajectory is None else [trajectory]
+        for i in selected:
+            solution = self.solution(i)
+            indices = self._sample_indices(len(solution), sample_size)
+            frame = pd.DataFrame(solution[indices].copy(), columns=COORDINATE_COLUMNS)
+            times = self.time(i)
+            frame.insert(0, "t", times[indices])
+            frame.insert(0, "step", indices)
+            frame.insert(0, "trajectory", i)
+            rows.append(frame)
+
+        if not rows:
+            return pd.DataFrame(
+                columns=["trajectory", "step", "t", *COORDINATE_COLUMNS]
+            )
+
         return pd.concat(rows, ignore_index=True)
 
     def plot_projection(
@@ -675,23 +717,44 @@ class SystemInspector:
         y_axis="y",
         *,
         trajectory=0,
-        plot_widget=None,
-        clear=True,
+        live=False,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
         pen=None,
+        label=None,
     ):
-        x_col = self._axis_index(x_axis)
-        y_col = self._axis_index(y_axis)
+        x_name = str(x_axis).lower()
+        y_name = str(y_axis).lower()
+        x_col = axis_index(x_name)
+        y_col = axis_index(y_name)
+        plot_mode = self._plot_mode(mode)
+        if live:
+            return self._follow_live_plot(
+                "projection",
+                plot=plot,
+                mode=plot_mode,
+                x_axis=x_name,
+                y_axis=y_name,
+                trajectory=int(trajectory),
+                pen=pen,
+                label=label,
+            )
+
         solution = self.solution(trajectory)
-        target = plot_widget or self._window.jupyter_console_panel.plot_widget
-        if clear:
-            target.clear()
         plot_kwargs = {}
         if pen is not None:
             plot_kwargs["pen"] = pen
-        item = target.plot(solution[:, x_col], solution[:, y_col], **plot_kwargs)
-        target.setLabel("bottom", str(x_axis))
-        target.setLabel("left", str(y_axis))
-        return item
+        if label is not None:
+            plot_kwargs["name"] = str(label)
+        return self._plot_line(
+            self._plot_target(plot),
+            solution[:, x_col],
+            solution[:, y_col],
+            mode=plot_mode,
+            bottom=x_name,
+            left=y_name,
+            **plot_kwargs,
+        )
 
     def plot_xy(self, **kwargs):
         return self.plot_projection("x", "y", **kwargs)
@@ -702,8 +765,89 @@ class SystemInspector:
     def plot_yz(self, **kwargs):
         return self.plot_projection("y", "z", **kwargs)
 
-    def _axis_index(self, axis):
+    def plot_axis(
+        self,
+        axis,
+        *,
+        trajectory=0,
+        live=False,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        label=None,
+        zoom_region=False,
+    ):
+        axis_name = str(axis).lower()
+        axis_col = axis_index(axis_name)
+        plot_mode = self._plot_mode(mode)
+        if live:
+            return self._follow_live_plot(
+                "axis",
+                plot=plot,
+                mode=plot_mode,
+                axis=axis_name,
+                trajectory=int(trajectory),
+                pen=pen,
+                label=label,
+                zoom_region=zoom_region,
+            )
+
+        solution = self.solution(trajectory)
+        return self._plot_timeseries(
+            self.time(trajectory),
+            solution[:, axis_col],
+            axis_name,
+            plot=plot,
+            mode=plot_mode,
+            pen=pen,
+            label=label,
+            zoom_region=zoom_region,
+        )
+
         try:
             return AXES[str(axis).lower()]
         except KeyError as exc:
             raise ValueError("Axis must be one of x, y or z") from exc
+    def plot_crossings(
+        self,
+        axis="z",
+        value=None,
+        *,
+        x_axis=None,
+        y_axis=None,
+        direction="both",
+        trajectory=None,
+        t_max=None,
+        n=None,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        symbol="+",
+        symbolSize=None,
+    ):
+        frame = self.crossings(
+            axis,
+            value,
+            direction=direction,
+            trajectory=trajectory,
+            t_max=t_max,
+            n=n,
+        )
+        section_x, section_y = section_axes(axis)
+        x_name = section_x if x_axis is None else str(x_axis).lower()
+        y_name = section_y if y_axis is None else str(y_axis).lower()
+        axis_index(x_name)
+        axis_index(y_name)
+        plot_kwargs = {"pen": pen, "symbol": symbol}
+        if symbolSize is not None:
+            plot_kwargs["symbolSize"] = symbolSize
+        return self._plot_scatter(
+            self._plot_target(plot),
+            frame[x_name].to_numpy(),
+            frame[y_name].to_numpy(),
+            mode=self._plot_mode(mode),
+            bottom=x_name,
+            left=y_name,
+            **plot_kwargs,
+        )
+
