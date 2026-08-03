@@ -953,3 +953,81 @@ class SystemInspector:
             **plot_kwargs,
         )
 
+    def _initial_conditions(self):
+        trajectories = self._window.controls.trajectory_panel.get_trajectories()
+        if trajectories:
+            return [trajectory["ic"] for trajectory in trajectories]
+
+        config = self.config
+        if config is None:
+            return []
+
+        return [config.initial_conditions]
+
+    def _trajectory_metadata(self):
+        rows = []
+        for index, trajectory in enumerate(
+            self._window.controls.trajectory_panel.get_trajectories() or []
+        ):
+            colour = trajectory.get("colour")
+            if colour is not None:
+                colour = colour.name()
+            rows.append(
+                {
+                    "label": trajectory.get("label", f"T{index}"),
+                    "colour": colour,
+                    "alpha": trajectory.get("alpha"),
+                    "render_mode": trajectory.get("render_mode"),
+                    "n": trajectory.get("n"),
+                    "t_max": trajectory.get("t_max"),
+                }
+            )
+
+        return rows
+
+    def _trajectory_solve_spec(self, index):
+        state = dict(self._window._solve_state)
+        specs = state.get("trajectory_specs")
+        if isinstance(specs, list):
+            try:
+                spec = specs[index]
+            except IndexError:
+                spec = None
+            if isinstance(spec, dict):
+                return dict(spec)
+
+        return {"n": self.n, "t_max": self.t_max}
+
+    def _coordinate(self, initial_conditions, trajectory, axis):
+        try:
+            return initial_conditions[trajectory][axis]
+        except (IndexError, TypeError):
+            return None
+
+    def _sample_indices(self, length, sample_size):
+        if length <= sample_size:
+            return np.arange(length)
+
+        return np.linspace(0, length - 1, sample_size, dtype=int)
+
+    def _trajectory_columns(self):
+        columns = [
+            "trajectory",
+            "label",
+            "colour",
+            "alpha",
+            "render_mode",
+            "n",
+            "t_max",
+            "length",
+            "initial_x",
+            "initial_y",
+            "initial_z",
+            "final_x",
+            "final_y",
+            "final_z",
+        ]
+        for axis in COORDINATE_COLUMNS:
+            columns.extend([f"{axis}_min", f"{axis}_max"])
+
+        return columns
