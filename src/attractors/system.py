@@ -97,8 +97,8 @@ HELP_ROWS = [
         "Keep a vector field slice linked to main parameters",
     ),
     ("live", "live_plots()", "List plots linked to the main solution"),
-    ("live", "unfollow(plot=None)", "Stop one live plot from following main"),
-    ("live", "unfollow_all()", "Stop all live plots from following main"),
+    ("live", "unfollow(plot=None)", "Stop one live plot"),
+    ("live", "unfollow_all()", "Stop all live plots"),
 ]
 EXAMPLE_ROWS = [
     (
@@ -746,6 +746,160 @@ class SystemInspector:
 
         return self._concat_frames(rows, ["trajectory", "step", "t", "speed"])
 
+    def separation(self, a=0, b=1, *, log=False):
+        sol_a = self.solution(a)
+        sol_b = self.solution(b)
+        length = min(len(sol_a), len(sol_b))
+        distance = np.linalg.norm(sol_a[:length] - sol_b[:length], axis=1)
+        if log:
+            with np.errstate(divide="ignore"):
+                distance = np.log(distance)
+            value_column = "log_distance"
+        else:
+            value_column = "distance"
+
+        return pd.DataFrame(
+            {
+                "trajectory_a": a,
+                "trajectory_b": b,
+                "step": np.arange(length),
+                "t": self.time(a)[:length],
+                value_column: distance,
+            }
+        )
+
+    def separation_fit(
+        self,
+        a=0,
+        b=1,
+        *,
+        t_min=None,
+        t_max=None,
+        step_min=None,
+        step_max=None,
+    ):
+        frame = self._separation_fit_frame(
+            a,
+            b,
+            t_min=t_min,
+            t_max=t_max,
+            step_min=step_min,
+            step_max=step_max,
+        )
+        if len(frame) < 2:
+            raise ValueError("At least two finite log-separation points are required")
+
+        fit = self._fit_log_separation(frame)
+
+        return pd.Series(
+            {
+                "trajectory_a": a,
+                "trajectory_b": b,
+                "slope": fit["slope"],
+                "intercept": fit["intercept"],
+                "r2": fit["r2"],
+                "points": len(frame),
+                "t_min": frame["t"].iloc[0],
+                "t_max": frame["t"].iloc[-1],
+                "step_min": int(frame["step"].iloc[0]),
+                "step_max": int(frame["step"].iloc[-1]),
+            }
+        )
+
+    def separation_summary(
+        self,
+        a=0,
+        b=1,
+        *,
+        t_min=None,
+        t_max=None,
+        step_min=None,
+        step_max=None,
+    ):
+        frame = self._separation_frame(
+            a,
+            b,
+            t_min=t_min,
+            t_max=t_max,
+            step_min=step_min,
+            step_max=step_max,
+        )
+
+        if frame.empty:
+            return pd.Series(
+                {
+                    "trajectory_a": a,
+                    "trajectory_b": b,
+                    "points": 0,
+                    "finite_points": 0,
+                    "initial_distance": np.nan,
+                    "final_distance": np.nan,
+                    "min_distance": np.nan,
+                    "median_distance": np.nan,
+                    "max_distance": np.nan,
+                    "growth_ratio": np.nan,
+                    "log_slope": np.nan,
+                    "log_intercept": np.nan,
+                    "log_r2": np.nan,
+                    "t_min": np.nan,
+                    "t_max": np.nan,
+                    "step_min": np.nan,
+                    "step_max": np.nan,
+                }
+            )
+
+        distance = frame["distance"].to_numpy(dtype=np.float64)
+        finite = np.isfinite(distance)
+        finite_distance = distance[finite]
+        if finite_distance.size:
+            min_distance = float(finite_distance.min())
+            median_distance = float(np.median(finite_distance))
+            max_distance = float(finite_distance.max())
+        else:
+            min_distance = median_distance = max_distance = np.nan
+
+        initial_distance = float(distance[0])
+        final_distance = float(distance[-1])
+        if (
+            np.isfinite(initial_distance)
+            and initial_distance != 0.0
+            and np.isfinite(final_distance)
+        ):
+            growth_ratio = final_distance / initial_distance
+        else:
+            growth_ratio = np.nan
+
+        fit = self._separation_summary_fit(
+            a,
+            b,
+            t_min=t_min,
+            t_max=t_max,
+            step_min=step_min,
+            step_max=step_max,
+        )
+
+        return pd.Series(
+            {
+                "trajectory_a": a,
+                "trajectory_b": b,
+                "points": len(frame),
+                "finite_points": int(finite.sum()),
+                "initial_distance": initial_distance,
+                "final_distance": final_distance,
+                "min_distance": min_distance,
+                "median_distance": median_distance,
+                "max_distance": max_distance,
+                "growth_ratio": growth_ratio,
+                "log_slope": fit["slope"],
+                "log_intercept": fit["intercept"],
+                "log_r2": fit["r2"],
+                "t_min": frame["t"].iloc[0],
+                "t_max": frame["t"].iloc[-1],
+                "step_min": int(frame["step"].iloc[0]),
+                "step_max": int(frame["step"].iloc[-1]),
+            }
+        )
+
     def crossings(
         self,
         axis="z",
@@ -835,7 +989,7 @@ class SystemInspector:
         y_col = axis_index(y_name)
         plot_mode = self._plot_mode(mode)
         if live:
-            return self._follow_live_plot(
+            return self._register_live_plot(
                 "projection",
                 plot=plot,
                 mode=plot_mode,
@@ -887,7 +1041,7 @@ class SystemInspector:
         axis_col = axis_index(axis_name)
         plot_mode = self._plot_mode(mode)
         if live:
-            return self._follow_live_plot(
+            return self._register_live_plot(
                 "axis",
                 plot=plot,
                 mode=plot_mode,
@@ -923,7 +1077,7 @@ class SystemInspector:
     ):
         plot_mode = self._plot_mode(mode)
         if live:
-            return self._follow_live_plot(
+            return self._register_live_plot(
                 "radius",
                 plot=plot,
                 mode=plot_mode,
@@ -957,7 +1111,7 @@ class SystemInspector:
     ):
         plot_mode = self._plot_mode(mode)
         if live:
-            return self._follow_live_plot(
+            return self._register_live_plot(
                 "speed",
                 plot=plot,
                 mode=plot_mode,
@@ -977,6 +1131,124 @@ class SystemInspector:
             label=label,
             zoom_region=zoom_region,
         )
+
+    def plot_separation(
+        self,
+        a=0,
+        b=1,
+        *,
+        log=False,
+        live=False,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        label=None,
+        zoom_region=False,
+    ):
+        plot_mode = self._plot_mode(mode)
+        if live:
+            return self._register_live_plot(
+                "separation",
+                plot=plot,
+                mode=plot_mode,
+                a=int(a),
+                b=int(b),
+                log=bool(log),
+                pen=pen,
+                label=label,
+                zoom_region=zoom_region,
+            )
+
+        frame = self.separation(a, b, log=log)
+        value_column = "log_distance" if log else "distance"
+        axis_label = f"log separation {a}-{b}" if log else f"separation {a}-{b}"
+        return self._plot_timeseries(
+            frame["t"].to_numpy(),
+            frame[value_column].to_numpy(),
+            axis_label,
+            plot=plot,
+            mode=plot_mode,
+            pen=pen,
+            label=label,
+            zoom_region=zoom_region,
+        )
+
+    def plot_separation_fit(
+        self,
+        a=0,
+        b=1,
+        *,
+        t_min=None,
+        t_max=None,
+        step_min=None,
+        step_max=None,
+        live=False,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        fit_pen=None,
+        label=None,
+    ):
+        plot_mode = self._plot_mode(mode)
+        if live:
+            return self._register_live_plot(
+                "separation_fit",
+                plot=plot,
+                mode=plot_mode,
+                a=int(a),
+                b=int(b),
+                t_min=t_min,
+                t_max=t_max,
+                step_min=step_min,
+                step_max=step_max,
+                pen=pen,
+                fit_pen=fit_pen,
+                label=label,
+            )
+
+        fit = self.separation_fit(
+            a,
+            b,
+            t_min=t_min,
+            t_max=t_max,
+            step_min=step_min,
+            step_max=step_max,
+        )
+        target = self._plot_target(plot)
+        self.plot_separation(
+            a,
+            b,
+            log=True,
+            plot=target,
+            mode=plot_mode,
+            pen=pen,
+            label=label,
+        )
+        frame = self._separation_fit_frame(
+            a,
+            b,
+            t_min=t_min,
+            t_max=t_max,
+            step_min=step_min,
+            step_max=step_max,
+        )
+        fitted = fit["slope"] * frame["t"].to_numpy() + fit["intercept"]
+        plot_kwargs = {}
+        fit_line_pen = pen if fit_pen is None else fit_pen
+        if fit_line_pen is not None:
+            plot_kwargs["pen"] = fit_line_pen
+        if label is not None:
+            plot_kwargs["name"] = f"{label} fit"
+        return self._plot_line(
+            target,
+            frame["t"].to_numpy(),
+            fitted,
+            mode=PLOT_MODE_OVERLAY,
+            bottom="t",
+            left=f"log separation fit {a}-{b}",
+            **plot_kwargs,
+        )
+
     def plot_crossings(
         self,
         axis="z",
@@ -1019,6 +1291,78 @@ class SystemInspector:
             left=y_name,
             **plot_kwargs,
         )
+
+
+    def live_plots(self):
+        return self._window.live_plot_controller._live_plot_frame()
+
+    def unfollow(self, plot=None):
+        return self._window.live_plot_controller._clear_live_plot(plot)
+
+    def unfollow_all(self):
+        return self._window.live_plot_controller._clear_all_live_plots()
+
+    def _separation_frame(
+        self,
+        a,
+        b,
+        *,
+        t_min=None,
+        t_max=None,
+        step_min=None,
+        step_max=None,
+    ):
+        frame = self.separation(a, b)
+        if t_min is not None:
+            frame = frame[frame["t"] >= t_min]
+        if t_max is not None:
+            frame = frame[frame["t"] <= t_max]
+        if step_min is not None:
+            frame = frame[frame["step"] >= step_min]
+        if step_max is not None:
+            frame = frame[frame["step"] <= step_max]
+        return frame.reset_index(drop=True)
+
+    def _separation_fit_frame(
+        self,
+        a,
+        b,
+        *,
+        t_min=None,
+        t_max=None,
+        step_min=None,
+        step_max=None,
+    ):
+        frame = self.separation(a, b, log=True)
+        mask = np.isfinite(frame["log_distance"].to_numpy())
+        if t_min is not None:
+            mask &= frame["t"].to_numpy() >= t_min
+        if t_max is not None:
+            mask &= frame["t"].to_numpy() <= t_max
+        if step_min is not None:
+            mask &= frame["step"].to_numpy() >= step_min
+        if step_max is not None:
+            mask &= frame["step"].to_numpy() <= step_max
+
+        return frame.loc[mask].reset_index(drop=True)
+
+    def _separation_summary_fit(self, a, b, **filters):
+        frame = self._separation_fit_frame(a, b, **filters)
+        if len(frame) < 2:
+            return {"slope": np.nan, "intercept": np.nan, "r2": np.nan}
+
+        return self._fit_log_separation(frame)
+
+    def _fit_log_separation(self, frame):
+        slope, intercept = np.polyfit(frame["t"], frame["log_distance"], 1)
+        predicted = slope * frame["t"] + intercept
+        residual = frame["log_distance"] - predicted
+        total = frame["log_distance"] - frame["log_distance"].mean()
+        ss_res = float(np.sum(residual**2))
+        ss_tot = float(np.sum(total**2))
+        r2 = 1.0 if ss_tot == 0.0 and ss_res == 0.0 else 1.0 - ss_res / ss_tot
+
+        return {"slope": float(slope), "intercept": float(intercept), "r2": float(r2)}
 
     def _initial_conditions(self):
         trajectories = self._window.controls.trajectory_panel.get_trajectories()
