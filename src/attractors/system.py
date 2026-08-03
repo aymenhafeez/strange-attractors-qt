@@ -711,6 +711,45 @@ class SystemInspector:
 
         return pd.concat(rows, ignore_index=True)
 
+    def radius(self, trajectory=None):
+        rows = []
+        for i in self._selected_trajectories(trajectory):
+            solution = self.solution(i)
+            radius = np.linalg.norm(solution, axis=1)
+            rows.append(self._series_frame(i, {"radius": radius}))
+
+        return self._concat_frames(rows, ["trajectory", "step", "t", "radius"])
+
+    def displacement(self, trajectory=None):
+        rows = []
+        for i in self._selected_trajectories(trajectory):
+            solution = self.solution(i)
+            if len(solution) == 0:
+                displacement = np.array([], dtype=np.float64)
+            else:
+                displacement = np.linalg.norm(solution - solution[0], axis=1)
+
+            rows.append(self._series_frame(i, {"displacement": displacement}))
+
+        return self._concat_frames(
+            rows,
+            ["trajectory", "step", "t", "displacement"],
+        )
+
+    def speed(self, trajectory=None):
+        rows = []
+        for i in self._selected_trajectories(trajectory):
+            solution = self.solution(i)
+            times = self.time(i)
+            if len(solution) < 2:
+                speed = np.zeros(len(solution), dtype=np.float64)
+            else:
+                velocity = np.gradient(solution, times, axis=0)
+                speed = np.linalg.norm(velocity, axis=1)
+
+            rows.append(self._series_frame(i, {"speed": speed}))
+
+        return self._concat_frames(rows, ["trajectory", "step", "t", "speed"])
     def plot_projection(
         self,
         x_axis="x",
@@ -804,10 +843,73 @@ class SystemInspector:
             zoom_region=zoom_region,
         )
 
-        try:
-            return AXES[str(axis).lower()]
-        except KeyError as exc:
-            raise ValueError("Axis must be one of x, y or z") from exc
+    def plot_radius(
+        self,
+        *,
+        trajectory=0,
+        live=False,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        label=None,
+        zoom_region=False,
+    ):
+        plot_mode = self._plot_mode(mode)
+        if live:
+            return self._follow_live_plot(
+                "radius",
+                plot=plot,
+                mode=plot_mode,
+                trajectory=int(trajectory),
+                pen=pen,
+                label=label,
+                zoom_region=zoom_region,
+            )
+
+        frame = self.radius(trajectory=trajectory)
+        return self._plot_timeseries_frame(
+            frame,
+            "radius",
+            plot=plot,
+            mode=plot_mode,
+            pen=pen,
+            label=label,
+            zoom_region=zoom_region,
+        )
+
+    def plot_speed(
+        self,
+        *,
+        trajectory=0,
+        live=False,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        label=None,
+        zoom_region=False,
+    ):
+        plot_mode = self._plot_mode(mode)
+        if live:
+            return self._follow_live_plot(
+                "speed",
+                plot=plot,
+                mode=plot_mode,
+                trajectory=int(trajectory),
+                pen=pen,
+                label=label,
+                zoom_region=zoom_region,
+            )
+
+        frame = self.speed(trajectory=trajectory)
+        return self._plot_timeseries_frame(
+            frame,
+            "speed",
+            plot=plot,
+            mode=plot_mode,
+            pen=pen,
+            label=label,
+            zoom_region=zoom_region,
+        )
     def plot_crossings(
         self,
         axis="z",
