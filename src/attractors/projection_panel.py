@@ -73,7 +73,11 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.plot_widget.addItem(self.img)
         self.image_items = {key: (self.img, self.plot_widget) for key in PROJECTIONS}
 
-        self.roi_line = pg.LineSegmentROI([[0.0, 0.0], [1.0, 0.0]], pen="r")
+        self.roi_line = pg.LineSegmentROI(
+            [[0.0, 0.0], [1.0, 0.0]],
+            pen=pg.mkPen("r", width=3),
+            hoverPen=pg.mkPen("y", width=4),
+        )
         self.roi_line.sigRegionChanged.connect(self._update_profile)
         self.roi_line.setVisible(False)
         self.plot_widget.addItem(self.roi_line)
