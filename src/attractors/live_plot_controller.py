@@ -274,12 +274,169 @@ class LivePlotController:
         self.window.workspace_panel.set_status("Cleared live plots")
         self._sync_live_menu()
 
+    def _close_plot(self):
+        plot_name = self.window.jupyter_console_panel.plots.current_name
+        self.window.jupyter_console_panel.plots.close()
+        self.live_plots.pop(plot_name, None)
+        self._clear_live_items(plot_name)
+        self._sync_live_menu()
+
+    def _register_live_plot(
+        self, kind, *, plot=None, mode=PLOT_MODE_REPLACE, **options
+    ):
+        plot_name = self._plot_name(plot)
+        mode = _plot_mode(mode)
+        spec = {
+            "source": "main",
+            "kind": kind,
+            "plot": plot_name,
+            "mode": mode,
+            **options,
+        }
+        specs = self.live_plots.setdefault(plot_name, [])
+        if mode == PLOT_MODE_OVERLAY:
+            specs.append(spec)
+        else:
+            self.live_plots[plot_name] = [spec]
+            self._clear_live_items(plot_name)
+        self._refresh_live_plot(plot_name)
+        self._sync_plots()
+        return pd.Series(spec)
+
+    def _plot_name(self, plot):
+        plots = self.window.jupyter_console_panel.plots
+        if plot is None:
+            return plots.current_name
+
+        plot_name = str(plot).strip()
+        if not plot_name:
+            raise ValueError("Plot name cannot be empty")
+        if plot_name not in plots.names():
+            plots.new(plot_name)
+        else:
+            plots.get(plot_name)
+
+        return plot_name
+
     def _clear_live_items(self, plot_name):
         live_items = self.live_items
         plot_key = str(plot_name)
         for key in list(live_items):
             if key[0] == plot_key:
                 live_items.pop(key, None)
+
+    def _refresh_live_plot(self, plot_name):
+        specs = self.live_plots.get(plot_name, [])
+        try:
+            for index, spec in enumerate(specs):
+                self._plot_live_spec(spec, trace_index=index)
+        except (IndexError, KeyError, TypeError, ValueError) as exc:
+            self.window.workspace_panel.set_status(str(exc))
+            return
+
+        self.window.workspace_panel.set_status(self._live_status_text())
+
+    def _plot_live_spec(self, spec, *, trace_index):
+        kind = spec["kind"]
+        plot = spec["plot"]
+        target = self._live_plot_target(plot)
+        key = self._live_item_key(plot, trace_index)
+        live_items = self.live_items
+        if self._update_live_item(
+            plot,
+            trace_index,
+            spec,
+            target=target,
+        ):
+            return
+
+        mode = PLOT_MODE_REPLACE if trace_index == 0 else PLOT_MODE_OVERLAY
+        pen = spec.get("pen")
+        label = spec.get("label") or self._live_trace_label(spec)
+        if kind == "axis":
+            item = self.window.system.plot_axis(
+                spec["axis"],
+                trajectory=spec.get("trajectory", 0),
+                plot=target,
+                mode=mode,
+                pen=pen,
+                label=label,
+                zoom_region=spec.get("zoom_region", False),
+            )
+            live_items[key] = item
+            return
+
+        if kind in TIMESERIES:
+            item = self._plot_derived_timeseries(
+                kind,
+                trajectory=spec.get("trajectory", 0),
+                plot=target,
+                mode=mode,
+                pen=pen,
+                label=label,
+                zoom_region=spec.get("zoom_region", False),
+            )
+            live_items[key] = item
+            return
+
+        if kind == "projection":
+            item = self.window.system.plot_projection(
+                spec.get("x_axis", "x"),
+                spec.get("y_axis", "y"),
+                trajectory=spec.get("trajectory", 0),
+                plot=target,
+                mode=mode,
+                pen=pen,
+                label=label,
+            )
+            live_items[key] = item
+            return
+
+        if kind == "separation":
+            item = self.window.system.plot_separation(
+                spec.get("a", 0),
+                spec.get("b", 1),
+                log=spec.get("log", False),
+                plot=target,
+                mode=mode,
+                pen=pen,
+                label=label,
+                zoom_region=spec.get("zoom_region", False),
+            )
+            live_items[key] = item
+            return
+
+        if kind == "separation_fit":
+            items = self._plot_live_separation_fit(
+                spec,
+                target,
+                mode=mode,
+                pen=pen,
+                label=label,
+            )
+            live_items[key] = items
+            return
+
+        if kind == "vector_field":
+            item = self.window.system.plot_vector_field(
+                spec.get("x_axis", "x"),
+                spec.get("y_axis", "y"),
+                fixed_axis=spec.get("fixed_axis"),
+                fixed_value=spec.get("fixed_value", 0.0),
+                x_range=spec.get("x_range"),
+                y_range=spec.get("y_range"),
+                density=spec.get("density", 21),
+                plot=target,
+                mode=mode,
+                pen=pen,
+                scale=spec.get("scale", 0.75),
+                colour_by_speed=spec.get("colour_by_speed", False),
+                speed_bands=spec.get("speed_bands", 5),
+            )
+            live_items[key] = item
+            return
+
+        raise ValueError(f"Unknown live plot kind: {kind}")
 
             return (
                 plotter,
