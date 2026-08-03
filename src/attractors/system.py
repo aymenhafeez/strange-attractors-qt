@@ -124,7 +124,6 @@ EXAMPLE_ROWS = [
             "system.plot_separation_fit(0, 2, pen='y', mode='overlay')"
         ),
     ),
-    ("Plot return durations", "system.plot_return_lags(count=100)"),
     ("Live z while sliders move", "system.plot_axis('z', live=True)"),
     (
         "Overlay coordinates",

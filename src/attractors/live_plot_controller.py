@@ -13,11 +13,35 @@ PREVIEW = {
 TIMESERIES = {"displacement", "radius", "speed"}
 
 
+def _plot_mode(mode=PLOT_MODE_REPLACE):
+    normalised = mode.strip().lower()
+    if normalised == PLOT_MODE_REPLACE:
+        return PLOT_MODE_REPLACE
+    if normalised == PLOT_MODE_OVERLAY:
+        return PLOT_MODE_OVERLAY
+
+    raise ValueError("Plot mode must be 'replace' or 'overlay'")
+
+
 class LivePlotController:
     def __init__(self, window):
         self.window = window
-        self.live_plots = {}
-        self.live_items = {}
+
+    @property
+    def live_plots(self):
+        return self.window._live_plots
+
+    @live_plots.setter
+    def live_plots(self, value):
+        self.window._live_plots = value
+
+    @property
+    def live_items(self):
+        return self.window._live_items
+
+    @live_items.setter
+    def live_items(self, value):
+        self.window._live_items = value
 
     def _rename_plot(self, old_name, new_name):
         live_specs = self.live_plots.get(old_name)
@@ -81,11 +105,9 @@ class LivePlotController:
     def _sync_live_menu(self, plot_name=None):
         if plot_name is None:
             plot_name = self.window.jupyter_console_panel.plots.current_name
-
         plot_name = str(plot_name).strip()
         specs = self.live_plots.get(plot_name, [])
 
-        traces = [
             {
                 "index": index,
                 "label": self._live_trace_label(spec),
@@ -94,7 +116,6 @@ class LivePlotController:
             for index, spec in enumerate(specs)
         ]
 
-        self.window.workspace_panel.set_live_traces(plot_name, traces)
 
     def _live_trace_label(self, spec):
         label = spec.get("label")
