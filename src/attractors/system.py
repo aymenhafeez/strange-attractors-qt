@@ -42,13 +42,9 @@ HELP_ROWS = [
     ("geometry", "radius(trajectory=None)", "Distance from origin over time"),
     ("geometry", "speed(trajectory=None)", "Approximate phase space speed"),
     ("geometry", "displacement(trajectory=None)", "Distance from the starting point"),
-    ("geometry", "extrema(trajectory=None)", "Local minima and maxima by axis"),
     ("chaos", "separation(a=0, b=1, log=False)", "Distance between trajectories"),
     ("chaos", "separation_summary(a=0, b=1)", "Quick separation statistics"),
     ("chaos", "separation_fit(a=0, b=1)", "Linear fit of log separation"),
-    ("recurrence", "nearest_returns()", "Closest lagged sampled returns"),
-    ("recurrence", "return_lags()", "Return durations from nearest returns"),
-    ("recurrence", "return_lag_summary()", "Quick return duration statistics"),
     (
         "sections",
         "crossings(axis='z', value=None, t_max=None)",
@@ -70,7 +66,6 @@ HELP_ROWS = [
         "plot_vector_field(live=False)",
         "Vector field on a 2D phase space slice",
     ),
-    ("plotting", "plot_returns() / plot_return_lags()", "Recurrence plots"),
     (
         "live",
         "plot_axis(axis, live=True, mode='replace')",
@@ -128,10 +123,6 @@ EXAMPLE_ROWS = [
             "system.plot_separation_fit(0, 1, pen='c'); "
             "system.plot_separation_fit(0, 2, pen='y', mode='overlay')"
         ),
-    ),
-    (
-        "Find recurrent states",
-        "system.return_lag_summary(); system.nearest_returns(count=50)",
     ),
     ("Plot return durations", "system.plot_return_lags(count=100)"),
     ("Live z while sliders move", "system.plot_axis('z', live=True)"),
@@ -242,7 +233,9 @@ class _SnapshotTrajectoryPanel:
     """Give the initial conditions of the current system"""
 
     def __init__(self, initial_conditions):
-        self._initial_conditions = _copy_initial_conditions(initial_conditions)
+        self._initial_conditions = [
+            [float(coord) for coord in ic] for ic in initial_conditions
+        ]
 
     def get_trajectories(self):
         return [{"ic": list(ic)} for ic in self._initial_conditions]
@@ -265,7 +258,8 @@ class LivePlotHandle:
 
     @property
     def spec(self):
-        return self._window._live_plots[self.plot_name][self.trace_index]
+        live_plots = self._window.live_plot_controller.live_plots
+        return live_plots[self.plot_name][self.trace_index]
 
     @property
     def item(self):
@@ -590,7 +584,9 @@ class SystemInspector:
 
         solve_ics = _normalise_initial_conditions(initial_conditions)
         if solve_ics is None:
-            solve_ics = _copy_initial_conditions(self._initial_conditions())
+            solve_ics = [
+                [float(coord) for coord in ic] for ic in self._initial_conditions()
+            ]
         if not solve_ics:
             raise ValueError("At least one initial condition is required")
 
@@ -750,6 +746,78 @@ class SystemInspector:
             rows.append(self._series_frame(i, {"speed": speed}))
 
         return self._concat_frames(rows, ["trajectory", "step", "t", "speed"])
+
+    def crossings(
+        self,
+        axis="z",
+        value=None,
+        *,
+        direction="both",
+        trajectory=None,
+        t_max=None,
+        n=None,
+    ):
+        axis_name = str(axis).lower()
+        axis_col = axis_index(axis_name)
+        direction = crossing_direction(direction)
+        trajectory_data = list(
+            self._crossing_trajectories(
+                trajectory,
+                t_max=t_max,
+                n=n,
+            )
+        )
+        level = self._crossing_level(
+            axis_col,
+            value,
+            [solution for _i, solution, _times in trajectory_data],
+        )
+        rows = []
+        for i, solution, times in trajectory_data:
+            if len(solution) < 2:
+                continue
+
+            crossings = plane_crossings(
+                solution,
+                axis_name,
+                level,
+                direction=direction,
+                times=times,
+            )
+            for step, t, point, crossing_dir in zip(
+                crossings.steps,
+                crossings.times,
+                crossings.points,
+                crossings.directions,
+                strict=True,
+            ):
+                rows.append(
+                    {
+                        "trajectory": i,
+                        "axis": axis_name,
+                        "level": level,
+                        "direction": crossing_dir,
+                        "step": int(step),
+                        "t": t,
+                        "x": point[0],
+                        "y": point[1],
+                        "z": point[2],
+                    }
+                )
+
+        columns = [
+            "trajectory",
+            "axis",
+            "level",
+            "direction",
+            "step",
+            "t",
+            *COORDINATE_COLUMNS,
+        ]
+        if not rows:
+            return pd.DataFrame(columns=columns)
+        return pd.DataFrame(rows, columns=columns)
+
     def plot_projection(
         self,
         x_axis="x",
