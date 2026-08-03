@@ -222,14 +222,14 @@ class Window(QtWidgets.QMainWindow):
         )
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
         self.workspace_panel = WorkspacePanel(self.jupyter_console_panel)
-        self.workspace_panel.follow_requested.connect(
-            self.live_plot_controller._on_follow_requested
+        self.workspace_panel.plot_requested.connect(
+            self.live_plot_controller._on_plot_requested
         )
         self.workspace_panel.live_trace_remove_requested.connect(
             self.live_plot_controller._remove_live_trace
         )
         self.workspace_panel.live_plot_clear_requested.connect(
-            self.live_plot_controller._remove_follow
+            self.live_plot_controller._clear_live_plot
         )
         self.jupyter_console_panel.plots.plots_changed.connect(
             self.live_plot_controller._on_plots_changed

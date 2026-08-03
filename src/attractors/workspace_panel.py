@@ -1,6 +1,5 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-STATUS_BUTTON_WIDTH = 58
 CONSOLE_PLOT_KINDS = [
     "Axis",
     "Projection",
@@ -10,8 +9,6 @@ CONSOLE_PLOT_KINDS = [
     "Speed",
     "Displacement",
     "Crossings",
-    "Returns",
-    "Return lags",
 ]
 LIVE_CONSOLE_PLOT_KINDS = {
     "Axis",
@@ -29,7 +26,7 @@ STATUS_SUMMARIES = (
     ("Stale", "Stale"),
     ("Solving", "Solving"),
     ("Solve failed", "Error"),
-    ("Following", "Live"),
+    ("Live", "Live"),
     ("Cleared", "Clear"),
     ("No live", "Live: 0"),
     ("No solution", "No sol"),
@@ -48,7 +45,7 @@ def _status_summary(text):
 
 
 class WorkspacePanel(QtWidgets.QWidget):
-    follow_requested = QtCore.pyqtSignal(str, dict)
+    plot_requested = QtCore.pyqtSignal(str, dict)
     live_trace_remove_requested = QtCore.pyqtSignal(str, int)
     live_plot_clear_requested = QtCore.pyqtSignal(str)
 
@@ -69,14 +66,14 @@ class WorkspacePanel(QtWidgets.QWidget):
         self.status_button = QtWidgets.QToolButton()
         self.status_button.setText("Status")
         self.status_button.setToolTip("No solution")
-        self.status_button.setFixedWidth(STATUS_BUTTON_WIDTH)
+        self.status_button.setFixedWidth(58)
         self._status_text = ""
         toolbar_layout.addWidget(self.status_button)
 
-        self.follow_kind_combo = QtWidgets.QComboBox()
-        self.follow_kind_combo.addItems(CONSOLE_PLOT_KINDS)
-        self.follow_kind_combo.currentTextChanged.connect(self._sync_follow_controls)
-        toolbar_layout.addWidget(self.follow_kind_combo)
+        self.plot_kind_combo = QtWidgets.QComboBox()
+        self.plot_kind_combo.addItems(CONSOLE_PLOT_KINDS)
+        self.plot_kind_combo.currentTextChanged.connect(self._sync_plot_controls)
+        toolbar_layout.addWidget(self.plot_kind_combo)
 
         self.live_button = QtWidgets.QToolButton()
         self.live_button.setText("Live: 0")
@@ -129,10 +126,6 @@ class WorkspacePanel(QtWidgets.QWidget):
         self.return_samples_spin.setValue(2000)
         self.return_samples_spin.setSingleStep(100)
         self.return_samples_spin.setToolTip("Samples used for return analysis")
-        self.return_min_lag_spin = QtWidgets.QSpinBox()
-        self.return_min_lag_spin.setRange(1, 200000)
-        self.return_min_lag_spin.setValue(50)
-        self.return_min_lag_spin.setToolTip("Minimum lag in samples")
         self.return_count_spin = QtWidgets.QSpinBox()
         self.return_count_spin.setRange(1, 10000)
         self.return_count_spin.setValue(20)
@@ -192,15 +185,15 @@ class WorkspacePanel(QtWidgets.QWidget):
         )
         self.options_menu = self._build_options_menu()
         self.options_button.setMenu(self.options_menu)
-        self.follow_button = QtWidgets.QPushButton("Run")
-        self.follow_button.clicked.connect(self._emit_follow)
+        self.run_button = QtWidgets.QPushButton("Run")
+        self.run_button.clicked.connect(self._emit_plot_request)
 
         toolbar_layout.addWidget(self.options_button)
-        toolbar_layout.addWidget(self.follow_button)
+        toolbar_layout.addWidget(self.run_button)
 
         layout.addWidget(self.toolbar)
         layout.addWidget(console_panel, 1)
-        self._sync_follow_controls()
+        self._sync_plot_controls()
 
     def set_plots(self, names, current_name):
         self.current_plot_name = current_name if current_name in names else ""
@@ -249,14 +242,7 @@ class WorkspacePanel(QtWidgets.QWidget):
         )
         layout.addRow(self.append_check)
         layout.addRow("Label", self.label_edit)
-        self.return_option_rows = [
-            self.return_samples_spin,
-            self.return_min_lag_spin,
-            self.return_count_spin,
-            self.return_unique_check,
-        ]
         layout.addRow("Samples", self.return_samples_spin)
-        layout.addRow("Min lag", self.return_min_lag_spin)
         layout.addRow("Count", self.return_count_spin)
         layout.addRow(self.return_unique_check)
         self.crossing_option_rows = [
@@ -289,7 +275,7 @@ class WorkspacePanel(QtWidgets.QWidget):
         return menu
 
     def _prepare_options_menu(self):
-        self._sync_follow_controls()
+        self._sync_plot_controls()
         self.options_widget.updateGeometry()
         self.options_widget.adjustSize()
         self.options_menu.updateGeometry()
@@ -328,8 +314,8 @@ class WorkspacePanel(QtWidgets.QWidget):
         self.status_button.setText(_status_summary(self._status_text))
         self.status_button.setToolTip(self._status_text)
 
-    def _sync_follow_controls(self):
-        kind = self.follow_kind_combo.currentText()
+    def _sync_plot_controls(self):
+        kind = self.plot_kind_combo.currentText()
         is_axis = kind == "Axis"
         is_projection = kind == "Projection"
         is_separation = kind in {"Separation", "Separation fit"}
@@ -342,8 +328,6 @@ class WorkspacePanel(QtWidgets.QWidget):
                 "Crossings",
                 "Displacement",
                 "Radius",
-                "Return lags",
-                "Returns",
                 "Speed",
             }
         )
@@ -354,9 +338,6 @@ class WorkspacePanel(QtWidgets.QWidget):
         self.separation_a_spin.setVisible(is_separation)
         self.separation_b_spin.setVisible(is_separation)
         self.log_check.setVisible(kind == "Separation")
-        show_return_options = kind in {"Return lags", "Returns"}
-        for widget in self.return_option_rows:
-            self._set_options_row_visible(widget, show_return_options)
         show_crossing_options = kind == "Crossings"
         for widget in self.crossing_option_rows:
             self._set_options_row_visible(widget, show_crossing_options)
@@ -390,8 +371,8 @@ class WorkspacePanel(QtWidgets.QWidget):
         self.fit_step_min_spin.setEnabled(use_steps)
         self.fit_step_max_spin.setEnabled(use_steps)
 
-    def _emit_follow(self):
-        display_kind = self.follow_kind_combo.currentText()
+    def _emit_plot_request(self):
+        display_kind = self.plot_kind_combo.currentText()
         kind = display_kind.lower().replace(" ", "_")
         options = {
             "live": self.live_check.isChecked(),
@@ -443,9 +424,5 @@ class WorkspacePanel(QtWidgets.QWidget):
             )
         else:
             options["trajectory"] = self.trajectory_spin.value()
-            if kind in {"return_lags", "returns"}:
-                options["samples"] = self.return_samples_spin.value()
-                options["min_lag"] = self.return_min_lag_spin.value()
-                options["count"] = self.return_count_spin.value()
-                options["unique"] = self.return_unique_check.isChecked()
-        self.follow_requested.emit(kind, options)
+
+        self.plot_requested.emit(kind, options)

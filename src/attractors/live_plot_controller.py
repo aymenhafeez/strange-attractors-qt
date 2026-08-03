@@ -1,4 +1,8 @@
+import numpy as np
+import pandas as pd
 from pyqtgraph.Qt import QtCore
+
+from .system import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE
 
 PREVIEW = {
     "axis",
@@ -166,18 +170,18 @@ class LivePlotController:
         self.window.toolbar_live_plot_name.setText(plot_name)
         self.window.jupyter_console_panel.plots.get(plot_name)
 
-    def _on_follow_requested(self, kind, options):
+    def _on_plot_requested(self, kind, options):
         plot_options = dict(options)
         live = bool(plot_options.pop("live", True))
         plot = plot_options.pop("plot", None)
         # if live and kind in LIVE_KINDS:
         if live and kind in {*PREVIEW}:
-            self._set_follow(kind, plot=plot, **plot_options)
+            self._register_live_plot(kind, plot=plot, **plot_options)
         else:
             self._run_console_plot_request(kind, plot=plot, **plot_options)
 
     def _run_console_plot_request(self, kind, *, plot=None, **options):
-        plot_name = self._follow_plot_name(plot)
+        plot_name = self._plot_name(plot)
         target = self._live_plot_target(plot_name)
         mode = _plot_mode(options.pop("mode", PLOT_MODE_REPLACE))
         label = options.pop("label", None)
