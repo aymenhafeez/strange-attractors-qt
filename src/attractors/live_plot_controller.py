@@ -659,7 +659,178 @@ class LivePlotController:
 
         return separation_item, fit_item
 
+    def _update_live_item(
+        self,
+        plot_name,
+        trace_index,
+        spec,
+        *,
+        target=None,
+        solutions=None,
+    ):
+        key = self._live_item_key(plot_name, trace_index)
+        item = self.live_items.get(key)
+        if item is None:
+            return False
+
+        if target is None:
+            try:
+                target = self.window.jupyter_console_panel.plots.get(
+                    plot_name, activate=False
+                )
+            except KeyError:
+                return False
+        if isinstance(item, tuple):
+            if not all(target.has_item(part) for part in item):
+                return False
+        elif not target.has_item(item):
+            return False
+
+        if spec.get("kind") == "separation_fit":
+            separation_item, fit_item = item
+            data = self._live_separation_fit_data(spec, solutions=solutions)
+            separation_item.setData(data["separation_t"], data["log_distance"])
+            fit_item.setData(data["fit_t"], data["fit_y"])
+            target.set_labels(bottom="t", left=data["axis_label"])
+        elif spec.get("kind") == "vector_field":
+            data = self._live_vector_field_data(spec)
+            if isinstance(item, tuple):
+                segments = data.get("segments")
+                if segments is None or len(item) != len(segments):
+                    return False
+                for part, (x_data, y_data, _pen) in zip(item, segments):
+                    part.setData(x_data, y_data)
+            else:
+                item.setData(data["x"], data["y"])
+            target.set_labels(bottom=data["bottom"], left=data["left"])
+        else:
+            x_data, y_data, bottom, left = self._live_trace_data(
+                spec,
+                solutions=solutions,
+            )
+            item.setData(x_data, y_data)
+            target.set_labels(bottom=bottom, left=left)
+
+        return True
+
+    def _live_trace_data(self, spec, *, solutions=None):
+        kind = spec["kind"]
+        if kind == "axis":
+            axis = str(spec["axis"]).lower()
+            trajectory = spec.get("trajectory", 0)
+            solution = self._live_solution(trajectory, solutions)
             return (
+                self._live_time(trajectory, solution),
+                solution[:, AXES[axis]],
+                "t",
+                axis,
+            )
+
+        if kind in TIMESERIES:
+            trajectory = spec.get("trajectory", 0)
+            solution = self._live_solution(trajectory, solutions)
+            times = self._live_time(trajectory, solution)
+            return (
+                times,
+                self._live_derived_values(kind, solution, times),
+                "t",
+                kind,
+            )
+
+        if kind == "projection":
+            x_axis = str(spec.get("x_axis", "x")).lower()
+            y_axis = str(spec.get("y_axis", "y")).lower()
+            trajectory = spec.get("trajectory", 0)
+            solution = self._live_solution(trajectory, solutions)
+            return (
+                solution[:, AXES[x_axis]],
+                solution[:, AXES[y_axis]],
+                str(spec.get("x_axis", "x")),
+                str(spec.get("y_axis", "y")),
+            )
+
+        if kind == "separation":
+            a = spec.get("a", 0)
+            b = spec.get("b", 1)
+            log = spec.get("log", False)
+            value_column = "log_distance" if log else "distance"
+            axis_label = f"log separation {a}-{b}" if log else f"separation {a}-{b}"
+            if solutions is not None:
+                sol_a = self._live_solution(a, solutions)
+                sol_b = self._live_solution(b, solutions)
+                length = min(len(sol_a), len(sol_b))
+                distance = np.linalg.norm(sol_a[:length] - sol_b[:length], axis=1)
+                if log:
+                    with np.errstate(divide="ignore"):
+                        distance = np.log(distance)
+                return (
+                    self._live_time(a, sol_a)[:length],
+                    distance,
+                    "t",
+                    axis_label,
+                )
+
+            frame = self.window.system.separation(a, b, log=log)
+            return (
+                frame["t"].to_numpy(),
+                frame[value_column].to_numpy(),
+                "t",
+                axis_label,
+            )
+
+        raise ValueError(f"Unknown live plot kind: {kind}")
+
+    @staticmethod
+    def _live_derived_values(kind, solution, times):
+        if kind == "radius":
+            return np.linalg.norm(solution, axis=1)
+        if kind == "displacement":
+            if len(solution) == 0:
+                return np.array([], dtype=np.float64)
+            return np.linalg.norm(solution - solution[0], axis=1)
+        if kind == "speed":
+            if len(solution) < 2:
+                return np.zeros(len(solution), dtype=np.float64)
+
+            velocity = np.gradient(solution, times, axis=0)
+            return np.linalg.norm(velocity, axis=1)
+
+        raise ValueError(f"Unknown derived plot kind: {kind}")
+
+    def _live_vector_field_data(self, spec):
+        x_axis = str(spec.get("x_axis", "x")).lower()
+        y_axis = str(spec.get("y_axis", "y")).lower()
+        frame = self.window.system.vector_field_slice(
+            x_axis,
+            y_axis,
+            fixed_axis=spec.get("fixed_axis"),
+            fixed_value=spec.get("fixed_value", 0.0),
+            x_range=spec.get("x_range"),
+            y_range=spec.get("y_range"),
+            density=spec.get("density", 21),
+        )
+        if spec.get("colour_by_speed", False):
+            return {
+                "segments": self.window.system._vector_field_speed_bands(
+                    frame,
+                    x_axis,
+                    y_axis,
+                    spec.get("scale", 0.75),
+                    spec.get("speed_bands", 5),
+                ),
+                "bottom": x_axis,
+                "left": y_axis,
+            }
+
+        x_data, y_data = self.window.system._vector_field_segments(
+            frame,
+            x_axis,
+            y_axis,
+            spec.get("scale", 0.75),
+        )
+
+        return {"x": x_data, "y": y_data, "bottom": x_axis, "left": y_axis}
+
     def _live_separation_fit_data(self, spec, *, solutions=None):
         a = spec.get("a", 0)
         b = spec.get("b", 1)
