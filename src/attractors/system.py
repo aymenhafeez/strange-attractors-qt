@@ -1315,6 +1315,105 @@ class SystemInspector:
 
         return float((values.min() + values.max()) / 2)
 
+    def _plot_timeseries(
+        self,
+        times,
+        values,
+        axis_label,
+        *,
+        plot,
+        mode,
+        pen,
+        label=None,
+        zoom_region=False,
+    ):
+        plot_kwargs = {}
+        if pen is not None:
+            plot_kwargs["pen"] = pen
+        if label is not None:
+            plot_kwargs["name"] = str(label)
+        return self._plot_line(
+            self._plot_target(plot),
+            times,
+            values,
+            mode=mode,
+            bottom="t",
+            left=axis_label,
+            zoom_region=zoom_region,
+            **plot_kwargs,
+        )
+
+    def _plot_mode(self, mode=PLOT_MODE_REPLACE):
+        normalised = str(mode).strip().lower()
+        if normalised == PLOT_MODE_REPLACE:
+            return PLOT_MODE_REPLACE
+        if normalised == PLOT_MODE_OVERLAY:
+            return PLOT_MODE_OVERLAY
+
+        raise ValueError("Plot mode must be 'replace' or 'overlay'")
+
+    def _plot_target(self, plot):
+        if plot is not None:
+            if isinstance(plot, str):
+                plots = self._window.jupyter_console_panel.plots
+                try:
+                    return plots.get(plot)
+                except KeyError:
+                    return plots.new(plot)
+            return plot
+
+        return self._window.jupyter_console_panel.plot
+
+    def _plot_line(
+        self,
+        target,
+        x,
+        y,
+        *,
+        mode,
+        bottom,
+        left,
+        zoom_region=False,
+        **kwargs,
+    ):
+        if isinstance(target, ConsolePlot):
+            return target.line(
+                x,
+                y,
+                mode=mode,
+                bottom=bottom,
+                left=left,
+                zoom_region=zoom_region,
+                **kwargs,
+            )
+
+        if mode == PLOT_MODE_REPLACE:
+            target.clear()
+        item = target.plot(x, y, **kwargs)
+        target.setLabel("bottom", bottom)
+        target.setLabel("left", left)
+        return item
+
+    def _plot_scatter(self, target, x, y, *, mode, bottom, left, **kwargs):
+        if isinstance(target, ConsolePlot):
+            symbol_size = kwargs.pop("symbolSize", None)
+            return target.scatter(
+                x,
+                y,
+                mode=mode,
+                bottom=bottom,
+                left=left,
+                symbol_size=symbol_size,
+                **kwargs,
+            )
+
+        if mode == PLOT_MODE_REPLACE:
+            target.clear()
+        item = target.plot(x, y, **kwargs)
+        target.setLabel("bottom", bottom)
+        target.setLabel("left", left)
+        return item
+
     def _separation_frame(
         self,
         a,
