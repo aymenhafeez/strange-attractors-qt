@@ -443,6 +443,10 @@ class Window(QtWidgets.QMainWindow):
 
         style_icon = QtWidgets.QStyle.StandardPixmap
 
+        start_pad = QtWidgets.QWidget()
+        start_pad.setFixedWidth(3)
+        toolbar.addWidget(start_pad)
+
         self.toolbar_left_panel_action = self._add_checked_icon_toolbar_action(
             toolbar,
             self._side_panel_icon("left"),
@@ -633,6 +637,9 @@ class Window(QtWidgets.QMainWindow):
             lambda checked: self._set_right_panel_visible(checked),
             "Show right panel",
         )
+        end_pad = QtWidgets.QWidget()
+        end_pad.setFixedWidth(3)
+        toolbar.addWidget(end_pad)
 
         self._sync_toolbar_panel_actions()
 
@@ -1539,7 +1546,8 @@ class Window(QtWidgets.QMainWindow):
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
             self.scene.grid_overlay.auto_adjust_grid(solutions)
-            self.live_plot_controller._refresh_live_plots()
+            for plot_name in list(self.live_plot_controller.live_plots):
+                self.live_plot_controller._refresh_live_plot(plot_name)
 
         if self._solve_needed:
             self._solve_needed = False
@@ -1617,7 +1625,7 @@ class Window(QtWidgets.QMainWindow):
     def _on_trajectory_styles_changed(self, trajectories):
         renderer = self.scene.trajectory_renderer
         renderer.set_trajectories(trajectories)
-        renderer.refresh_colours()
+        renderer.update_display()
 
     def _on_lyapunov_result(self, request_id, lyap, ky_dim, t_hist, lyap_hist):
         if request_id != self._active_lyapunov_request_id:

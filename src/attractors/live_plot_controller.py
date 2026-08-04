@@ -434,6 +434,37 @@ class LivePlotController:
 
         self.window.workspace_panel.set_status(self._live_status_text())
 
+    def _refresh_live_preview(self, solutions=None, *, kinds=None):
+        live_plots = self.live_plots
+        live_items = self.live_items
+        if not live_plots or not live_items:
+            return
+
+        preview_kinds = PREVIEW if kinds is None else set(kinds)
+        now_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
+        if solutions is None and not _should_update(
+            now_ms,
+            self.window._last_live_preview_update,
+            PREVIEW_UPDATE_INTERVAL,
+        ):
+            return
+
+        refreshed = False
+        for plot_name, specs in list(live_plots.items()):
+            for index, spec in enumerate(specs):
+                if spec.get("kind") not in preview_kinds:
+                    continue
+                if self._update_live_item(
+                    plot_name,
+                    index,
+                    spec,
+                    solutions=solutions,
+                ):
+                    refreshed = True
+
+        if refreshed:
+            self.window._last_live_preview_update = now_ms
+
     def _plot_live_spec(self, spec, *, trace_index):
         kind = spec["kind"]
         plot = spec["plot"]
