@@ -593,6 +593,72 @@ class LivePlotController:
 
         raise ValueError(f"Unknown live plot kind: {kind}")
 
+    def _plot_derived_timeseries(
+        self,
+        kind,
+        *,
+        trajectory,
+        plot,
+        mode,
+        pen=None,
+        label=None,
+        zoom_region=False,
+    ):
+        kwargs = {
+            "trajectory": trajectory,
+            "plot": plot,
+            "mode": mode,
+            "label": label,
+            "zoom_region": zoom_region,
+        }
+        if pen is not None:
+            kwargs["pen"] = pen
+
+        if kind == "displacement":
+            return self.window.system.plot_displacement(**kwargs)
+        if kind == "radius":
+            return self.window.system.plot_radius(**kwargs)
+        if kind == "speed":
+            return self.window.system.plot_speed(**kwargs)
+
+        raise ValueError(f"Unknown derived plot kind: {kind}")
+
+    def _plot_live_separation_fit(self, spec, target, *, mode, pen, label):
+        data = self._live_separation_fit_data(spec)
+
+        separation_kwargs = {}
+        if pen is not None:
+            separation_kwargs["pen"] = pen
+        if label is not None:
+            separation_kwargs["name"] = str(label)
+
+        fit_pen = spec.get("fit_pen", pen)
+        fit_label = f"{label} fit" if label else None
+        fit_kwargs = {}
+        if fit_pen is not None:
+            fit_kwargs["pen"] = fit_pen
+        if fit_label is not None:
+            fit_kwargs["name"] = fit_label
+
+        separation_item = target.line(
+            data["separation_t"],
+            data["log_distance"],
+            mode=mode,
+            bottom="t",
+            left=data["axis_label"],
+            **separation_kwargs,
+        )
+        fit_item = target.line(
+            data["fit_t"],
+            data["fit_y"],
+            mode=PLOT_MODE_OVERLAY,
+            bottom="t",
+            left=data["axis_label"],
+            **fit_kwargs,
+        )
+
+        return separation_item, fit_item
+
             return (
                 plotter,
                 (),
