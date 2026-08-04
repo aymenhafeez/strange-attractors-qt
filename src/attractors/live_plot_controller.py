@@ -728,3 +728,27 @@ class LivePlotController:
         except IndexError as exc:
             raise IndexError(f"No trajectory at index {trajectory}") from exc
 
+    def _live_time(self, trajectory, solution):
+        times = self.window.system.time(trajectory)
+        if len(times) == len(solution):
+            return times
+
+        t_min = self.window.system.t_min
+        spec = self.window.system._trajectory_solve_spec(trajectory)
+        t_max = spec.get("t_max", self.window.system.t_max)
+        if len(solution) <= 0:
+            return np.array([], dtype=np.float64)
+        dt = (t_max - t_min) / len(solution)
+
+        return t_min + (np.arange(len(solution), dtype=np.float64) + 1.0) * dt
+
+    def _live_status_text(self):
+        plot_count = len(self.live_plots)
+        trace_count = sum(len(specs) for specs in self.live_plots.values())
+
+        if trace_count == 0:
+            return "No live plots"
+        if trace_count == 1:
+            return "Live: 1 trace"
+
+        return f"Live: {trace_count} traces across {plot_count} plots"
