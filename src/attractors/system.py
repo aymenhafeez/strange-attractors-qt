@@ -913,12 +913,10 @@ class SystemInspector:
         axis_name = str(axis).lower()
         axis_col = axis_index(axis_name)
         direction = crossing_direction(direction)
-        trajectory_data = list(
-            self._crossing_trajectories(
-                trajectory,
-                t_max=t_max,
-                n=n,
-            )
+        trajectory_data = self._crossing_trajectories(
+            trajectory,
+            t_max=t_max,
+            n=n,
         )
         level = self._crossing_level(
             axis_col,
@@ -1302,6 +1300,21 @@ class SystemInspector:
     def unfollow_all(self):
         return self._window.live_plot_controller._clear_all_live_plots()
 
+    def _crossing_level(self, axis_col, value, solutions=None):
+        if value is not None:
+            return float(value)
+
+        if solutions is None:
+            solutions = self.solutions
+        if not solutions:
+            return 0.0
+        values = np.concatenate([solution[:, axis_col] for solution in solutions])
+        values = values[np.isfinite(values)]
+        if len(values) == 0:
+            return 0.0
+
+        return float((values.min() + values.max()) / 2)
+
     def _separation_frame(
         self,
         a,
@@ -1358,11 +1371,107 @@ class SystemInspector:
         predicted = slope * frame["t"] + intercept
         residual = frame["log_distance"] - predicted
         total = frame["log_distance"] - frame["log_distance"].mean()
-        ss_res = float(np.sum(residual**2))
-        ss_tot = float(np.sum(total**2))
+        ss_res = np.sum(residual**2)
+        ss_tot = np.sum(total**2)
         r2 = 1.0 if ss_tot == 0.0 and ss_res == 0.0 else 1.0 - ss_res / ss_tot
 
-        return {"slope": float(slope), "intercept": float(intercept), "r2": float(r2)}
+        return {"slope": slope, "intercept": intercept, "r2": r2}
+
+    def _selected_trajectories(self, trajectory):
+        solutions = self.solutions
+        if trajectory is None:
+            return range(len(solutions))
+
+        self.solution(trajectory)
+
+        return [trajectory]
+
+    def _variant_values(self, values):
+        variant_values = dict(self.values)
+        if values is None:
+            return variant_values
+        if not isinstance(values, dict):
+            raise TypeError("Parameter overrides must be a dictionary")
+
+        valid_names = {param.name for param in self.config.params}
+        unknown = sorted(set(values) - valid_names)
+        if unknown:
+            names = ", ".join(unknown)
+            raise ValueError(f"Unknown parameter override(s): {names}")
+
+        for name, value in values.items():
+            try:
+                variant_values[name] = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Parameter {name} must be numeric") from exc
+
+        return variant_values
+
+    def _crossing_trajectories(self, trajectory, *, t_max=None, n=None):
+        rows = []
+
+        if t_max is None and n is None:
+            for i in self._selected_trajectories(trajectory):
+                rows.append((i, self.solution(i), self.time(i)))
+            return rows
+
+        config = self.config
+        if config is None:
+            return rows
+
+        solve_n = self._positive_int(self.n if n is None else n, "n")
+        solve_t_max = self.t_max if t_max is None else float(t_max)
+        if solve_t_max <= self.t_min:
+            raise ValueError("t_max must be greater than t_min")
+
+        initial_conditions = self._initial_conditions()
+        if trajectory is None:
+            selected = range(len(initial_conditions))
+        else:
+            selected = [
+                self._trajectory_index_from_initial_conditions(
+                    trajectory,
+                    initial_conditions,
+                )
+            ]
+
+        for i in selected:
+            solution = solve_attractor(
+                config,
+                self.values,
+                solve_n,
+                t_max=solve_t_max,
+                ic=initial_conditions[i],
+            )
+            times = _solver_sample_times(self.t_min, solve_t_max, len(solution))
+            rows.append((i, solution, times))
+
+        return rows
+
+    def _trajectory_index_from_initial_conditions(self, trajectory, initial_conditions):
+        try:
+            index = int(trajectory)
+        except (TypeError, ValueError) as exc:
+            raise IndexError(f"No trajectory at index {trajectory}") from exc
+        if index < 0 or index >= len(initial_conditions):
+            raise IndexError(f"No trajectory at index {trajectory}")
+        return index
+
+    def _series_frame(self, trajectory, columns):
+        first = next(iter(columns.values()))
+        length = len(first)
+        frame = pd.DataFrame(columns)
+        frame.insert(0, "t", self.time(trajectory)[:length])
+        frame.insert(0, "step", np.arange(length))
+        frame.insert(0, "trajectory", trajectory)
+
+        return frame
+
+    def _concat_frames(self, rows, columns):
+        if not rows:
+            return pd.DataFrame(columns=columns)
+
+        return pd.concat(rows, ignore_index=True)
 
     def _initial_conditions(self):
         trajectories = self._window.controls.trajectory_panel.get_trajectories()
