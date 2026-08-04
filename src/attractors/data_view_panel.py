@@ -12,6 +12,55 @@ class RowTableModel(QtCore.QAbstractTableModel):
         self._columns = tuple(columns)
         self._rows = []
 
+    def set_rows(self, rows):
+        self.beginResetModel()
+        self._rows = list(rows or [])
+        self.endResetModel()
+
+    def clear(self):
+        self.set_rows([])
+
+    def rowCount(self, parent=None):
+        if parent is not None and parent.isValid():
+            return 0
+
+        return len(self._rows)
+
+    def columnCount(self, parent=None):
+        if parent is not None and parent.isValid():
+            return 0
+
+        return len(self._columns)
+
+    def data(self, index, role=QtCore.Qt.ItemDataRole.DisplayRole):
+        if not index.isValid() or role != QtCore.Qt.ItemDataRole.DisplayRole:
+            return None
+
+        try:
+            column = self._columns[index.column()]
+            value = self._rows[index.row()].get(column)
+        except IndexError:
+            return None
+
+        return _format_value(value)
+
+    def headerData(
+        self,
+        section,
+        orientation,
+        role=QtCore.Qt.ItemDataRole.DisplayRole,
+    ):
+        if role != QtCore.Qt.ItemDataRole.DisplayRole:
+            return None
+
+        if orientation == QtCore.Qt.Orientation.Horizontal:
+            try:
+                return self._columns[section]
+            except IndexError:
+                return None
+
+        return str(section + 1)
+
 
 class TrajectoryTableModel(QtCore.QAbstractTableModel):
     def __init__(self, columns=SAMPLE_COLUMNS, parent=None):
