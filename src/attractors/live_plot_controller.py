@@ -303,6 +303,104 @@ class LivePlotController:
         self._sync_plots()
         return pd.Series(spec)
 
+    def _live_plot_frame(self):
+        rows = []
+        for specs in self.live_plots.values():
+            for index, spec in enumerate(specs):
+                row = dict(spec)
+                row["trace"] = index
+                rows.append(row)
+
+        columns = [
+            "plot",
+            "trace",
+            "source",
+            "kind",
+            "mode",
+            "axis",
+            "x_axis",
+            "y_axis",
+            "fixed_axis",
+            "fixed_value",
+            "x_range",
+            "y_range",
+            "density",
+            "scale",
+            "colour_by_speed",
+            "speed_bands",
+            "trajectory",
+            "a",
+            "b",
+            "log",
+            "pen",
+            "fit_pen",
+            "label",
+            "zoom_region",
+            "t_min",
+            "t_max",
+            "step_min",
+            "step_max",
+        ]
+
+        if not rows:
+            return pd.DataFrame(columns=columns).set_index("plot")
+
+        return pd.DataFrame(rows).reindex(columns=columns).set_index("plot")
+
+    def _clear_live_plot(self, plot=None):
+        live_plots = self.live_plots
+
+        if plot is None:
+            plot_name = self.window.jupyter_console_panel.plots.current_name
+        else:
+            plot_name = str(plot).strip()
+
+        if not plot_name:
+            raise ValueError("Plot name cannot be empty")
+
+        live_plots.pop(plot_name, None)
+        self._clear_live_items(plot_name)
+        self._live_plot_target(plot_name).clear()
+        self.window.workspace_panel.set_status(self._live_status_text())
+        self._sync_live_menu(plot_name)
+
+        return self._live_plot_frame()
+
+    def _remove_live_trace(self, plot_name, trace_index):
+        plot_name = str(plot_name).strip()
+        if not plot_name:
+            return self._live_plot_frame()
+
+        live_plots = self.live_plots
+        specs = live_plots.get(plot_name, [])
+
+        if not 0 <= int(trace_index) < len(specs):
+            return self._live_plot_frame()
+
+        specs.pop(int(trace_index))
+        target = self._live_plot_target(plot_name)
+        target.clear()
+
+        self._clear_live_items(plot_name)
+
+        if specs:
+            self._refresh_live_plot(plot_name)
+        else:
+            live_plots.pop(plot_name, None)
+            self.window.workspace_panel.set_status(self._live_status_text())
+
+        self._sync_live_menu(plot_name)
+
+        return self._live_plot_frame()
+
+    def _clear_all_live_plots(self):
+        self.live_plots.clear()
+        self.live_items.clear()
+        self.window.workspace_panel.set_status("No live plots")
+        self._sync_live_menu()
+
+        return self._live_plot_frame()
+
     def _plot_name(self, plot):
         plots = self.window.jupyter_console_panel.plots
         if plot is None:
