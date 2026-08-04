@@ -273,8 +273,8 @@ class Window(QtWidgets.QMainWindow):
         self._panel_dock_defaults = {
             "lyapunov_panel": ("top", self.viewport_dock),
             "poincare_panel": ("top", self.viewport_dock),
-            "bifurcation_panel": ("bottom", self.viewport_dock),
-            "projection_panel": ("bottom", self.viewport_dock),
+            "bifurcation_panel": ("top", self.viewport_dock),
+            "projection_panel": ("above", self.viewport_dock),
         }
         self._connect_workspace_dock_signals()
 
@@ -742,7 +742,7 @@ class Window(QtWidgets.QMainWindow):
         self.right_panel.hide()
 
     def _build_panel_dock(self, title, panel):
-        dock = Dock(title, size=(10, 25), closable=True)
+        dock = Dock(title, size=(10, 12), closable=True)
         dock.addWidget(panel)
         dock.sigClosed.connect(lambda _dock: self._on_panel_dock_closed(panel))
         return dock
@@ -1517,6 +1517,7 @@ class Window(QtWidgets.QMainWindow):
 
         if is_partial:
             self.live_plot_controller._refresh_live_preview(solutions)
+            self._update_projection_panel_from_solutions(solutions)
 
         if not is_partial:
             self._last_live_preview_update = None
