@@ -4,6 +4,7 @@ from PyQt6.Qsci import QsciLexerPython, QsciScintilla
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .script_browser import ScriptBrowser, default_scripts_dir
+from .style import SPLITTER_HANDLE_HOVER
 
 # dark mode palette derived from KDE Breeze Dark
 # https://qscintilla.com/#syntax_highlighting/custom_lexer_example
@@ -164,7 +165,9 @@ class ScriptPanel(QtWidgets.QWidget):
         self.splitter.addWidget(editor_host)
         self.splitter.setCollapsible(0, True)
         self.splitter.setCollapsible(1, False)
-        self.splitter.setSizes([220, 620])
+        self.splitter.setSizes([170, 620])
+        # self.splitter.setContentsMargins(0, 0, 0, 0)
+        self.splitter.setStyleSheet(SPLITTER_HANDLE_HOVER)
         layout.addWidget(self.splitter)
 
         self.editor.textChanged.connect(self._on_editor_text_changed)
