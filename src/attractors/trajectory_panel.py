@@ -72,6 +72,13 @@ class _TrajectoryRow(QtCore.QObject):
             },
             {"name": "Alpha", "type": "int", "value": 100, "limits": (0, 100)},
             {
+                "name": "Size",
+                "type": "float",
+                "value": 1.0,
+                "limits": (0.1, 20.0),
+                "step": 0.1,
+            },
+            {
                 "name": "Render",
                 "type": "list",
                 "limits": ["points", "line"],
@@ -102,7 +109,7 @@ class _TrajectoryRow(QtCore.QObject):
         for param, change, _data in changes:
             if change != "value":
                 continue
-            if param.name() in {"Colour", "Alpha", "Render"}:
+            if param.name() in {"Colour", "Alpha", "Size", "Render"}:
                 self.style_changed.emit()
             else:
                 self.changed.emit()
@@ -132,6 +139,9 @@ class _TrajectoryRow(QtCore.QObject):
     def set_render_mode(self, mode: str):
         value = "line" if mode.lower() == "line" else "points"
         self.param.child("Render").setValue(value)
+
+    def get_size(self):
+        return self.param.child("Size").value()
 
 
 class TrajectoryPanel(QtWidgets.QWidget):
@@ -335,6 +345,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
                 "t_max": r.get_t_max(),
                 "colour": r.get_colour(),
                 "alpha": r.get_alpha(),
+                "size": r.get_size(),
                 "render_mode": r.get_render_mode(),
             }
             for index, r in enumerate(self._rows)
