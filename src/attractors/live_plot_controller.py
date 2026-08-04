@@ -4,6 +4,8 @@ from pyqtgraph.Qt import QtCore
 
 from .system import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE
 
+PREVIEW_UPDATE_INTERVAL = 120  # ms
+AXES = {"x": 0, "y": 1, "z": 2}
 PREVIEW = {
     "axis",
     "displacement",
@@ -416,12 +418,35 @@ class LivePlotController:
 
         return plot_name
 
+    def _live_plot_target(self, plot_name):
+        plots = self.window.jupyter_console_panel.plots
+        try:
+            return plots.get(plot_name, activate=False)
+        except KeyError:
+            return plots.new(plot_name, activate=False)
+
+    def _live_item_key(self, plot_name, trace_index):
+        return (str(plot_name), int(trace_index))
+
     def _clear_live_items(self, plot_name):
         live_items = self.live_items
         plot_key = str(plot_name)
         for key in list(live_items):
             if key[0] == plot_key:
                 live_items.pop(key, None)
+
+    def _rename_live_items(self, old_name, new_name):
+        live_items = self.live_items
+        old_key = str(old_name)
+        new_key = str(new_name)
+        renamed = {}
+
+        for key, item in list(live_items.items()):
+            if key[0] != old_key:
+                continue
+            renamed[(new_key, key[1])] = item
+            live_items.pop(key, None)
+        live_items.update(renamed)
 
     def _refresh_live_plot(self, plot_name):
         specs = self.live_plots.get(plot_name, [])
@@ -442,10 +467,11 @@ class LivePlotController:
 
         preview_kinds = PREVIEW if kinds is None else set(kinds)
         now_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
-        if solutions is None and not _should_update(
-            now_ms,
-            self.window._last_live_preview_update,
-            PREVIEW_UPDATE_INTERVAL,
+        last_update = self.window._last_live_preview_update
+        if (
+            solutions is None
+            and last_update is not None
+            and now_ms - last_update < PREVIEW_UPDATE_INTERVAL
         ):
             return
 
