@@ -6,6 +6,19 @@ MEASURE_COLUMNS = ("trajectory", "step", "t", "radius", "speed", "displacement")
 DEFAULT_SAMPLE_SIZE = 2000
 
 
+def _format_value(value):
+    if value is None:
+        return ""
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value):
+            return str(value)
+        return f"{float(value):.6g}"
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+
+    return str(value)
+
+
 class RowTableModel(QtCore.QAbstractTableModel):
     def __init__(self, columns, parent=None):
         super().__init__(parent)
