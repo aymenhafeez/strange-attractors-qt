@@ -742,7 +742,7 @@ class Window(QtWidgets.QMainWindow):
         self.right_panel.hide()
 
     def _build_panel_dock(self, title, panel):
-        dock = Dock(title, size=(10, 4), closable=True)
+        dock = Dock(title, size=(10, 25), closable=True)
         dock.addWidget(panel)
         dock.sigClosed.connect(lambda _dock: self._on_panel_dock_closed(panel))
         return dock

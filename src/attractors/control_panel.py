@@ -2,6 +2,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .data_view_panel import DataViewPanel
 from .registry import ATTRACTORS
+from .style import SIDE_PANEL
 
 STEP = 1000
 
@@ -26,6 +27,7 @@ class ControlPanel(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("controlPanel")
+        self.setStyleSheet(SIDE_PANEL)
 
         # plain QWidget to work around objectName selector bug on QWidget subclasses
         inner = QtWidgets.QWidget()
@@ -72,6 +74,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.controls_scroll.setObjectName("sidePanelControlsScroll")
         self.controls_scroll.setWidgetResizable(True)
         self.controls_tab = QtWidgets.QWidget()
+        self.controls_tab.setObjectName("controlPanelSliders")
         self.controls_layout = QtWidgets.QVBoxLayout(self.controls_tab)
         self.controls_layout.setContentsMargins(8, 8, 8, 8)
         self.controls_layout.setSpacing(7)

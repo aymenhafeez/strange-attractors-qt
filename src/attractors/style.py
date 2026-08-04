@@ -58,81 +58,20 @@ DOCK_NO_TITLE = f"""
 """
 
 SIDE_PANEL = """
-    QFrame#sidePanelFrame {
-        background: transparent;
-        border: 1px solid palette(mid);
-        border-radius: 6px;
-        padding: 2px;
+    QWidget#controlPanel {
+        background: palette(window);
     }
-    QSplitter#sidePanelSplitter::handle:hover {
-        background: palette(highlight);
-    }
-    QScrollArea#sidePanelControlsScroll {
-        background: transparent;
-        border: none;
-    }
-    QScrollArea#sidePanelControlsScroll > QWidget {
-        background: transparent;
-    }
-    QScrollArea#sidePanelScroll {
-        background: transparent;
-        border: 1px solid palette(mid);
-        border-radius: 6px;
-        padding: 2px;
-    }
-    QScrollArea#sidePanelScroll > QWidget {
-        background: transparent;
+
+    QWidget#controlPanelSliders {
+        background: palette(base);
     }
 """
 
-CUSTOM_PANEL = """
-    QWidget#customPanelContent {
-        background-color: rgba(0, 0, 0, 240);
-        border: 1px solid #aaa;
-        border-radius: 6px;
-    }
-    QLabel {
-        color: white;
-        border: none;
-    }
-    QTextEdit {
-        background-color: white;
-        color: #333;
-        border: 1px solid #aaa;
-    }
-    QDoubleSpinBox {
-        background-color: white;
-        color: #333;
-        border: 1px solid #aaa;
-    }
-    QPushButton {
-        background-color: #ddd;
-        color: black;
-        border: 1px solid #aaa;
-        padding: 4px 12px;
-    }
-    QPushButton:hover {
-        background-color: #eee;
-    }
-    QPushButton:pressed {
-        background-color: #ccc;
-    }
-    QCheckBox {
-        border: none;
-        color: white;
-    }
-    QCheckBox::indicator {
-        width: 13px;
-        height: 13px;
-        background-color: white;
-        border: 1px solid #aaa;
-    }
-    QCheckBox::indicator:checked {
-        background-color: #4a90d9;
-        border: 1px solid #2a6099;
-    }
-    QCheckBox::indicator:hover {
-        border: 1px solid #4a90d9;
+RIGHT_PANEL = """
+    QTextEdit, QDoubleSpinBox {
+        background: palette(window);
+        border: 1px solid palette(mid);
+        padding: 2px 4px;
     }
 """
 
