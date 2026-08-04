@@ -660,17 +660,71 @@ class LivePlotController:
         return separation_item, fit_item
 
             return (
-                plotter,
-                (),
-                {
-                    "trajectory": options.get("trajectory", 0),
-                    "samples": options.get("samples", 2000),
-                    "min_lag": options.get("min_lag", 50),
-                    "count": options.get("count", 20),
-                    "unique": options.get("unique", True),
-                },
-                False,
-            )
+    def _live_separation_fit_data(self, spec, *, solutions=None):
+        a = spec.get("a", 0)
+        b = spec.get("b", 1)
+        frame = self._live_separation_frame(
+            a,
+            b,
+            log=True,
+            solutions=solutions,
+        )
 
-        raise ValueError(f"Unknown console plot kind: {kind}")
+        mask = np.isfinite(frame["log_distance"].to_numpy())
+
+        if spec.get("t_min") is not None:
+            mask &= frame["t"].to_numpy() >= spec["t_min"]
+        if spec.get("t_max") is not None:
+            mask &= frame["t"].to_numpy() <= spec["t_max"]
+        if spec.get("step_min") is not None:
+            mask &= frame["step"].to_numpy() >= spec["step_min"]
+        if spec.get("step_max") is not None:
+            mask &= frame["step"].to_numpy() <= spec["step_max"]
+
+        fit_frame = frame.loc[mask].reset_index(drop=True)
+        if len(fit_frame) < 2:
+            raise ValueError("At least two finite log-separation points are required")
+
+        fit = self.window.system._fit_log_separation(fit_frame)
+        fit_t = fit_frame["t"].to_numpy()
+        fit_y = fit["slope"] * fit_t + fit["intercept"]
+        axis_label = f"log separation fit {a}-{b}"
+
+        return {
+            "separation_t": frame["t"].to_numpy(),
+            "log_distance": frame["log_distance"].to_numpy(),
+            "fit_t": fit_t,
+            "fit_y": fit_y,
+            "axis_label": axis_label,
+        }
+
+    def _live_separation_frame(self, a, b, *, log, solutions=None):
+        if solutions is None:
+            return self.window.system.separation(a, b, log=log)
+
+        sol_a = self._live_solution(a, solutions)
+        sol_b = self._live_solution(b, solutions)
+        length = min(len(sol_a), len(sol_b))
+        distance = np.linalg.norm(sol_a[:length] - sol_b[:length], axis=1)
+        columns = {
+            "trajectory_a": a,
+            "trajectory_b": b,
+            "step": np.arange(length),
+            "t": self._live_time(a, sol_a)[:length],
+        }
+        if log:
+            with np.errstate(divide="ignore"):
+                columns["log_distance"] = np.log(distance)
+        else:
+            columns["distance"] = distance
+
+        return pd.DataFrame(columns)
+
+    def _live_solution(self, trajectory, solutions=None):
+        if solutions is None:
+            return self.window.system.solution(trajectory)
+        try:
+            return solutions[trajectory]
+        except IndexError as exc:
+            raise IndexError(f"No trajectory at index {trajectory}") from exc
 
