@@ -42,11 +42,19 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.projection_combo.currentTextChanged.connect(self._on_projection_changed)
         controls_layout.addWidget(self.projection_combo)
 
+        controls_layout.addStretch(3)
+        spacer = QtWidgets.QWidget()
+        spacer.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
+        controls_layout.addWidget(spacer)
+
         controls_layout.addWidget(QtWidgets.QLabel("Map:"))
         self.dropdown = QtWidgets.QComboBox()
-        colourmaps = pg.colormap.listMaps(source="matplotlib")
+        colourmaps = pg.colormap.listMaps()
         self.dropdown.addItems(colourmaps)
-        self.dropdown.setCurrentText("CMRmap")
+        self.dropdown.setCurrentText("inferno")
         self.dropdown.currentTextChanged.connect(self._update_colourmap)
         self.dropdown.setMaxVisibleItems(12)
         # needed for setMaxVisibleItems to apply
@@ -65,6 +73,7 @@ class ProjectionPanel(QtWidgets.QWidget):
         split_layout.addLayout(plot_layout, 1)
 
         self.plot_widget = pg.PlotWidget()
+        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
         # self.plot_widget.getPlotItem().setContentsMargins(0, 10, 0, 0)
         self.plot_widget.getViewBox().setAspectLocked(True)
         plot_layout.addWidget(self.plot_widget, 2)
@@ -83,6 +92,7 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.plot_widget.addItem(self.roi_line)
 
         self.profile_plot = pg.PlotWidget()
+        self.profile_plot.showGrid(x=True, y=True, alpha=0.3)
         self.profile_plot.setLabel("bottom", "Distance")
         self.profile_plot.setLabel("left", "Density")
         # self.profile_plot.getPlotItem().setContentsMargins(0, 10, 0, 0)
@@ -92,7 +102,7 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.histogram = pg.HistogramLUTWidget()
         self.histogram.item.setImageItem(self.img)
         self.histogram.item.gradient.setColorMap(
-            pg.colormap.get(self.dropdown.currentText(), source="matplotlib")
+            pg.colormap.get(self.dropdown.currentText())
         )
         split_layout.addWidget(self.histogram)
 
@@ -227,7 +237,7 @@ class ProjectionPanel(QtWidgets.QWidget):
         )
 
     def _update_colourmap(self, cmap_name):
-        cmap = pg.colormap.get(cmap_name, source="matplotlib")
+        cmap = pg.colormap.get(cmap_name)
         self.img.setLookupTable(cmap.getLookupTable())
         self.histogram.item.gradient.setColorMap(cmap)
         self._render_cached_projection_data()
