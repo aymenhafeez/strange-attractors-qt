@@ -16,6 +16,12 @@ from .sections import (
 from .solution_validation import validate_solutions
 from .solver import solve_attractor
 
+VECTOR_FIELD_SPEED_PENS = [
+    (65, 105, 155),
+    (55, 135, 175),
+    (60, 165, 165),
+    (120, 185, 115),
+    (235, 190, 80),
 ]
 PLOT_MODE_REPLACE = "replace"
 PLOT_MODE_OVERLAY = "overlay"
@@ -1051,6 +1057,7 @@ class SystemInspector:
             )
 
         solution = self.solution(trajectory)
+
         return self._plot_timeseries(
             self.time(trajectory),
             solution[:, axis_col],
@@ -1086,8 +1093,10 @@ class SystemInspector:
             )
 
         frame = self.radius(trajectory=trajectory)
-        return self._plot_timeseries_frame(
-            frame,
+
+        return self._plot_timeseries(
+            frame["t"].to_numpy(),
+            frame["radius"].to_numpy(),
             "radius",
             plot=plot,
             mode=plot_mode,
@@ -1120,9 +1129,47 @@ class SystemInspector:
             )
 
         frame = self.speed(trajectory=trajectory)
-        return self._plot_timeseries_frame(
-            frame,
+
+        return self._plot_timeseries(
+            frame["t"].to_numpy(),
+            frame["speed"].to_numpy(),
             "speed",
+            plot=plot,
+            mode=plot_mode,
+            pen=pen,
+            label=label,
+            zoom_region=zoom_region,
+        )
+
+    def plot_displacement(
+        self,
+        *,
+        trajectory=0,
+        live=False,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        label=None,
+        zoom_region=False,
+    ):
+        plot_mode = self._plot_mode(mode)
+        if live:
+            return self._register_live_plot(
+                "displacement",
+                plot=plot,
+                mode=plot_mode,
+                trajectory=int(trajectory),
+                pen=pen,
+                label=label,
+                zoom_region=zoom_region,
+            )
+
+        frame = self.displacement(trajectory=trajectory)
+
+        return self._plot_timeseries(
+            frame["t"].to_numpy(),
+            frame["displacement"].to_numpy(),
+            "displacement",
             plot=plot,
             mode=plot_mode,
             pen=pen,
@@ -1160,6 +1207,7 @@ class SystemInspector:
         frame = self.separation(a, b, log=log)
         value_column = "log_distance" if log else "distance"
         axis_label = f"log separation {a}-{b}" if log else f"separation {a}-{b}"
+
         return self._plot_timeseries(
             frame["t"].to_numpy(),
             frame[value_column].to_numpy(),
@@ -1290,6 +1338,159 @@ class SystemInspector:
             **plot_kwargs,
         )
 
+    def vector_field_slice(
+        self,
+        x_axis="x",
+        y_axis="y",
+        *,
+        fixed_axis=None,
+        fixed_value=0.0,
+        x_range=None,
+        y_range=None,
+        density=21,
+    ):
+        x_name, y_name, fixed_name = self._slice_axes(x_axis, y_axis, fixed_axis)
+        density = self._positive_int(density, "Density")
+        if density < 2:
+            raise ValueError("Density must be at least 2")
+        x_range = self._vector_field_axis_range(x_name, x_range)
+        y_range = self._vector_field_axis_range(y_name, y_range)
+
+        x_values = np.linspace(x_range[0], x_range[1], density)
+        y_values = np.linspace(y_range[0], y_range[1], density)
+        xx, yy = np.meshgrid(x_values, y_values)
+        states = np.zeros((density * density, 3), dtype=np.float64)
+        states[:, AXES[x_name]] = xx.ravel()
+        states[:, AXES[y_name]] = yy.ravel()
+        states[:, AXES[fixed_name]] = float(fixed_value)
+
+        config = self.config
+        if config is None:
+            raise ValueError("No attractor selected")
+        params = np.ascontiguousarray(
+            [self.values[param.name] for param in config.params],
+            dtype=np.float64,
+        )
+        vectors = np.asarray(
+            [config.equation(state, self.t_min, params) for state in states],
+            dtype=np.float64,
+        )
+        u = vectors[:, AXES[x_name]]
+        v = vectors[:, AXES[y_name]]
+        return pd.DataFrame(
+            {
+                x_name: states[:, AXES[x_name]],
+                y_name: states[:, AXES[y_name]],
+                fixed_name: states[:, AXES[fixed_name]],
+                "u": u,
+                "v": v,
+                "speed": np.hypot(u, v),
+            }
+        )
+
+    def plot_vector_field(
+        self,
+        x_axis="x",
+        y_axis="y",
+        *,
+        fixed_axis=None,
+        fixed_value=0.0,
+        x_range=None,
+        y_range=None,
+        density=21,
+        live=False,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        label=None,
+        scale=0.75,
+        colour_by_speed=False,
+        speed_bands=5,
+    ):
+        plot_mode = self._plot_mode(mode)
+        if live:
+            x_name, y_name, fixed_name = self._slice_axes(
+                x_axis,
+                y_axis,
+                fixed_axis,
+            )
+            return self._register_live_plot(
+                "vector_field",
+                plot=plot,
+                mode=plot_mode,
+                x_axis=x_name,
+                y_axis=y_name,
+                fixed_axis=fixed_name,
+                fixed_value=float(fixed_value),
+                x_range=(
+                    None
+                    if x_range is None
+                    else tuple(float(value) for value in x_range)
+                ),
+                y_range=(
+                    None
+                    if y_range is None
+                    else tuple(float(value) for value in y_range)
+                ),
+                density=int(density),
+                pen=pen,
+                label=label,
+                scale=float(scale),
+                colour_by_speed=bool(colour_by_speed),
+                speed_bands=int(speed_bands),
+            )
+
+        frame = self.vector_field_slice(
+            x_axis,
+            y_axis,
+            fixed_axis=fixed_axis,
+            fixed_value=fixed_value,
+            x_range=x_range,
+            y_range=y_range,
+            density=density,
+        )
+        x_name = str(x_axis).lower()
+        y_name = str(y_axis).lower()
+        target = self._plot_target(plot)
+        if colour_by_speed:
+            items = []
+            for index, (x_data, y_data, band_pen) in enumerate(
+                self._vector_field_speed_bands(
+                    frame,
+                    x_name,
+                    y_name,
+                    scale,
+                    speed_bands,
+                )
+            ):
+                items.append(
+                    self._plot_line(
+                        target,
+                        x_data,
+                        y_data,
+                        mode=plot_mode if index == 0 else PLOT_MODE_OVERLAY,
+                        bottom=x_name,
+                        left=y_name,
+                        pen=band_pen,
+                    )
+                )
+            return tuple(items)
+
+        x_data, y_data = self._vector_field_segments(frame, x_name, y_name, scale)
+        plot_kwargs = {}
+        if pen is not None:
+            plot_kwargs["pen"] = pen
+        if label is not None:
+            plot_kwargs["name"] = str(label)
+        return self._plot_line(
+            target,
+            x_data,
+            y_data,
+            mode=plot_mode,
+            bottom=x_name,
+            left=y_name,
+            **plot_kwargs,
+        )
 
     def live_plots(self):
         return self._window.live_plot_controller._live_plot_frame()
@@ -1314,6 +1515,68 @@ class SystemInspector:
             return 0.0
 
         return float((values.min() + values.max()) / 2)
+
+    def _slice_axes(self, x_axis, y_axis, fixed_axis):
+        x_name = str(x_axis).lower()
+        y_name = str(y_axis).lower()
+        axis_index(x_name)
+        axis_index(y_name)
+
+        if x_name == y_name:
+            raise ValueError("Slice axes must be different")
+
+        if fixed_axis is None:
+            fixed_name = next(
+                axis for axis in COORDINATE_COLUMNS if axis not in {x_name, y_name}
+            )
+        else:
+            fixed_name = str(fixed_axis).lower()
+            axis_index(fixed_name)
+        if fixed_name in {x_name, y_name}:
+            raise ValueError("Fixed axis must be different from slice axes")
+
+        return x_name, y_name, fixed_name
+
+    def _vector_field_axis_range(self, axis, explicit_range):
+        if explicit_range is not None:
+            low, high = explicit_range
+            return float(low), float(high)
+
+        bounds = self.bounds()
+        if axis not in bounds.index:
+            return -20.0, 20.0
+
+        low = bounds.loc[axis, "min"]
+        high = bounds.loc[axis, "max"]
+        if not np.isfinite(low) or not np.isfinite(high):
+            return -20.0, 20.0
+        if low == high:
+            span = max(abs(float(low)), 1.0)
+            padding = span * 0.5
+        else:
+            padding = (float(high) - float(low)) * 0.05
+
+        return float(low) - padding, float(high) + padding
+
+    def _positive_int(self, value, label):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{label} must be a positive integer") from exc
+        if parsed <= 0:
+            raise ValueError(f"{label} must be a positive integer")
+
+        return parsed
+
+    def _non_negative_int(self, value, label):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{label} must be a non-negative integer") from exc
+        if parsed < 0:
+            raise ValueError(f"{label} must be a non-negative integer")
+
+        return parsed
 
     def _plot_timeseries(
         self,
@@ -1413,6 +1676,167 @@ class SystemInspector:
         target.setLabel("bottom", bottom)
         target.setLabel("left", left)
         return item
+
+    def _vector_field_segments(self, frame, x_axis, y_axis, scale):
+        x = frame[x_axis].to_numpy(dtype=np.float64)
+        y = frame[y_axis].to_numpy(dtype=np.float64)
+        u = frame["u"].to_numpy(dtype=np.float64)
+        v = frame["v"].to_numpy(dtype=np.float64)
+        speed = np.hypot(u, v)
+        finite = np.isfinite(speed) & (speed > 0)
+        if not finite.any():
+            return np.array([], dtype=np.float64), np.array([], dtype=np.float64)
+
+        x = x[finite]
+        y = y[finite]
+        u = u[finite]
+        v = v[finite]
+        speed = speed[finite]
+
+        unique_x = np.unique(x)
+        unique_y = np.unique(y)
+        dx = np.diff(unique_x).min() if len(unique_x) > 1 else 1.0
+        dy = np.diff(unique_y).min() if len(unique_y) > 1 else 1.0
+        length = min(abs(dx), abs(dy)) * float(scale)
+
+        nx = u / speed
+        ny = v / speed
+        x0 = x - 0.5 * length * nx
+        y0 = y - 0.5 * length * ny
+        x1 = x + 0.5 * length * nx
+        y1 = y + 0.5 * length * ny
+
+        head_length = length * 0.25
+        head_width = length * 0.12
+        base_x = x1 - head_length * nx
+        base_y = y1 - head_length * ny
+        perp_x = -ny
+        perp_y = nx
+        left_x = base_x + head_width * perp_x
+        left_y = base_y + head_width * perp_y
+        right_x = base_x - head_width * perp_x
+        right_y = base_y - head_width * perp_y
+
+        nan_x = np.full_like(x0, np.nan)
+        nan_y = np.full_like(y0, np.nan)
+        return (
+            np.column_stack(
+                [
+                    x0,
+                    x1,
+                    nan_x,
+                    x1,
+                    left_x,
+                    nan_x,
+                    x1,
+                    right_x,
+                    nan_x,
+                ]
+            ).ravel(),
+            np.column_stack(
+                [
+                    y0,
+                    y1,
+                    nan_y,
+                    y1,
+                    left_y,
+                    nan_y,
+                    y1,
+                    right_y,
+                    nan_y,
+                ]
+            ).ravel(),
+        )
+
+    def _vector_field_speed_bands(
+        self,
+        frame,
+        x_axis,
+        y_axis,
+        scale,
+        speed_bands,
+    ):
+        band_count = self._positive_int(speed_bands, "Speed band count")
+        if band_count < 2:
+            raise ValueError("Speed band count must be at least 2")
+
+        speeds = frame["speed"].to_numpy(dtype=np.float64)
+        finite_speeds = speeds[np.isfinite(speeds)]
+        if len(finite_speeds) == 0:
+            empty = (np.array([], dtype=np.float64), np.array([], dtype=np.float64))
+            return [
+                (*empty, self._vector_field_speed_pen(index, band_count))
+                for index in range(band_count)
+            ]
+
+        low = float(finite_speeds.min())
+        high = float(finite_speeds.max())
+        edges = np.linspace(low, high, band_count + 1)
+        rows = []
+        for index in range(band_count):
+            if low == high:
+                mask = (
+                    np.isfinite(speeds)
+                    if index == band_count - 1
+                    else np.zeros(len(speeds), dtype=bool)
+                )
+            elif index == band_count - 1:
+                mask = (speeds >= edges[index]) & (speeds <= edges[index + 1])
+            else:
+                mask = (speeds >= edges[index]) & (speeds < edges[index + 1])
+            x_data, y_data = self._vector_field_segments(
+                frame.loc[mask],
+                x_axis,
+                y_axis,
+                scale,
+            )
+            rows.append(
+                (x_data, y_data, self._vector_field_speed_pen(index, band_count))
+            )
+        return rows
+
+    def _vector_field_speed_pen(self, index, band_count):
+        if band_count <= len(VECTOR_FIELD_SPEED_PENS):
+            return VECTOR_FIELD_SPEED_PENS[index]
+        palette_index = round(
+            index * (len(VECTOR_FIELD_SPEED_PENS) - 1) / (band_count - 1)
+        )
+        return VECTOR_FIELD_SPEED_PENS[palette_index]
+
+    def _register_live_plot(self, kind, *, plot=None, **options):
+        mode = self._plot_mode(options.pop("mode", PLOT_MODE_REPLACE))
+        registration = self._window.live_plot_controller._register_live_plot(
+            kind,
+            plot=plot,
+            mode=mode,
+            **options,
+        )
+        return self._live_plot_handle_or_registration(
+            registration,
+            plot=plot,
+            mode=mode,
+        )
+
+    def _live_plot_handle_or_registration(self, registration, *, plot, mode):
+        live_plots = self._window.live_plot_controller.live_plots
+
+        plot_name = None
+        if isinstance(registration, pd.Series | dict):
+            plot_name = registration.get("plot")
+        if not plot_name:
+            plot_name = plot
+        if not plot_name:
+            plot_name = self._window.jupyter_console_panel.plots.current_name
+        if not plot_name or plot_name not in live_plots:
+            return registration
+
+        specs = live_plots[plot_name]
+        trace_index = len(specs) - 1 if mode == PLOT_MODE_OVERLAY else 0
+
+        if not 0 <= trace_index < len(specs):
+            return registration
+
+        return LivePlotHandle(self._window, plot_name, trace_index)
 
     def _separation_frame(
         self,
