@@ -3,9 +3,9 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from pyqtgraph.Qt.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
+from ..core.sections import axis_index, plane_crossings
 from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
-from ..sections import axis_index, plane_crossings
 
 _AXIS_LABELS = {"x": ("Y", "Z"), "y": ("X", "Z"), "z": ("X", "Y")}
 DIR_MAP = {"both": "both", "rising": "positive", "falling": "negative"}

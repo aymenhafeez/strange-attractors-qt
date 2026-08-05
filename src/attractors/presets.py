@@ -3,8 +3,8 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .core.expression_parser import compile_system, format_equations
 from .core.models import AttractorConfig, AttractorParam, TimeDefaults
-from .expression_parser import compile_system, format_equations
 from .systems.registry import ATTRACTORS
 
 PRESET_VERSION = 1
