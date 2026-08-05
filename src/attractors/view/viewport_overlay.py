@@ -37,4 +37,5 @@ class ViewportOverlay:
             return False
 
         img = self.view.grabFramebuffer()
+
         return img.save(filename)
