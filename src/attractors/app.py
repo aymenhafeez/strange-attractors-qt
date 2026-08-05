@@ -690,6 +690,26 @@ class Window(QtWidgets.QMainWindow):
             "Clear all plots",
             self.live_plot_controller._clear_all_plots,
         )
+        workspace_menu.addSeparator()
+        workspace_menu.addAction(self.plot_view_all_action)
+        workspace_menu.addAction(self.plot_pan_action)
+        workspace_menu.addAction(self.plot_zoom_action)
+        workspace_menu.addSeparator()
+        workspace_menu.addAction(self.plot_x_grid_action)
+        workspace_menu.addAction(self.plot_y_grid_action)
+        if self.plot_options_menu is not None:
+            workspace_menu.addSeparator()
+            self._add_proxy_menu(
+                workspace_menu,
+                "Plot options",
+                self.plot_options_menu,
+            )
+        if self.plot_view_menu is not None:
+            self._add_proxy_menu(
+                workspace_menu,
+                "ViewBox options",
+                self.plot_view_menu,
+            )
 
         analysis_menu = menu_bar.addMenu("&Analysis")
         analysis_menu.addAction(self.toolbar_lyapunov_action)
@@ -928,71 +948,61 @@ class Window(QtWidgets.QMainWindow):
         plot_item = self.jupyter_console_panel.plot_widget.getPlotItem()
         view_box = plot_item.getViewBox()
 
-        view_all_action = toolbar.addAction(
+        self.plot_view_all_action = QtGui.QAction(
             self._toolbar_icon(
                 "zoom-fit-best",
                 QtWidgets.QStyle.StandardPixmap.SP_TitleBarMaxButton,
             ),
             "View all",
+            self,
         )
-        view_all_action.setToolTip("Fit all plot data")
-        view_all_action.triggered.connect(view_box.autoRange)
-        self._jupyter_toolbar_actions.append(view_all_action)
-        self._keep_toolbar_action_from_taking_focus(toolbar, view_all_action)
+        self.plot_view_all_action.setToolTip("Fit all plot data")
+        self.plot_view_all_action.triggered.connect(view_box.autoRange)
 
-        mouse_group = QtGui.QActionGroup(toolbar)
+        mouse_group = QtGui.QActionGroup(self)
         mouse_group.setExclusive(True)
-        pan_action = toolbar.addAction(
+        self.plot_pan_action = QtGui.QAction(
             self._toolbar_icon(
                 "transform-move",
                 QtWidgets.QStyle.StandardPixmap.SP_ArrowUp,
             ),
             "Pan",
+            self,
         )
-        pan_action.setCheckable(True)
-        pan_action.setChecked(True)
-        pan_action.setToolTip("Pan with left mouse button")
-        zoom_action = toolbar.addAction(
+        self.plot_pan_action.setCheckable(True)
+        self.plot_pan_action.setChecked(True)
+        self.plot_pan_action.setToolTip("Pan with left mouse button")
+        self.plot_zoom_action = QtGui.QAction(
             self._toolbar_icon(
                 "zoom-in",
                 QtWidgets.QStyle.StandardPixmap.SP_FileDialogContentsView,
             ),
             "Zoom",
+            self,
         )
-        zoom_action.setCheckable(True)
-        zoom_action.setToolTip("Zoom to rectangle with left mouse button")
-        mouse_group.addAction(pan_action)
-        mouse_group.addAction(zoom_action)
-        pan_action.triggered.connect(lambda: view_box.setLeftButtonAction("pan"))
-        zoom_action.triggered.connect(lambda: view_box.setLeftButtonAction("rect"))
-        self._jupyter_toolbar_actions.extend([pan_action, zoom_action])
-        self._keep_toolbar_action_from_taking_focus(toolbar, pan_action)
-        self._keep_toolbar_action_from_taking_focus(toolbar, zoom_action)
+        self.plot_zoom_action.setCheckable(True)
+        self.plot_zoom_action.setToolTip("Zoom to rectangle with left mouse button")
+        mouse_group.addAction(self.plot_pan_action)
+        mouse_group.addAction(self.plot_zoom_action)
+        self.plot_pan_action.triggered.connect(
+            lambda: view_box.setLeftButtonAction("pan")
+        )
+        self.plot_zoom_action.triggered.connect(
+            lambda: view_box.setLeftButtonAction("rect")
+        )
 
-        self._jupyter_toolbar_actions.append(toolbar.addSeparator())
-        for text, widget in [
-            ("X grid", plot_item.ctrl.xGridCheck),
-            ("Y grid", plot_item.ctrl.yGridCheck),
-        ]:
-            self._jupyter_toolbar_actions.append(
-                self._add_plot_option_action(toolbar, text, widget)
-            )
+        self.plot_x_grid_action = self._plot_option_action(
+            "X grid",
+            plot_item.ctrl.xGridCheck,
+        )
+        self.plot_y_grid_action = self._plot_option_action(
+            "Y grid",
+            plot_item.ctrl.yGridCheck,
+        )
 
-        self._jupyter_toolbar_actions.append(toolbar.addSeparator())
         self._add_jupyter_plot_controls(toolbar)
-        self._jupyter_toolbar_actions.append(toolbar.addSeparator())
-        self._jupyter_toolbar_actions.append(
-            self._add_toolbar_menu_button(
-                toolbar, "Plot", plot_item.getMenu(), "Plot options"
-            )
-        )
-        view_menu = view_box.menu
-        if view_menu is not None:
-            self._jupyter_toolbar_actions.append(
-                self._add_toolbar_menu_button(
-                    toolbar, "View", view_menu, "ViewBox options"
-                )
-            )
+        self.plot_options_menu = plot_item.getMenu()
+        self.plot_view_menu = view_box.menu
 
         for action in self._jupyter_toolbar_actions:
             action.setVisible(False)
@@ -1081,6 +1091,65 @@ class Window(QtWidgets.QMainWindow):
         widget.toggled.connect(action.setChecked)
         self._keep_toolbar_action_from_taking_focus(toolbar, action)
         return action
+
+    def _plot_option_action(self, text, widget):
+        action = QtGui.QAction(text, self)
+        action.setCheckable(True)
+        action.setChecked(widget.isChecked())
+        action.toggled.connect(widget.setChecked)
+        widget.toggled.connect(action.setChecked)
+        return action
+
+    def _popup_menu(self, menu):
+        if menu is not None:
+            menu.popup(QtGui.QCursor.pos())
+
+    def _add_proxy_menu(self, parent_menu, title, source_menu):
+        menu = parent_menu.addMenu(title)
+        for source_action in source_menu.actions():
+            if source_action.isSeparator():
+                menu.addSeparator()
+                continue
+
+            source_submenu = source_action.menu()
+            if source_submenu is not None:
+                submenu = menu.addMenu(source_action.text())
+                self._populate_proxy_menu(submenu, source_submenu)
+                continue
+
+            action = menu.addAction(source_action.text())
+            action.setCheckable(source_action.isCheckable())
+            action.setChecked(source_action.isChecked())
+            action.setEnabled(source_action.isEnabled())
+            action.triggered.connect(source_action.trigger)
+
+        return menu
+
+    def _populate_proxy_menu(self, menu, source_menu):
+        source_actions = source_menu.actions()
+        if any(isinstance(action, QtWidgets.QWidgetAction) for action in source_actions):
+            menu.addAction(
+                f"Open {source_menu.title()}...",
+                lambda checked=False, menu=source_menu: self._popup_menu(menu),
+            )
+            return
+
+        for source_action in source_actions:
+            if source_action.isSeparator():
+                menu.addSeparator()
+                continue
+
+            source_submenu = source_action.menu()
+            if source_submenu is not None:
+                submenu = menu.addMenu(source_action.text())
+                self._populate_proxy_menu(submenu, source_submenu)
+                continue
+
+            action = menu.addAction(source_action.text())
+            action.setCheckable(source_action.isCheckable())
+            action.setChecked(source_action.isChecked())
+            action.setEnabled(source_action.isEnabled())
+            action.triggered.connect(source_action.trigger)
 
     def _add_toolbar_menu_button(self, toolbar, text, menu, tooltip=None):
         button = QtWidgets.QToolButton()
