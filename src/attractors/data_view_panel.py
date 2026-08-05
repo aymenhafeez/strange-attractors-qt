@@ -97,6 +97,45 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
         self._cumulative_rows = []
         self._row_count = 0
 
+    def set_solutions(
+        self,
+        solutions,
+        *,
+        t_min=0.0,
+        t_max=0.0,
+        trajectory_specs=None,
+    ):
+        self.beginResetModel()
+        self._solutions = [np.asarray(solution) for solution in solutions or []]
+        self._t_min = float(t_min)
+        self._default_t_max = float(t_max)
+        self._trajectory_specs = list(trajectory_specs or [])
+        self._rebuild_rows()
+        self.endResetModel()
+
+    def clear(self):
+        self.set_solutions([])
+
+    def set_sampled(self, sampled):
+        sampled = bool(sampled)
+        if sampled == self._sampled:
+            return
+
+        self.beginResetModel()
+        self._sampled = sampled
+        self._rebuild_rows()
+        self.endResetModel()
+
+    def set_sample_size(self, sample_size):
+        sample_size = max(1, int(sample_size))
+        if sample_size == self._sample_size:
+            return
+
+        self.beginResetModel()
+        self._sample_size = sample_size
+        self._rebuild_rows()
+        self.endResetModel()
+
     def rowCount(self, parent=None):
         if parent is not None and parent.isValid():
             return 0
@@ -216,3 +255,65 @@ class DataViewPanel(QtWidgets.QWidget):
         layout.setSpacing(6)
         layout.addLayout(toolbar)
         layout.addWidget(self.tabs)
+
+    def set_solutions(
+        self,
+        solutions,
+        *,
+        t_min=0.0,
+        t_max=0.0,
+        trajectory_specs=None,
+        config=None,
+        values=None,
+        partial=False,
+    ):
+        solution_arrays = [np.asarray(solution) for solution in solutions or []]
+        specs = list(trajectory_specs or [])
+        self._partial = bool(partial)
+        self.model.set_solutions(
+            solution_arrays,
+            t_min=t_min,
+            t_max=t_max,
+            trajectory_specs=specs,
+        )
+        self.measures_model.set_solutions(
+            solution_arrays,
+            t_min=t_min,
+            t_max=t_max,
+            trajectory_specs=specs,
+        )
+
+        self.trajectory_model.set_rows(self._trajectory_rows(solutions, specs))
+        self.parameter_model.set_rows(self._parameter_rows(config, values or {}))
+        self.bounds_model.set_rows(self._bounds_rows(solutions))
+        self._update_summary()
+
+    def clear(self):
+        self._partial = False
+        self.model.clear()
+        self.measures_model.clear()
+        self.trajectory_model.clear()
+        self.parameter_model.clear()
+        self.bounds_model.clear()
+        self.summary_label.setText("No data")
+
+    @staticmethod
+    def _table(model):
+        table = QtWidgets.QTableView()
+        table.setModel(model)
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        table.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.SingleSelection
+        )
+        table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.verticalHeader().setVisible(False)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.horizontalHeader().setSectionResizeMode(
+            QtWidgets.QHeaderView.ResizeMode.ResizeToContents
+        )
+
+        return table
+
