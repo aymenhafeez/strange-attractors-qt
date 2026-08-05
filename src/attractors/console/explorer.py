@@ -1,3 +1,4 @@
+import numpy as np
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 
@@ -59,3 +60,25 @@ class ConsoleParam(QtCore.QObject):
 
     def __repr__(self):
         return f"ConsoleParam({self.name!r}, value={self.value:g})"
+
+
+class ConsoleCurve:
+    """Reactive 2D plot curve. Data recomputed on command"""
+
+    def __init__(self, name, x, y, item, plot):
+        self.name = name
+        self.x = x
+        self.y = y
+        self.item = item
+        self.plot = plot
+
+    def update(self):
+        x_data = self.x() if callable(self.x) else self.x
+        y_data = self.y() if callable(self.y) else self.y
+        x_array = np.array(x_data)
+        y_array = np.array(y_data)
+
+        if len(x_array) != len(y_array):
+            raise ValueError("x and y must be the same length")
+
+        self.item.setData(x_array, y_array)
