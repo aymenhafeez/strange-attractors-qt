@@ -121,6 +121,20 @@ class ConsoleExplorer(QtCore.QObject):
 
         return param
 
+    def params(self):
+        return {name: param.value for name, param in self._params.items()}
+
+    def remove_slider(self, name):
+        key = str(name).strip()
+        param = self._params.pop(key, None)
+        if param is None:
+            raise KeyError(f"No slider named {key!r}")
+
+        self.param_layout.removeWidget(param.widget)
+        param.widget.deleteLater()
+
+        return self.params()
+
     def curve(
         self,
         name,
