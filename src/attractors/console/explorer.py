@@ -135,21 +135,31 @@ class ConsoleExplorer(QtCore.QObject):
 
         return param
 
+    def int_slider(self, name, value=0, start=0, end=100, step=1):
+        # useful for when setting sliders to array sizes
+        return self.slider(
+            name, value=int(value), start=int(start), end=int(end), step=int(step)
+        )
+
     def curves(self):
         return {name: curve.name for name, curve in self._curves.items()}
 
     def params(self):
         return {name: param.value for name, param in self._params.items()}
 
-    def remove_curve(self, name):
+    def remove_trace(self, name):
         key = str(name).strip()
-        curve = self._curves.pop(key, None)
-        if curve is None:
+        trace = self._curves.pop(key, None)
+        if trace is None:
             raise KeyError(f"No curve named {key!r}")
 
-        curve.remove()
+        trace.remove()
 
         return self.curves()
+
+    def remove_curve(self, name):
+        # should rename everything 'curve' to 'trace' ideally, keep this alias for now
+        return self.remove_trace(name)
 
     def remove_slider(self, name):
         key = str(name).strip()
@@ -162,6 +172,7 @@ class ConsoleExplorer(QtCore.QObject):
 
         return self.params()
 
+    # TODO: write a helper around curve() and scatter()
     def curve(
         self,
         name,
