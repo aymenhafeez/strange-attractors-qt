@@ -31,7 +31,7 @@ jupyter-console = [
 ]
 
 [project.scripts]
-strange-attractors = "attractors.__main__:main"
+analysis = "attractors.__main__:main"
 
 [dependency-groups]
 dev = [

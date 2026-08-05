@@ -27,13 +27,13 @@ This is a local, more performant version of
 * Bifuraction diagrams
 * Poincaré section view with configurable section plane
 * Save and load attractor configurations
-* Integrated Jupyter console
+* Integrated scripting panel and Jupyter console
 
 ## Running the app
 
 ```bash
 git clone https://github.com/aymenhafeez/strange-attractors-qt
-cd strange-attractors-qt
+cd analysis
 ```
 
 With uv:
@@ -42,25 +42,17 @@ With uv:
 uv sync
 # uv sync --extra jupyter-console
 
-uv run strange-attractors  # --fullscreen
+uv run analysis  # --fullscreen
 ```
 
-With pip:
-
-```bash
-pip install -e .
-# pip install -e ".[jupyter-console]"
-
-python -m attractors  # --fullscreen
-```
-
-`ipykernel` and `qtconsole` are optional dependencies for the integrated Jupyter console, so use the extras install flags to install them.
+`ipykernel` and `qtconsole` are optional dependencies for the integrated Jupyter console, so use the extras install
+flags to install them.
 
 ## Development
 
 ```bash
 uv sync --extra jupyter-console
-uv run strange-attractors
+uv run analysis
 ```
 
 Run tests:
@@ -72,7 +64,7 @@ uv run pytest -v
 Enable performance logging (outputs attractor and lyapunov solve times):
 
 ```bash
-ATTRACTOR_PROFILE=1 uv run strange-attractors
+ANALYSIS_PROFILE=1 uv run analysis
 ```
 
 ## TODO

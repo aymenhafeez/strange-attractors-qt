@@ -3,7 +3,7 @@ import os
 import time
 from contextlib import contextmanager
 
-PROFILE_ENV = "ATTRACTOR_PROFILE"
+PROFILE_ENV = "ANALYSIS_PROFILE"
 LOGGER_NAME = "attractors.perf"
 
 

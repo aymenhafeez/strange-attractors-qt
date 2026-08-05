@@ -71,7 +71,7 @@ def _workspace_visible(window):
 class Window(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Strange Attractors")
+        self.setWindowTitle("Systems analysis")
 
         self._initial_full_solves = 0
         self._solve_pending = False
