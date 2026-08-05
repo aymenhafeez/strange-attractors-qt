@@ -24,6 +24,7 @@ class ConsoleParam(QtCore.QObject):
         self.slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.spin = QtWidgets.QDoubleSpinBox()
 
+        # map the numeric range onto step indices since Qt sliders are integer based
         steps = max(1, round((self.end - self.start) / self.step))
         self.slider.setRange(0, steps)
         self.spin.setRange(self.start, self.end)
@@ -36,12 +37,16 @@ class ConsoleParam(QtCore.QObject):
 
         self.set_value(self.value, emit=False)
 
+        self.slider.valueChanged.connect(self._on_slider_changed)
+        self.spin.valueChanged.connect(self._on_spin_changed)
+
     def set_value(self, value, *, emit=True):
         value = min(self.end, max(self.start, float(value)))
         index = round((value - self.start) / self.step)
         snapped = self.start + index * self.step
         self.value = snapped
 
+        # keep the widgets in sync without emitting changes recursively
         with QtCore.QSignalBlocker(self.slider), QtCore.QSignalBlocker(self.spin):
             self.slider.setValue(index)
             self.spin.setValue(snapped)
@@ -73,6 +78,7 @@ class ConsoleCurve:
         self.plot = plot
 
     def update(self):
+        # callable for reactive plots, otherwise static
         x_data = self.x() if callable(self.x) else self.x
         y_data = self.y() if callable(self.y) else self.y
         x_array = np.array(x_data)
