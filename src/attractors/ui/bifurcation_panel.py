@@ -4,7 +4,7 @@ from pyqtgraph.exporters import ImageExporter
 from pyqtgraph.Qt import QtCore, QtWidgets
 from pyqtgraph.Qt.QtCore import QThreadPool
 
-from .bifurcation_worker import BifurcationWorker
+from ..workers.bifurcation_worker import BifurcationWorker
 
 
 class BifurcationPanel(QtWidgets.QWidget):

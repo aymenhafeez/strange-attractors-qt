@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from ..core.solution_validation import validate_solutions
+from ..core.solver import solve_attractor
 from ..sections import (
     AXES,
     COORDINATE_COLUMNS,
@@ -13,7 +14,6 @@ from ..sections import (
     plane_crossings,
     section_axes,
 )
-from ..solver import solve_attractor
 from .jupyter_console_panel import ConsolePlot
 
 VECTOR_FIELD_SPEED_PENS = [

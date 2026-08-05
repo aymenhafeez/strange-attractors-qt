@@ -3,8 +3,8 @@ import logging
 import numpy as np
 from pyqtgraph.Qt.QtCore import QObject, pyqtSignal, pyqtSlot
 
-from .lyapunov import compute_lyapunov
-from .solver import solve_attractor
+from ..core.lyapunov import compute_lyapunov
+from ..core.solver import solve_attractor
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +62,7 @@ class LyapunovWorker(QObject):
 
         try:
             solve_n = int(config.time_defaults.n if n is None else n)
-            solve_t_max = float(
-                config.time_defaults.t_max if t_max is None else t_max
-            )
+            solve_t_max = float(config.time_defaults.t_max if t_max is None else t_max)
             pvals = np.ascontiguousarray(
                 [values[p.name] for p in config.params], dtype=np.float64
             )

@@ -1,7 +1,7 @@
 import numpy as np
 from pyqtgraph.Qt.QtCore import QObject, QRunnable, pyqtSignal
 
-from .solver import solve_rk4
+from ..core.solver import solve_rk4
 
 SWEEP_DIRECTIONS = 2
 
@@ -86,9 +86,7 @@ class BifurcationWorker(QRunnable):
 
                 if i % emit_interval == 0:
                     progress = (
-                        (sweep_idx * n_params + i)
-                        / (SWEEP_DIRECTIONS * n_params)
-                        * 100
+                        (sweep_idx * n_params + i) / (SWEEP_DIRECTIONS * n_params) * 100
                     )
                     self.signals.progress.emit(int(progress))
 
