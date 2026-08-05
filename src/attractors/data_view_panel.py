@@ -20,6 +20,10 @@ def _format_value(value):
 
 
 class RowTableModel(QtCore.QAbstractTableModel):
+    """QTAbstractModel implementation.
+    Override Qt rowCount, columnCount, headerData and data virtual methods
+    """
+
     def __init__(self, columns, parent=None):
         super().__init__(parent)
         self._columns = tuple(columns)
@@ -76,6 +80,10 @@ class RowTableModel(QtCore.QAbstractTableModel):
 
 
 class TrajectoryTableModel(QtCore.QAbstractTableModel):
+    """QAbstractModel implementation to get sampled trajectory values
+    Override Qt rowCount, columnCount, headerData and data virtual methods
+    """
+
     def __init__(self, columns=SAMPLE_COLUMNS, parent=None):
         super().__init__(parent)
         self._columns = tuple(columns)
@@ -88,6 +96,48 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
         self._sample_indices = []
         self._cumulative_rows = []
         self._row_count = 0
+
+    def rowCount(self, parent=None):
+        if parent is not None and parent.isValid():
+            return 0
+
+        return self._row_count
+
+    def columnCount(self, parent=None):
+        if parent is not None and parent.isValid():
+            return 0
+
+        return len(self._columns)
+
+    def data(self, index, role=QtCore.Qt.ItemDataRole.DisplayRole):
+        if not index.isValid() or role != QtCore.Qt.ItemDataRole.DisplayRole:
+            return None
+
+        row_ref = self._row_ref(index.row())
+        if row_ref is None:
+            return None
+
+        trajectory, step = row_ref
+        column = self._columns[index.column()]
+
+        return _format_value(self._value(trajectory, step, column))
+
+    def headerData(
+        self,
+        section,
+        orientation,
+        role=QtCore.Qt.ItemDataRole.DisplayRole,
+    ):
+        if role != QtCore.Qt.ItemDataRole.DisplayRole:
+            return None
+
+        if orientation == QtCore.Qt.Orientation.Horizontal:
+            try:
+                return self._columns[section]
+            except IndexError:
+                return None
+
+        return str(section + 1)
 
 
 class DataViewPanel(QtWidgets.QWidget):
