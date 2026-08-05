@@ -3,8 +3,8 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from pyqtgraph.Qt.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
+from .core.solution_validation import validate_solutions
 from .sections import axis_index, plane_crossings
-from .solution_validation import validate_solutions
 from .solver import solve_attractor
 
 _AXIS_LABELS = {"x": ("Y", "Z"), "y": ("X", "Z"), "z": ("X", "Y")}

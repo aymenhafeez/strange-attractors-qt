@@ -7,12 +7,12 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .bifurcation_panel import BifurcationPanel
+from .console.jupyter_console_panel import JupyterConsolePanel
+from .console.live_plot_controller import LivePlotController
+from .console.system import SystemInspector
 from .control_panel import ControlPanel
-from .docking import AreaBoundDock as Dock
-from .docking import AreaBoundDockArea as DockArea
+from .core.solution_validation import validate_solutions
 from .grid_overlay import DEFAULT_GRID_HALF_SIZE
-from .jupyter_console_panel import JupyterConsolePanel
-from .live_plot_controller import LivePlotController
 from .lyapunov_panel import LyapunovPanel
 from .perf import PerfProfiler, perf_finish, perf_start
 from .poincare_panel import PoincarePanel
@@ -27,11 +27,11 @@ from .presets import (
 from .process_metrics import ProcessUsageStatus
 from .projection_panel import ProjectionPanel
 from .right_panel import RightPanel
-from .solution_validation import validate_solutions
 from .solve_manager import SolveManager
 from .style import SCENE_TOOLBAR, SPLITTER_HANDLE_HOVER
-from .system import SystemInspector
 from .systems.registry import ATTRACTORS
+from .ui.docking import AreaBoundDock as Dock
+from .ui.docking import AreaBoundDockArea as DockArea
 from .view_manager import ViewManager
 from .workspace_panel import WorkspacePanel
 

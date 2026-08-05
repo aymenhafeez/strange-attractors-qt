@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 
-from .jupyter_console_panel import ConsolePlot
-from .sections import (
+from ..core.solution_validation import validate_solutions
+from ..sections import (
     AXES,
     COORDINATE_COLUMNS,
     axis_index,
@@ -13,8 +13,8 @@ from .sections import (
     plane_crossings,
     section_axes,
 )
-from .solution_validation import validate_solutions
-from .solver import solve_attractor
+from ..solver import solve_attractor
+from .jupyter_console_panel import ConsolePlot
 
 VECTOR_FIELD_SPEED_PENS = [
     (65, 105, 155),

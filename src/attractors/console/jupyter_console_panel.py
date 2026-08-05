@@ -3,8 +3,8 @@
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .docking import AreaBoundDock as Dock
-from .docking import AreaBoundDockArea as DockArea
+from ..ui.docking import AreaBoundDock as Dock
+from ..ui.docking import AreaBoundDockArea as DockArea
 from .script_panel import ScriptPanel
 
 try:
