@@ -92,6 +92,9 @@ class ConsoleCurve:
 
         self.item.setData(x_array, y_array)
 
+    def remove(self):
+        self.plot._plot_widget.removeItem(self.item)
+
 
 class ConsoleExplorer(QtCore.QObject):
     """Manage reactive plots and parameters created in the console"""
@@ -121,8 +124,21 @@ class ConsoleExplorer(QtCore.QObject):
 
         return param
 
+    def curves(self):
+        return {name: curve.name for name, curve in self._curves.items()}
+
     def params(self):
         return {name: param.value for name, param in self._params.items()}
+
+    def remove_curve(self, name):
+        key = str(name).strip()
+        curve = self._curves.pop(key, None)
+        if curve is None:
+            raise KeyError(f"No curve named {key!r}")
+
+        curve.remove()
+
+        return self.curves()
 
     def remove_slider(self, name):
         key = str(name).strip()
@@ -166,6 +182,10 @@ class ConsoleExplorer(QtCore.QObject):
 
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
+
+        old = self._curves.pop(str(name), None)
+        if old is not None:
+            old.remove()
 
         item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
         curve = ConsoleCurve(name, x, y, item, target)

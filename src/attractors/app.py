@@ -1197,6 +1197,7 @@ class Window(QtWidgets.QMainWindow):
             "slider": self.jupyter_console_panel.explorer.slider,
             "curve": self.jupyter_console_panel.explorer.curve,
             "remove_slider": self.jupyter_console_panel.explorer.remove_slider,
+            "remove_curve": self.jupyter_console_panel.explorer.remove_curve,
         }
 
     def _set_console_parameters(self, values, *, solve=False):
