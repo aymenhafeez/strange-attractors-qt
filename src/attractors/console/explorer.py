@@ -153,7 +153,7 @@ class ConsoleExplorer(QtCore.QObject):
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
 
-        item = target.line(x_array, y_array, **plot_kwargs)
+        item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
         curve = ConsoleCurve(name, x, y, item, target)
         self._curves[name] = curve
 
