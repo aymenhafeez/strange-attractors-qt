@@ -5,6 +5,17 @@ PLOT_MODE_REPLACE = "replace"
 PLOT_MODE_OVERLAY = "overlay"
 
 
+def check_array_dim(value, name):
+    data = np.asarray(value, dtype=np.float64)
+
+    if data.ndim != 1:
+        raise ValueError(f"{name} must be one dimensional")
+    if not np.all(np.isfinite(data)):
+        raise ValueError(f"{name} contains non finite values")
+
+    return data
+
+
 class ConsoleParam(QtCore.QObject):
     """Console created parameter backed by a slider and spinbox"""
 
@@ -84,8 +95,8 @@ class ConsoleTrace:
         # callable for reactive plots, otherwise static
         x_data = self.x() if callable(self.x) else self.x
         y_data = self.y() if callable(self.y) else self.y
-        x_array = np.array(x_data)
-        y_array = np.array(y_data)
+        x_array = check_array_dim(x_data, "x")
+        y_array = check_array_dim(y_data, "y")
 
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
@@ -177,8 +188,8 @@ class ConsoleExplorer(QtCore.QObject):
 
         x_data = x() if callable(x) else x
         y_data = y() if callable(y) else y
-        x_array = np.array(x_data)
-        y_array = np.array(y_data)
+        x_array = check_array_dim(x_data, "x")
+        y_array = check_array_dim(y_data, "y")
 
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
