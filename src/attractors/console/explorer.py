@@ -70,7 +70,7 @@ class ConsoleParam(QtCore.QObject):
         return f"ConsoleParam({self.name!r}, value={self.value:g})"
 
 
-class ConsoleCurve:
+class ConsoleTrace:
     """Reactive 2D plot curve. Data recomputed on command"""
 
     def __init__(self, name, x, y, item, plot):
@@ -188,7 +188,55 @@ class ConsoleExplorer(QtCore.QObject):
             old.remove()
 
         item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
-        curve = ConsoleCurve(name, x, y, item, target)
+        curve = ConsoleTrace(name, x, y, item, target)
+        self._curves[name] = curve
+
+        return curve
+
+    def scatter(
+        self,
+        name,
+        x,
+        y,
+        *,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        label=None,
+        symbol="o",
+        symbol_size=None,
+        **kwargs,
+    ):
+        target = self.plots.current if plot is None else self.plots.get(plot)
+        mode = mode.strip().lower()
+
+        if mode not in {PLOT_MODE_REPLACE, PLOT_MODE_OVERLAY}:
+            raise ValueError("Plot mode must be either 'replace' or 'overlay'")
+
+        plot_kwargs = kwargs.copy()
+        if label is not None:
+            plot_kwargs["name"] = str(label)
+
+        x_data = x() if callable(x) else x
+        y_data = y() if callable(y) else y
+        x_array = np.array(x_data)
+        y_array = np.array(y_data)
+
+        if len(x_array) != len(y_array):
+            raise ValueError("x and y must be the same length")
+
+        old = self._curves.pop(str(name), None)
+        if old is not None:
+            old.remove()
+
+        item = target.scatter(
+            x_array,
+            y_array,
+            mode=mode,
+            symbol=symbol,
+            symbol_size=symbol_size,
+            **plot_kwargs,
+        )
+        curve = ConsoleTrace(name, x, y, item, target)
         self._curves[name] = curve
 
         return curve
@@ -204,6 +252,9 @@ class ConsoleExplorer(QtCore.QObject):
         for param in self._params.values():
             self.param_layout.removeWidget(param.widget)
             param.widget.deleteLater()
+
+        for curve in self._curves.values():
+            curve.remove()
 
         self._params.clear()
         self._curves.clear()
