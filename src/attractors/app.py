@@ -2,6 +2,7 @@ import weakref
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
@@ -11,173 +12,60 @@ from .docking import AreaBoundDock as Dock
 from .docking import AreaBoundDockArea as DockArea
 from .grid_overlay import DEFAULT_GRID_HALF_SIZE
 from .jupyter_console_panel import JupyterConsolePanel
+from .live_plot_controller import LivePlotController
 from .lyapunov_panel import LyapunovPanel
 from .perf import PerfProfiler, perf_finish, perf_start
 from .poincare_panel import PoincarePanel
 from .presets import (
     PresetError,
-    build_preset,
-    custom_config_from_preset_data,
     delete_named_preset,
     list_presets,
     load_named_preset,
     preset_metadata,
     save_named_preset,
 )
+from .process_metrics import ProcessUsageStatus
 from .projection_panel import ProjectionPanel
 from .registry import ATTRACTORS
-from .session import clear_session, load_session, save_session, session_settings
+from .right_panel import RightPanel
 from .solution_validation import validate_solutions
 from .solve_manager import SolveManager
-from .style import SPLITTER_HANDLE
+from .style import SCENE_TOOLBAR, SPLITTER_HANDLE_HOVER
 from .system import SystemInspector
 from .view_manager import ViewManager
+from .workspace_panel import WorkspacePanel
 
 WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 850
 PARTIAL_N = 40000
-PROJECTION_UPDATE_INTERVAL_MS = 100
-MAIN_VIEW_MARGIN = 8
+PROJECTION_UPDATE_INTERVAL = 100  # ms
+MAIN_VIEW_MARGIN = 4
 TOOLBAR_ICON_SIZE = 18
-
-
-def _should_update_projection(now_ms, last_update_ms, interval_ms):
-    if last_update_ms is None:
-        return True
-
-    return now_ms - last_update_ms >= interval_ms
-
-
-def _solve_status_text(n_trajectories):
-    if n_trajectories == 1:
-        return "Solving trajectory"
-    return f"Solving {n_trajectories} trajectories"
-
-
-def _attractor_name_for_config(config):
-    if config.name == "Custom":
-        return "Custom"
-
-    for name, registered_config in ATTRACTORS.items():
-        if registered_config is config:
-            return name
-
-    return config.name
-
-
-def _preset_directory():
-    app_data = QtCore.QStandardPaths.writableLocation(
-        QtCore.QStandardPaths.StandardLocation.AppDataLocation
-    )
-    if app_data:
-        return app_data + "/presets"
-
-    return str(QtCore.QDir.homePath() + "/.strange-attractors/presets")
-
-
-def _session_attractor_name(state):
-    name = state.get("attractor")
-    if name in ATTRACTORS:
-        return name
-    return next(iter(ATTRACTORS.keys()))
-
-
-def _can_restore_builtin_session(state):
-    return state.get("attractor") in ATTRACTORS
-
-
-def _can_restore_session(state):
-    return _can_restore_builtin_session(state) or state.get("attractor") == "Custom"
-
-
-def _sync_panel_toolbar(window):
-    sync = getattr(window, "_sync_toolbar_panel_actions", None)
-    if sync is not None:
-        sync()
-
-
-def _sync_animation_toolbar(window, playing):
-    sync = getattr(window, "_sync_toolbar_animation_action", None)
-    if sync is not None:
-        sync(playing)
-
-
-def _lyapunov_auto_enabled(window):
-    panel = getattr(window, "lyapunov_panel", None)
-    if panel is not None:
-        return panel.isVisible() and panel.auto_enabled()
-
-    auto_lyapunov_enabled = getattr(window.controls, "auto_lyapunov_enabled", None)
-    if auto_lyapunov_enabled is None:
-        return True
-
-    return auto_lyapunov_enabled()
-
-
-def _set_lyapunov_auto_enabled(window, enabled):
-    panel = getattr(window, "lyapunov_panel", None)
-    if panel is not None:
-        panel.set_auto_enabled(enabled)
-
-
-def _clear_lyapunov_display(window):
-    panel = getattr(window, "lyapunov_panel", None)
-    if panel is not None:
-        panel.clear()
-        return
-
-    clear = getattr(window.scene, "clear_lyapunov", None)
-    if clear is not None:
-        clear()
-
-
-def _set_lyapunov_display(window, lyap, ky_dim, t_hist, lyap_hist):
-    panel = getattr(window, "lyapunov_panel", None)
-    if panel is not None:
-        panel.set_result(lyap, ky_dim, t_hist, lyap_hist)
-        return
-
-    set_result = getattr(window.scene, "set_lyapunov_result", None)
-    if set_result is not None:
-        set_result(lyap, ky_dim, t_hist, lyap_hist)
+LIVE_PLOT_COMBO_WIDTH = 132
+PROCESS_STATUS_DEFAULT_VISIBLE = True
 
 
 def _panel_visible(window, panel_name):
-    panel_docks = getattr(window, "_panel_docks", {})
-    dock = panel_docks.get(panel_name)
+    dock = window._panel_docks.get(panel_name)
     if dock is not None:
         return dock.container() is not None
 
-    panel = getattr(window, panel_name, None)
-    return bool(panel is not None and panel.isVisible())
+    panels = {
+        "lyapunov_panel": window.lyapunov_panel,
+        "projection_panel": window.projection_panel,
+        "poincare_panel": window.poincare_panel,
+        "bifurcation_panel": window.bifurcation_panel,
+        "jupyter_console_panel": window.jupyter_console_panel,
+    }
+
+    return panels[panel_name].isVisible()
 
 
-def _dock_branch_is_current(dock):
-    item = dock
-    container = dock.container()
-    while container is not None:
-        container_type = getattr(container, "type", lambda: None)()
-        if container_type == "tab":
-            stack = getattr(container, "stack", None)
-            if stack is not None and stack.currentWidget() is not item:
-                return False
-        item = container
-        container = container.container() if hasattr(container, "container") else None
-    return True
+def _workspace_visible(window):
+    if window.workspace_dock is not None:
+        return window.workspace_dock.container() is not None
 
-
-def _panel_visible_to_user(window, panel_name):
-    panel_docks = getattr(window, "_panel_docks", {})
-    dock = panel_docks.get(panel_name)
-    if dock is not None:
-        return dock.container() is not None and _dock_branch_is_current(dock)
-
-    return _panel_visible(window, panel_name)
-
-
-def _has_hidden_lyapunov_panel(window):
-    panel = getattr(window, "lyapunov_panel", None)
-    return bool(panel is not None and not _panel_visible(window, "lyapunov_panel"))
+    return _panel_visible(window, "jupyter_console_panel")
 
 
 class Window(QtWidgets.QMainWindow):
@@ -192,25 +80,64 @@ class Window(QtWidgets.QMainWindow):
         self._restoring_view = False
         self._active_solve_request_id = None
         self._active_lyapunov_request_id = None
+
+        self._solve_state = {
+            "solving": False,
+            "valid": False,
+            "stale": False,
+            "partial": False,
+            "last_error": None,
+            "request_id": None,
+            "attractor": None,
+            "parameters": {},
+            "n": None,
+            "t_max": None,
+            "trajectories": 0,
+            "solution_points": [],
+        }
+
         self._solve_perf_tokens = {}
         self._lyapunov_perf_tokens = {}
-        self._last_projection_update_ms = None
+        self._last_projection_update = None
+        self._last_live_preview_update = None
         self._latest_projection_solutions = None
-        self._settings = session_settings()
-        self._session_state = load_session(self._settings)
-        self._session_reset_requested = False
         self._perf = PerfProfiler()
+        self._process_status_visible = PROCESS_STATUS_DEFAULT_VISIBLE
+        self._app_status_message = ""
+        self._app_status_clear_timer = None
+        self._panel_docks = {}
+        self._panel_dock_titles = {}
+        self._panel_dock_defaults = {}
+        self._closing_panel_dock = None
+        self._closing_workspace_dock = False
+        self._workspace_tab_stacks = weakref.WeakSet()
+        self._jupyter_toolbar_actions = []
+        self._left_panel_splitter_size = int(WINDOW_WIDTH * 0.22)
+        self._right_panel_splitter_size = int(WINDOW_WIDTH * 0.23)
+        self.workspace_dock = None
         self.current_n = 100000
         self.current_t_max = 50
-        self.current_name = _session_attractor_name(self._session_state)
+        self.current_name = next(iter(ATTRACTORS.keys()))
         self._custom_config = None
-        self._preset_directory = _preset_directory()
+        app_data_location = QtCore.QStandardPaths.writableLocation(
+            QtCore.QStandardPaths.StandardLocation.AppDataLocation
+        )
+        if app_data_location:
+            self._preset_directory = app_data_location + "/presets"
+            self._app_data_directory = Path(app_data_location)
+        else:
+            self._preset_directory = (
+                QtCore.QDir.homePath() + "/.strange-attractors/presets"
+            )
+            self._app_data_directory = Path(
+                QtCore.QDir.homePath() + "/.strange-attractors"
+            )
+        self._scripts_directory = self._app_data_directory / "scripts"
+        self._scripts_directory.mkdir(parents=True, exist_ok=True)
+        self._live_plots = {}
+        self._live_items = {}
+        self.live_plot_controller = LivePlotController(self)
         self.system = SystemInspector(self)
-
-        central = QtWidgets.QWidget()
-        self.setCentralWidget(central)
-        layout = QtWidgets.QHBoxLayout(central)
-        layout.setContentsMargins(0, 0, 0, 0)
 
         self.solver = SolveManager(self)
         self.solver.solutions_ready.connect(self._on_solve_result)
@@ -218,23 +145,48 @@ class Window(QtWidgets.QMainWindow):
         self.solver.lyapunov_failed.connect(self._on_lyapunov_failed)
 
         self.scene = ViewManager(self)
-        self.scene.animation_finished.connect(self._on_anim_finished)
+        self.scene.animation_finished.connect(
+            lambda: self._sync_toolbar_animation_action(False)
+        )
+        self.scene.animation_segments_data.connect(
+            lambda segments: self.live_plot_controller._refresh_live_preview(
+                segments, kinds={"projection"}
+            )
+        )
         self.scene.projections_data.connect(self._on_projections_data)
 
         self.controls = ControlPanel()
+        self.right_panel = RightPanel()
+        self.controls.set_right_panel(self.right_panel)
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._on_controls_solve_requested)
         self.controls.n_changed.connect(self._on_n_changed)
-        self.controls.t_max_changed.connect(self._on_t_max_changed)
-        self.controls.animation_speed_changed.connect(self.scene.set_anim_step)
-        self.controls.orbit_speed_changed.connect(self.scene.set_orbit_speed)
-        self.controls.alpha_slider.valueChanged.connect(self.scene.set_alpha)
-        self.controls.alpha_spin.valueChanged.connect(self.scene.set_alpha)
-        self.controls.preset_save_requested.connect(self._save_preset)
-        self.controls.preset_load_requested.connect(self._load_preset)
-        self.controls.preset_delete_requested.connect(self._delete_preset)
-        self.controls.preset_selected.connect(self._update_preset_summary)
-        self.controls.traj_tail_length_changed.connect(self.scene.set_traj_tail_length)
+        self.controls.t_max_changed.connect(
+            lambda val: setattr(self, "current_t_max", val)
+        )
+        self.controls.animation_speed_changed.connect(
+            self.scene.animation_controller.set_step
+        )
+        self.controls.orbit_speed_changed.connect(
+            self.scene.camera_controller.set_orbit_speed
+        )
+        self.controls.alpha_slider.valueChanged.connect(
+            self.scene.trajectory_renderer.set_alpha
+        )
+        self.controls.alpha_spin.valueChanged.connect(
+            self.scene.trajectory_renderer.set_alpha
+        )
+        self.right_panel.preset_panel.preset_save_requested.connect(self._save_preset)
+        self.right_panel.preset_panel.preset_load_requested.connect(self._load_preset)
+        self.right_panel.preset_panel.preset_delete_requested.connect(
+            self._delete_preset
+        )
+        self.right_panel.preset_panel.preset_selected.connect(
+            self._update_preset_summary
+        )
+        self.controls.traj_tail_length_changed.connect(
+            self.scene.trajectory_renderer.set_traj_tail_length
+        )
         self.controls.trajectory_panel.trajectories_changed.connect(
             self._on_trajectories_changed
         )
@@ -244,12 +196,13 @@ class Window(QtWidgets.QMainWindow):
         self.controls.custom_panel.compile_requested.connect(self._on_custom_compile)
 
         self.poincare_panel = PoincarePanel()
-        self.poincare_panel.plane_changed.connect(self.scene.set_poincare_plane)
-        self.poincare_panel.close_requested.connect(self._close_poincare)
+        self.poincare_panel.plane_changed.connect(
+            self.scene.grid_overlay.set_poincare_plane
+        )
         self.poincare_panel.hide()
 
         self.lyapunov_panel = LyapunovPanel()
-        self.lyapunov_panel.compute_requested.connect(self._on_lyapunov_requested)
+        self.lyapunov_panel.compute_requested.connect(self._request_lyapunov)
         self.lyapunov_panel.close_requested.connect(self._close_lyapunov_panel)
         self.lyapunov_panel.hide()
 
@@ -262,17 +215,39 @@ class Window(QtWidgets.QMainWindow):
         self.bifurcation_panel.hide()
 
         self.jupyter_console_panel = JupyterConsolePanel(
-            self._jupyter_console_namespace
+            self._jupyter_console_namespace, script_dir=self._scripts_directory
+        )
+        self.jupyter_console_panel.script_panel.status_changed.connect(
+            lambda message: self._set_temporary_app_status(message)
         )
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
-        self.jupyter_console_panel.hide()
+        self.workspace_panel = WorkspacePanel(self.jupyter_console_panel)
+        self.workspace_panel.plot_requested.connect(
+            self.live_plot_controller._on_plot_requested
+        )
+        self.workspace_panel.live_trace_remove_requested.connect(
+            self.live_plot_controller._remove_live_trace
+        )
+        self.workspace_panel.live_plot_clear_requested.connect(
+            self.live_plot_controller._clear_live_plot
+        )
+        self.jupyter_console_panel.plots.plots_changed.connect(
+            self.live_plot_controller._on_plots_changed
+        )
+        self.jupyter_console_panel.plots.current_changed.connect(
+            lambda _name: self.live_plot_controller._sync_plots()
+        )
+        self.workspace_panel.set_solve_state(self._solve_state)
+        self.live_plot_controller._sync_plots()
 
         self._build_toolbar()
+        self._build_status_bar()
 
         self.workspace_dock_area = DockArea()
         self.viewport_dock = Dock("Viewport", size=(10, 12))
         self.viewport_dock.addWidget(self.scene.container)
         self.workspace_dock_area.addDock(self.viewport_dock)
+        self.workspace_dock = self._build_workspace_dock()
         self.lyapunov_dock = self._build_panel_dock("Lyapunov", self.lyapunov_panel)
         self.poincare_dock = self._build_panel_dock("Poincare", self.poincare_panel)
         self.bifurcation_dock = self._build_panel_dock(
@@ -283,33 +258,24 @@ class Window(QtWidgets.QMainWindow):
             "Projection heatmaps",
             self.projection_panel,
         )
-        self.jupyter_console_dock = self._build_panel_dock(
-            "Console",
-            self.jupyter_console_panel,
-        )
         self._panel_docks = {
             "lyapunov_panel": self.lyapunov_dock,
             "poincare_panel": self.poincare_dock,
             "bifurcation_panel": self.bifurcation_dock,
             "projection_panel": self.projection_dock,
-            "jupyter_console_panel": self.jupyter_console_dock,
         }
         self._panel_dock_titles = {
             "lyapunov_panel": "Lyapunov",
             "poincare_panel": "Poincare",
             "bifurcation_panel": "Bifurcation",
             "projection_panel": "Projection heatmaps",
-            "jupyter_console_panel": "Console",
         }
         self._panel_dock_defaults = {
             "lyapunov_panel": ("top", self.viewport_dock),
             "poincare_panel": ("top", self.viewport_dock),
-            "bifurcation_panel": ("bottom", self.viewport_dock),
-            "projection_panel": ("bottom", self.viewport_dock),
-            "jupyter_console_panel": ("above", self.viewport_dock),
+            "bifurcation_panel": ("top", self.viewport_dock),
+            "projection_panel": ("above", self.viewport_dock),
         }
-        self._closing_panel_dock = None
-        self._workspace_tab_stacks = weakref.WeakSet()
         self._connect_workspace_dock_signals()
 
         main_area = QtWidgets.QWidget()
@@ -317,7 +283,7 @@ class Window(QtWidgets.QMainWindow):
         main_area_layout.setContentsMargins(
             0,
             MAIN_VIEW_MARGIN,
-            MAIN_VIEW_MARGIN,
+            0,
             MAIN_VIEW_MARGIN,
         )
         main_area_layout.addWidget(self.workspace_dock_area)
@@ -325,22 +291,30 @@ class Window(QtWidgets.QMainWindow):
         self.main_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         self.main_splitter.addWidget(self.controls)
         self.main_splitter.addWidget(main_area)
+        self.main_splitter.addWidget(self.right_panel)
         self.main_splitter.setSizes(
-            [int(WINDOW_WIDTH * 0.25), int(WINDOW_WIDTH * 0.75)]
+            [
+                int(WINDOW_WIDTH * 0.22),
+                int(WINDOW_WIDTH * 0.55),
+                int(WINDOW_WIDTH * 0.23),
+            ]
         )
-        self.main_splitter.setStyleSheet(SPLITTER_HANDLE)
-        layout.addWidget(self.main_splitter)
+        self.main_splitter.setStyleSheet(SPLITTER_HANDLE_HOVER)
+        visualiser_page = QtWidgets.QWidget()
+        visualiser_layout = QtWidgets.QHBoxLayout(visualiser_page)
+        visualiser_layout.setContentsMargins(0, 0, 0, 0)
+        visualiser_layout.addWidget(self.main_splitter)
+        self.setCentralWidget(visualiser_page)
 
         self.scene.container.installEventFilter(self)
         app = QtWidgets.QApplication.instance()
         if app is not None:
             app.focusChanged.connect(self._on_focus_changed)
 
-        self.scene.build_grid(DEFAULT_GRID_HALF_SIZE)
+        self.scene.grid_overlay.build_grid(DEFAULT_GRID_HALF_SIZE)
         self._refresh_presets()
         self.controls.set_current_attractor(self.current_name)
         self._rebuild_view(self.current_name)
-        self._restore_session(self._session_state)
 
     def eventFilter(self, obj, event):
         if event.type() == QtCore.QEvent.Type.Resize and obj is self.scene.container:
@@ -349,7 +323,7 @@ class Window(QtWidgets.QMainWindow):
         return super().eventFilter(obj, event)
 
     def _on_focus_changed(self, _old, _now):
-        Window._sync_jupyter_workspace_state(self)
+        self._sync_jupyter_workspace_state()
 
     def on_attractor_change(self, name):
         self.current_name = name
@@ -362,8 +336,8 @@ class Window(QtWidgets.QMainWindow):
         self._rebuild_view_from_config(ATTRACTORS[name])
 
     def _rebuild_view_custom(self):
-        self.scene.stop_animation()
-        _sync_animation_toolbar(self, False)
+        self.scene.animation_controller.stop()
+        self._sync_toolbar_animation_action(False)
         self.controls.hide_standard_controls()
         if self._custom_config is not None:
             self._apply_config_to_view(self._custom_config)
@@ -373,24 +347,28 @@ class Window(QtWidgets.QMainWindow):
             self._solve_pending = False
             self._latest_projection_solutions = None
             self.scene.clear_solutions()
-            _clear_lyapunov_display(self)
+            self._clear_data_view()
+            self.lyapunov_panel.clear()
 
     def _rebuild_view_from_config(self, config):
-        self.scene.stop_animation()
-        _sync_animation_toolbar(self, False)
+        self.scene.animation_controller.stop()
+        self._sync_toolbar_animation_action(False)
         self.controls.show_standard_controls()
         self._apply_config_to_view(config)
 
     def _apply_config_to_view(self, config):
         self._restoring_view = True
         try:
-            self.scene.set_info(config, self.controls.get_current_values())
-            self.scene.set_camera(config)
+            self.scene.viewport_overlay.set_info(
+                config,
+                self.controls.get_current_values(),
+            )
+            self.scene.camera_controller.set_camera(config)
             self.controls.configure(config)
             self.current_n = config.time_defaults.n
             self.current_t_max = config.time_defaults.t_max
             self.controls.set_traj_tail_max(self.current_n)
-            _clear_lyapunov_display(self)
+            self.lyapunov_panel.clear()
             self.controls.trajectory_panel.reset(config)
             self.bifurcation_panel.set_config(
                 config, self.controls.get_current_values()
@@ -414,14 +392,17 @@ class Window(QtWidgets.QMainWindow):
                 self.controls.set_current_attractor("Custom")
                 self.controls.hide_standard_controls()
             else:
-                name = _attractor_name_for_config(config)
+                name = next(
+                    (name for name, con in ATTRACTORS.items() if con is config),
+                    config.name,
+                )
                 self.current_name = name
                 self.controls.set_current_attractor(name)
                 self.controls.show_standard_controls()
 
-            self.scene.stop_animation()
-            _sync_animation_toolbar(self, False)
-            self.scene.set_camera(config)
+            self.scene.animation_controller.stop()
+            self._sync_toolbar_animation_action(False)
+            self.scene.camera_controller.set_camera(config)
             self.controls.configure(config)
 
             if config.name == "Custom":
@@ -432,8 +413,11 @@ class Window(QtWidgets.QMainWindow):
             self.current_n = n
             self.current_t_max = t_max
             self.controls.set_traj_tail_max(self.current_n)
-            self.scene.set_info(config, self.controls.get_current_values())
-            _clear_lyapunov_display(self)
+            self.scene.viewport_overlay.set_info(
+                config,
+                self.controls.get_current_values(),
+            )
+            self.lyapunov_panel.clear()
             self.controls.trajectory_panel.reset(config)
             self.bifurcation_panel.set_config(
                 config, self.controls.get_current_values()
@@ -442,198 +426,10 @@ class Window(QtWidgets.QMainWindow):
             self._restoring_view = False
         self._update_plot()
 
-    def _collect_session_state(self):
-        values = self.controls.get_current_values()
-        visual_options = Window._collect_visual_options(self)
-        custom_data = None
-        if self.current_name == "Custom" and self._custom_config is not None:
-            try:
-                custom_data = build_preset(
-                    self._custom_config,
-                    values,
-                    self.current_n,
-                    self.current_t_max,
-                )
-            except PresetError:
-                custom_data = None
-
-        state = {
-            "attractor": (
-                self.current_name
-                if self.current_name in ATTRACTORS or custom_data is not None
-                else None
-            ),
-            "custom": custom_data,
-            "values": values,
-            "n": int(self.current_n),
-            "t_max": int(self.current_t_max),
-            "visual_options": visual_options,
-            "trajectories": self.controls.trajectory_panel.get_session_state(),
-            "panels": Window._collect_panel_state(self),
-            "camera": self.scene.get_camera_state(),
-            "selected_preset": self.controls.current_preset_name(),
-        }
-        dock_layout = Window._collect_workspace_dock_layout(self)
-        if dock_layout is not None:
-            state["workspace_dock_layout"] = dock_layout
-        return state
-
-    def _collect_panel_state(self):
-        panels = {
-            "projections": _panel_visible(self, "projection_panel"),
-            "poincare": _panel_visible(self, "poincare_panel"),
-            "bifurcation": _panel_visible(self, "bifurcation_panel"),
-        }
-        if hasattr(self, "lyapunov_panel"):
-            panels["lyapunov"] = _panel_visible(self, "lyapunov_panel")
-        if hasattr(self, "jupyter_console_panel"):
-            panels["jupyter_console"] = _panel_visible(self, "jupyter_console_panel")
-        return panels
-
-    def _collect_visual_options(self):
-        options = self.controls.get_visual_options()
-        for key, attr in [
-            ("point", "toolbar_point_action"),
-            ("line", "toolbar_line_action"),
-            ("trail", "toolbar_trail_action"),
-            ("grid", "toolbar_grid_action"),
-            ("orbit", "toolbar_orbit_action"),
-        ]:
-            action = getattr(self, attr, None)
-            if action is not None:
-                options[key] = action.isChecked()
-        if hasattr(self, "lyapunov_panel"):
-            options["auto_lyapunov"] = _lyapunov_auto_enabled(self)
-        return options
-
-    def _set_visual_options(self, options):
-        self.controls.set_visual_options(options)
-        for key, action in [
-            ("point", getattr(self, "toolbar_point_action", None)),
-            ("line", getattr(self, "toolbar_line_action", None)),
-            ("trail", getattr(self, "toolbar_trail_action", None)),
-            ("grid", getattr(self, "toolbar_grid_action", None)),
-            ("orbit", getattr(self, "toolbar_orbit_action", None)),
-        ]:
-            if key in options and action is not None:
-                action.setChecked(bool(options[key]))
-        if "auto_lyapunov" in options:
-            _set_lyapunov_auto_enabled(
-                self,
-                bool(options["auto_lyapunov"]),
-            )
-
-    def _collect_workspace_dock_layout(self):
-        dock_area = getattr(self, "workspace_dock_area", None)
-        if dock_area is None:
-            return None
-
-        try:
-            return dock_area.saveState()
-        except (AttributeError, TypeError, ValueError):
-            return None
-
-    def _restore_session(self, state):
-        if not state or not _can_restore_session(state):
-            return
-
-        if state.get("attractor") == "Custom":
-            custom_data = state.get("custom")
-            if not isinstance(custom_data, dict):
-                return
-            try:
-                config = custom_config_from_preset_data(custom_data)
-            except PresetError:
-                return
-            self._restoring_view = True
-            try:
-                self._custom_config = config
-                self.current_name = "Custom"
-                self.controls.set_current_attractor("Custom")
-                self.controls.hide_standard_controls()
-                self.scene.stop_animation()
-                _sync_animation_toolbar(self, False)
-                self.scene.set_camera(config)
-                self.controls.configure(config)
-                self.controls.custom_panel.set_from_config(config)
-                self.controls.set_current_values(state.get("values", {}))
-                _clear_lyapunov_display(self)
-                self.controls.trajectory_panel.reset(config)
-                self.bifurcation_panel.set_config(
-                    config, self.controls.get_current_values()
-                )
-            finally:
-                self._restoring_view = False
-
-        values = state.get("values", {})
-        if isinstance(values, dict):
-            self.controls.set_current_values(values)
-
-        n = state.get("n")
-        t_max = state.get("t_max")
-        if n is not None and t_max is not None:
-            try:
-                self.current_n = int(n)
-                self.current_t_max = int(t_max)
-            except (TypeError, ValueError):
-                pass
-            else:
-                self.controls.set_time_values(self.current_n, self.current_t_max)
-                self.controls.set_traj_tail_max(self.current_n)
-
-        visual_options = state.get("visual_options", {})
-        if isinstance(visual_options, dict):
-            Window._set_visual_options(self, visual_options)
-
-        trajectory_state = state.get("trajectories")
-        if isinstance(trajectory_state, dict):
-            config, _ = self._get_current_config_and_values()
-            if config is not None:
-                restoring_view = self._restoring_view
-                self._restoring_view = True
-                try:
-                    self.controls.trajectory_panel.set_session_state(
-                        trajectory_state, config
-                    )
-                finally:
-                    self._restoring_view = restoring_view
-                self.scene.set_trajectories(
-                    self.controls.trajectory_panel.get_trajectories()
-                )
-
-        selected_preset = state.get("selected_preset")
-        if selected_preset:
-            self._refresh_presets(str(selected_preset))
-
-        panels = state.get("panels", {})
-        if isinstance(panels, dict):
-            if panels.get("lyapunov"):
-                self._toggle_lyapunov_panel()
-            if panels.get("projections"):
-                self._toggle_projections()
-            if panels.get("poincare"):
-                self._toggle_poincare()
-            if panels.get("bifurcation"):
-                self._toggle_bifurcation()
-            if panels.get("jupyter_console"):
-                self._toggle_jupyter_console()
-
-        dock_layout = state.get("workspace_dock_layout")
-        if isinstance(dock_layout, dict):
-            Window._restore_workspace_dock_layout(self, dock_layout)
-
-        self._update_plot()
-
-        camera = state.get("camera")
-        if isinstance(camera, dict):
-            self.scene.set_camera_state(camera)
-
     def _refresh_presets(self, selected=None):
-        self.controls.set_saved_presets(list_presets(self._preset_directory), selected)
-        self._update_preset_summary(selected or self.controls.current_preset_name())
-
-    def _icon(self, standard_icon):
-        return self.style().standardIcon(standard_icon)
+        preset_panel = self.controls.preset_panel
+        preset_panel.set_saved_presets(list_presets(self._preset_directory), selected)
+        self._update_preset_summary(selected or preset_panel.current_preset_name())
 
     def _build_toolbar(self):
         toolbar = QtWidgets.QToolBar("Scene")
@@ -641,22 +437,50 @@ class Window(QtWidgets.QMainWindow):
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
         toolbar.setIconSize(QtCore.QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
+        toolbar.setStyleSheet(SCENE_TOOLBAR)
         self.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
         self.scene_toolbar = toolbar
 
         style_icon = QtWidgets.QStyle.StandardPixmap
 
+        start_pad = QtWidgets.QWidget()
+        start_pad.setFixedWidth(3)
+        toolbar.addWidget(start_pad)
+
+        self.toolbar_left_panel_action = self._add_checked_icon_toolbar_action(
+            toolbar,
+            self._side_panel_icon("left"),
+            True,
+            lambda checked: self._set_left_panel_visible(checked),
+            "Show left panel",
+        )
+        toolbar.addSeparator()
+
         self.toolbar_anim_action = toolbar.addAction(
-            self._icon(style_icon.SP_MediaPlay),
+            self.style().standardIcon(style_icon.SP_MediaPlay),
             "Play",
-            self._on_anim_toggled,
+            lambda: self._sync_toolbar_animation_action(
+                self.scene.animation_controller.toggle()
+            ),
         )
         self.toolbar_anim_action.setToolTip("Play animation")
+
+        self.toolbar_loop_action = self._add_checked_toolbar_action(
+            toolbar,
+            "Loop",
+            False,
+            self.scene.animation_controller.set_loop,
+            "Loop animation",
+            icon=self._toolbar_icon(
+                "media-playlist-repeat",
+                QtWidgets.QStyle.StandardPixmap.SP_BrowserReload,
+            ),
+        )
 
         toolbar.addSeparator()
 
         reset_action = toolbar.addAction(
-            self._icon(style_icon.SP_BrowserReload), "Reset"
+            self.style().standardIcon(style_icon.SP_BrowserReload), "Reset"
         )
         reset_action.setToolTip("Reset parameters")
         reset_action.triggered.connect(self.controls.reset_to_defaults)
@@ -671,14 +495,16 @@ class Window(QtWidgets.QMainWindow):
         fit_camera_action = toolbar.addAction(
             QtGui.QIcon.fromTheme("view-fullscreen"),
             "Fit",
-            self.scene.fit_camera_to_solutions,
+            lambda: self.scene.camera_controller.fit_camera_to_solutions(
+                self.scene.trajectory_renderer.solutions
+            ),
         )
         fit_camera_action.setToolTip("Fit view to trajectories")
 
         save_action = toolbar.addAction(
-            self._icon(style_icon.SP_DialogSaveButton),
+            self.style().standardIcon(style_icon.SP_DialogSaveButton),
             "Save",
-            self.scene.save_view_as_png,
+            self.scene.viewport_overlay.save_view_as_png,
         )
         save_action.setToolTip("Save view as PNG")
 
@@ -688,15 +514,23 @@ class Window(QtWidgets.QMainWindow):
             toolbar,
             "Point",
             True,
-            self.scene.set_point_mode,
+            self.scene.trajectory_renderer.set_point_mode,
             "Show animation head points",
+            icon=self._toolbar_icon(
+                "media-record",
+                QtWidgets.QStyle.StandardPixmap.SP_DialogYesButton,
+            ),
         )
         self.toolbar_line_action = self._add_checked_toolbar_action(
             toolbar,
             "Line",
             False,
-            self.scene.set_line_mode,
+            lambda checked: self._set_line_mode(checked),
             "Show trajectory lines",
+            icon=self._toolbar_icon(
+                "draw-line",
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogListView,
+            ),
         )
         self.toolbar_trail_action = self._add_checked_toolbar_action(
             toolbar,
@@ -704,25 +538,43 @@ class Window(QtWidgets.QMainWindow):
             False,
             self._set_trail_mode,
             "Show animated trajectory trails",
+            icon=self._toolbar_icon(
+                "draw-path",
+                QtWidgets.QStyle.StandardPixmap.SP_ArrowRight,
+            ),
         )
         self.toolbar_grid_action = self._add_checked_toolbar_action(
             toolbar,
             "Grid",
             True,
-            self.scene.set_grid_visible,
-            "Show reference grid",
+            self.scene.grid_overlay.set_grid_visible,
+            "Show grid",
+            icon=self._toolbar_icon(
+                "view-grid",
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            ),
         )
         self.toolbar_orbit_action = self._add_checked_toolbar_action(
             toolbar,
             "Orbit",
             False,
-            self.scene.set_orbit_mode,
+            self.scene.camera_controller.set_orbit_mode,
             "Orbit camera automatically",
+            icon=self._toolbar_icon(
+                "object-rotate-right",
+                QtWidgets.QStyle.StandardPixmap.SP_BrowserReload,
+            ),
         )
 
         toolbar.addSeparator()
 
-        solve_action = toolbar.addAction("Solve")
+        solve_action = toolbar.addAction(
+            self._toolbar_icon(
+                "system-run",
+                QtWidgets.QStyle.StandardPixmap.SP_MediaPlay,
+            ),
+            "Solve",
+        )
         solve_action.setToolTip("Run a full solve")
         solve_action.triggered.connect(lambda: self._on_controls_solve_requested(True))
 
@@ -755,14 +607,17 @@ class Window(QtWidgets.QMainWindow):
         )
         self.toolbar_jupyter_console_action = self._add_panel_menu_action(
             tools_menu,
-            "Jupyter console",
+            "Console",
             self._toggle_jupyter_console,
+        )
+        self.toolbar_process_status_action = self._add_panel_menu_action(
+            tools_menu,
+            "Status bar",
+            lambda: self._toggle_process_status(),
         )
         tools_menu.addSeparator()
         open_folder_action = tools_menu.addAction("Open preset folder")
         open_folder_action.triggered.connect(self._open_preset_folder)
-        reset_session_action = tools_menu.addAction("Reset saved session")
-        reset_session_action.triggered.connect(self._reset_saved_session)
         self.tools_button.setMenu(tools_menu)
         toolbar.addWidget(self.tools_button)
 
@@ -773,26 +628,137 @@ class Window(QtWidgets.QMainWindow):
             QtWidgets.QSizePolicy.Policy.Preferred,
         )
         toolbar.addWidget(spacer)
+
         self._build_jupyter_toolbar_actions(toolbar)
+        self.toolbar_right_panel_action = self._add_checked_icon_toolbar_action(
+            toolbar,
+            self._side_panel_icon("right"),
+            True,
+            lambda checked: self._set_right_panel_visible(checked),
+            "Show right panel",
+        )
+        end_pad = QtWidgets.QWidget()
+        end_pad.setFixedWidth(3)
+        toolbar.addWidget(end_pad)
 
         self._sync_toolbar_panel_actions()
 
-    def _add_checked_toolbar_action(self, toolbar, text, checked, callback, tooltip):
-        action = toolbar.addAction(text)
+    def _build_status_bar(self):
+        status_bar = QtWidgets.QStatusBar()
+        status_bar.setSizeGripEnabled(False)
+        status_bar.setFixedHeight(18)
+        status_bar.setStyleSheet(
+            """
+            QStatusBar {
+                border: none;
+                padding: 0px;
+            }
+            QStatusBar::item {
+                border: none;
+            }
+            """
+        )
+
+        self.app_status_label = QtWidgets.QLabel("")
+        self.app_status_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        self.app_status_label.setStyleSheet(
+            "border: none; padding: 0 4px 1px 4px; font-size: 12px; color: #178640;"
+        )
+        self.process_status = ProcessUsageStatus()
+        status_bar.addWidget(self.app_status_label, 1)
+        status_bar.addPermanentWidget(self.process_status)
+        self.setStatusBar(status_bar)
+        self._set_process_status_visible(self._process_status_visible)
+
+    def _add_checked_toolbar_action(
+        self,
+        toolbar,
+        text,
+        checked,
+        callback,
+        tooltip,
+        *,
+        icon=None,
+    ):
+        if icon is None:
+            action = toolbar.addAction(text)
+        else:
+            action = toolbar.addAction(icon, text)
         action.setCheckable(True)
         action.setChecked(bool(checked))
         action.setToolTip(tooltip)
         action.toggled.connect(callback)
         return action
 
+    def _add_checked_icon_toolbar_action(
+        self, toolbar, icon, checked, callback, tooltip
+    ):
+        action = toolbar.addAction(icon, "")
+        action.setCheckable(True)
+        action.setChecked(bool(checked))
+        action.setToolTip(tooltip)
+        action.toggled.connect(callback)
+        self._keep_toolbar_action_from_taking_focus(toolbar, action)
+        return action
+
+    def _side_panel_icon(self, side):
+        icon = QtGui.QIcon.fromTheme(f"sidebar-show-{side}")
+        if icon.isNull():
+            icon = self.style().standardIcon(
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            )
+        return icon
+
+    def _set_left_panel_visible(self, checked):
+        if checked:
+            self.controls.show()
+            sizes = self.main_splitter.sizes()
+            if len(sizes) >= 3 and sizes[0] == 0:
+                sizes[0] = self._left_panel_splitter_size
+                self.main_splitter.setSizes(sizes)
+            return
+
+        sizes = self.main_splitter.sizes()
+        if len(sizes) >= 3 and sizes[0] > 0:
+            self._left_panel_splitter_size = sizes[0]
+        self.controls.hide()
+
     def _set_trail_mode(self, checked):
-        self.scene.set_trail_mode(checked)
+        self.scene.trajectory_renderer.set_trail_mode(checked)
         self.controls.set_trail_options_visible(checked)
 
+    def _set_line_mode(self, checked):
+        mode = "line" if checked else "points"
+        self.controls.trajectory_panel.set_render_mode_all(mode)
+        self.scene.trajectory_renderer.set_line_mode(checked)
+
+    def _set_right_panel_visible(self, checked):
+        if checked:
+            self.right_panel.show()
+            sizes = self.main_splitter.sizes()
+            if len(sizes) >= 3 and sizes[2] == 0:
+                sizes[2] = self._right_panel_splitter_size
+                self.main_splitter.setSizes(sizes)
+            return
+
+        sizes = self.main_splitter.sizes()
+        if len(sizes) >= 3 and sizes[2] > 0:
+            self._right_panel_splitter_size = sizes[2]
+        self.right_panel.hide()
+
     def _build_panel_dock(self, title, panel):
-        dock = Dock(title, size=(10, 4), closable=True)
+        dock = Dock(title, size=(10, 12), closable=True)
         dock.addWidget(panel)
         dock.sigClosed.connect(lambda _dock: self._on_panel_dock_closed(panel))
+        return dock
+
+    def _build_workspace_dock(self):
+        dock = Dock("Console", size=(10, 12), closable=True)
+        dock.addWidget(self.workspace_panel)
+        dock.sigClosed.connect(lambda _dock: self._on_workspace_dock_closed())
+
         return dock
 
     def _add_panel_menu_action(self, menu, text, callback):
@@ -802,15 +768,13 @@ class Window(QtWidgets.QMainWindow):
         return action
 
     def _sync_toolbar_panel_actions(self):
-        if not hasattr(self, "toolbar_lyapunov_action"):
-            return
-
         with (
             QtCore.QSignalBlocker(self.toolbar_lyapunov_action),
             QtCore.QSignalBlocker(self.toolbar_projection_action),
             QtCore.QSignalBlocker(self.toolbar_poincare_action),
             QtCore.QSignalBlocker(self.toolbar_bifurcation_action),
             QtCore.QSignalBlocker(self.toolbar_jupyter_console_action),
+            QtCore.QSignalBlocker(self.toolbar_process_status_action),
         ):
             self.toolbar_lyapunov_action.setChecked(
                 _panel_visible(self, "lyapunov_panel")
@@ -824,10 +788,73 @@ class Window(QtWidgets.QMainWindow):
             self.toolbar_bifurcation_action.setChecked(
                 _panel_visible(self, "bifurcation_panel")
             )
-            self.toolbar_jupyter_console_action.setChecked(
-                _panel_visible(self, "jupyter_console_panel")
+            self.toolbar_jupyter_console_action.setChecked(_workspace_visible(self))
+            self.toolbar_process_status_action.setChecked(self._process_status_visible)
+        self._sync_jupyter_workspace_state()
+
+    def _set_process_status_visible(self, visible):
+        self._process_status_visible = bool(visible)
+
+        self.process_status.setVisible(self._process_status_visible)
+        self.process_status.set_active(self._process_status_visible)
+        self.statusBar().setVisible(self._process_status_visible)
+
+        if (
+            self.toolbar_process_status_action.isChecked()
+            != self._process_status_visible
+        ):
+            with QtCore.QSignalBlocker(self.toolbar_process_status_action):
+                self.toolbar_process_status_action.setChecked(
+                    self._process_status_visible
+                )
+
+        self._sync_status_bar_visibility()
+
+    def _toggle_process_status(self):
+        self._set_process_status_visible(not self._process_status_visible)
+
+    def _set_app_status(self, message, error=False):
+        self._app_status_message = str(message)
+        colour = "#ff6b6b" if error else "#178640"
+        self.app_status_label.setText(self._app_status_message)
+        self.app_status_label.setStyleSheet(
+            f"border: none; padding: 0 4px 3px 4px; font-size: 12px; color: {colour};"
+        )
+
+        self._sync_status_bar_visibility()
+
+    def _set_temporary_app_status(self, message, *, timeout_ms=3000, error=False):
+        message = str(message)
+        self._set_app_status(message, error=error)
+
+        if self._app_status_clear_timer is None:
+            self._app_status_clear_timer = QtCore.QTimer(self)
+            self._app_status_clear_timer.setSingleShot(True)
+
+        try:
+            self._app_status_clear_timer.timeout.disconnect()
+        except TypeError:
+            pass
+
+        self._app_status_clear_timer.timeout.connect(
+            lambda expected=message: (
+                self._clear_app_status()
+                if self._app_status_message == expected
+                else None
             )
-        Window._sync_jupyter_workspace_state(self)
+        )
+        self._app_status_clear_timer.start(int(timeout_ms))
+
+    def _clear_app_status(self):
+        self._app_status_message = ""
+        self.app_status_label.clear()
+
+        self._sync_status_bar_visibility()
+
+    def _sync_status_bar_visibility(self):
+        self.statusBar().setVisible(
+            bool(self._process_status_visible or self._app_status_message)
+        )
 
     def _build_jupyter_toolbar_actions(self, toolbar):
         self._jupyter_toolbar_actions = []
@@ -836,19 +863,37 @@ class Window(QtWidgets.QMainWindow):
         plot_item = self.jupyter_console_panel.plot_widget.getPlotItem()
         view_box = plot_item.getViewBox()
 
-        view_all_action = toolbar.addAction("View all")
+        view_all_action = toolbar.addAction(
+            self._toolbar_icon(
+                "zoom-fit-best",
+                QtWidgets.QStyle.StandardPixmap.SP_TitleBarMaxButton,
+            ),
+            "View all",
+        )
         view_all_action.setToolTip("Fit all plot data")
         view_all_action.triggered.connect(view_box.autoRange)
         self._jupyter_toolbar_actions.append(view_all_action)
-        Window._keep_toolbar_action_from_taking_focus(self, toolbar, view_all_action)
+        self._keep_toolbar_action_from_taking_focus(toolbar, view_all_action)
 
         mouse_group = QtGui.QActionGroup(toolbar)
         mouse_group.setExclusive(True)
-        pan_action = toolbar.addAction("Pan")
+        pan_action = toolbar.addAction(
+            self._toolbar_icon(
+                "transform-move",
+                QtWidgets.QStyle.StandardPixmap.SP_ArrowUp,
+            ),
+            "Pan",
+        )
         pan_action.setCheckable(True)
         pan_action.setChecked(True)
         pan_action.setToolTip("Pan with left mouse button")
-        zoom_action = toolbar.addAction("Zoom")
+        zoom_action = toolbar.addAction(
+            self._toolbar_icon(
+                "zoom-in",
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogContentsView,
+            ),
+            "Zoom",
+        )
         zoom_action.setCheckable(True)
         zoom_action.setToolTip("Zoom to rectangle with left mouse button")
         mouse_group.addAction(pan_action)
@@ -856,42 +901,107 @@ class Window(QtWidgets.QMainWindow):
         pan_action.triggered.connect(lambda: view_box.setLeftButtonAction("pan"))
         zoom_action.triggered.connect(lambda: view_box.setLeftButtonAction("rect"))
         self._jupyter_toolbar_actions.extend([pan_action, zoom_action])
-        Window._keep_toolbar_action_from_taking_focus(self, toolbar, pan_action)
-        Window._keep_toolbar_action_from_taking_focus(self, toolbar, zoom_action)
+        self._keep_toolbar_action_from_taking_focus(toolbar, pan_action)
+        self._keep_toolbar_action_from_taking_focus(toolbar, zoom_action)
 
         self._jupyter_toolbar_actions.append(toolbar.addSeparator())
         for text, widget in [
             ("X grid", plot_item.ctrl.xGridCheck),
             ("Y grid", plot_item.ctrl.yGridCheck),
-            ("Log X", plot_item.ctrl.logXCheck),
-            ("Log Y", plot_item.ctrl.logYCheck),
-            ("FFT", plot_item.ctrl.fftCheck),
         ]:
             self._jupyter_toolbar_actions.append(
-                Window._add_plot_option_action(self, toolbar, text, widget)
+                self._add_plot_option_action(toolbar, text, widget)
             )
 
         self._jupyter_toolbar_actions.append(toolbar.addSeparator())
+        self._add_jupyter_plot_controls(toolbar)
+        self._jupyter_toolbar_actions.append(toolbar.addSeparator())
         self._jupyter_toolbar_actions.append(
-            Window._add_toolbar_menu_button(
-                self, toolbar, "Plot options", plot_item.getMenu()
+            self._add_toolbar_menu_button(
+                toolbar, "Plot", plot_item.getMenu(), "Plot options"
             )
         )
-        view_menu = getattr(view_box, "menu", None)
+        view_menu = view_box.menu
         if view_menu is not None:
             self._jupyter_toolbar_actions.append(
-                Window._add_toolbar_menu_button(
-                    self, toolbar, "ViewBox options", view_menu
+                self._add_toolbar_menu_button(
+                    toolbar, "View", view_menu, "ViewBox options"
                 )
             )
 
-        Window._set_toolbar_actions_visible(self, self._jupyter_toolbar_actions, False)
+        for action in self._jupyter_toolbar_actions:
+            action.setVisible(False)
 
-    def _standard_icon(self, standard_icon):
-        icon = getattr(self, "_icon", None)
-        if icon is not None:
-            return icon(standard_icon)
-        return QtWidgets.QApplication.style().standardIcon(standard_icon)
+    def _add_jupyter_plot_controls(self, toolbar):
+        label = QtWidgets.QLabel("Plot")
+        label.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self._jupyter_toolbar_actions.append(toolbar.addWidget(label))
+
+        self.toolbar_live_plot_combo = QtWidgets.QComboBox()
+        self.toolbar_live_plot_combo.setFixedWidth(LIVE_PLOT_COMBO_WIDTH)
+        self.toolbar_live_plot_combo.currentIndexChanged.connect(
+            lambda _index: self.live_plot_controller._on_toolbar_plot_selected()
+        )
+        self._jupyter_toolbar_actions.append(
+            toolbar.addWidget(self.toolbar_live_plot_combo)
+        )
+
+        self.toolbar_live_plot_name = QtWidgets.QLineEdit()
+        self.toolbar_live_plot_name.setPlaceholderText("Plot name")
+        self.toolbar_live_plot_name.setMaximumWidth(130)
+        self.toolbar_live_plot_name.returnPressed.connect(
+            lambda: self._rename_current_live_plot()
+        )
+        self._jupyter_toolbar_actions.append(
+            toolbar.addWidget(self.toolbar_live_plot_name)
+        )
+
+        icon_specs = [
+            (
+                "New",
+                "list-add",
+                QtWidgets.QStyle.StandardPixmap.SP_FileIcon,
+                lambda: self._new_live_plot(),
+                "Create a new console plot",
+            ),
+            (
+                "Rename",
+                "edit-rename",
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
+                lambda: self._rename_current_live_plot(),
+                "Rename the current console plot",
+            ),
+            (
+                "Clear",
+                "edit-clear-history",
+                QtWidgets.QStyle.StandardPixmap.SP_DialogDiscardButton,
+                lambda: self.live_plot_controller._clear_plot(),
+                "Clear the current console plot",
+            ),
+            (
+                "Clear all",
+                "edit-delete",
+                QtWidgets.QStyle.StandardPixmap.SP_TrashIcon,
+                lambda: self.live_plot_controller._clear_all_plots(),
+                "Clear all console plots",
+            ),
+        ]
+        for text, theme_name, fallback_icon, callback, tooltip in icon_specs:
+            action = toolbar.addAction(
+                self._toolbar_icon(theme_name, fallback_icon),
+                text,
+            )
+            action.setToolTip(tooltip)
+            action.triggered.connect(callback)
+            self._jupyter_toolbar_actions.append(action)
+            self._keep_toolbar_action_from_taking_focus(toolbar, action)
+        self.live_plot_controller._sync_plots()
+
+    def _toolbar_icon(self, theme_name, fallback_icon):
+        icon = QtGui.QIcon.fromTheme(theme_name)
+        if icon.isNull():
+            icon = self.style().standardIcon(fallback_icon)
+        return icon
 
     def _keep_toolbar_action_from_taking_focus(self, toolbar, action):
         widget = toolbar.widgetForAction(action)
@@ -904,76 +1014,64 @@ class Window(QtWidgets.QMainWindow):
         action.setChecked(widget.isChecked())
         action.toggled.connect(widget.setChecked)
         widget.toggled.connect(action.setChecked)
-        Window._keep_toolbar_action_from_taking_focus(self, toolbar, action)
+        self._keep_toolbar_action_from_taking_focus(toolbar, action)
         return action
 
-    def _add_toolbar_menu_button(self, toolbar, text, menu):
+    def _add_toolbar_menu_button(self, toolbar, text, menu, tooltip=None):
         button = QtWidgets.QToolButton()
         button.setText(text)
+        button.setToolTip(tooltip or text)
         button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
         button.setMenu(menu)
         button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         return toolbar.addWidget(button)
 
-    def _set_toolbar_actions_visible(self, actions, visible):
-        for action in actions:
+    def _sync_jupyter_toolbar_visibility(self):
+        if self.workspace_dock is not None:
+            visible = self.workspace_dock.container() is not None
+            if visible:
+                item = self.workspace_dock
+                container = item.container()
+                while container is not None:
+                    try:
+                        container_type = container.type()
+                    except AttributeError:
+                        container_type = None
+                    if container_type == "tab":
+                        try:
+                            stack = container.stack
+                        except AttributeError:
+                            stack = None
+                        if stack is not None and stack.currentWidget() is not item:
+                            visible = False
+                            break
+                    item = container
+                    try:
+                        container = container.container()
+                    except AttributeError:
+                        container = None
+        else:
+            visible = _workspace_visible(self)
+
+        for action in self._jupyter_toolbar_actions:
             action.setVisible(visible)
 
-    def _jupyter_toolbar_should_be_visible(self):
-        return _panel_visible_to_user(self, "jupyter_console_panel")
-
-    def _jupyter_console_has_focus(self):
-        if not _panel_visible_to_user(self, "jupyter_console_panel"):
-            return False
-
-        panel = getattr(self, "jupyter_console_panel", None)
-        focused = QtWidgets.QApplication.focusWidget()
-        return bool(
-            panel is not None
-            and focused is not None
-            and (focused is panel or panel.isAncestorOf(focused))
-        )
-
-    def _sync_jupyter_toolbar_visibility(self):
-        actions = getattr(self, "_jupyter_toolbar_actions", None)
-        if actions is None:
-            return
-        Window._set_toolbar_actions_visible(
-            self,
-            actions,
-            Window._jupyter_toolbar_should_be_visible(self),
-        )
-
-    def _sync_non_jupyter_controls_enabled(self):
-        enabled = not Window._jupyter_console_has_focus(self)
-        controls = getattr(self, "controls", None)
-        if controls is not None and hasattr(controls, "setEnabled"):
-            controls.setEnabled(enabled)
-
-        toolbar = getattr(self, "scene_toolbar", None)
-        jupyter_actions = set(getattr(self, "_jupyter_toolbar_actions", []))
-        if toolbar is None:
-            return
-        for action in toolbar.actions():
-            if action not in jupyter_actions:
-                action.setEnabled(enabled)
-
     def _sync_jupyter_workspace_state(self):
-        Window._watch_workspace_tab_stacks(self)
-        Window._sync_jupyter_toolbar_visibility(self)
-        Window._sync_non_jupyter_controls_enabled(self)
+        self._watch_workspace_tab_stacks()
+        self._sync_jupyter_toolbar_visibility()
 
     def _sync_toolbar_animation_action(self, playing):
-        if not hasattr(self, "toolbar_anim_action"):
-            return
-
         style_icon = QtWidgets.QStyle.StandardPixmap
         if playing:
-            self.toolbar_anim_action.setIcon(self._icon(style_icon.SP_MediaStop))
+            self.toolbar_anim_action.setIcon(
+                self.style().standardIcon(style_icon.SP_MediaStop)
+            )
             self.toolbar_anim_action.setText("Stop")
             self.toolbar_anim_action.setToolTip("Stop animation")
         else:
-            self.toolbar_anim_action.setIcon(self._icon(style_icon.SP_MediaPlay))
+            self.toolbar_anim_action.setIcon(
+                self.style().standardIcon(style_icon.SP_MediaPlay)
+            )
             self.toolbar_anim_action.setText("Play")
             self.toolbar_anim_action.setToolTip("Play animation")
 
@@ -983,29 +1081,20 @@ class Window(QtWidgets.QMainWindow):
             QtCore.QUrl.fromLocalFile(self._preset_directory)
         )
         if not opened:
-            self.controls.set_status("Could not open preset folder", error=True)
-
-    def _reset_saved_session(self):
-        clear_session(self._settings)
-        self._session_reset_requested = True
-        self.controls.set_status("Saved session reset")
-
-    def _save_session_on_close(self):
-        if not self._session_reset_requested:
-            save_session(self._settings, self._collect_session_state())
+            self._set_app_status("Could not open preset folder", error=True)
 
     def _update_preset_summary(self, name):
         preset_name = name.strip()
         if not preset_name:
-            self.controls.set_preset_notes("")
-            self.controls.set_preset_summary("No saved presets")
+            self.controls.preset_panel.set_preset_notes("")
+            self.controls.preset_panel.set_preset_summary("No saved presets")
             return
 
         try:
             metadata = preset_metadata(self._preset_directory, preset_name)
         except PresetError as exc:
-            self.controls.set_preset_notes("")
-            self.controls.set_preset_summary(str(exc))
+            self.controls.preset_panel.set_preset_notes("")
+            self.controls.preset_panel.set_preset_summary(str(exc))
             return
 
         kind = "custom" if metadata["is_custom"] else "built-in"
@@ -1017,19 +1106,16 @@ class Window(QtWidgets.QMainWindow):
         updated_at = metadata.get("updated_at")
         if updated_at:
             summary = f"{summary}\nUpdated {updated_at}"
-        self.controls.set_preset_notes(metadata["notes"])
-        self.controls.set_preset_summary(summary)
-
-    def _default_preset_name(self):
-        return f"{self.current_name} preset"
+        self.controls.preset_panel.set_preset_notes(metadata["notes"])
+        self.controls.preset_panel.set_preset_summary(summary)
 
     def _save_preset(self, name, notes):
         config, values = self._get_current_config_and_values()
         if config is None:
-            self.controls.set_status("No attractor selected", error=True)
+            self._set_app_status("No attractor selected", error=True)
             return
 
-        preset_name = name.strip() or self._default_preset_name()
+        preset_name = name.strip() or f"{self.current_name} preset"
 
         try:
             save_named_preset(
@@ -1042,16 +1128,16 @@ class Window(QtWidgets.QMainWindow):
                 notes,
             )
         except PresetError as exc:
-            self.controls.set_status(str(exc), error=True)
+            self._set_app_status(str(exc), error=True)
             return
 
         self._refresh_presets(preset_name)
-        self.controls.set_status(f"Saved preset: {preset_name}")
+        self._set_app_status(f"Saved preset: {preset_name}")
 
     def _load_preset(self, name):
         preset_name = name.strip()
         if not preset_name:
-            self.controls.set_status("Select a preset to load", error=True)
+            self._set_app_status("Select a preset to load", error=True)
             return
 
         try:
@@ -1059,27 +1145,27 @@ class Window(QtWidgets.QMainWindow):
                 self._preset_directory, preset_name
             )
         except PresetError as exc:
-            self.controls.set_status(str(exc), error=True)
+            self._set_app_status(str(exc), error=True)
             return
 
         self._apply_loaded_preset(config, values, n, t_max)
         self._refresh_presets(preset_name)
-        self.controls.set_status(f"Loaded preset: {preset_name}")
+        self._set_app_status(f"Loaded preset: {preset_name}")
 
     def _delete_preset(self, name):
         preset_name = name.strip()
         if not preset_name:
-            self.controls.set_status("Select a preset to delete", error=True)
+            self._set_app_status("Select a preset to delete", error=True)
             return
 
         try:
             delete_named_preset(self._preset_directory, preset_name)
         except PresetError as exc:
-            self.controls.set_status(str(exc), error=True)
+            self._set_app_status(str(exc), error=True)
             return
 
         self._refresh_presets()
-        self.controls.set_status(f"Deleted preset: {preset_name}")
+        self._set_app_status(f"Deleted preset: {preset_name}")
 
     def _get_current_config_and_values(self):
         if self.current_name == "Custom":
@@ -1092,31 +1178,139 @@ class Window(QtWidgets.QMainWindow):
         return config, values
 
     def _jupyter_console_namespace(self):
+        plot = self.jupyter_console_panel.plot
         return {
             "np": np,
-            "window": self,
-            "scene": self.scene,
-            "view": self.scene.view,
-            "controls": self.controls,
-            "system": self.system,
-            "plot_widget": self.jupyter_console_panel.plot_widget,
-            "pw": self.jupyter_console_panel.plot_widget,
-            "get_solutions": self.scene.get_solutions,
-            "current_config": lambda: self._get_current_config_and_values()[0],
-            "current_values": lambda: self._get_current_config_and_values()[1],
+            "pd": pd,
             "pg": pg,
+            "system": self.system,
+            "plot": plot,
+            "console_plots": self.jupyter_console_panel.plots,
+            "plots": self.jupyter_console_panel.plots,
+            "clear_plot": plot.clear,
+            "current_values": lambda: self.system.values,
+            "scripts_dir": self._scripts_directory,
         }
 
+    def _set_console_parameters(self, values, *, solve=False):
+        config, current_values = self._get_current_config_and_values()
+        if config is None:
+            raise ValueError("No attractor selected")
+
+        updates = self._validated_console_parameter_updates(config, values)
+        next_values = {**current_values, **updates}
+        self.controls.set_current_values(next_values)
+        self.scene.viewport_overlay.set_info(
+            config,
+            self.controls.get_current_values(),
+        )
+        if solve:
+            self._on_controls_solve_requested(True)
+
+        return self.system.parameters()
+
+    def _set_console_time(self, *, n=None, t_max=None, solve=False):
+        next_n = self.current_n if n is None else self._validated_console_n(n)
+        next_t_max = (
+            self.current_t_max
+            if t_max is None
+            else self._validated_console_t_max(t_max)
+        )
+        self.current_n = next_n
+        self.current_t_max = next_t_max
+        self.controls.set_time_values(self.current_n, self.current_t_max)
+        self.controls.set_traj_tail_max(self.current_n)
+
+        if solve:
+            self._on_controls_solve_requested(True)
+
+        return self.system.status()
+
+    def _validated_console_n(self, value):
+        try:
+            n = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("N must be a positive integer") from exc
+        if n < 1000 or n > 500000:
+            raise ValueError("N must be between 1000 and 500000")
+
+        return n
+
+    def _validated_console_t_max(self, value):
+        try:
+            t_max = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("t_max must be a positive integer") from exc
+        if t_max < 1 or t_max > 750:
+            raise ValueError("t_max must be between 1 and 750")
+
+        return t_max
+
+    def _validated_console_parameter_updates(self, config, values):
+        if not isinstance(values, dict):
+            raise TypeError("Parameter updates must be a dictionary")
+
+        params = {param.name: param for param in config.params}
+        updates = {}
+        for name, value in values.items():
+            key = str(name)
+            if key not in params:
+                raise ValueError(f"Unknown parameter: {key}")
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Parameter {key} must be numeric") from exc
+
+            param = params[key]
+            if numeric < param.min_val or numeric > param.max_val:
+                raise ValueError(
+                    f"Parameter {key} must be between {param.min_val} and {param.max_val}"
+                )
+            updates[key] = numeric
+
+        return updates
+
+    def _solve_from_console(self):
+        self._on_controls_solve_requested(True)
+
+        return self.system.status()
+
+    def _set_solve_state(self, **updates):
+        state = dict(self._solve_state)
+        state.update(updates)
+        self._solve_state = state
+        self.workspace_panel.set_solve_state(state)
+        return state
+
+    def _clear_data_view(self):
+        self.controls.data_view.clear()
+
+    def _update_data_view(self, solutions, is_partial):
+        if is_partial:
+            return
+
+        config, values = self._get_current_config_and_values()
+        t_min = 0.0 if config is None else config.time_defaults.t_min
+        self.controls.data_view.set_solutions(
+            solutions,
+            t_min=t_min,
+            t_max=self.current_t_max,
+            trajectory_specs=self._solve_state.get("trajectory_specs", []),
+            config=config,
+            values=values,
+            partial=is_partial,
+        )
+
     def _update_plot(self):
-        self.scene.stop_animation()
-        _sync_animation_toolbar(self, False)
+        self.scene.animation_controller.stop()
+        self._sync_toolbar_animation_action(False)
         self.solver.cancel_solve()
         self.solver.cancel_lyapunov()
         self._solve_pending = False
         self._dispatch_solve(full=True)
         config, values = self._get_current_config_and_values()
         if config is not None:
-            self.scene.set_info(config, values)
+            self.scene.viewport_overlay.set_info(config, values)
 
     def _dispatch_solve(self, full=False):
         if self._solve_pending:
@@ -1126,17 +1320,90 @@ class Window(QtWidgets.QMainWindow):
         config, values = self._get_current_config_and_values()
         if config is None:
             self._solve_pending = False
+            self._set_solve_state(
+                solving=False,
+                valid=False,
+                stale=False,
+                partial=False,
+                last_error="No attractor selected",
+                request_id=None,
+                attractor=None,
+                parameters={},
+                n=None,
+                t_max=None,
+                trajectories=0,
+                solution_points=[],
+            )
             return
         user_n = self.current_n or config.time_defaults.n
         t_max = self.current_t_max
-        ics = self.controls.trajectory_panel.get_trajectories()
-        ic_list = [t["ic"] for t in ics] if ics else [config.initial_conditions]
-        dispatch_n = user_n if full else min(user_n, PARTIAL_N)
+        trajectories = self.controls.trajectory_panel.get_trajectories()
+        if trajectories:
+            trajectory_specs = []
+            for trajectory in trajectories:
+                trajectory_n = int(trajectory.get("n", user_n))
+                solve_n = trajectory_n if full else min(trajectory_n, PARTIAL_N)
+                trajectory_specs.append(
+                    {
+                        "ic": [float(coord) for coord in trajectory["ic"]],
+                        "n": solve_n,
+                        "t_max": float(trajectory.get("t_max", t_max)),
+                    }
+                )
+        else:
+            solve_n = int(user_n if full else min(user_n, PARTIAL_N))
+            trajectory_specs = [
+                {
+                    "ic": [float(coord) for coord in config.initial_conditions],
+                    "n": solve_n,
+                    "t_max": float(t_max),
+                }
+            ]
+        dispatch_n = max(spec["n"] for spec in trajectory_specs)
+        dispatch_t_max = max(spec["t_max"] for spec in trajectory_specs)
         self.solver.cancel_lyapunov()
         if full:
-            self.controls.set_status(_solve_status_text(len(ic_list)))
+            n_trajectories = len(trajectory_specs)
+            status_text = (
+                "Solving trajectory"
+                if n_trajectories == 1
+                else f"Solving {n_trajectories} trajectories"
+            )
+            self._set_app_status(status_text)
         self._active_solve_request_id = self.solver.request_solve(
-            config, values, ic_list, dispatch_n, not full, t_max
+            config, values, trajectory_specs, dispatch_n, not full, dispatch_t_max
+        )
+        signature = {
+            "attractor": config.name,
+            "parameters": {str(key): float(value) for key, value in values.items()},
+            "n": int(dispatch_n),
+            "t_max": float(dispatch_t_max),
+            "trajectories": [
+                [float(coord) for coord in spec["ic"]] for spec in trajectory_specs
+            ],
+            "trajectory_specs": [
+                {
+                    "ic": [float(coord) for coord in spec["ic"]],
+                    "n": int(spec["n"]),
+                    "t_max": float(spec["t_max"]),
+                }
+                for spec in trajectory_specs
+            ],
+        }
+        self._set_solve_state(
+            solving=True,
+            valid=False,
+            stale=bool(self.scene.trajectory_renderer.solutions),
+            partial=not full,
+            last_error=None,
+            request_id=self._active_solve_request_id,
+            attractor=signature["attractor"],
+            parameters=signature["parameters"],
+            n=signature["n"],
+            t_max=signature["t_max"],
+            trajectories=len(trajectory_specs),
+            trajectory_specs=signature["trajectory_specs"],
+            solution_points=[],
         )
         token = perf_start(
             self,
@@ -1146,36 +1413,39 @@ class Window(QtWidgets.QMainWindow):
             full=full,
             partial=not full,
             n=dispatch_n,
-            t_max=t_max,
-            trajectories=len(ic_list),
+            t_max=dispatch_t_max,
+            trajectories=len(trajectory_specs),
         )
         if token is not None:
             self._solve_perf_tokens[self._active_solve_request_id] = token
 
     def _on_controls_solve_requested(self, full):
-        self.scene.stop_animation()
-        _sync_animation_toolbar(self, False)
+        self.scene.animation_controller.stop()
+        self._sync_toolbar_animation_action(False)
+        if not full and self._solve_pending and self._solve_state.get("partial", False):
+            self._solve_needed = True
+            self._full_needed = False
+
+            return
+
         self.solver.cancel_solve()
         self._solve_pending = False
         self._solve_needed = full
         self._full_needed = full
         self._dispatch_solve(full=full)
 
-    def _auto_lyapunov_enabled(self):
-        return _lyapunov_auto_enabled(self)
-
     def _request_lyapunov(self, config=None, values=None):
-        if _has_hidden_lyapunov_panel(self):
+        if not _panel_visible(self, "lyapunov_panel"):
             return
 
         if config is None or values is None:
             config, values = self._get_current_config_and_values()
         if config is None:
-            self.controls.set_status("No attractor selected", error=True)
+            self._set_app_status("No attractor selected", error=True)
             return
 
         self.solver.cancel_lyapunov()
-        self.controls.set_status("Computing Lyapunov spectrum")
+        self._set_app_status("Computing Lyapunov spectrum")
         self._active_lyapunov_request_id = self.solver.request_lyapunov(
             config,
             values,
@@ -1193,29 +1463,46 @@ class Window(QtWidgets.QMainWindow):
         if token is not None:
             self._lyapunov_perf_tokens[self._active_lyapunov_request_id] = token
 
-    def _on_lyapunov_requested(self):
-        self._request_lyapunov()
-
     def _on_solve_result(self, request_id, solutions, is_partial):
         if request_id != self._active_solve_request_id:
             return
 
-        solve_token = getattr(self, "_solve_perf_tokens", {}).pop(request_id, None)
+        solve_token = self._solve_perf_tokens.pop(request_id, None)
         self._solve_pending = False
 
         if solutions is None:
             perf_finish(self, solve_token, status="failed", partial=is_partial)
+            self._set_solve_state(
+                solving=False,
+                valid=False,
+                stale=bool(self.scene.trajectory_renderer.solutions),
+                partial=False,
+                last_error="Solve failed",
+                solution_points=[],
+            )
+            if not is_partial:
+                self._clear_data_view()
             if self._solve_needed:
                 self._solve_needed = False
                 self._dispatch_solve(full=self._full_needed)
             else:
-                self.controls.set_status("Solve failed", error=True)
+                self._set_app_status("Solve failed", error=True)
             return
 
         is_valid, message = validate_solutions(solutions)
         if not is_valid:
             perf_finish(self, solve_token, status="invalid", partial=is_partial)
-            self.controls.set_status(message, error=True)
+            self._set_solve_state(
+                solving=False,
+                valid=False,
+                stale=bool(self.scene.trajectory_renderer.solutions),
+                partial=False,
+                last_error=message,
+                solution_points=[],
+            )
+            if not is_partial:
+                self._clear_data_view()
+            self._set_app_status(message, error=True)
             if self._solve_needed:
                 self._solve_needed = False
                 full = self._full_needed
@@ -1224,16 +1511,33 @@ class Window(QtWidgets.QMainWindow):
             return
 
         perf_finish(self, solve_token, status="ok", partial=is_partial)
-        self.controls.clear_status()
-        self.scene.display_solutions(solutions, is_partial)
+        self._clear_app_status()
+        self.scene.trajectory_renderer.display_solutions(solutions, is_partial)
+        self._update_data_view(solutions, is_partial)
+        self._set_solve_state(
+            solving=False,
+            valid=not is_partial,
+            stale=is_partial or bool(self._solve_needed),
+            partial=is_partial,
+            last_error=None,
+            solution_points=[len(solution) for solution in solutions or []],
+        )
+
+        if is_partial:
+            self.live_plot_controller._refresh_live_preview(solutions)
+            self._update_projection_panel_from_solutions(solutions)
 
         if not is_partial:
+            self._last_live_preview_update = None
             self._latest_projection_solutions = solutions
             config, values = self._get_current_config_and_values()
             if config is not None:
                 if _panel_visible(self, "poincare_panel"):
                     self.poincare_panel.set_attractor(config, values)
-                if self._auto_lyapunov_enabled():
+                if (
+                    self.lyapunov_panel.isVisible()
+                    and self.lyapunov_panel.auto_enabled()
+                ):
                     self._request_lyapunov(config, values)
             self._update_projection_panel_from_solutions(solutions)
             if (
@@ -1242,7 +1546,9 @@ class Window(QtWidgets.QMainWindow):
             ):
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
-            self.scene.auto_adjust_grid(solutions)
+            self.scene.grid_overlay.auto_adjust_grid(solutions)
+            for plot_name in list(self.live_plot_controller.live_plots):
+                self.live_plot_controller._refresh_live_plot(plot_name)
 
         if self._solve_needed:
             self._solve_needed = False
@@ -1251,7 +1557,10 @@ class Window(QtWidgets.QMainWindow):
             self._dispatch_solve(full=full)
 
     def _reapply_projections(self):
-        solutions = self._latest_projection_solutions or self.scene.get_solutions()
+        solutions = (
+            self._latest_projection_solutions
+            or self.scene.trajectory_renderer.solutions
+        )
         self.projection_panel.reapply_projections(solutions)
 
     def _update_projection_panel_from_solutions(self, solutions):
@@ -1268,21 +1577,20 @@ class Window(QtWidgets.QMainWindow):
         )
         self.projection_panel.update_projections(x, y, z)
         perf_finish(self, token)
-        self._last_projection_update_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
+        self._last_projection_update = QtCore.QDateTime.currentMSecsSinceEpoch()
 
     def _on_projections_data(self, x, y, z):
         if not _panel_visible(self, "projection_panel"):
             return
 
         now_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
-        if not _should_update_projection(
-            now_ms,
-            self._last_projection_update_ms,
-            PROJECTION_UPDATE_INTERVAL_MS,
+        if (
+            self._last_projection_update is not None
+            and now_ms - self._last_projection_update < PROJECTION_UPDATE_INTERVAL
         ):
             return
 
-        self._last_projection_update_ms = now_ms
+        self._last_projection_update = now_ms
         token = perf_start(
             self,
             "projection_update",
@@ -1295,29 +1603,20 @@ class Window(QtWidgets.QMainWindow):
     def _reset_camera(self):
         config, _ = self._get_current_config_and_values()
         if config is not None:
-            self.scene.set_camera(config)
-
-    def _on_anim_toggled(self):
-        playing = self.scene.toggle_animation()
-        _sync_animation_toolbar(self, playing)
-
-    def _on_anim_finished(self):
-        _sync_animation_toolbar(self, False)
+            self.scene.camera_controller.set_camera(config)
 
     def _on_n_changed(self, val):
         self.current_n = val
         self.controls.set_traj_tail_max(val)
 
-    def _on_t_max_changed(self, val):
-        self.current_t_max = val
-
     def _on_trajectories_changed(self, trajectories):
-        self.scene.set_trajectories(trajectories)
-        if getattr(self, "_restoring_view", False):
+        self.scene.trajectory_renderer.set_trajectories(trajectories)
+        if self._restoring_view:
             return
 
         self._latest_projection_solutions = None
         self.scene.clear_solutions()
+        self._clear_data_view()
         self.solver.cancel_solve()
         self._solve_pending = False
         self._solve_needed = True
@@ -1325,104 +1624,98 @@ class Window(QtWidgets.QMainWindow):
         self._dispatch_solve(full=True)
 
     def _on_trajectory_styles_changed(self, trajectories):
-        self.scene.set_trajectories(trajectories)
-        self.scene.refresh_colours()
+        renderer = self.scene.trajectory_renderer
+        renderer.set_trajectories(trajectories)
+        renderer.update_display()
 
     def _on_lyapunov_result(self, request_id, lyap, ky_dim, t_hist, lyap_hist):
         if request_id != self._active_lyapunov_request_id:
             return
-        if _has_hidden_lyapunov_panel(self):
+        if not _panel_visible(self, "lyapunov_panel"):
             return
 
-        token = getattr(self, "_lyapunov_perf_tokens", {}).pop(request_id, None)
+        token = self._lyapunov_perf_tokens.pop(request_id, None)
         perf_finish(self, token)
-        _set_lyapunov_display(self, lyap, ky_dim, t_hist, lyap_hist)
-        self.controls.clear_status()
+        self.lyapunov_panel.set_result(lyap, ky_dim, t_hist, lyap_hist)
+        self._clear_app_status()
 
     def _on_lyapunov_failed(self, request_id, message):
         if request_id != self._active_lyapunov_request_id:
             return
-        if _has_hidden_lyapunov_panel(self):
+        if not _panel_visible(self, "lyapunov_panel"):
             self._cancel_lyapunov_analysis()
             return
 
-        token = getattr(self, "_lyapunov_perf_tokens", {}).pop(request_id, None)
+        token = self._lyapunov_perf_tokens.pop(request_id, None)
         perf_finish(self, token, status="failed")
-        self.controls.set_status(f"Lyapunov failed: {message}", error=True)
+        self._set_app_status(f"Lyapunov failed: {message}", error=True)
 
-    def _panel_dock_for(self, panel):
-        for dock in getattr(self, "_panel_docks", {}).values():
+    def _find_dock(self, panel):
+        for dock in self._panel_docks.values():
             if panel in dock.widgets:
                 return dock
+
         return None
 
     def _connect_workspace_dock_signals(self):
-        docks = [getattr(self, "viewport_dock", None)]
-        docks.extend(getattr(self, "_panel_docks", {}).values())
+        docks = [self.viewport_dock, self.workspace_dock]
+        docks.extend(self._panel_docks.values())
         for dock in docks:
-            signal = getattr(dock, "container_changed", None)
-            if signal is not None:
-                signal.connect(self._on_workspace_layout_changed)
+            if dock is None:
+                continue
+            dock.container_changed.connect(self._on_workspace_layout_changed)
 
     def _on_workspace_layout_changed(self):
         QtCore.QTimer.singleShot(0, self._sync_jupyter_workspace_state)
 
     def _watch_workspace_tab_stacks(self):
-        dock_area = getattr(self, "workspace_dock_area", None)
-        if dock_area is None:
-            return
-
-        watched = getattr(self, "_workspace_tab_stacks", None)
-        if watched is None:
-            watched = weakref.WeakSet()
-            self._workspace_tab_stacks = watched
-
         try:
-            containers, _docks = dock_area.findAll()
+            containers, _docks = self.workspace_dock_area.findAll()
         except (AttributeError, RuntimeError):
             return
 
         for container in containers:
-            stack = getattr(container, "stack", None)
-            if stack is None or stack in watched:
+            try:
+                stack = container.stack
+            except AttributeError:
+                stack = None
+            if stack is None or stack in self._workspace_tab_stacks:
                 continue
             stack.currentChanged.connect(
-                lambda _index: Window._sync_jupyter_workspace_state(self)
+                lambda _index: self._sync_jupyter_workspace_state()
             )
-            watched.add(stack)
+            self._workspace_tab_stacks.add(stack)
 
-    def _restore_workspace_dock_layout(self, dock_layout):
-        dock_area = getattr(self, "workspace_dock_area", None)
-        if dock_area is None:
+    def _open_workspace_dock(self):
+        if self.workspace_dock is None:
+            self.workspace_panel.show()
             return
 
-        try:
-            dock_area.restoreState(dock_layout, missing="ignore", extra="bottom")
-        except Exception:  # noqa: BLE001
-            return
-        Window._sync_jupyter_workspace_state(self)
-
-    def _panel_name_for_panel(self, panel):
-        for panel_name, dock in getattr(self, "_panel_docks", {}).items():
-            if panel in dock.widgets:
-                return panel_name
-        return None
+        if self.workspace_dock.container() is None:
+            self.workspace_dock_area.addDock(
+                self.workspace_dock,
+                position="above",
+                relativeTo=self.viewport_dock,
+            )
+        self.workspace_panel.show()
+        if self.workspace_dock.container() is not None:
+            try:
+                self.workspace_dock.raiseDock()
+            except AttributeError:
+                pass
+        self._sync_jupyter_workspace_state()
 
     def _replace_closed_panel_dock(self, panel_name, panel):
-        titles = getattr(self, "_panel_dock_titles", {})
-        title = titles.get(panel_name)
+        title = self._panel_dock_titles.get(panel_name)
         if title is None:
             return
 
-        dock = Window._build_panel_dock(self, title, panel)
-        signal = getattr(dock, "container_changed", None)
-        on_layout_changed = getattr(self, "_on_workspace_layout_changed", None)
-        if signal is not None and on_layout_changed is not None:
-            signal.connect(on_layout_changed)
+        dock = self._build_panel_dock(title, panel)
+        dock.container_changed.connect(self._on_workspace_layout_changed)
         self._panel_docks[panel_name] = dock
 
     def _open_panel_dock(self, panel, panel_name):
-        dock = getattr(self, "_panel_docks", {}).get(panel_name)
+        dock = self._panel_docks.get(panel_name)
         if dock is None:
             panel.show()
             return
@@ -1435,17 +1728,16 @@ class Window(QtWidgets.QMainWindow):
                 relativeTo=relative_to,
             )
         panel.show()
-        container = dock.container()
-        if hasattr(container, "raiseDock"):
-            dock.raiseDock()
-        Window._sync_jupyter_workspace_state(self)
+        if dock.container() is not None:
+            try:
+                dock.raiseDock()
+            except AttributeError:
+                pass
+        self._sync_jupyter_workspace_state()
 
     def _close_panel_dock(self, panel):
-        dock = Window._panel_dock_for(self, panel)
+        dock = self._find_dock(panel)
         if dock is None:
-            close_split_panel = getattr(self, "_close_split_panel", None)
-            if close_split_panel is not None:
-                return close_split_panel(panel)
             return 0
 
         if dock.container() is not None and self._closing_panel_dock is not dock:
@@ -1457,87 +1749,88 @@ class Window(QtWidgets.QMainWindow):
         return 0
 
     def _on_panel_dock_closed(self, panel):
-        panel_name = Window._panel_name_for_panel(self, panel)
-        dock = Window._panel_dock_for(self, panel)
-        if getattr(self, "_closing_panel_dock", None) is dock:
+        panel_name = None
+        dock = None
+        for candidate_name, candidate_dock in self._panel_docks.items():
+            if panel in candidate_dock.widgets:
+                panel_name = candidate_name
+                dock = candidate_dock
+                break
+        if self._closing_panel_dock is dock:
             if panel_name is not None:
-                Window._replace_closed_panel_dock(self, panel_name, panel)
+                self._replace_closed_panel_dock(panel_name, panel)
             return
 
-        if panel is getattr(self, "lyapunov_panel", None):
+        if panel is self.lyapunov_panel:
             self._close_lyapunov_panel()
-        elif panel is getattr(self, "projection_panel", None):
+        elif panel is self.projection_panel:
             self._close_projections()
-        elif panel is getattr(self, "poincare_panel", None):
+        elif panel is self.poincare_panel:
             self._close_poincare()
-        elif panel is getattr(self, "bifurcation_panel", None):
+        elif panel is self.bifurcation_panel:
             self._close_bifurcation()
-        elif panel is getattr(self, "jupyter_console_panel", None):
-            self._close_jupyter_console()
 
         if panel_name is not None:
-            Window._replace_closed_panel_dock(self, panel_name, panel)
+            self._replace_closed_panel_dock(panel_name, panel)
 
     def _cancel_lyapunov_analysis(self):
-        cancel = getattr(self.solver, "cancel_lyapunov", None)
-        if cancel is not None:
-            cancel()
+        self.solver.cancel_lyapunov()
 
-        request_id = getattr(self, "_active_lyapunov_request_id", None)
+        request_id = self._active_lyapunov_request_id
         if request_id is not None:
-            token = getattr(self, "_lyapunov_perf_tokens", {}).pop(request_id, None)
+            token = self._lyapunov_perf_tokens.pop(request_id, None)
             perf_finish(self, token, status="cancelled")
         self._active_lyapunov_request_id = None
-        self.controls.clear_status()
+        self._clear_app_status()
 
     def _close_lyapunov_panel(self):
-        Window._cancel_lyapunov_analysis(self)
+        self._cancel_lyapunov_analysis()
         self.lyapunov_panel.hide()
-        size = Window._close_panel_dock(self, self.lyapunov_panel)
+        size = self._close_panel_dock(self.lyapunov_panel)
         if size > 0:
             self._lyapunov_splitter_size = size
-        _sync_panel_toolbar(self)
+        self._sync_toolbar_panel_actions()
 
     def _toggle_lyapunov_panel(self):
         if _panel_visible(self, "lyapunov_panel"):
             self._close_lyapunov_panel()
         else:
-            Window._open_panel_dock(self, self.lyapunov_panel, "lyapunov_panel")
+            self._open_panel_dock(self.lyapunov_panel, "lyapunov_panel")
             if self.lyapunov_panel.auto_enabled():
                 self._request_lyapunov()
-            _sync_panel_toolbar(self)
+            self._sync_toolbar_panel_actions()
 
     def _close_projections(self):
         self.projection_panel.hide()
-        size = Window._close_panel_dock(self, self.projection_panel)
+        size = self._close_panel_dock(self.projection_panel)
         if size > 0:
             self._projection_splitter_size = size
-        _sync_panel_toolbar(self)
+        self._sync_toolbar_panel_actions()
 
     def _toggle_projections(self):
         if _panel_visible(self, "projection_panel"):
             self._close_projections()
         else:
-            Window._open_panel_dock(self, self.projection_panel, "projection_panel")
+            self._open_panel_dock(self.projection_panel, "projection_panel")
             QtCore.QTimer.singleShot(0, self._reapply_projections)
             QtCore.QTimer.singleShot(50, self._reapply_projections)
-            _sync_panel_toolbar(self)
+            self._sync_toolbar_panel_actions()
 
     def _close_poincare(self):
         self.poincare_panel.cancel_solve()
-        self.scene.remove_poincare_plane()
+        self.scene.grid_overlay.remove_poincare_plane()
         self.poincare_panel.hide()
-        size = Window._close_panel_dock(self, self.poincare_panel)
+        size = self._close_panel_dock(self.poincare_panel)
         if size > 0:
             self._poincare_splitter_size = size
-        _sync_panel_toolbar(self)
+        self._sync_toolbar_panel_actions()
 
     def _toggle_poincare(self):
         if _panel_visible(self, "poincare_panel"):
             self._close_poincare()
         else:
-            Window._open_panel_dock(self, self.poincare_panel, "poincare_panel")
-            self.scene.set_poincare_plane(
+            self._open_panel_dock(self.poincare_panel, "poincare_panel")
+            self.scene.grid_overlay.set_poincare_plane(
                 self.poincare_panel.plane_combo.currentText(),
                 self.poincare_panel.value_spin.value(),
             )
@@ -1545,15 +1838,15 @@ class Window(QtWidgets.QMainWindow):
             config, values = self._get_current_config_and_values()
             if config is not None:
                 self.poincare_panel.set_attractor(config, values)
-            _sync_panel_toolbar(self)
+            self._sync_toolbar_panel_actions()
 
     def _close_bifurcation(self):
         self.bifurcation_panel.cancel_sweep()
         self.bifurcation_panel.hide()
-        size = Window._close_panel_dock(self, self.bifurcation_panel)
+        size = self._close_panel_dock(self.bifurcation_panel)
         if size > 0:
             self._bifurcation_splitter_size = size
-        _sync_panel_toolbar(self)
+        self._sync_toolbar_panel_actions()
 
     def _toggle_bifurcation(self):
         if _panel_visible(self, "bifurcation_panel"):
@@ -1563,37 +1856,58 @@ class Window(QtWidgets.QMainWindow):
             if config is None:
                 return
             self.bifurcation_panel.set_config(config, values)
-            Window._open_panel_dock(
-                self,
+            self._open_panel_dock(
                 self.bifurcation_panel,
                 "bifurcation_panel",
             )
-            _sync_panel_toolbar(self)
+            self._sync_toolbar_panel_actions()
+
+    def _new_live_plot(self):
+        self.jupyter_console_panel.plots.new()
+        self._sync_jupyter_workspace_state()
+
+    def _rename_current_live_plot(self):
+        old_name = self.jupyter_console_panel.plots.current_name
+        new_name = self.toolbar_live_plot_name.text().strip()
+        if new_name:
+            self.live_plot_controller._rename_plot(old_name, new_name)
+
+    def _on_workspace_dock_closed(self):
+        if not self._closing_workspace_dock:
+            self.workspace_panel.hide()
+        dock = self._build_workspace_dock()
+        dock.container_changed.connect(self._on_workspace_layout_changed)
+        self.workspace_dock = dock
+        self._sync_jupyter_workspace_state()
+        self._sync_toolbar_panel_actions()
 
     def _close_jupyter_console(self):
-        self.jupyter_console_panel.hide()
-        Window._close_panel_dock(self, self.jupyter_console_panel)
-        Window._sync_jupyter_workspace_state(self)
-        _sync_panel_toolbar(self)
+        if (
+            self.workspace_dock is not None
+            and self.workspace_dock.container() is not None
+        ):
+            self._closing_workspace_dock = True
+            try:
+                self.workspace_dock.close()
+            finally:
+                self._closing_workspace_dock = False
+        self.workspace_panel.hide()
+        self._sync_jupyter_workspace_state()
+        self._sync_toolbar_panel_actions()
 
     def _toggle_jupyter_console(self):
-        if _panel_visible(self, "jupyter_console_panel"):
+        if _workspace_visible(self):
             self._close_jupyter_console()
         else:
             self.jupyter_console_panel.ensure_console()
-            Window._open_panel_dock(
-                self,
-                self.jupyter_console_panel,
-                "jupyter_console_panel",
-            )
+            self._open_workspace_dock()
             self.jupyter_console_panel.focus_console()
-            Window._sync_jupyter_workspace_state(self)
-            _sync_panel_toolbar(self)
+            self._sync_jupyter_workspace_state()
+            self._sync_toolbar_panel_actions()
 
     def closeEvent(self, a0):
-        self._save_session_on_close()
         self.jupyter_console_panel.shutdown_kernel()
-        self.scene.set_orbit_mode(False)
-        self.scene.stop_animation()
+        self.scene.camera_controller.set_orbit_mode(False)
+        self.scene.animation_controller.stop()
         self.solver.shutdown()
         super().closeEvent(a0)

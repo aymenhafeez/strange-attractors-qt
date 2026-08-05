@@ -1,5 +1,6 @@
 import numpy as np
 import pyqtgraph.opengl as gl
+from pyqtgraph.Qt import QtGui
 
 STATIC_RENDER_MAX_POINTS = 80000
 ANIM_RENDER_MAX_POINTS = 30000
@@ -67,9 +68,10 @@ class TrajectoryRenderer:
 
     def set_line_mode(self, checked):
         self._line_mode = checked
-        for scatter, line in zip(self._scatters, self._lines):
-            line.setVisible(checked)
-            scatter.setVisible(not checked)
+        for index, (scatter, line) in enumerate(zip(self._scatters, self._lines)):
+            line_mode = self._trajectory_line_mode(index)
+            line.setVisible(line_mode)
+            scatter.setVisible(not line_mode)
 
     def set_point_mode(self, checked):
         self._heads_visible = checked
@@ -87,15 +89,27 @@ class TrajectoryRenderer:
     def set_trajectories(self, trajectories):
         self._trajectories = trajectories
 
+    def _trajectory_line_mode(self, i):
+        traj = self._trajectories[i] if i < len(self._trajectories) else None
+        if traj is None:
+            return self._line_mode
+        mode = traj.get("render_mode")
+        if mode is None:
+            return self._line_mode
+        return str(mode).lower() == "line"
+
     def get_traj_colour_alpha(self, i):
         traj = self._trajectories[i] if i < len(self._trajectories) else None
-        if traj is not None:
-            qc = traj["colour"]
+        qc = traj.get("colour") if traj is not None else None
+        if isinstance(qc, QtGui.QColor):
             base_colour = (qc.redF(), qc.greenF(), qc.blueF())
             alpha = self._current_alpha * traj.get("alpha", 1.0)
         else:
             base_colour = self._base_colour
-            alpha = self._current_alpha
+            if traj:
+                alpha = self._current_alpha * traj.get("alpha", 1.0)
+            else:
+                alpha = self._current_alpha
         return base_colour, alpha
 
     def plot_trail(self, n, alpha=1.0, base_colour=None):
@@ -129,15 +143,8 @@ class TrajectoryRenderer:
         if not self._solutions:
             return
         for i, sol in enumerate(self._solutions):
-            if i >= len(self._scatters):
-                break
             _, colour = self.get_traj_tail_data(i, sol)
-            self._scatters[i].setData(color=colour)
-            self._scatters[i].setVisible(not self._line_mode)
-            self._lines[i].setData(color=colour)
-            self._lines[i].setVisible(self._line_mode)
-            if i < len(self._heads):
-                self._heads[i].setData(color=colour[-1:])
+            self._set_trajectory_data(i, colour=colour)
 
     def display_solutions(self, solutions, is_partial):
         if not is_partial:
@@ -147,12 +154,7 @@ class TrajectoryRenderer:
 
         for i, sol in enumerate(solutions):
             segment, colour = self.get_traj_tail_data(i, sol)
-            self._scatters[i].setData(pos=segment, color=colour)
-            self._scatters[i].setVisible(not self._line_mode)
-            self._lines[i].setData(pos=segment, color=colour)
-            self._lines[i].setVisible(self._line_mode)
-            if i < len(self._heads):
-                self._heads[i].setData(pos=segment[-1:], color=colour[-1:])
+            self._set_trajectory_data(i, pos=segment, colour=colour)
 
     def clear_solutions(self):
         self._solutions = None
@@ -184,15 +186,38 @@ class TrajectoryRenderer:
         if not self._solutions:
             return
         for i, sol in enumerate(self._solutions):
-            if i >= len(self._scatters):
-                break
             segment, colour = self.get_traj_tail_data(i, sol)
-            self._scatters[i].setData(pos=segment, color=colour)
-            self._scatters[i].setVisible(not self._line_mode)
-            self._lines[i].setData(pos=segment, color=colour)
-            self._lines[i].setVisible(self._line_mode)
-            if i < len(self._heads):
-                self._heads[i].setData(pos=segment[-1:], color=colour[-1:])
+            self._set_trajectory_data(i, pos=segment, colour=colour)
+
+    def _trajectory_size(self, i):
+        traj = self._trajectories[i] if i < len(self._trajectories) else None
+
+        if traj is None:
+            return 1.0
+
+        return traj.get("size", 1.0)
+
+    def _set_trajectory_data(self, i, *, pos=None, colour=None):
+        if i >= len(self._scatters):
+            return
+
+        line_mode = self._trajectory_line_mode(i)
+        kwargs = {}
+        if pos is not None:
+            kwargs["pos"] = pos
+        if colour is not None:
+            kwargs["color"] = colour
+
+        self._scatters[i].setData(size=self._trajectory_size(i), **kwargs)
+        self._scatters[i].setVisible(not line_mode)
+        self._lines[i].setData(width=self._trajectory_size(i), **kwargs)
+        self._lines[i].setVisible(line_mode)
+
+        if i < len(self._heads) and colour is not None:
+            head_kwargs = {"color": colour[-1:]}
+            if pos is not None:
+                head_kwargs["pos"] = pos[-1:]
+            self._heads[i].setData(**head_kwargs)
 
     def render_animation_frame(self, frame):
         if not self._solutions:
@@ -209,8 +234,12 @@ class TrajectoryRenderer:
             base_colour, alpha = self.get_traj_colour_alpha(i)
             colour = self.get_colour_array(len(render_segment), alpha, base_colour)
             if i < len(self._scatters):
-                self._scatters[i].setData(pos=render_segment, color=colour)
-                self._lines[i].setData(pos=render_segment, color=colour)
+                self._scatters[i].setData(
+                    pos=render_segment, color=colour, size=self._trajectory_size(i)
+                )
+                self._lines[i].setData(
+                    pos=render_segment, color=colour, width=self._trajectory_size(i)
+                )
             if i < len(self._heads):
                 self._heads[i].setData(pos=render_segment[-1:], color=colour[-1:])
             all_segments.append(segment)

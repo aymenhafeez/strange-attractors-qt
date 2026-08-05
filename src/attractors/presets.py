@@ -101,11 +101,12 @@ def custom_config_from_preset_data(data):
         params.append(param)
 
     try:
+        time_defaults = data.get("time_defaults", {})
         initial_conditions = [float(v) for v in data["initial_conditions"]]
-        time_defaults = TimeDefaults(
-            t_min=int(data.get("time_defaults", {}).get("t_min", 0)),
-            t_max=int(data["t_max"]),
-            n=int(data["n"]),
+        defaults = TimeDefaults(
+            t_min=float(time_defaults.get("t_min", 0)),
+            t_max=float(time_defaults.get("t_max", data["t_max"])),
+            n=int(time_defaults.get("n", data["n"])),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise PresetError("Invalid custom preset values") from exc
@@ -118,7 +119,7 @@ def custom_config_from_preset_data(data):
         equation=func,
         params=params,
         initial_conditions=initial_conditions,
-        time_defaults=time_defaults,
+        time_defaults=defaults,
         equation_text=format_equations(tuple(equations)),
         description="User-defined custom attractor",
     )
@@ -158,6 +159,11 @@ def build_preset(
                 "equations": equations,
                 "initial_conditions": [float(v) for v in config.initial_conditions],
                 "params": [_param_to_dict(param) for param in config.params],
+                "time_defaults": {
+                    "t_min": float(config.time_defaults.t_min),
+                    "t_max": int(t_max),
+                    "n": int(n),
+                },
             }
         )
 

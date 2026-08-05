@@ -1,7 +1,7 @@
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtGui
 
-ORBIT_INTERVAL_MS = 30
+ORBIT_INTERVAL = 30  # ms
 ORBIT_STEP_DEGREES = 0.25
 
 
@@ -15,12 +15,11 @@ class CameraController:
 
     def set_camera(self, config):
         self.view.setCameraPosition(
-            pos=QtGui.QVector3D(0, 0, 0),
+            pos=QtGui.QVector3D(0, 0, config.pan),
             distance=config.camera_distance,
             elevation=config.camera_elevation,
             azimuth=config.camera_azimuth,
         )
-        self.view.opts["center"] = QtGui.QVector3D(0, 0, config.pan)
 
     def get_camera_state(self):
         center = self.view.opts.get("center", QtGui.QVector3D(0, 0, 0))
@@ -30,28 +29,6 @@ class CameraController:
             "azimuth": float(self.view.opts.get("azimuth", 0.0)),
             "center": [float(center.x()), float(center.y()), float(center.z())],
         }
-
-    def set_camera_state(self, state):
-        try:
-            center = state["center"]
-            x, y, z = (float(center[0]), float(center[1]), float(center[2]))
-            distance = float(state["distance"])
-            elevation = float(state["elevation"])
-            azimuth = float(state["azimuth"])
-        except (KeyError, TypeError, ValueError, IndexError):
-            return False
-
-        self.view.setCameraPosition(
-            pos=QtGui.QVector3D(x, y, z),
-            distance=distance,
-            elevation=elevation,
-            azimuth=azimuth,
-        )
-        self.view.opts["distance"] = distance
-        self.view.opts["elevation"] = elevation
-        self.view.opts["azimuth"] = azimuth
-        self.view.opts["center"] = QtGui.QVector3D(x, y, z)
-        return True
 
     def fit_camera_to_solutions(self, solutions):
         if not solutions:
@@ -80,7 +57,7 @@ class CameraController:
     def set_orbit_mode(self, enabled):
         if enabled:
             if not self._orbit_timer.isActive():
-                self._orbit_timer.start(ORBIT_INTERVAL_MS)
+                self._orbit_timer.start(ORBIT_INTERVAL)
         else:
             self._orbit_timer.stop()
 
@@ -89,9 +66,4 @@ class CameraController:
 
     def _orbit_frame(self):
         step = ORBIT_STEP_DEGREES * (self._orbit_speed / 100.0)
-        azimuth = float(self.view.opts.get("azimuth", 0.0)) + step
-        if hasattr(self.view, "orbit"):
-            self.view.orbit(step, 0)
-        else:
-            self.view.setCameraPosition(azimuth=azimuth)
-        self.view.opts["azimuth"] = azimuth
+        self.view.orbit(step, 0)

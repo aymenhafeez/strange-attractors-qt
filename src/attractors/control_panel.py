@@ -1,10 +1,8 @@
-from functools import partial
-
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .custom_panel import CustomPanel
+from .data_view_panel import DataViewPanel
 from .registry import ATTRACTORS
-from .trajectory_panel import TrajectoryPanel
+from .style import SIDE_PANEL
 
 STEP = 1000
 
@@ -24,15 +22,12 @@ class ControlPanel(QtWidgets.QWidget):
     t_max_changed = QtCore.pyqtSignal(int)
     animation_speed_changed = QtCore.pyqtSignal(int)
     orbit_speed_changed = QtCore.pyqtSignal(int)
-    preset_save_requested = QtCore.pyqtSignal(str, str)
-    preset_load_requested = QtCore.pyqtSignal(str)
-    preset_delete_requested = QtCore.pyqtSignal(str)
-    preset_selected = QtCore.pyqtSignal(str)
     traj_tail_length_changed = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("controlPanel")
+        self.setStyleSheet(SIDE_PANEL)
 
         # plain QWidget to work around objectName selector bug on QWidget subclasses
         inner = QtWidgets.QWidget()
@@ -43,40 +38,57 @@ class ControlPanel(QtWidgets.QWidget):
         outer_layout.addWidget(inner)
 
         self.panel_layout = QtWidgets.QVBoxLayout(inner)
-        self.panel_layout.setContentsMargins(8, 8, 8, 8)
+        self.panel_layout.setContentsMargins(4, 2, 0, 4)
         self.panel_layout.setSpacing(7)
 
         self.current_name = next(iter(ATTRACTORS.keys()))
+        self.right_panel = None
+        self.trajectory_panel = None
+        self.custom_panel = None
+        self.preset_panel = None
         self.slider_rows = []
-        self.n_slider_row = None
+        self.n_slider = None
+        self.n_spin = None
         self.n_slider_wrapper = None
-        self.t_max_slider_row = None
+        self.t_max_slider = None
+        self.t_max_spin = None
         self.t_max_slider_wrapper = None
 
-        options = QtWidgets.QHBoxLayout()
+        self.dropdown = QtWidgets.QComboBox()
+        self.dropdown.addItems([*ATTRACTORS, "Custom"])
+        self.dropdown.currentTextChanged.connect(self._on_attractor_selected)
 
-        self.dropdown = QtWidgets.QPushButton(next(iter(ATTRACTORS.keys())))
-        menu = QtWidgets.QMenu(self.dropdown)
-        for name in ATTRACTORS:
-            action = menu.addAction(name)
-            assert action is not None
-            action.triggered.connect(partial(self._on_attractor_selected, name))
-        custom_action = menu.addAction("Custom")
-        assert custom_action is not None
-        custom_action.triggered.connect(partial(self._on_attractor_selected, "Custom"))
-        self.dropdown.setMenu(menu)
+        self.content_frame = QtWidgets.QFrame()
+        self.content_frame.setObjectName("sidePanelFrame")
+        content_layout = QtWidgets.QVBoxLayout(self.content_frame)
+        content_layout.setContentsMargins(2, 2, 2, 2)
+        content_layout.setSpacing(0)
 
-        options.addWidget(self.dropdown)
-        self.panel_layout.addLayout(options)
+        self.content_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+        self.content_splitter.setObjectName("sidePanelSplitter")
+        self.content_splitter.setChildrenCollapsible(False)
+        content_layout.addWidget(self.content_splitter)
+        self.panel_layout.addWidget(self.content_frame)
 
         self.controls_scroll = QtWidgets.QScrollArea()
+        self.controls_scroll.setObjectName("sidePanelControlsScroll")
         self.controls_scroll.setWidgetResizable(True)
         self.controls_tab = QtWidgets.QWidget()
+        self.controls_tab.setObjectName("controlPanelSliders")
         self.controls_layout = QtWidgets.QVBoxLayout(self.controls_tab)
         self.controls_layout.setContentsMargins(8, 8, 8, 8)
         self.controls_layout.setSpacing(7)
         self.controls_scroll.setWidget(self.controls_tab)
-        self.panel_layout.addWidget(self.controls_scroll)
+        self.content_splitter.addWidget(self.controls_scroll)
+
+        self.data_view = DataViewPanel()
+        self.data_view.setMinimumHeight(190)
+        self.content_splitter.addWidget(self.data_view)
+        self.content_splitter.setSizes([360, 240])
+
+        options = QtWidgets.QHBoxLayout()
+        options.addWidget(self.dropdown)
+        self.controls_layout.addLayout(options)
 
         alpha_row = QtWidgets.QHBoxLayout()
         alpha_row.setSpacing(10)
@@ -93,6 +105,9 @@ class ControlPanel(QtWidgets.QWidget):
         alpha_row.addWidget(alpha_label)
         alpha_row.addWidget(self.alpha_slider)
         alpha_row.addWidget(self.alpha_spin)
+
+        # put alpha speed and orbit speed sliders in wrapper widgets so they're so
+        # spaced out nicer
         alpha_wrapper = QtWidgets.QWidget()
         alpha_wrapper.setLayout(alpha_row)
         self.controls_layout.addWidget(alpha_wrapper)
@@ -164,61 +179,12 @@ class ControlPanel(QtWidgets.QWidget):
         traj_tail_row.addWidget(traj_tail_label)
         traj_tail_row.addWidget(self.traj_tail_slider)
         traj_tail_row.addWidget(self.traj_tail_spin)
-        traj_tail_wrapper = QtWidgets.QWidget()
-        traj_tail_wrapper.setLayout(traj_tail_row)
-        traj_tail_wrapper.setVisible(False)
-        self.traj_tail_wrapper = traj_tail_wrapper
-        self.controls_layout.addWidget(traj_tail_wrapper)
 
-        self.preset_toggle_btn = QtWidgets.QPushButton("Presets ▸")
-        self.preset_toggle_btn.clicked.connect(self._toggle_preset_content)
-
-        self.preset_content = QtWidgets.QWidget()
-        self.preset_content.setObjectName("customPanelContent")
-
-        self.preset_label = QtWidgets.QLabel("Preset library")
-        self.preset_name_edit = QtWidgets.QLineEdit()
-        self.preset_name_edit.setPlaceholderText("Preset name")
-        self.preset_notes_edit = QtWidgets.QTextEdit()
-        self.preset_notes_edit.setPlaceholderText("Notes")
-        self.preset_notes_edit.setFixedHeight(54)
-        self.preset_combo = QtWidgets.QComboBox()
-        self.preset_combo.currentTextChanged.connect(self._on_preset_selected)
-        self.preset_summary = QtWidgets.QLabel("No saved presets")
-        self.preset_summary.setWordWrap(True)
-        self.save_preset_button = QtWidgets.QPushButton("Save")
-        self.save_preset_button.clicked.connect(self._emit_preset_save)
-        self.load_preset_button = QtWidgets.QPushButton("Load")
-        self.load_preset_button.clicked.connect(self._emit_preset_load)
-        self.delete_preset_button = QtWidgets.QPushButton("Delete")
-        self.delete_preset_button.clicked.connect(self._emit_preset_delete)
-
-        self.preset_grid = QtWidgets.QGridLayout()
-        self.preset_grid.setContentsMargins(6, 6, 6, 4)
-        self.preset_grid.setSpacing(6)
-        self.preset_grid.addWidget(self.preset_label, 0, 0, 1, 2)
-        self.preset_grid.addWidget(self.preset_combo, 1, 0, 1, 2)
-        self.preset_grid.addWidget(self.preset_name_edit, 2, 0, 1, 2)
-        self.preset_grid.addWidget(self.preset_notes_edit, 3, 0, 1, 2)
-        self.preset_grid.addWidget(self.preset_summary, 4, 0, 1, 2)
-        self.preset_grid.addWidget(self.save_preset_button, 5, 0)
-        self.preset_grid.addWidget(self.load_preset_button, 5, 1)
-        self.preset_grid.addWidget(self.delete_preset_button, 6, 0, 1, 2)
-        self.preset_content.setLayout(self.preset_grid)
-        self.preset_content.setVisible(False)
-
-        self.status_label = QtWidgets.QLabel("")
-        self.status_label.setWordWrap(True)
-        self.status_label.setMinimumHeight(28)
-        self.status_label.setStyleSheet("color: transparent; font-size: 11px;")
-
-        self.trajectory_panel = TrajectoryPanel()
-        self.custom_panel = CustomPanel()
-        self.custom_panel.setVisible(False)
-
-        self.controls_layout.addWidget(self.preset_toggle_btn)
-        self.controls_layout.addWidget(self.preset_content)
-        self.controls_layout.addWidget(self.status_label)
+        # put in a wrapper widget so it's visibility can be toggled
+        self.traj_tail_wrapper = QtWidgets.QWidget()
+        self.traj_tail_wrapper.setLayout(traj_tail_row)
+        self.traj_tail_wrapper.setVisible(False)
+        self.controls_layout.addWidget(self.traj_tail_wrapper)
 
     def _on_attractor_selected(self, name):
         self.set_current_attractor(name)
@@ -226,104 +192,47 @@ class ControlPanel(QtWidgets.QWidget):
 
     def set_current_attractor(self, name):
         self.current_name = name
-        self.dropdown.setText(name)
-        self.custom_panel.setVisible(name == "Custom")
+        with QtCore.QSignalBlocker(self.dropdown):
+            index = self.dropdown.findText(name)
+            if index >= 0:
+                self.dropdown.setCurrentIndex(index)
+        if self.right_panel is not None:
+            self.right_panel.set_current_attractor(name)
 
-    def set_saved_presets(self, names, selected=None):
-        selected_name = selected or self.current_preset_name()
-        with QtCore.QSignalBlocker(self.preset_combo):
-            self.preset_combo.clear()
-            self.preset_combo.addItems(names)
-            if selected_name in names:
-                self.preset_combo.setCurrentText(selected_name)
-
-        has_presets = self.preset_combo.count() > 0
-        self.load_preset_button.setEnabled(has_presets)
-        self.delete_preset_button.setEnabled(has_presets)
-        self._on_preset_selected(self.preset_combo.currentText())
-
-    def current_preset_name(self):
-        return self.preset_combo.currentText().strip()
-
-    def _preset_name_from_edit_or_combo(self):
-        return self.preset_name_edit.text().strip() or self.current_preset_name()
-
-    def _on_preset_selected(self, name):
-        with QtCore.QSignalBlocker(self.preset_name_edit):
-            self.preset_name_edit.setText(name)
-        self.preset_selected.emit(name)
-
-    def set_preset_notes(self, notes):
-        with QtCore.QSignalBlocker(self.preset_notes_edit):
-            self.preset_notes_edit.setPlainText(notes)
-
-    def set_preset_summary(self, summary):
-        self.preset_summary.setText(summary or "No saved presets")
-
-    def get_visual_options(self):
-        return {
-            "orbit_speed": self.orbit_speed_spin.value(),
-            "alpha": self.alpha_spin.value(),
-            "animation_speed": self.anim_speed_spin.value(),
-        }
-
-    def set_visual_options(self, options):
-        if "orbit_speed" in options:
-            self.orbit_speed_spin.setValue(int(options["orbit_speed"]))
-        if "alpha" in options:
-            self.alpha_spin.setValue(int(options["alpha"]))
-        if "animation_speed" in options:
-            self.anim_speed_spin.setValue(int(options["animation_speed"]))
-
-    def auto_lyapunov_enabled(self):
-        return True
+    def set_right_panel(self, right_panel):
+        self.right_panel = right_panel
+        self.trajectory_panel = right_panel.trajectory_panel
+        self.custom_panel = right_panel.custom_panel
+        self.preset_panel = right_panel.preset_panel
+        self.right_panel.set_current_attractor(self.current_name)
 
     def set_trail_options_visible(self, visible):
         self.traj_tail_wrapper.setVisible(bool(visible))
-
-    def _toggle_preset_content(self):
-        visible = self.preset_content.isHidden()
-        self.preset_content.setVisible(visible)
-        self.preset_toggle_btn.setText("Presets ▾" if visible else "Presets ▸")
-
-    def _emit_preset_save(self):
-        self.preset_save_requested.emit(
-            self._preset_name_from_edit_or_combo(),
-            self.preset_notes_edit.toPlainText().strip(),
-        )
-
-    def _emit_preset_load(self):
-        self.preset_load_requested.emit(self.current_preset_name())
-
-    def _emit_preset_delete(self):
-        self.preset_delete_requested.emit(self.current_preset_name())
 
     def configure(self, config):
         self._clear_sliders()
         self._build_n_slider(config)
         self._build_t_max_slider(config)
         self._build_param_sliders(config)
-        self.controls_layout.addWidget(self.trajectory_panel)
-        self.controls_layout.addWidget(self.custom_panel)
         self.controls_layout.addStretch()
 
     def _clear_sliders(self):
         if self.n_slider_wrapper is not None:
             self.controls_layout.removeWidget(self.n_slider_wrapper)
             self.n_slider_wrapper.deleteLater()
-            self.n_slider_row = None
+            self.n_slider = None
+            self.n_spin = None
             self.n_slider_wrapper = None
         if self.t_max_slider_wrapper is not None:
             self.controls_layout.removeWidget(self.t_max_slider_wrapper)
             self.t_max_slider_wrapper.deleteLater()
-            self.t_max_slider_row = None
+            self.t_max_slider = None
+            self.t_max_spin = None
             self.t_max_slider_wrapper = None
         for *_, wrapper in self.slider_rows:
             self.controls_layout.removeWidget(wrapper)
             wrapper.deleteLater()
         self.slider_rows.clear()
-        self.controls_layout.removeWidget(self.trajectory_panel)
-        self.controls_layout.removeWidget(self.custom_panel)
         while self.controls_layout.count():
             item = self.controls_layout.itemAt(self.controls_layout.count() - 1)
             if item is not None and item.spacerItem():
@@ -333,64 +242,64 @@ class ControlPanel(QtWidgets.QWidget):
 
     def _build_n_slider(self, config):
         n_row = QtWidgets.QHBoxLayout()
-        self.n_slider_row = n_row
         n_label = QtWidgets.QLabel("N")
         n_row.addWidget(n_label)
-        n_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        n_slider.setRange(1, 500)
-        n_slider.setValue(int(config.time_defaults.n / STEP))
-        n_slider.param_step = STEP
-        n_spin = QtWidgets.QSpinBox()
-        n_spin.setKeyboardTracking(False)
-        n_spin.setRange(1000, 500000)
-        n_spin.setSingleStep(STEP)
-        n_spin.setValue(config.time_defaults.n)
-        n_spin.param_step = STEP
-        n_slider.valueChanged.connect(
-            lambda val, slider=n_slider, spin=n_spin: self._on_n_slider_changed(
-                val, slider, spin
-            )
+        self.n_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.n_slider.setRange(1, 500)
+        self.n_slider.setValue(int(config.time_defaults.n / STEP))
+        self.n_slider.param_step = STEP
+        self.n_spin = QtWidgets.QSpinBox()
+        self.n_spin.setKeyboardTracking(False)
+        self.n_spin.setRange(1000, 500000)
+        self.n_spin.setSingleStep(STEP)
+        self.n_spin.setValue(config.time_defaults.n)
+        self.n_spin.param_step = STEP
+        self.n_slider.valueChanged.connect(
+            lambda val: self._on_n_slider_changed(val, self.n_slider, self.n_spin)
         )
-        n_slider.sliderReleased.connect(lambda: self.solve_requested.emit(True))
-        n_spin.valueChanged.connect(
-            lambda val, slider=n_slider, spin=n_spin: self._on_n_spin_changed(
-                val, slider, spin
-            )
+        self.n_slider.sliderReleased.connect(lambda: self.solve_requested.emit(True))
+        self.n_spin.valueChanged.connect(
+            lambda val: self._on_n_spin_changed(val, self.n_slider, self.n_spin)
         )
-        n_row.addWidget(n_slider)
-        n_row.addWidget(n_spin)
+        n_row.addWidget(self.n_slider)
+        n_row.addWidget(self.n_spin)
+
+        # put n_slider and t_max sliders in wrappers so because they need to be deleted
+        # and rebuilt on attractor change
         self.n_slider_wrapper = QtWidgets.QWidget()
         self.n_slider_wrapper.setLayout(n_row)
         self.controls_layout.addWidget(self.n_slider_wrapper)
 
     def _build_t_max_slider(self, config):
+        t_max = int(config.time_defaults.t_max)
         t_max_row = QtWidgets.QHBoxLayout()
-        self.t_max_slider_row = t_max_row
         t_max_label = QtWidgets.QLabel("t_max")
         t_max_row.addWidget(t_max_label)
-        t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        t_max_slider.setRange(1, 750)
-        t_max_slider.setValue(config.time_defaults.t_max)
-        t_max_slider.param_step = 1
-        t_max_spin = QtWidgets.QSpinBox()
-        t_max_spin.setKeyboardTracking(False)
-        t_max_spin.setRange(1, 750)
-        t_max_spin.setSingleStep(1)
-        t_max_spin.setValue(config.time_defaults.t_max)
-        t_max_spin.param_step = 1
-        t_max_slider.valueChanged.connect(
-            lambda val, slider=t_max_slider, spin=t_max_spin: (
-                self._on_t_max_slider_changed(val, slider, spin)
+        self.t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.t_max_slider.setRange(1, 750)
+        self.t_max_slider.setValue(t_max)
+        self.t_max_slider.param_step = 1
+        self.t_max_spin = QtWidgets.QSpinBox()
+        self.t_max_spin.setKeyboardTracking(False)
+        self.t_max_spin.setRange(1, 750)
+        self.t_max_spin.setSingleStep(1)
+        self.t_max_spin.setValue(t_max)
+        self.t_max_spin.param_step = 1
+        self.t_max_slider.valueChanged.connect(
+            lambda val: self._on_t_max_slider_changed(
+                val, self.t_max_slider, self.t_max_spin
             )
         )
-        t_max_slider.sliderReleased.connect(lambda: self.solve_requested.emit(True))
-        t_max_spin.valueChanged.connect(
-            lambda val, slider=t_max_slider, spin=t_max_spin: (
-                self._on_t_max_spin_changed(val, slider, spin)
+        self.t_max_slider.sliderReleased.connect(
+            lambda: self.solve_requested.emit(True)
+        )
+        self.t_max_spin.valueChanged.connect(
+            lambda val: self._on_t_max_spin_changed(
+                val, self.t_max_slider, self.t_max_spin
             )
         )
-        t_max_row.addWidget(t_max_slider)
-        t_max_row.addWidget(t_max_spin)
+        t_max_row.addWidget(self.t_max_slider)
+        t_max_row.addWidget(self.t_max_spin)
         self.t_max_slider_wrapper = QtWidgets.QWidget()
         self.t_max_slider_wrapper.setLayout(t_max_row)
         self.controls_layout.addWidget(self.t_max_slider_wrapper)
@@ -413,22 +322,18 @@ class ControlPanel(QtWidgets.QWidget):
             spin.param_min = p.min_val
             spin.param_step = p.step
             s.valueChanged.connect(
-                lambda val, ss=s, sp=spin: self._on_param_slider_changed(
-                    val, ss, sp
-                )
+                lambda val, ss=s, sp=spin: self._on_param_slider_changed(val, ss, sp)
             )
             s.sliderReleased.connect(lambda: self.solve_requested.emit(True))
             spin.valueChanged.connect(
-                lambda val, ss=s, sp=spin: self._on_param_spin_changed(
-                    val, ss, sp
-                )
+                lambda val, ss=s, sp=spin: self._on_param_spin_changed(val, ss, sp)
             )
             row.addWidget(s)
             row.addWidget(spin)
             wrapper = QtWidgets.QWidget()
             wrapper.setLayout(row)
             self.controls_layout.addWidget(wrapper)
-            self.slider_rows.append((p, s, row, wrapper))
+            self.slider_rows.append((p, s, spin, wrapper))
 
     def _on_n_slider_changed(self, val, slider, spin):
         n = val * slider.param_step
@@ -505,39 +410,28 @@ class ControlPanel(QtWidgets.QWidget):
         }
 
     def set_current_values(self, values):
-        for p, s, row, _ in self.slider_rows:
+        for p, s, spin, _ in self.slider_rows:
             if p.name not in values:
                 continue
-            spin = row.itemAt(2).widget()
             slider_value = _slider_index(values[p.name], p.min_val, p.step)
             with QtCore.QSignalBlocker(s), QtCore.QSignalBlocker(spin):
                 s.setValue(slider_value)
                 spin.setValue(_slider_value(slider_value, p.min_val, p.step))
 
     def set_time_values(self, n, t_max):
-        if self.n_slider_row is not None:
-            slider = self.n_slider_row.itemAt(1).widget()
-            spin = self.n_slider_row.itemAt(2).widget()
-            slider_value = int(n / spin.param_step)
-            with QtCore.QSignalBlocker(slider), QtCore.QSignalBlocker(spin):
-                slider.setValue(slider_value)
-                spin.setValue(n)
-        if self.t_max_slider_row is not None:
-            slider = self.t_max_slider_row.itemAt(1).widget()
-            spin = self.t_max_slider_row.itemAt(2).widget()
-            slider_value = int(t_max / spin.param_step)
-            with QtCore.QSignalBlocker(slider), QtCore.QSignalBlocker(spin):
-                slider.setValue(slider_value)
-                spin.setValue(t_max)
-
-    def set_status(self, message, error=False):
-        colour = "#ff6b6b" if error else "#178640"
-        self.status_label.setText(message)
-        self.status_label.setStyleSheet(
-            f"color: {colour}; font-size: 11px; font-weight: bold;"
-        )
-        self.status_label.show()
-
-    def clear_status(self):
-        self.status_label.clear()
-        self.status_label.setStyleSheet("color: transparent; font-size: 11px;")
+        if self.n_slider is not None:
+            slider_value = int(n / self.n_spin.param_step)
+            with (
+                QtCore.QSignalBlocker(self.n_slider),
+                QtCore.QSignalBlocker(self.n_spin),
+            ):
+                self.n_slider.setValue(slider_value)
+                self.n_spin.setValue(n)
+        if self.t_max_slider is not None:
+            slider_value = int(t_max / self.t_max_spin.param_step)
+            with (
+                QtCore.QSignalBlocker(self.t_max_slider),
+                QtCore.QSignalBlocker(self.t_max_spin),
+            ):
+                self.t_max_slider.setValue(slider_value)
+                self.t_max_spin.setValue(t_max)

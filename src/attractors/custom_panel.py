@@ -6,31 +6,45 @@ from .expression_parser import (
     format_equations,
 )
 from .models import AttractorConfig, AttractorParam, TimeDefaults
+from .style import RIGHT_PANEL
 
 STEP = 0.01
 DEFAULT_RANGE = (0.0, 50.0)
 SPIN_WIDTH = 72
 RANGE_PARAM_WIDTH = 42
+EQUATION_MIN_HEIGHT = 32
+EQUATION_MAX_HEIGHT = 120
+EQUATION_HEIGHT_PADDING = 8
 
 
 class CustomPanel(QtWidgets.QWidget):
     compile_requested = QtCore.pyqtSignal(object)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, collapsible=True):
         super().__init__(parent)
+        self.setStyleSheet(RIGHT_PANEL)
+        self._collapsible = collapsible
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
+        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
-        self.toggle_btn = QtWidgets.QPushButton("Custom ▾")
-        self.toggle_btn.clicked.connect(self._toggle_content)
-        layout.addWidget(self.toggle_btn)
+        self.toggle_btn = None
+        if self._collapsible:
+            self.toggle_btn = QtWidgets.QPushButton("Custom ▾")
+            self.toggle_btn.clicked.connect(self._toggle_content)
+            layout.addWidget(self.toggle_btn)
 
         self._content = QtWidgets.QWidget()
         self._content.setObjectName("customPanelContent")
+        self._content.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Preferred,
+            QtWidgets.QSizePolicy.Policy.Maximum,
+        )
         content_layout = QtWidgets.QVBoxLayout(self._content)
         content_layout.setContentsMargins(6, 6, 6, 4)
         content_layout.setSpacing(4)
+        content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
         eq_label = QtWidgets.QLabel("Equations")
         content_layout.addWidget(eq_label)
@@ -53,10 +67,14 @@ class CustomPanel(QtWidgets.QWidget):
 
             te = QtWidgets.QTextEdit()
             te.setPlaceholderText(placeholder)
-            te.setFixedHeight(32)
+            te.setMinimumHeight(EQUATION_MIN_HEIGHT)
+            te.setMaximumHeight(EQUATION_MAX_HEIGHT)
             te.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             te.setHorizontalScrollBarPolicy(
                 QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            )
+            te.document().documentLayout().documentSizeChanged.connect(
+                lambda _size, edit=te: self._resize_equation_edit(edit)
             )
             self.text_edits.append(te)
             row.addWidget(te)
@@ -108,8 +126,12 @@ class CustomPanel(QtWidgets.QWidget):
         self._equation_text = ""
 
         layout.addWidget(self._content)
+        for edit in self.text_edits:
+            self._resize_equation_edit(edit)
 
     def _toggle_content(self):
+        if self.toggle_btn is None:
+            return
         visible = not self._content.isVisible()
         self._content.setVisible(visible)
         self.toggle_btn.setText("Custom ▾" if visible else "Custom ▸")
@@ -117,6 +139,19 @@ class CustomPanel(QtWidgets.QWidget):
 
     def _get_equations(self) -> tuple[str, str, str]:
         return tuple(te.toPlainText().strip() for te in self.text_edits)
+
+    def _resize_equation_edit(self, edit):
+        """Adapt equation input to size of the text with some padding"""
+        document_height = edit.document().size().height()
+        margins = edit.contentsMargins()
+        height = round(
+            document_height + margins.top() + margins.bottom() + EQUATION_HEIGHT_PADDING
+        )
+        height = max(EQUATION_MIN_HEIGHT, min(EQUATION_MAX_HEIGHT, height))
+        if edit.height() != height:
+            edit.setFixedHeight(height)
+            self._content.adjustSize()
+            self.adjustSize()
 
     def set_from_config(self, config):
         equations = []
@@ -126,6 +161,7 @@ class CustomPanel(QtWidgets.QWidget):
 
         for text_edit, equation in zip(self.text_edits, equations):
             text_edit.setPlainText(equation)
+            self._resize_equation_edit(text_edit)
 
         for spin, value in zip(self.ic_spins, config.initial_conditions):
             spin.setValue(float(value))
@@ -150,7 +186,8 @@ class CustomPanel(QtWidgets.QWidget):
             self.solve_btn.hide()
 
         self._content.setVisible(True)
-        self.toggle_btn.setText("Custom ▾")
+        if self.toggle_btn is not None:
+            self.toggle_btn.setText("Custom ▾")
 
     def _on_compile(self):
         equations = self._get_equations()
@@ -187,7 +224,7 @@ class CustomPanel(QtWidgets.QWidget):
         self.adjustSize()
 
         self._show_status(
-            f"Compiled — {len(detected_params)} parameter(s): "
+            f"Compiled - {len(detected_params)} parameter(s): "
             + ", ".join(detected_params)
             + ". Set ranges and click solve",
             error=False,
@@ -258,7 +295,6 @@ class CustomPanel(QtWidgets.QWidget):
         self.solve_btn.hide()
         self.compile_btn.show()
         self.adjustSize()
-        # self._emit_config()
 
     def _emit_config(self):
         params = []
@@ -293,7 +329,7 @@ class CustomPanel(QtWidgets.QWidget):
         )
 
         self._show_status(
-            f"Compiled — {len(params)} parameter(s): "
+            f"Compiled - {len(params)} parameter(s): "
             + ", ".join(p.name for p in params),
             error=False,
         )

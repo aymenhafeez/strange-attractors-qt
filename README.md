@@ -19,15 +19,15 @@ This is a local, more performant version of
 ## Current features
 
 * Selection of attractors with real time slider updates for parameters
-* Input custom attractor equations
+* Input custom time dependant ODE systems
 * Trajectory animation
-* Trail mode showing solution's time step evolution
 * 2D heatmap projections
 * Multi trajectory view with varying initial conditions
 * Lyapunov exponent spectrum, convergence plots and Kaplan-Yorke dimension
-* Bifuraction plot from Poincaré sweep
+* Bifuraction diagrams
 * Poincaré section view with configurable section plane
-* Save and reload attractor configurations
+* Save and load attractor configurations
+* Integrated Jupyter console
 
 ## Running the app
 

@@ -1,3 +1,4 @@
+from pyqtgraph.parametertree import Parameter, ParameterTree
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 DEFAULT_PALETTE = [
@@ -12,225 +13,316 @@ DEFAULT_PALETTE = [
 ]
 
 MAX_TRAJECTORIES = 8
-SPIN_WIDTH = 64
-ICON_BUTTON_SIZE = 20
+ROW_TREE_MIN_HEIGHT = 96
+ROW_HEIGHT = 26
 
 
-class _TrajectoryRow(QtWidgets.QWidget):
+class _TrajectoryRow(QtCore.QObject):
     changed = QtCore.pyqtSignal()
     style_changed = QtCore.pyqtSignal()
     remove_requested = QtCore.pyqtSignal(object)
 
     def __init__(
-        self, ic: list[float], colour: QtGui.QColor, removeable: bool, parent=None
+        self,
+        ic: list[float],
+        colour: QtGui.QColor,
+        removeable: bool,
+        *,
+        label: str,
+        n: int,
+        t_max: int,
+        parent=None,
     ):
         super().__init__(parent)
-        outer = QtWidgets.QVBoxLayout(self)
-        outer.setContentsMargins(0, 4, 0, 4)
-        outer.setSpacing(8)
-
-        layout = QtWidgets.QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-        outer.addLayout(layout)
-
-        self._colour = colour
-        self.colour_btn = QtWidgets.QPushButton()
-        self.colour_btn.setFixedSize(ICON_BUTTON_SIZE, ICON_BUTTON_SIZE)
-        self._apply_colour_btn()
-        self.colour_btn.clicked.connect(self._pick_colour)
-        layout.addWidget(self.colour_btn)
-
-        self.spins: list[QtWidgets.QDoubleSpinBox] = []
-        for val in ic:
-            spin = QtWidgets.QDoubleSpinBox()
-            spin.setRange(-1000.0, 1000.0)
-            spin.setDecimals(3)
-            spin.setSingleStep(0.1)
-            spin.setValue(val)
-            spin.setFixedWidth(SPIN_WIDTH)
-            spin.setFixedHeight(28)
-            spin.valueChanged.connect(self.changed)
-            layout.addWidget(spin)
-            self.spins.append(spin)
-
+        children = [
+            {"name": "Colour", "type": "color", "value": colour},
+            {
+                "name": "N",
+                "type": "int",
+                "value": n,
+                "limits": (1000, 500000),
+                "step": 1000,
+            },
+            {
+                "name": "t_max",
+                "type": "int",
+                "value": t_max,
+                "limits": (1, 750),
+            },
+            {
+                "name": "x₀",
+                "type": "float",
+                "value": ic[0],
+                "limits": (-1000.0, 1000.0),
+                "step": 0.1,
+            },
+            {
+                "name": "y₀",
+                "type": "float",
+                "value": ic[1],
+                "limits": (-1000.0, 1000.0),
+                "step": 0.1,
+            },
+            {
+                "name": "z₀",
+                "type": "float",
+                "value": ic[2],
+                "limits": (-1000.0, 1000.0),
+                "step": 0.1,
+            },
+            {"name": "Alpha", "type": "int", "value": 100, "limits": (0, 100)},
+            {
+                "name": "Size",
+                "type": "float",
+                "value": 1.0,
+                "limits": (0.1, 20.0),
+                "step": 0.1,
+            },
+            {
+                "name": "Render",
+                "type": "list",
+                "limits": ["points", "line"],
+                "value": "points",
+            },
+        ]
         if removeable:
-            remove_btn = QtWidgets.QToolButton()
-            remove_btn.setText("×")
-            remove_btn.setAutoRaise(True)
-            remove_btn.setFixedSize(ICON_BUTTON_SIZE, ICON_BUTTON_SIZE)
-            remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
-            layout.addWidget(remove_btn)
-        else:
-            layout.addSpacing(ICON_BUTTON_SIZE + 4)
+            children.append({"name": "Remove", "type": "action"})
 
-        alpha_row = QtWidgets.QHBoxLayout()
-        alpha_row.setContentsMargins(0, 0, 0, 0)
-        alpha_row.setSpacing(6)
-        alpha_row.addSpacing(ICON_BUTTON_SIZE + 6)
-        alpha_label = QtWidgets.QLabel("α")
-        alpha_row.addWidget(alpha_label)
-        self.alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.alpha_slider.setRange(0, 100)
-        self.alpha_slider.setValue(100)
-        self.alpha_slider.setFixedHeight(18)
-        self.alpha_slider.valueChanged.connect(self.style_changed)
-        alpha_row.addWidget(self.alpha_slider)
-        alpha_row.addSpacing(ICON_BUTTON_SIZE + 4)
-        outer.addLayout(alpha_row)
+        self.param = Parameter.create(name=label, type="group", children=children)
+        _remove_parameter_defaults(self.param)
+        self.param.sigTreeStateChanged.connect(self._on_tree_change)
+        remove_param = self.param.names.get("Remove")
+        if remove_param is not None:
+            remove_param.sigActivated.connect(
+                lambda _param: self.remove_requested.emit(self)
+            )
 
-    def _apply_colour_btn(self):
-        self.colour_btn.setStyleSheet(
-            f"background-color: {self._colour.name()}; border: 1px solid #555;"
-        )
+    def set_enabled(self, enabled: bool):
+        for child in self.param.children():
+            child.setOpts(enabled=enabled)
 
-    def _pick_colour(self):
-        colour = QtWidgets.QColorDialog.getColor(self._colour, self)
-        if colour.isValid():
-            self._colour = colour
-            self._apply_colour_btn()
-            self.style_changed.emit()
+    def set_identity(self, index: int):
+        label = f"T{index}"
+        self.param.setName(label)
+
+    def _on_tree_change(self, _param, changes):
+        for param, change, _data in changes:
+            if change != "value":
+                continue
+            if param.name() in {"Colour", "Alpha", "Size", "Render"}:
+                self.style_changed.emit()
+            else:
+                self.changed.emit()
 
     def get_ic(self) -> list[float]:
-        return [s.value() for s in self.spins]
+        return [
+            self.param.child("x₀").value(),
+            self.param.child("y₀").value(),
+            self.param.child("z₀").value(),
+        ]
+
+    def get_n(self) -> int:
+        return self.param.child("N").value()
+
+    def get_t_max(self) -> int:
+        return self.param.child("t_max").value()
 
     def get_colour(self) -> QtGui.QColor:
-        return self._colour
+        return self.param.child("Colour").value()
 
     def get_alpha(self) -> float:
-        return self.alpha_slider.value() / 100.0
+        return self.param.child("Alpha").value() / 100.0
 
-    def set_ic(self, ic: list[float]):
-        for spin, val in zip(self.spins, ic):
-            spin.blockSignals(True)
-            spin.setValue(val)
-            spin.blockSignals(False)
+    def get_render_mode(self) -> str:
+        return self.param.child("Render").value()
 
-    def set_colour(self, colour: QtGui.QColor):
-        if colour.isValid():
-            self._colour = colour
-            self._apply_colour_btn()
+    def set_render_mode(self, mode: str):
+        value = "line" if mode.lower() == "line" else "points"
+        self.param.child("Render").setValue(value)
 
-    def set_alpha(self, alpha: float):
-        value = max(0, min(100, round(float(alpha) * 100)))
-        self.alpha_slider.blockSignals(True)
-        self.alpha_slider.setValue(value)
-        self.alpha_slider.blockSignals(False)
+    def get_size(self):
+        return self.param.child("Size").value()
 
 
 class TrajectoryPanel(QtWidgets.QWidget):
     trajectories_changed = QtCore.pyqtSignal(list)
     styles_changed = QtCore.pyqtSignal(list)
+    layout_changed = QtCore.pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, collapsible=True):
         super().__init__(parent)
+        self._collapsible = collapsible
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
+        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
-        self.toggle_btn = QtWidgets.QPushButton("Trajectories ▸")
-        self.toggle_btn.clicked.connect(self._toggle_content)
-        layout.addWidget(self.toggle_btn)
+        self.toggle_btn = None
+        if self._collapsible:
+            self.toggle_btn = QtWidgets.QPushButton("Trajectories ▸")
+            self.toggle_btn.clicked.connect(self._toggle_content)
+            layout.addWidget(self.toggle_btn)
 
         self._content = QtWidgets.QWidget()
         self._content.setObjectName("customPanelContent")
+        self._content.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Preferred,
+            QtWidgets.QSizePolicy.Policy.Maximum,
+        )
         content_layout = QtWidgets.QVBoxLayout(self._content)
-        content_layout.setContentsMargins(8, 8, 8, 8)
-        content_layout.setSpacing(8)
+        content_layout.setContentsMargins(4, 6, 4, 6)
+        content_layout.setSpacing(6)
+        content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
-        enable_row = QtWidgets.QHBoxLayout()
-        self._enable_check = QtWidgets.QCheckBox("Enable multi-trajectory")
-        self._enable_check.setChecked(False)
-        self._enable_check.toggled.connect(self._on_enable_toggled)
-        enable_row.addWidget(self._enable_check)
-        content_layout.addLayout(enable_row)
-
-        self._rows_container = QtWidgets.QWidget()
-        self._rows_container.setObjectName("rowsContainer")
-        self._rows_container.setEnabled(False)
-        rows_container_layout = QtWidgets.QVBoxLayout(self._rows_container)
-        rows_container_layout.setContentsMargins(0, 0, 0, 0)
-        rows_container_layout.setSpacing(10)
-
-        header = QtWidgets.QHBoxLayout()
-        header.setSpacing(6)
-        header.addSpacing(ICON_BUTTON_SIZE + 4)
-        for axis in ("x₀", "y₀", "z₀"):
-            lbl = QtWidgets.QLabel(axis)
-            lbl.setFixedWidth(SPIN_WIDTH)
-            lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-            header.addWidget(lbl)
-        rows_container_layout.addLayout(header)
-
-        self._rows_layout = QtWidgets.QVBoxLayout()
-        self._rows_layout.setSpacing(16)
-        rows_container_layout.addLayout(self._rows_layout)
+        self._rows_container = ParameterTree(showHeader=True)
+        self._rows_container.itemExpanded.connect(
+            lambda _item: self._resize_to_content()
+        )
+        self._rows_container.itemCollapsed.connect(
+            lambda _item: self._resize_to_content()
+        )
+        self._rows_container.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Preferred,
+            QtWidgets.QSizePolicy.Policy.Maximum,
+        )
+        self._rows_container.setMinimumHeight(ROW_TREE_MIN_HEIGHT)
+        self._root_param = Parameter.create(
+            name="Trajectories",
+            type="group",
+            children=[
+                {
+                    "name": "Enable multi-trajectory",
+                    "type": "bool",
+                    "value": False,
+                },
+                {"name": "Add trajectory", "type": "action"},
+            ],
+        )
+        _remove_parameter_defaults(self._root_param)
+        self._enable_param = self._root_param.child("Enable multi-trajectory")
+        self._add_param = self._root_param.child("Add trajectory")
+        self._enable_param.sigValueChanged.connect(
+            lambda _param, value: self._on_enable_toggled(value)
+        )
+        self._add_param.sigActivated.connect(lambda _param: self._add_row())
+        self._add_param.setOpts(enabled=False)
+        self._rows_container.addParameters(self._root_param, showTop=False)
 
         self._rows: list[_TrajectoryRow] = []
         self._suppress_emit = False
+        self._default_n = 1000
+        self._default_t_max = 10
 
         content_layout.addWidget(self._rows_container)
 
-        self._add_btn = QtWidgets.QPushButton("+ Add")
-        self._add_btn.setFixedHeight(30)
-        self._add_btn.setEnabled(False)
-        self._add_btn.clicked.connect(lambda: self._add_row())
-        content_layout.addWidget(self._add_btn)
         layout.addWidget(self._content)
-        self._content.setVisible(False)
+        self._content.setVisible(not self._collapsible)
 
     def _toggle_content(self):
+        if self.toggle_btn is None:
+            return
         visible = not self._content.isVisible()
         self._content.setVisible(visible)
         self.toggle_btn.setText("Trajectories ▾" if visible else "Trajectories ▸")
         self.adjustSize()
+        self.layout_changed.emit()
 
     def _on_enable_toggled(self, enabled: bool):
-        self._rows_container.setEnabled(enabled)
-        self._add_btn.setEnabled(enabled)
+        self._add_param.setOpts(enabled=enabled)
+        for row in self._rows:
+            row.set_enabled(enabled)
         self._emit()
 
     def is_enabled(self) -> bool:
-        return self._enable_check.isChecked()
+        return bool(self._enable_param.value())
 
     def reset(self, config):
         for row in self._rows:
-            self._rows_layout.removeWidget(row)
             row.deleteLater()
+            self._root_param.removeChild(row.param)
         self._rows.clear()
-        self._add_row(ic=config.initial_conditions, removeable=False)
+        self._default_n = int(config.time_defaults.n)
+        self._default_t_max = int(config.time_defaults.t_max)
+        self._add_row(
+            ic=config.initial_conditions,
+            removeable=False,
+            n=self._default_n,
+            t_max=self._default_t_max,
+        )
 
-    def _add_row(self, ic: list[float] | None = None, removeable: bool = True):
+    def _add_row(
+        self,
+        ic: list[float] | None = None,
+        removeable: bool = True,
+        *,
+        n: int | None = None,
+        t_max: int | None = None,
+    ):
         if len(self._rows) >= MAX_TRAJECTORIES:
             return
         if ic is None:
             ic = self._rows[0].get_ic() if self._rows else [0.1, 0.0, 0.0]
+        if n is None:
+            n = self._rows[0].get_n() if self._rows else self._default_n
+        if t_max is None:
+            t_max = self._rows[0].get_t_max() if self._rows else self._default_t_max
 
         colour = DEFAULT_PALETTE[len(self._rows) % len(DEFAULT_PALETTE)]
-        row = _TrajectoryRow(ic, colour, removeable)
+        row = _TrajectoryRow(
+            ic,
+            colour,
+            removeable,
+            label=f"T{len(self._rows)}",
+            n=n,
+            t_max=t_max,
+            parent=self,
+        )
         row.changed.connect(self._emit)
+        row.changed.connect(self._resize_to_content)
         row.style_changed.connect(self._emit_styles)
+        row.style_changed.connect(self._resize_to_content)
         row.remove_requested.connect(self._remove_row)
-        self._rows_layout.addWidget(row)
         self._rows.append(row)
+        insert_at = max(0, len(self._root_param.children()) - 1)
+        self._root_param.insertChild(insert_at, row.param)
+        row.set_enabled(self.is_enabled())
+        self._sync_row_identities()
         self._resize_to_content()
         self._emit()
 
     def _remove_row(self, row: _TrajectoryRow):
-        self._rows_layout.removeWidget(row)
         self._rows.remove(row)
-        row.hide()
-        row.setParent(None)
+        self._root_param.removeChild(row.param)
         row.deleteLater()
+        self._sync_row_identities()
         self._resize_to_content()
         self._emit()
+
+    def _sync_row_identities(self):
+        for index, row in enumerate(self._rows):
+            row.set_identity(index)
 
     def _resize_to_content(self):
         QtCore.QTimer.singleShot(0, self._apply_resize)
 
     def _apply_resize(self):
+        max_item_bottom = 0
+        item_count = 0
+        for item in self._rows_container.listAllItems():
+            rect = self._rows_container.visualItemRect(item)
+            if rect.isValid():
+                max_item_bottom = max(max_item_bottom, rect.y() + rect.height())
+            item_count += 1
+        if max_item_bottom:
+            height = self._rows_container.header().height() + max_item_bottom + 6
+        else:
+            height = (
+                self._rows_container.header().height() + item_count * ROW_HEIGHT + 6
+            )
+        self._rows_container.setFixedHeight(max(ROW_TREE_MIN_HEIGHT, height))
         self._content.adjustSize()
         self.adjustSize()
+        self.layout_changed.emit()
 
     def _emit(self):
         if self._suppress_emit:
@@ -243,75 +335,33 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self.styles_changed.emit(self.get_trajectories())
 
     def get_trajectories(self) -> list[dict]:
-        if not self._enable_check.isChecked():
+        if not self.is_enabled():
             return []
         return [
-            {"ic": r.get_ic(), "colour": r.get_colour(), "alpha": r.get_alpha()}
-            for r in self._rows
+            {
+                "label": f"T{index}",
+                "ic": r.get_ic(),
+                "n": r.get_n(),
+                "t_max": r.get_t_max(),
+                "colour": r.get_colour(),
+                "alpha": r.get_alpha(),
+                "size": r.get_size(),
+                "render_mode": r.get_render_mode(),
+            }
+            for index, r in enumerate(self._rows)
         ]
 
-    def get_session_state(self) -> dict:
-        return {
-            "enabled": self._enable_check.isChecked(),
-            "rows": [
-                {
-                    "ic": [float(v) for v in row.get_ic()],
-                    "colour": row.get_colour().name(),
-                    "alpha": float(row.get_alpha()),
-                }
-                for row in self._rows
-            ],
-        }
-
-    def set_session_state(self, state, config):
-        if not isinstance(state, dict):
-            return
-
-        rows = state.get("rows")
-        if not isinstance(rows, list) or not rows:
-            return
-
+    def set_render_mode_all(self, mode: str):
         self._suppress_emit = True
         try:
             for row in self._rows:
-                self._rows_layout.removeWidget(row)
-                row.deleteLater()
-            self._rows.clear()
-
-            for idx, row_state in enumerate(rows[:MAX_TRAJECTORIES]):
-                ic = _ic_from_session_row(row_state, config.initial_conditions)
-                self._add_row(ic=ic, removeable=idx > 0)
-                row = self._rows[-1]
-                row_data = row_state if isinstance(row_state, dict) else {}
-
-                colour = QtGui.QColor(str(row_data.get("colour", "")))
-                row.set_colour(colour)
-                try:
-                    row.set_alpha(float(row_data.get("alpha", 1.0)))
-                except (TypeError, ValueError):
-                    row.set_alpha(1.0)
-
-            enabled = bool(state.get("enabled", False))
-            with QtCore.QSignalBlocker(self._enable_check):
-                self._enable_check.setChecked(enabled)
-            self._rows_container.setEnabled(enabled)
-            self._add_btn.setEnabled(enabled)
+                row.set_render_mode(mode)
         finally:
             self._suppress_emit = False
-
-        self._resize_to_content()
-        self._emit()
+        self._emit_styles()
 
 
-def _ic_from_session_row(row_state, fallback):
-    if not isinstance(row_state, dict):
-        return list(fallback)
-
-    raw_ic = row_state.get("ic")
-    if not isinstance(raw_ic, list) or len(raw_ic) != 3:
-        return list(fallback)
-
-    try:
-        return [float(v) for v in raw_ic]
-    except (TypeError, ValueError):
-        return list(fallback)
+def _remove_parameter_defaults(param):
+    param.setDefault(None)
+    for child in param.children():
+        _remove_parameter_defaults(child)

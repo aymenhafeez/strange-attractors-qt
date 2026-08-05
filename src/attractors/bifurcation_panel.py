@@ -30,6 +30,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         row1.addWidget(QtWidgets.QLabel("  Variable:"))
         self.var_combo = QtWidgets.QComboBox()
         self.var_combo.addItems(["x", "y", "z"])
+        self.var_combo.currentTextChanged.connect(self._update_axis_label)
         row1.addWidget(self.var_combo)
 
         layout.addLayout(row1)
@@ -68,7 +69,7 @@ class BifurcationPanel(QtWidgets.QWidget):
 
         self.cancel_btn = QtWidgets.QPushButton("\u25a0 Cancel")
         self.cancel_btn.setEnabled(False)
-        self.cancel_btn.clicked.connect(self._cancel_sweep)
+        self.cancel_btn.clicked.connect(self.cancel_sweep)
         row3.addWidget(self.cancel_btn)
 
         self.export_btn = QtWidgets.QPushButton("Export PNG...")
@@ -108,7 +109,7 @@ class BifurcationPanel(QtWidgets.QWidget):
             return
 
         p = next(
-            (p for p in self.config.params if p.name == self.param_combo.currentText()),
+            (p for p in self.config.params if p.name == param_name),
             None,
         )
         if p is None:
@@ -117,10 +118,13 @@ class BifurcationPanel(QtWidgets.QWidget):
         span = p.max_val - p.min_val
         self.min_spin.setValue(p.min_val + 0.01 * span)
         self.max_spin.setValue(p.max_val - 0.01 * span)
+        self._update_axis_label()
+
+    def _update_axis_label(self):
         self.plot_widget.setLabel("left", self.var_combo.currentText())
 
     def set_config(self, config, current_values):
-        self._cancel_sweep()
+        self.cancel_sweep()
         self._sweep_gen += 1
         self._error_label.setVisible(False)
         self.config = config
@@ -194,12 +198,9 @@ class BifurcationPanel(QtWidgets.QWidget):
         self._worker = worker
         QThreadPool.globalInstance().start(worker)
 
-    def _cancel_sweep(self):
-        self.cancel_sweep()
-
     def cancel_sweep(self):
         if self._worker:
-            self._worker._cancel = True
+            self._worker.cancel()
             self._worker = None
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
