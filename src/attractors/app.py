@@ -244,6 +244,7 @@ class Window(QtWidgets.QMainWindow):
         self.live_plot_controller._sync_plots()
 
         self._build_toolbar()
+        self._build_menu_bar()
         self._build_status_bar()
 
         self.workspace_dock_area = DockArea()
@@ -482,34 +483,34 @@ class Window(QtWidgets.QMainWindow):
 
         toolbar.addSeparator()
 
-        reset_action = toolbar.addAction(
+        self.toolbar_reset_action = toolbar.addAction(
             self.style().standardIcon(style_icon.SP_BrowserReload), "Reset"
         )
-        reset_action.setToolTip("Reset parameters")
-        reset_action.triggered.connect(self.controls.reset_to_defaults)
+        self.toolbar_reset_action.setToolTip("Reset parameters")
+        self.toolbar_reset_action.triggered.connect(self.controls.reset_to_defaults)
 
-        reset_camera_action = toolbar.addAction(
+        self.toolbar_reset_camera_action = toolbar.addAction(
             QtGui.QIcon.fromTheme("zoom-original"),
             "Reset camera",
             self._reset_camera,
         )
-        reset_camera_action.setToolTip("Reset camera")
+        self.toolbar_reset_camera_action.setToolTip("Reset camera")
 
-        fit_camera_action = toolbar.addAction(
+        self.toolbar_fit_camera_action = toolbar.addAction(
             QtGui.QIcon.fromTheme("view-fullscreen"),
             "Fit",
             lambda: self.scene.camera_controller.fit_camera_to_solutions(
                 self.scene.trajectory_renderer.solutions
             ),
         )
-        fit_camera_action.setToolTip("Fit view to trajectories")
+        self.toolbar_fit_camera_action.setToolTip("Fit view to trajectories")
 
-        save_action = toolbar.addAction(
+        self.toolbar_save_view_action = toolbar.addAction(
             self.style().standardIcon(style_icon.SP_DialogSaveButton),
             "Save",
             self.scene.viewport_overlay.save_view_as_png,
         )
-        save_action.setToolTip("Save view as PNG")
+        self.toolbar_save_view_action.setToolTip("Save view as PNG")
 
         toolbar.addSeparator()
 
@@ -571,15 +572,17 @@ class Window(QtWidgets.QMainWindow):
 
         toolbar.addSeparator()
 
-        solve_action = toolbar.addAction(
+        self.toolbar_solve_action = toolbar.addAction(
             self._toolbar_icon(
                 "system-run",
                 QtWidgets.QStyle.StandardPixmap.SP_MediaPlay,
             ),
             "Solve",
         )
-        solve_action.setToolTip("Run a full solve")
-        solve_action.triggered.connect(lambda: self._on_controls_solve_requested(True))
+        self.toolbar_solve_action.setToolTip("Run a full solve")
+        self.toolbar_solve_action.triggered.connect(
+            lambda: self._on_controls_solve_requested(True)
+        )
 
         self.tools_button = QtWidgets.QToolButton()
         self.tools_button.setText("Tools")
@@ -645,6 +648,65 @@ class Window(QtWidgets.QMainWindow):
         toolbar.addWidget(end_pad)
 
         self._sync_toolbar_panel_actions()
+
+    def _build_menu_bar(self):
+        menu_bar = self.menuBar()
+        menu_bar.clear()
+
+        file_menu = menu_bar.addMenu("&File")
+        file_menu.addAction(self.toolbar_save_view_action)
+        file_menu.addSeparator()
+        file_menu.addAction("Open preset folder", self._open_preset_folder)
+
+        view_menu = menu_bar.addMenu("&View")
+        view_menu.addAction(self.toolbar_left_panel_action)
+        view_menu.addAction(self.toolbar_right_panel_action)
+        view_menu.addAction(self.toolbar_jupyter_console_action)
+        view_menu.addAction(self.toolbar_process_status_action)
+        view_menu.addSeparator()
+        view_menu.addAction(self.toolbar_reset_camera_action)
+        view_menu.addAction(self.toolbar_fit_camera_action)
+        view_menu.addAction(self.toolbar_grid_action)
+        view_menu.addAction(self.toolbar_orbit_action)
+
+        system_menu = menu_bar.addMenu("&System")
+        system_menu.addAction(self.toolbar_solve_action)
+        system_menu.addAction(self.toolbar_reset_action)
+        system_menu.addSeparator()
+        system_menu.addAction(self.toolbar_loop_action)
+        system_menu.addAction(self.toolbar_point_action)
+        system_menu.addAction(self.toolbar_line_action)
+        system_menu.addAction(self.toolbar_trail_action)
+
+        workspace_menu = menu_bar.addMenu("&Workspace")
+        workspace_menu.addAction("New plot", self._new_live_plot)
+        workspace_menu.addAction("Rename current plot", self._rename_current_live_plot)
+        workspace_menu.addSeparator()
+        workspace_menu.addAction(
+            "Clear current plot",
+            self.live_plot_controller._clear_plot,
+        )
+        workspace_menu.addAction(
+            "Clear all plots",
+            self.live_plot_controller._clear_all_plots,
+        )
+
+        analysis_menu = menu_bar.addMenu("&Analysis")
+        analysis_menu.addAction(self.toolbar_lyapunov_action)
+        analysis_menu.addAction(self.toolbar_projection_action)
+        analysis_menu.addAction(self.toolbar_poincare_action)
+        analysis_menu.addAction(self.toolbar_bifurcation_action)
+
+        explore_menu = menu_bar.addMenu("&Explore")
+        explore_menu.addAction(
+            "Clear traces",
+            self.jupyter_console_panel.explorer.clear_traces,
+        )
+        explore_menu.addAction(
+            "Clear sliders",
+            self.jupyter_console_panel.explorer.clear_sliders,
+        )
+        explore_menu.addAction("Clear all", self.jupyter_console_panel.explorer.clear)
 
     def _build_status_bar(self):
         status_bar = QtWidgets.QStatusBar()
