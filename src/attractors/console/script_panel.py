@@ -3,7 +3,7 @@ from pathlib import Path
 from PyQt6.Qsci import QsciLexerPython, QsciScintilla
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from ..style import SPLITTER_HANDLE_HOVER
+from ..ui.style import SPLITTER_HANDLE_HOVER
 from .script_browser import ScriptBrowser, default_scripts_dir
 
 # dark mode palette derived from KDE Breeze Dark

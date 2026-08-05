@@ -1,8 +1,8 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from ..systems.registry import ATTRACTORS
 from .data_view_panel import DataViewPanel
 from .style import SIDE_PANEL
-from .systems.registry import ATTRACTORS
 
 STEP = 1000
 
