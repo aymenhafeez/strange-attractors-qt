@@ -5,6 +5,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.docking import AreaBoundDock as Dock
 from ..ui.docking import AreaBoundDockArea as DockArea
+from .explorer import ConsoleExplorer
 from .script_panel import ScriptPanel
 
 try:
@@ -420,6 +421,20 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             self.plot,
             self.plot_dock,
         )
+
+        self.explorer_params = QtWidgets.QWidget()
+        self.explorer_params_layout = QtWidgets.QVBoxLayout(self.explorer_params)
+        self.explorer_params_layout.setContentsMargins(0, 0, 0, 0)
+        self.explorer_params_layout.setSpacing(0)
+        # self.explorer_params_layout.addStretch()
+
+        self.explorer_params_dock = Dock("Parameters", size=(10, 3), closable=False)
+        self.explorer_params_dock.addWidget(self.explorer_params)
+        self.dock_area.addDock(
+            self.explorer_params_dock, position="bottom", relativeTo=self.plot_dock
+        )
+
+        self.explorer = ConsoleExplorer(self.plots, self.explorer_params_layout)
 
         self._console_host = QtWidgets.QWidget()
         self._console_layout = QtWidgets.QVBoxLayout(self._console_host)

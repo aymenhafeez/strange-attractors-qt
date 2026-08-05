@@ -1,7 +1,8 @@
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .jupyter_console_panel import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE
+PLOT_MODE_REPLACE = "replace"
+PLOT_MODE_OVERLAY = "overlay"
 
 
 class ConsoleParam(QtCore.QObject):

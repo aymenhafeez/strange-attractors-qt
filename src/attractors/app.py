@@ -222,6 +222,9 @@ class Window(QtWidgets.QMainWindow):
         )
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
         self.workspace_panel = WorkspacePanel(self.jupyter_console_panel)
+        self.jupyter_console_panel.explorer.status_callback = (
+            self.workspace_panel.set_status
+        )
         self.workspace_panel.plot_requested.connect(
             self.live_plot_controller._on_plot_requested
         )
@@ -1190,6 +1193,9 @@ class Window(QtWidgets.QMainWindow):
             "clear_plot": plot.clear,
             "current_values": lambda: self.system.values,
             "scripts_dir": self._scripts_directory,
+            "explore": self.jupyter_console_panel.explorer,
+            "slider": self.jupyter_console_panel.explorer.slider,
+            "curve": self.jupyter_console_panel.explorer.curve,
         }
 
     def _set_console_parameters(self, values, *, solve=False):
