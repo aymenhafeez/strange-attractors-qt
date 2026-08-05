@@ -10,7 +10,6 @@ from .console.jupyter_console_panel import JupyterConsolePanel
 from .console.live_plot_controller import LivePlotController
 from .console.system import SystemInspector
 from .core.solution_validation import validate_solutions
-from .grid_overlay import DEFAULT_GRID_HALF_SIZE
 from .perf import PerfProfiler, perf_finish, perf_start
 from .presets import (
     PresetError,
@@ -32,7 +31,8 @@ from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
 from .ui.style import SCENE_TOOLBAR, SPLITTER_HANDLE_HOVER
 from .ui.workspace_panel import WorkspacePanel
-from .view_manager import ViewManager
+from .view.grid_overlay import DEFAULT_GRID_HALF_SIZE
+from .view.view_manager import ViewManager
 from .workers.solve_manager import SolveManager
 
 WINDOW_WIDTH = 1100

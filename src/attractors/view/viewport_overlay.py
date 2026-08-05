@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .ui.style import EQUATION_LABEL
+from ..ui.style import EQUATION_LABEL
 
 
 class ViewportOverlay:
