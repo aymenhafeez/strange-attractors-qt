@@ -1,9 +1,29 @@
+from bisect import bisect_right
+
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 SAMPLE_COLUMNS = ("trajectory", "step", "t", "x", "y", "z")
 MEASURE_COLUMNS = ("trajectory", "step", "t", "radius", "speed", "displacement")
 DEFAULT_SAMPLE_SIZE = 2000
+
+
+def _sample_indices(length, sample_size):
+    if length <= 0:
+        return np.array([], dtype=np.int64)
+    if length <= sample_size:
+        return np.arange(length, dtype=np.int64)
+
+    return np.linspace(0, length - 1, sample_size, dtype=np.int64)
+
+
+def _sample_time(t_min, t_max, length, step):
+    if length <= 0:
+        return None
+
+    dt = (float(t_max) - float(t_min)) / length
+
+    return float(t_min) + (int(step) + 1.0) * dt
 
 
 def _format_value(value):
@@ -177,6 +197,91 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
                 return None
 
         return str(section + 1)
+
+    def _value(self, trajectory, step, column):
+        solution = self._solutions[trajectory]
+        if column == "trajectory":
+            return trajectory
+        if column == "step":
+            return step
+        if column == "t":
+            return _sample_time(
+                self._t_min,
+                self._trajectory_t_max(trajectory),
+                len(solution),
+                step,
+            )
+        if column in ("x", "y", "z"):
+            return solution[step, SAMPLE_COLUMNS.index(column) - 3]
+        if column == "radius":
+            return np.linalg.norm(solution[step])
+        if column == "displacement":
+            return (
+                None
+                if len(solution) == 0
+                else np.linalg.norm(solution[step] - solution[0])
+            )
+        if column == "speed":
+            return self._speed(trajectory, step)
+
+        return None
+
+    def _speed(self, trajectory, step):
+        solution = self._solutions[trajectory]
+        if len(solution) < 2:
+            return 0.0
+
+        t_max = self._trajectory_t_max(trajectory)
+        dt = (float(t_max) - self._t_min) / len(solution)
+        if dt == 0:
+            return 0.0
+        if step == 0:
+            delta = solution[1] - solution[0]
+        elif step == len(solution) - 1:
+            delta = solution[-1] - solution[-2]
+        else:
+            delta = (solution[step + 1] - solution[step - 1]) / 2.0
+
+        return np.linalg.norm(delta / dt)
+
+    def _rebuild_rows(self):
+        if self._sampled:
+            self._sample_indices = [
+                _sample_indices(len(solution), self._sample_size)
+                for solution in self._solutions
+            ]
+            lengths = [len(indices) for indices in self._sample_indices]
+        else:
+            self._sample_indices = []
+            lengths = [len(solution) for solution in self._solutions]
+
+        total = 0
+        self._cumulative_rows = []
+        for length in lengths:
+            total += int(length)
+            self._cumulative_rows.append(total)
+        self._row_count = total
+
+    def _row_ref(self, row):
+        if row < 0 or row >= self._row_count:
+            return None
+
+        trajectory = bisect_right(self._cumulative_rows, row)
+        previous_total = 0 if trajectory == 0 else self._cumulative_rows[trajectory - 1]
+        local_row = row - previous_total
+
+        if self._sampled:
+            return trajectory, int(self._sample_indices[trajectory][local_row])
+
+        return trajectory, local_row
+
+    def _trajectory_t_max(self, trajectory):
+        try:
+            spec = self._trajectory_specs[trajectory]
+        except IndexError:
+            spec = {}
+
+        return spec.get("t_max", self._default_t_max)
 
 
 class DataViewPanel(QtWidgets.QWidget):
