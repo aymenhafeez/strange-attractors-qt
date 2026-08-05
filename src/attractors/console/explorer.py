@@ -1,6 +1,8 @@
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .jupyter_console_panel import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE
+
 
 class ConsoleParam(QtCore.QObject):
     """Console created parameter backed by a slider and spinbox"""
@@ -118,12 +120,58 @@ class ConsoleExplorer(QtCore.QObject):
 
         return param
 
+    def curve(
+        self,
+        name,
+        x,
+        y,
+        *,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        label=None,
+        pen=None,
+        **kwargs,
+    ):
+        target = self.plots.current if plot is None else self.plots.get(plot)
+        mode = mode.strip().lower()
+
+        if mode not in {PLOT_MODE_REPLACE, PLOT_MODE_OVERLAY}:
+            raise ValueError("Plot mode must be either 'replace' or 'overlay'")
+
+        plot_kwargs = kwargs.copy()
+        if pen is not None:
+            plot_kwargs["pen"] = pen
+        if label is not None:
+            plot_kwargs["name"] = str(label)
+
+        x_data = x() if callable(x) else x
+        y_data = y() if callable(y) else y
+        x_array = np.array(x_data)
+        y_array = np.array(y_data)
+
+        if len(x_array) != len(y_array):
+            raise ValueError("x and y must be the same length")
+
+        item = target.line(x_array, y_array, **plot_kwargs)
+        curve = ConsoleCurve(name, x, y, item, target)
+        self._curves[name] = curve
+
+        return curve
+
     def refresh(self):
         for curve in list(self._curves.values()):
             try:
                 curve.update()
-            except Exception as e:
-                self._set_status(str(e))
+            except (TypeError, ValueError, FloatingPointError) as exc:
+                self._set_status(f"{curve.name}: {exc}")
+
+    def clear(self):
+        for param in self._params.values():
+            self.param_layout.removeWidget(param.widget)
+            param.widget.deleteLater()
+
+        self._params.clear()
+        self._curves.clear()
 
     def _set_status(self, message):
         if self.status_callback is not None:
