@@ -330,6 +330,7 @@ class DataViewPanel(QtWidgets.QWidget):
         toolbar = QtWidgets.QHBoxLayout()
         toolbar.setContentsMargins(0, 0, 0, 0)
         toolbar.setSpacing(6)
+        # TODO: consider removing the summary label altogether, takes up too much space
         # toolbar.addWidget(self.summary_label, 1)
         toolbar.addWidget(self.sample_mode)
         toolbar.addWidget(self.export_button)
@@ -422,3 +423,161 @@ class DataViewPanel(QtWidgets.QWidget):
 
         return table
 
+    def _on_sample_mode_toggled(self, checked):
+        self.sample_size.setEnabled(checked)
+        self.model.set_sampled(checked)
+        self.measures_model.set_sampled(checked)
+        self._update_summary()
+
+    def _on_sample_size_changed(self, value):
+        self.model.set_sample_size(value)
+        self.measures_model.set_sample_size(value)
+        self._update_summary()
+
+    def _trajectory_rows(self, solutions, specs):
+        rows = []
+        for i, solution in enumerate(solutions):
+            spec = specs[i] if i < len(specs) else {}
+            initial = spec.get("ic", [None, None, None])
+            final = solution[-1] if len(solution) else [None, None, None]
+            rows.append(
+                {
+                    "trajectory": i,
+                    "length": len(solution),
+                    "initial_x": self._coordinate(initial, 0),
+                    "initial_y": self._coordinate(initial, 1),
+                    "initial_z": self._coordinate(initial, 2),
+                    "final_x": self._coordinate(final, 0),
+                    "final_y": self._coordinate(final, 1),
+                    "final_z": self._coordinate(final, 2),
+                }
+            )
+
+        return rows
+
+    @staticmethod
+    def _parameter_rows(config, values):
+        if config is None:
+            return []
+
+        rows = []
+        for param in config.params:
+            rows.append(
+                {
+                    "name": param.name,
+                    "value": values.get(param.name),
+                    "default": param.default,
+                    "min": param.min_val,
+                    "max": param.max_val,
+                    "step": param.step,
+                }
+            )
+
+        return rows
+
+    @staticmethod
+    def _bounds_rows(solutions):
+        if not solutions:
+            return []
+
+        points = np.concatenate(solutions, axis=0)
+        finite = points[np.isfinite(points).all(axis=1)]
+        if len(finite) == 0:
+            return []
+
+        rows = []
+        for axis, minimum, maximum in zip(
+            "xyz", finite.min(axis=0), finite.max(axis=0)
+        ):
+            rows.append(
+                {
+                    "axis": axis,
+                    "min": minimum,
+                    "max": maximum,
+                    "range": maximum - minimum,
+                }
+            )
+
+        return rows
+
+    def _update_summary(self):
+        total_points = sum(len(solution) for solution in self.model._solutions)
+        shown_points = self.model.rowCount()
+
+        if total_points == 0:
+            self.summary_label.setText("No data")
+            return
+
+        suffix = " partial" if self._partial else ""
+        self.summary_label.setText(f"{shown_points:,} / {total_points:,}{suffix}")
+
+    @staticmethod
+    def _coordinate(values, index):
+        try:
+            return values[index]
+        except (IndexError, TypeError):
+            return None
+
+    @staticmethod
+    def _model_to_rows(model):
+        # turn QAbstractTableModels into rows
+        columns = [
+            model.headerData(
+                col,
+                QtCore.Qt.Orientation.Horizontal,
+                QtCore.Qt.ItemDataRole.DisplayRole,
+            )
+            for col in range(model.columnCount())
+        ]
+
+        rows = []
+        for row in range(model.rowCount()):
+            rows.append(
+                [
+                    model.data(
+                        model.index(row, col),
+                        QtCore.Qt.ItemDataRole.DisplayRole,
+                    )
+                    for col in range(model.columnCount())
+                ]
+            )
+
+        return columns, rows
+
+    def _export_current_tab(self):
+        model = self._current_export_model()
+        if model is None or model.rowCount() == 0:
+            return
+
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Export Data", "", "CSV Files (*.csv)"
+        )
+
+        if not path:
+            return
+
+        if not path.lower().endswith(".csv"):
+            path += ".csv"
+
+        columns, rows = self._model_to_rows(model)
+
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(columns)
+            writer.writerows(rows)
+
+    def _current_export_model(self):
+        index = self.tabs.currentIndex()
+
+        if index == 0:
+            return self.model
+        if index == 1:
+            return self.trajectory_model
+        if index == 2:
+            return self.parameter_model
+        if index == 3:
+            return self.bounds_model
+        if index == 4:
+            return self.measures_model
+
+        return None
