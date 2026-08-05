@@ -26,12 +26,12 @@ from .presets import (
 )
 from .process_metrics import ProcessUsageStatus
 from .projection_panel import ProjectionPanel
-from .registry import ATTRACTORS
 from .right_panel import RightPanel
 from .solution_validation import validate_solutions
 from .solve_manager import SolveManager
 from .style import SCENE_TOOLBAR, SPLITTER_HANDLE_HOVER
 from .system import SystemInspector
+from .systems.registry import ATTRACTORS
 from .view_manager import ViewManager
 from .workspace_panel import WorkspacePanel
 

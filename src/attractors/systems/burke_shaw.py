@@ -1,7 +1,7 @@
 import numba
 import numpy as np
 
-from .models import AttractorConfig, AttractorParam
+from ..core.models import AttractorConfig, AttractorParam
 
 
 @numba.njit(nogil=True)

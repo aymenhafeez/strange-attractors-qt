@@ -1,11 +1,11 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .core.models import AttractorConfig, AttractorParam, TimeDefaults
 from .expression_parser import (
     ParseError,
     compile_system,
     format_equations,
 )
-from .models import AttractorConfig, AttractorParam, TimeDefaults
 from .style import RIGHT_PANEL
 
 STEP = 0.01

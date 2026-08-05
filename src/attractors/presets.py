@@ -3,9 +3,9 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .core.models import AttractorConfig, AttractorParam, TimeDefaults
 from .expression_parser import compile_system, format_equations
-from .models import AttractorConfig, AttractorParam, TimeDefaults
-from .registry import ATTRACTORS
+from .systems.registry import ATTRACTORS
 
 PRESET_VERSION = 1
 PRESET_SUFFIX = ".json"
