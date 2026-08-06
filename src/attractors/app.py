@@ -675,6 +675,11 @@ class Window(QtWidgets.QMainWindow):
                 self.workspace_system_mode_action.setChecked(key == "system")
                 self.workspace_explore_mode_action.setChecked(key == "explore")
 
+    def _apply_explore_layout(self):
+        self._set_workspace_mode("explore")
+        self.jupyter_console_panel.apply_explore_layout()
+        self._set_temporary_app_status("Applied Explore layout")
+
     def _workspace_focus(self, mode):
         if mode == "explore":
             if self._pre_explore_side_panel_state is None:
@@ -816,8 +821,13 @@ class Window(QtWidgets.QMainWindow):
             lambda: self._set_workspace_mode("explore")
         )
         workspace_menu.addSeparator()
+        workspace_menu.addAction("Apply Explore layout", self._apply_explore_layout)
+        workspace_menu.addSeparator()
         workspace_menu.addAction("New plot", self._new_live_plot)
-        workspace_menu.addAction("Rename current plot", self._rename_current_live_plot)
+        workspace_menu.addAction(
+            "Rename current plot",
+            self._rename_current_live_plot,
+        )
         workspace_menu.addSeparator()
         workspace_menu.addAction(
             "Clear current plot",

@@ -496,8 +496,18 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self._console.execute(code)
 
     def set_explorer_visible(self, visible):
-        self.explorer_params_dock.setVisible(visible)
-        self.explorer_params.setVisible(visible)
+        self.explorer_params_dock.setVisible(bool(visible))
+        self.explorer_params.setVisible(bool(visible))
+
+    def apply_explore_layout(self):
+        self.set_explorer_visible(True)
+        self.dock_area.moveDock(self.script_dock, "left", self.plot_dock)
+        self.dock_area.moveDock(self.console_dock, "bottom", self.plot_dock)
+        self.dock_area.moveDock(
+            self.explorer_params_dock,
+            "bottom",
+            self.console_dock,
+        )
 
 
 class ConsolePlotZoom(QtWidgets.QWidget):
