@@ -104,7 +104,8 @@ class ConsoleTrace:
         self.item.setData(x_array, y_array)
 
     def remove(self):
-        self.plot._plot_widget.removeItem(self.item)
+        if self.plot.has_item(self.item):
+            self.plot._plot_widget.removeItem(self.item)
 
 
 class ConsoleExplorer(QtCore.QObject):
@@ -117,6 +118,9 @@ class ConsoleExplorer(QtCore.QObject):
         self.status_callback = status_callback
         self._params = {}
         self._curves = {}
+
+        self.plots.plot_removed.connect(self.remove_plot_traces)
+        self.plots.plot_cleared.connect(self.remove_plot_traces)
 
     def slider(self, name, value=0.0, start=0.0, end=1.0, step=0.01):
         key = name.strip()
@@ -171,6 +175,13 @@ class ConsoleExplorer(QtCore.QObject):
         param.widget.deleteLater()
 
         return self.params()
+
+    def remove_plot_traces(self, _plot_name, plot):
+        # not calling trace.remove() here since the dock is already closing
+        # so calling back into it may lead to some weirdness
+        for name, trace in list(self._curves.items()):
+            if trace.plot is plot:
+                self._curves.pop(name, None)
 
     # TODO: write a helper around curve() and scatter()
     def curve(
@@ -240,8 +251,8 @@ class ConsoleExplorer(QtCore.QObject):
 
         x_data = x() if callable(x) else x
         y_data = y() if callable(y) else y
-        x_array = np.array(x_data)
-        y_array = np.array(y_data)
+        x_array = check_array_dim(x_data, "x")
+        y_array = check_array_dim(y_data, "y")
 
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
@@ -271,15 +282,21 @@ class ConsoleExplorer(QtCore.QObject):
                 self._set_status(f"{curve.name}: {exc}")
 
     def clear(self):
+        self.clear_sliders()
+        self.clear_traces()
+
+    def clear_traces(self):
+        for trace in self._curves.values():
+            trace.remove()
+
+        self._curves.clear()
+
+    def clear_sliders(self):
         for param in self._params.values():
             self.param_layout.removeWidget(param.widget)
             param.widget.deleteLater()
 
-        for curve in self._curves.values():
-            curve.remove()
-
         self._params.clear()
-        self._curves.clear()
 
     def _set_status(self, message):
         if self.status_callback is not None:

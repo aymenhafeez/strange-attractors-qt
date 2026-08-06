@@ -227,6 +227,8 @@ class ConsolePlot:
 class ConsolePlotManager(QtCore.QObject):
     plots_changed = QtCore.pyqtSignal()
     current_changed = QtCore.pyqtSignal(str)
+    plot_removed = QtCore.pyqtSignal(str, object)
+    plot_cleared = QtCore.pyqtSignal(str, object)
 
     def __init__(self, dock_area, default_name, default_plot, default_dock):
         super().__init__(dock_area)
@@ -329,7 +331,9 @@ class ConsolePlotManager(QtCore.QObject):
     def close(self, name=None):
         key = self._current_name if name is None else self._plot_name(name)
         if key == self._default_name:
-            self._plots[key].clear()
+            plot = self._plots[key]
+            plot.clear()
+            self.plot_cleared.emit(key, plot)
             self._set_current_name(key)
 
             return
@@ -342,11 +346,14 @@ class ConsolePlotManager(QtCore.QObject):
             self._forget(key)
 
     def clear_all(self):
-        for plot in self._plots.values():
+        for name, plot in self._plots.items():
             plot.clear()
+            self.plot_cleared.emit(name, plot)
 
     def clear(self):
-        self.current.clear()
+        plot = self.current
+        plot.clear()
+        self.plot_cleared.emit(self._current_name, plot)
 
     def auto_range(self):
         self.current.auto_range()
@@ -372,10 +379,12 @@ class ConsolePlotManager(QtCore.QObject):
         if name not in self._plots:
             return
 
-        self._plots.pop(name)
+        plot = self._plots.pop(name)
         self._docks.pop(name, None)
         if self._current_name == name:
             self._set_current_name(self._default_name)
+
+        self.plot_removed.emit(name, plot)
         self.plots_changed.emit()
 
     def _next_name(self):

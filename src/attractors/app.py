@@ -1506,7 +1506,7 @@ class Window(QtWidgets.QMainWindow):
             "plot": plot,
             "console_plots": self.jupyter_console_panel.plots,
             "plots": self.jupyter_console_panel.plots,
-            "clear_plot": plot.clear,
+            "clear_plot": self.jupyter_console_panel.plots.clear,
             "current_values": lambda: self.system.values,
             "scripts_dir": self._scripts_directory,
             "explore": self.jupyter_console_panel.explorer,
