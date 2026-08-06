@@ -114,6 +114,7 @@ class Window(QtWidgets.QMainWindow):
         self._jupyter_toolbar_actions = []
         self._left_panel_splitter_size = int(WINDOW_WIDTH * 0.22)
         self._right_panel_splitter_size = int(WINDOW_WIDTH * 0.23)
+        self._pre_explore_side_panel_state = None
         self.workspace_dock = None
         self.current_n = 100000
         self.current_t_max = 50
@@ -222,6 +223,15 @@ class Window(QtWidgets.QMainWindow):
         )
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
         self.workspace_panel = WorkspacePanel(self.jupyter_console_panel)
+        self.workspace_panel.explorer_clear_requested.connect(
+            self.jupyter_console_panel.explorer.clear
+        )
+        self.workspace_panel.explorer_clear_traces_requested.connect(
+            self.jupyter_console_panel.explorer.clear_traces
+        )
+        self.workspace_panel.explorer_clear_sliders_requested.connect(
+            self.jupyter_console_panel.explorer.clear_sliders
+        )
         self.jupyter_console_panel.explorer.status_callback = (
             self.workspace_panel.set_status
         )
@@ -584,13 +594,7 @@ class Window(QtWidgets.QMainWindow):
             lambda: self._on_controls_solve_requested(True)
         )
 
-        self.tools_button = QtWidgets.QToolButton()
-        self.tools_button.setText("Tools")
-        self.tools_button.setToolTip("Open analysis and maintenance tools")
-        self.tools_button.setPopupMode(
-            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
-        )
-        tools_menu = QtWidgets.QMenu(self.tools_button)
+        tools_menu = QtWidgets.QMenu(self)
         self.toolbar_lyapunov_action = self._add_panel_menu_action(
             tools_menu,
             "Lyapunov spectrum",
@@ -621,11 +625,6 @@ class Window(QtWidgets.QMainWindow):
             "Status bar",
             lambda: self._toggle_process_status(),
         )
-        tools_menu.addSeparator()
-        open_folder_action = tools_menu.addAction("Open preset folder")
-        open_folder_action.triggered.connect(self._open_preset_folder)
-        self.tools_button.setMenu(tools_menu)
-        toolbar.addWidget(self.tools_button)
 
         toolbar.addSeparator()
         spacer = QtWidgets.QWidget()
@@ -649,36 +648,183 @@ class Window(QtWidgets.QMainWindow):
 
         self._sync_toolbar_panel_actions()
 
+    def _workspace_mode_toolbar_control(self, toolbar):
+        self.workspace_mode_combo = QtWidgets.QComboBox()
+        self.workspace_mode_combo.setToolTip("Workspace mode")
+        self.workspace_mode_combo.addItem("System", "system")
+        self.workspace_mode_combo.addItem("Explore", "explore")
+        self.workspace_mode_combo.currentIndexChanged.connect(
+            lambda _index: self._on_workspace_mode_selected()
+        )
+        self._jupyter_toolbar_actions.append(
+            toolbar.addWidget(self.workspace_mode_combo)
+        )
+
+    def _on_workspace_mode_selected(self):
+        mode = self.workspace_mode_combo.currentData()
+        if mode is not None:
+            self._set_workspace_mode(mode)
+
+    def _set_workspace_mode(self, mode):
+        key = str(mode).strip().lower()
+        self._workspace_focus(key)
+        self.workspace_panel.set_mode(key)
+
+        if hasattr(self, "workspace_mode_combo"):
+            index = self.workspace_mode_combo.findData(key)
+            if index >= 0 and self.workspace_mode_combo.currentIndex() != index:
+                with QtCore.QSignalBlocker(self.workspace_mode_combo):
+                    self.workspace_mode_combo.setCurrentIndex(index)
+
+        if hasattr(self, "workspace_system_mode_action"):
+            with (
+                QtCore.QSignalBlocker(self.workspace_system_mode_action),
+                QtCore.QSignalBlocker(self.workspace_explore_mode_action),
+            ):
+                self.workspace_system_mode_action.setChecked(key == "system")
+                self.workspace_explore_mode_action.setChecked(key == "explore")
+
+    def _workspace_focus(self, mode):
+        if mode == "explore":
+            if self._pre_explore_side_panel_state is None:
+                self._pre_explore_side_panel_state = {
+                    "left": self.controls.isVisible(),
+                    "right": self.right_panel.isVisible(),
+                }
+            self._set_side_panel_actions(left=False, right=False)
+            return
+
+        if mode == "system" and self._pre_explore_side_panel_state is not None:
+            state = self._pre_explore_side_panel_state
+            self._pre_explore_side_panel_state = None
+            self._set_side_panel_actions(left=state["left"], right=state["right"])
+
+    def _set_side_panel_actions(self, *, left, right):
+        with (
+            QtCore.QSignalBlocker(self.toolbar_left_panel_action),
+            QtCore.QSignalBlocker(self.toolbar_right_panel_action),
+        ):
+            self.toolbar_left_panel_action.setChecked(bool(left))
+            self.toolbar_right_panel_action.setChecked(bool(right))
+        self._set_left_panel_visible(left)
+        self._set_right_panel_visible(right)
+
+    def _hide_menu_icons(self, menu):
+        for action in menu.actions():
+            action.setIconVisibleInMenu(False)
+            submenu = action.menu()
+            if submenu is not None:
+                self._hide_menu_icons(submenu)
+
+    def _submenu_context_actions(self, menu, text, source_action):
+        action = QtGui.QAction(text, self)
+        action.setCheckable(source_action.isCheckable())
+        action.setChecked(source_action.isChecked())
+        action.setEnabled(source_action.isEnabled())
+        action.setToolTip(source_action.toolTip())
+        action.triggered.connect(source_action.trigger)
+
+        def sync():
+            action.setChecked(source_action.isChecked())
+            action.setEnabled(source_action.isEnabled())
+
+        source_action.changed.connect(sync)
+        menu.addAction(action)
+        return action
+
     def _build_menu_bar(self):
         menu_bar = self.menuBar()
         menu_bar.clear()
 
         file_menu = menu_bar.addMenu("&File")
-        file_menu.addAction(self.toolbar_save_view_action)
+        self._submenu_context_actions(
+            file_menu,
+            "Save view as PNG",
+            self.toolbar_save_view_action,
+        )
         file_menu.addSeparator()
         file_menu.addAction("Open preset folder", self._open_preset_folder)
 
         view_menu = menu_bar.addMenu("&View")
-        view_menu.addAction(self.toolbar_left_panel_action)
-        view_menu.addAction(self.toolbar_right_panel_action)
-        view_menu.addAction(self.toolbar_jupyter_console_action)
-        view_menu.addAction(self.toolbar_process_status_action)
+        self._submenu_context_actions(
+            view_menu,
+            "Left panel",
+            self.toolbar_left_panel_action,
+        )
+        self._submenu_context_actions(
+            view_menu,
+            "Right panel",
+            self.toolbar_right_panel_action,
+        )
+        self._submenu_context_actions(
+            view_menu,
+            "Console",
+            self.toolbar_jupyter_console_action,
+        )
+        self._submenu_context_actions(
+            view_menu,
+            "Status bar",
+            self.toolbar_process_status_action,
+        )
         view_menu.addSeparator()
-        view_menu.addAction(self.toolbar_reset_camera_action)
-        view_menu.addAction(self.toolbar_fit_camera_action)
-        view_menu.addAction(self.toolbar_grid_action)
-        view_menu.addAction(self.toolbar_orbit_action)
+        self._submenu_context_actions(
+            view_menu,
+            "Reset camera",
+            self.toolbar_reset_camera_action,
+        )
+        self._submenu_context_actions(
+            view_menu,
+            "Fit view",
+            self.toolbar_fit_camera_action,
+        )
+        self._submenu_context_actions(view_menu, "Grid", self.toolbar_grid_action)
+        self._submenu_context_actions(view_menu, "Orbit", self.toolbar_orbit_action)
 
         system_menu = menu_bar.addMenu("&System")
-        system_menu.addAction(self.toolbar_solve_action)
-        system_menu.addAction(self.toolbar_reset_action)
+        self._submenu_context_actions(system_menu, "Solve", self.toolbar_solve_action)
+        self._submenu_context_actions(
+            system_menu,
+            "Reset parameters",
+            self.toolbar_reset_action,
+        )
         system_menu.addSeparator()
-        system_menu.addAction(self.toolbar_loop_action)
-        system_menu.addAction(self.toolbar_point_action)
-        system_menu.addAction(self.toolbar_line_action)
-        system_menu.addAction(self.toolbar_trail_action)
+        self._submenu_context_actions(
+            system_menu,
+            "Loop animation",
+            self.toolbar_loop_action,
+        )
+        self._submenu_context_actions(
+            system_menu,
+            "Show points",
+            self.toolbar_point_action,
+        )
+        self._submenu_context_actions(
+            system_menu,
+            "Show lines",
+            self.toolbar_line_action,
+        )
+        self._submenu_context_actions(
+            system_menu, "Show trail", self.toolbar_trail_action
+        )
 
         workspace_menu = menu_bar.addMenu("&Workspace")
+        mode_menu = workspace_menu.addMenu("Mode")
+        mode_group = QtGui.QActionGroup(self)
+        mode_group.setExclusive(True)
+        self.workspace_system_mode_action = mode_menu.addAction("System")
+        self.workspace_system_mode_action.setCheckable(True)
+        self.workspace_system_mode_action.setChecked(True)
+        self.workspace_explore_mode_action = mode_menu.addAction("Explore")
+        self.workspace_explore_mode_action.setCheckable(True)
+        mode_group.addAction(self.workspace_system_mode_action)
+        mode_group.addAction(self.workspace_explore_mode_action)
+        self.workspace_system_mode_action.triggered.connect(
+            lambda: self._set_workspace_mode("system")
+        )
+        self.workspace_explore_mode_action.triggered.connect(
+            lambda: self._set_workspace_mode("explore")
+        )
+        workspace_menu.addSeparator()
         workspace_menu.addAction("New plot", self._new_live_plot)
         workspace_menu.addAction("Rename current plot", self._rename_current_live_plot)
         workspace_menu.addSeparator()
@@ -691,12 +837,24 @@ class Window(QtWidgets.QMainWindow):
             self.live_plot_controller._clear_all_plots,
         )
         workspace_menu.addSeparator()
-        workspace_menu.addAction(self.plot_view_all_action)
-        workspace_menu.addAction(self.plot_pan_action)
-        workspace_menu.addAction(self.plot_zoom_action)
+        self._submenu_context_actions(
+            workspace_menu,
+            "View all",
+            self.plot_view_all_action,
+        )
+        self._submenu_context_actions(workspace_menu, "Pan", self.plot_pan_action)
+        self._submenu_context_actions(workspace_menu, "Zoom", self.plot_zoom_action)
         workspace_menu.addSeparator()
-        workspace_menu.addAction(self.plot_x_grid_action)
-        workspace_menu.addAction(self.plot_y_grid_action)
+        self._submenu_context_actions(
+            workspace_menu,
+            "X grid",
+            self.plot_x_grid_action,
+        )
+        self._submenu_context_actions(
+            workspace_menu,
+            "Y grid",
+            self.plot_y_grid_action,
+        )
         if self.plot_options_menu is not None:
             workspace_menu.addSeparator()
             self._add_proxy_menu(
@@ -712,10 +870,26 @@ class Window(QtWidgets.QMainWindow):
             )
 
         analysis_menu = menu_bar.addMenu("&Analysis")
-        analysis_menu.addAction(self.toolbar_lyapunov_action)
-        analysis_menu.addAction(self.toolbar_projection_action)
-        analysis_menu.addAction(self.toolbar_poincare_action)
-        analysis_menu.addAction(self.toolbar_bifurcation_action)
+        self._submenu_context_actions(
+            analysis_menu,
+            "Lyapunov spectrum",
+            self.toolbar_lyapunov_action,
+        )
+        self._submenu_context_actions(
+            analysis_menu,
+            "Projection heatmaps",
+            self.toolbar_projection_action,
+        )
+        self._submenu_context_actions(
+            analysis_menu,
+            "Poincare section",
+            self.toolbar_poincare_action,
+        )
+        self._submenu_context_actions(
+            analysis_menu,
+            "Bifurcation diagram",
+            self.toolbar_bifurcation_action,
+        )
 
         explore_menu = menu_bar.addMenu("&Explore")
         explore_menu.addAction(
@@ -727,6 +901,13 @@ class Window(QtWidgets.QMainWindow):
             self.jupyter_console_panel.explorer.clear_sliders,
         )
         explore_menu.addAction("Clear all", self.jupyter_console_panel.explorer.clear)
+
+        self._hide_menu_icons(file_menu)
+        self._hide_menu_icons(view_menu)
+        self._hide_menu_icons(system_menu)
+        self._hide_menu_icons(workspace_menu)
+        self._hide_menu_icons(analysis_menu)
+        self._hide_menu_icons(explore_menu)
 
     def _build_status_bar(self):
         status_bar = QtWidgets.QStatusBar()
@@ -1000,6 +1181,7 @@ class Window(QtWidgets.QMainWindow):
             plot_item.ctrl.yGridCheck,
         )
 
+        self._workspace_mode_toolbar_control(toolbar)
         self._add_jupyter_plot_controls(toolbar)
         self.plot_options_menu = plot_item.getMenu()
         self.plot_view_menu = view_box.menu
@@ -1127,7 +1309,9 @@ class Window(QtWidgets.QMainWindow):
 
     def _populate_proxy_menu(self, menu, source_menu):
         source_actions = source_menu.actions()
-        if any(isinstance(action, QtWidgets.QWidgetAction) for action in source_actions):
+        if any(
+            isinstance(action, QtWidgets.QWidgetAction) for action in source_actions
+        ):
             menu.addAction(
                 f"Open {source_menu.title()}...",
                 lambda checked=False, menu=source_menu: self._popup_menu(menu),

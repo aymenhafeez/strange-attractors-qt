@@ -435,6 +435,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         )
 
         self.explorer = ConsoleExplorer(self.plots, self.explorer_params_layout)
+        self.set_explorer_visible(False)
 
         self._console_host = QtWidgets.QWidget()
         self._console_layout = QtWidgets.QVBoxLayout(self._console_host)
@@ -493,6 +494,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
 
         self._console.push_namespace(self._namespace_factory())
         self._console.execute(code)
+
+    def set_explorer_visible(self, visible):
+        self.explorer_params.setVisible(visible)
 
 
 class ConsolePlotZoom(QtWidgets.QWidget):
