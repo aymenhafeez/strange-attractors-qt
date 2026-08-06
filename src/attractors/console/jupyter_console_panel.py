@@ -5,7 +5,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.docking import AreaBoundDock as Dock
 from ..ui.docking import AreaBoundDockArea as DockArea
-from .explorer import ConsoleExplorer
+from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
 
 try:
@@ -61,7 +61,7 @@ class _RichJupyterConsole(_BaseJupyterConsole):
 
 
 class ConsolePlot:
-    def __init__(self, plot_widget):
+    def __init__(self, plot_widget, status_callback=None):
         self._plot_widget = plot_widget
         self._manager = None
         self._legend = None
@@ -73,6 +73,22 @@ class ConsolePlot:
         self.layout.setSpacing(0)
         self.layout.addWidget(self._plot_widget)
 
+        self.param_widget = QtWidgets.QWidget()
+        self.param_layout = QtWidgets.QVBoxLayout(self.param_widget)
+        self.param_layout.setContentsMargins(0, 0, 0, 0)
+        self.param_layout.setSpacing(0)
+        self.param_widget.setVisible(False)
+
+        self.layout.addWidget(self.param_widget)
+
+        self.explore = PlotExplorer(
+            self,
+            self.param_widget,
+            self.param_layout,
+            status_callback=status_callback,
+            parent=self.host,
+        )
+
     def __repr__(self):
         return "ConsolePlot()"
 
@@ -81,6 +97,8 @@ class ConsolePlot:
 
     def clear(self):
         self._plot_widget.clear()
+        if hasattr(self, "explore"):
+            self.explore.clear_traces()
 
         if self._zoom is not None:
             self._zoom.clear()
@@ -230,13 +248,17 @@ class ConsolePlotManager(QtCore.QObject):
     plot_removed = QtCore.pyqtSignal(str, object)
     plot_cleared = QtCore.pyqtSignal(str, object)
 
-    def __init__(self, dock_area, default_name, default_plot, default_dock):
+    def __init__(
+        self, dock_area, default_name, default_plot, default_dock, status_callback=None
+    ):
         super().__init__(dock_area)
         self._dock_area = dock_area
         self._plots = {default_name: default_plot}
         self._docks = {default_name: default_dock}
         self._current_name = default_name
         self._default_name = default_name
+        self._status_callback = status_callback
+        default_plot.explore.status_callback = status_callback
         default_plot._manager = self
 
     def __repr__(self):
@@ -255,6 +277,11 @@ class ConsolePlotManager(QtCore.QObject):
 
     def names(self):
         return list(self._plots)
+
+    def set_status_callback(self, callback):
+        self._status_callback = callback
+        for plot in self._plots.values():
+            plot.explore.status_callback = callback
 
     def get(self, name, *, activate=True):
         key = self._plot_name(name)
@@ -308,7 +335,7 @@ class ConsolePlotManager(QtCore.QObject):
             return self.get(key, activate=activate)
 
         plot_widget = _build_console_plot_widget()
-        plot = ConsolePlot(plot_widget)
+        plot = ConsolePlot(plot_widget, status_callback=self._status_callback)
         # i can't remember why this is needed
         plot._manager = self
         dock = Dock(key, size=(10, 6), closable=True)
@@ -410,6 +437,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self._namespace_factory = namespace_factory
         self._console = None
         self._script_dir = script_dir
+        self._explore_status_callback = None
         self.setMinimumHeight(180)
 
         self._layout = QtWidgets.QVBoxLayout(self)
@@ -420,7 +448,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self._layout.addWidget(self.dock_area)
 
         self.plot_widget = _build_console_plot_widget()
-        self.plot = ConsolePlot(self.plot_widget)
+        self.plot = ConsolePlot(
+            self.plot_widget, status_callback=self._explore_status_callback
+        )
         self.plot_dock = Dock("Plot", size=(10, 6))
         self.plot_dock.addWidget(self.plot.host)
         self.dock_area.addDock(self.plot_dock)
@@ -429,22 +459,23 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             "Plot",
             self.plot,
             self.plot_dock,
+            status_callback=self._explore_status_callback,
         )
 
-        self.explorer_params = QtWidgets.QWidget()
-        self.explorer_params_layout = QtWidgets.QVBoxLayout(self.explorer_params)
-        self.explorer_params_layout.setContentsMargins(0, 0, 0, 0)
-        self.explorer_params_layout.setSpacing(0)
+        # self.explorer_params = QtWidgets.QWidget()
+        # self.explorer_params_layout = QtWidgets.QVBoxLayout(self.explorer_params)
+        # self.explorer_params_layout.setContentsMargins(0, 0, 0, 0)
+        # self.explorer_params_layout.setSpacing(0)
         # self.explorer_params_layout.addStretch()
+        # self.explorer = ConsoleExplorer(self.plots)
 
-        self.explorer_params_dock = Dock("Parameters", size=(10, 3), closable=False)
-        self.explorer_params_dock.addWidget(self.explorer_params)
-        self.dock_area.addDock(
-            self.explorer_params_dock, position="bottom", relativeTo=self.plot_dock
-        )
+        # self.explorer_params_dock = Dock("Parameters", size=(10, 3), closable=False)
+        # self.explorer_params_dock.addWidget(self.explorer_params)
+        # self.dock_area.addDock(
+        #     self.explorer_params_dock, position="bottom", relativeTo=self.plot_dock
+        # )
 
-        self.explorer = ConsoleExplorer(self.plots, self.explorer_params_layout)
-        self.set_explorer_visible(False)
+        self.set_explore_visible(False)
 
         self._console_host = QtWidgets.QWidget()
         self._console_layout = QtWidgets.QVBoxLayout(self._console_host)
@@ -504,19 +535,23 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self._console.push_namespace(self._namespace_factory())
         self._console.execute(code)
 
-    def set_explorer_visible(self, visible):
-        self.explorer_params_dock.setVisible(bool(visible))
-        self.explorer_params.setVisible(bool(visible))
+    def set_explore_visible(self, visible):
+        for plot in self.plots._plots.values():
+            plot.param_widget.setVisible(bool(visible) and bool(plot.explore.params()))
 
     def apply_explore_layout(self):
-        self.set_explorer_visible(True)
+        self.set_explore_visible(True)
         self.dock_area.moveDock(self.script_dock, "left", self.plot_dock)
         self.dock_area.moveDock(self.console_dock, "bottom", self.plot_dock)
-        self.dock_area.moveDock(
-            self.explorer_params_dock,
-            "bottom",
-            self.console_dock,
-        )
+        # self.dock_area.moveDock(
+        #     self.explorer_params_dock,
+        #     "bottom",
+        #     self.console_dock,
+        # )
+
+    def set_explore_status_callback(self, callback):
+        self._explore_status_callback = callback
+        self.plots.set_status_callback(callback)
 
 
 class ConsolePlotZoom(QtWidgets.QWidget):

@@ -223,7 +223,7 @@ class Window(QtWidgets.QMainWindow):
         )
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
         self.workspace_panel = WorkspacePanel(self.jupyter_console_panel)
-        self.jupyter_console_panel.explorer.status_callback = (
+        self.jupyter_console_panel.set_explore_status_callback(
             self.workspace_panel.set_status
         )
         self.workspace_panel.plot_requested.connect(
@@ -895,13 +895,13 @@ class Window(QtWidgets.QMainWindow):
         explore_menu = menu_bar.addMenu("&Explore")
         explore_menu.addAction(
             "Clear traces",
-            self.jupyter_console_panel.explorer.clear_traces,
+            self._clear_current_explore_traces,
         )
         explore_menu.addAction(
             "Clear sliders",
-            self.jupyter_console_panel.explorer.clear_sliders,
+            self._clear_current_explore_sliders,
         )
-        explore_menu.addAction("Clear all", self.jupyter_console_panel.explorer.clear)
+        explore_menu.addAction("Clear all", self._clear_current_explore)
 
         self._hide_menu_icons(file_menu)
         self._hide_menu_icons(view_menu)
@@ -1504,18 +1504,10 @@ class Window(QtWidgets.QMainWindow):
             "pg": pg,
             "system": self.system,
             "plot": plot,
-            "console_plots": self.jupyter_console_panel.plots,
             "plots": self.jupyter_console_panel.plots,
-            "clear_plot": self.jupyter_console_panel.plots.clear,
+            "current_plot": lambda: self.jupyter_console_panel.plots.current,
             "current_values": lambda: self.system.values,
             "scripts_dir": self._scripts_directory,
-            "explore": self.jupyter_console_panel.explorer,
-            "slider": self.jupyter_console_panel.explorer.slider,
-            "curve": self.jupyter_console_panel.explorer.curve,
-            "remove_slider": self.jupyter_console_panel.explorer.remove_slider,
-            "remove_curve": self.jupyter_console_panel.explorer.remove_curve,
-            "scatter": self.jupyter_console_panel.explorer.scatter,
-            "int_slider": self.jupyter_console_panel.explorer.int_slider,
         }
 
     def _set_console_parameters(self, values, *, solve=False):
@@ -2191,6 +2183,18 @@ class Window(QtWidgets.QMainWindow):
     def _new_live_plot(self):
         self.jupyter_console_panel.plots.new()
         self._sync_jupyter_workspace_state()
+
+    def _clear_current_explore_traces(self):
+        self.jupyter_console_panel.plots.current.explore.clear_traces()
+        self.jupyter_console_panel.set_explore_visible(True)
+
+    def _clear_current_explore_sliders(self):
+        self.jupyter_console_panel.plots.current.explore.clear_sliders()
+        self.jupyter_console_panel.set_explore_visible(True)
+
+    def _clear_current_explore(self):
+        self.jupyter_console_panel.plots.current.explore.clear()
+        self.jupyter_console_panel.set_explore_visible(True)
 
     def _rename_current_live_plot(self):
         old_name = self.jupyter_console_panel.plots.current_name

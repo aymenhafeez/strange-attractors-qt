@@ -442,4 +442,4 @@ class WorkspacePanel(QtWidgets.QWidget):
             raise ValueError("Workspace mode must be 'system' or 'explore'")
 
         self.toolbar_stack.setVisible(key == "system")
-        self.console_panel.set_explorer_visible(key == "explore")
+        self.console_panel.set_explore_visible(key == "explore")

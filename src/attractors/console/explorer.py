@@ -82,7 +82,7 @@ class ConsoleParam(QtCore.QObject):
 
 
 class ConsoleTrace:
-    """Reactive 2D plot curve. Data recomputed on command"""
+    """Reactive 2D plot item. Data recomputed on command"""
 
     def __init__(self, name, x, y, item, plot):
         self.name = name
@@ -108,19 +108,19 @@ class ConsoleTrace:
             self.plot._plot_widget.removeItem(self.item)
 
 
-class ConsoleExplorer(QtCore.QObject):
-    """Manage reactive plots and parameters created in the console"""
+class PlotExplorer(QtCore.QObject):
+    """Manage reactive plots and parameters for a single console plot"""
 
-    def __init__(self, plots, param_layout, status_callback=None, parent=None):
+    def __init__(
+        self, plot, param_widget, param_layout, status_callback=None, parent=None
+    ):
         super().__init__(parent)
-        self.plots = plots
+        self.plot = plot
+        self.param_widget = param_widget
         self.param_layout = param_layout
         self.status_callback = status_callback
         self._params = {}
-        self._curves = {}
-
-        self.plots.plot_removed.connect(self.remove_plot_traces)
-        self.plots.plot_cleared.connect(self.remove_plot_traces)
+        self._traces = {}
 
     def slider(self, name, value=0.0, start=0.0, end=1.0, step=0.01):
         key = name.strip()
@@ -136,6 +136,7 @@ class ConsoleExplorer(QtCore.QObject):
         param.changed.connect(self.refresh)
         self._params[key] = param
         self.param_layout.addWidget(param.widget)
+        self.param_widget.setVisible(True)
 
         return param
 
@@ -145,25 +146,21 @@ class ConsoleExplorer(QtCore.QObject):
             name, value=int(value), start=int(start), end=int(end), step=int(step)
         )
 
-    def curves(self):
-        return {name: curve.name for name, curve in self._curves.items()}
+    def traces(self):
+        return {name: trace.name for name, trace in self._traces.items()}
 
     def params(self):
         return {name: param.value for name, param in self._params.items()}
 
     def remove_trace(self, name):
         key = str(name).strip()
-        trace = self._curves.pop(key, None)
+        trace = self._traces.pop(key, None)
         if trace is None:
-            raise KeyError(f"No curve named {key!r}")
+            raise KeyError(f"No trace named {key!r}")
 
         trace.remove()
 
-        return self.curves()
-
-    def remove_curve(self, name):
-        # should rename everything 'curve' to 'trace' ideally, keep this alias for now
-        return self.remove_trace(name)
+        return self.traces()
 
     def remove_slider(self, name):
         key = str(name).strip()
@@ -173,15 +170,9 @@ class ConsoleExplorer(QtCore.QObject):
 
         self.param_layout.removeWidget(param.widget)
         param.widget.deleteLater()
+        self.param_widget.setVisible(bool(self._params))
 
         return self.params()
-
-    def remove_plot_traces(self, _plot_name, plot):
-        # not calling trace.remove() here since the dock is already closing
-        # so calling back into it may lead to some weirdness
-        for name, trace in list(self._curves.items()):
-            if trace.plot is plot:
-                self._curves.pop(name, None)
 
     # TODO: write a helper around curve() and scatter()
     def curve(
@@ -190,13 +181,12 @@ class ConsoleExplorer(QtCore.QObject):
         x,
         y,
         *,
-        plot=None,
         mode=PLOT_MODE_REPLACE,
         label=None,
         pen=None,
         **kwargs,
     ):
-        target = self.plots.current if plot is None else self.plots.get(plot)
+        target = self.plot
         mode = mode.strip().lower()
 
         if mode not in {PLOT_MODE_REPLACE, PLOT_MODE_OVERLAY}:
@@ -216,15 +206,15 @@ class ConsoleExplorer(QtCore.QObject):
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
 
-        old = self._curves.pop(str(name), None)
+        old = self._traces.pop(str(name), None)
         if old is not None:
             old.remove()
 
         item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
-        curve = ConsoleTrace(name, x, y, item, target)
-        self._curves[name] = curve
+        trace = ConsoleTrace(name, x, y, item, target)
+        self._traces[name] = trace
 
-        return curve
+        return trace
 
     def scatter(
         self,
@@ -232,14 +222,13 @@ class ConsoleExplorer(QtCore.QObject):
         x,
         y,
         *,
-        plot=None,
         mode=PLOT_MODE_REPLACE,
         label=None,
         symbol="o",
         symbol_size=None,
         **kwargs,
     ):
-        target = self.plots.current if plot is None else self.plots.get(plot)
+        target = self.plot
         mode = mode.strip().lower()
 
         if mode not in {PLOT_MODE_REPLACE, PLOT_MODE_OVERLAY}:
@@ -257,7 +246,7 @@ class ConsoleExplorer(QtCore.QObject):
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
 
-        old = self._curves.pop(str(name), None)
+        old = self._traces.pop(str(name), None)
         if old is not None:
             old.remove()
 
@@ -269,27 +258,27 @@ class ConsoleExplorer(QtCore.QObject):
             symbol_size=symbol_size,
             **plot_kwargs,
         )
-        curve = ConsoleTrace(name, x, y, item, target)
-        self._curves[name] = curve
+        trace = ConsoleTrace(name, x, y, item, target)
+        self._traces[name] = trace
 
-        return curve
+        return trace
 
     def refresh(self):
-        for curve in list(self._curves.values()):
+        for trace in list(self._traces.values()):
             try:
-                curve.update()
+                trace.update()
             except (TypeError, ValueError, FloatingPointError) as exc:
-                self._set_status(f"{curve.name}: {exc}")
+                self._set_status(f"{trace.name}: {exc}")
 
     def clear(self):
         self.clear_sliders()
         self.clear_traces()
 
     def clear_traces(self):
-        for trace in self._curves.values():
+        for trace in self._traces.values():
             trace.remove()
 
-        self._curves.clear()
+        self._traces.clear()
 
     def clear_sliders(self):
         for param in self._params.values():
@@ -297,6 +286,7 @@ class ConsoleExplorer(QtCore.QObject):
             param.widget.deleteLater()
 
         self._params.clear()
+        self.param_widget.setVisible(False)
 
     def _set_status(self, message):
         if self.status_callback is not None:
