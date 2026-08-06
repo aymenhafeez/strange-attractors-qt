@@ -496,6 +496,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self._console.execute(code)
 
     def set_explorer_visible(self, visible):
+        self.explorer_params_dock.setVisible(visible)
         self.explorer_params.setVisible(visible)
 
 

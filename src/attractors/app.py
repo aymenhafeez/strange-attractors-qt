@@ -223,15 +223,6 @@ class Window(QtWidgets.QMainWindow):
         )
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
         self.workspace_panel = WorkspacePanel(self.jupyter_console_panel)
-        self.workspace_panel.explorer_clear_requested.connect(
-            self.jupyter_console_panel.explorer.clear
-        )
-        self.workspace_panel.explorer_clear_traces_requested.connect(
-            self.jupyter_console_panel.explorer.clear_traces
-        )
-        self.workspace_panel.explorer_clear_sliders_requested.connect(
-            self.jupyter_console_panel.explorer.clear_sliders
-        )
         self.jupyter_console_panel.explorer.status_callback = (
             self.workspace_panel.set_status
         )
