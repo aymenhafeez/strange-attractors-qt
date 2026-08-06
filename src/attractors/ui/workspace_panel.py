@@ -57,143 +57,15 @@ class WorkspacePanel(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self.toolbar = QtWidgets.QWidget()
-        self.toolbar.setObjectName("controlPanel")
-        toolbar_layout = QtWidgets.QHBoxLayout(self.toolbar)
-        toolbar_layout.setContentsMargins(6, 6, 6, 4)
-        toolbar_layout.setSpacing(6)
+        self.toolbar_stack = QtWidgets.QStackedWidget()
+        self.toolbar = self._build_system_toolbar()
+        self.toolbar_stack.addWidget(self.toolbar)
 
-        self.status_button = QtWidgets.QToolButton()
-        self.status_button.setText("Status")
-        self.status_button.setToolTip("No solution")
-        self.status_button.setFixedWidth(58)
-        self._status_text = ""
-        toolbar_layout.addWidget(self.status_button)
-
-        self.plot_kind_combo = QtWidgets.QComboBox()
-        self.plot_kind_combo.addItems(CONSOLE_PLOT_KINDS)
-        self.plot_kind_combo.currentTextChanged.connect(self._sync_plot_controls)
-        toolbar_layout.addWidget(self.plot_kind_combo)
-
-        self.live_button = QtWidgets.QToolButton()
-        self.live_button.setText("Live: 0")
-        self.live_button.setToolTip("Live traces for the current plot")
-        self.live_button.setPopupMode(
-            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
-        )
-        self.live_button.setMenu(QtWidgets.QMenu(self.live_button))
-        toolbar_layout.addWidget(self.live_button)
-
-        self.axis_combo = QtWidgets.QComboBox()
-        self.axis_combo.addItems(["x", "y", "z"])
-        self.x_axis_combo = QtWidgets.QComboBox()
-        self.x_axis_combo.addItems(["x", "y", "z"])
-        self.y_axis_combo = QtWidgets.QComboBox()
-        self.y_axis_combo.addItems(["x", "y", "z"])
-        self.y_axis_combo.setCurrentText("z")
-        toolbar_layout.addWidget(self.axis_combo)
-        toolbar_layout.addWidget(self.x_axis_combo)
-        toolbar_layout.addWidget(self.y_axis_combo)
-
-        self.trajectory_spin = QtWidgets.QSpinBox()
-        self.trajectory_spin.setRange(0, 99)
-        self.trajectory_spin.setToolTip("Trajectory index")
-        toolbar_layout.addWidget(self.trajectory_spin)
-
-        self.separation_a_spin = QtWidgets.QSpinBox()
-        self.separation_a_spin.setRange(0, 99)
-        self.separation_a_spin.setToolTip("First trajectory")
-        self.separation_b_spin = QtWidgets.QSpinBox()
-        self.separation_b_spin.setRange(0, 99)
-        self.separation_b_spin.setValue(1)
-        self.separation_b_spin.setToolTip("Second trajectory")
-        self.log_check = QtWidgets.QCheckBox("Log")
-        toolbar_layout.addWidget(self.separation_a_spin)
-        toolbar_layout.addWidget(self.separation_b_spin)
-        toolbar_layout.addWidget(self.log_check)
-
-        self.live_check = QtWidgets.QCheckBox("Live")
-        self.live_check.setChecked(True)
-        self.live_check.setToolTip("Keep this plot linked to parameter changes")
-        self.append_check = QtWidgets.QCheckBox("Overlay")
-        self.label_edit = QtWidgets.QLineEdit()
-        self.label_edit.setPlaceholderText("Label")
-        self.label_edit.setMinimumWidth(130)
-        toolbar_layout.addWidget(self.live_check)
-
-        self.return_samples_spin = QtWidgets.QSpinBox()
-        self.return_samples_spin.setRange(10, 200000)
-        self.return_samples_spin.setValue(2000)
-        self.return_samples_spin.setSingleStep(100)
-        self.return_samples_spin.setToolTip("Samples used for return analysis")
-        self.return_count_spin = QtWidgets.QSpinBox()
-        self.return_count_spin.setRange(1, 10000)
-        self.return_count_spin.setValue(20)
-        self.return_count_spin.setToolTip("Number of return matches")
-        self.return_unique_check = QtWidgets.QCheckBox("Unique")
-        self.return_unique_check.setChecked(True)
-        self.return_unique_check.setToolTip("Keep unique return pairs")
-
-        self.crossing_auto_value_check = QtWidgets.QCheckBox("Auto value")
-        self.crossing_auto_value_check.setChecked(True)
-        self.crossing_auto_value_check.setToolTip(
-            "Use the current default section value"
-        )
-        self.crossing_value_spin = QtWidgets.QDoubleSpinBox()
-        self.crossing_value_spin.setRange(-1_000_000.0, 1_000_000.0)
-        self.crossing_value_spin.setDecimals(4)
-        self.crossing_value_spin.setSingleStep(0.5)
-        self.crossing_value_spin.setEnabled(False)
-        self.crossing_value_spin.setToolTip("Manual crossing plane value")
-        self.crossing_auto_value_check.toggled.connect(
-            lambda checked: self.crossing_value_spin.setEnabled(not checked)
-        )
-        self.crossing_direction_combo = QtWidgets.QComboBox()
-        self.crossing_direction_combo.addItems(["Both", "Positive", "Negative"])
-        self.crossing_direction_combo.setToolTip("Crossing direction")
-
-        self.fit_time_range_check = QtWidgets.QCheckBox("Use t range")
-        self.fit_time_range_check.setToolTip("Limit the fit by time")
-        self.fit_t_min_spin = QtWidgets.QDoubleSpinBox()
-        self.fit_t_min_spin.setRange(-1_000_000.0, 1_000_000.0)
-        self.fit_t_min_spin.setDecimals(4)
-        self.fit_t_min_spin.setToolTip("Fit start time")
-        self.fit_t_max_spin = QtWidgets.QDoubleSpinBox()
-        self.fit_t_max_spin.setRange(-1_000_000.0, 1_000_000.0)
-        self.fit_t_max_spin.setDecimals(4)
-        self.fit_t_max_spin.setValue(100.0)
-        self.fit_t_max_spin.setToolTip("Fit end time")
-        self.fit_time_range_check.toggled.connect(self._sync_fit_option_enabled)
-
-        self.fit_step_range_check = QtWidgets.QCheckBox("Use step range")
-        self.fit_step_range_check.setToolTip("Limit the fit by sample step")
-        self.fit_step_min_spin = QtWidgets.QSpinBox()
-        self.fit_step_min_spin.setRange(0, 1_000_000_000)
-        self.fit_step_min_spin.setToolTip("First fit sample step")
-        self.fit_step_max_spin = QtWidgets.QSpinBox()
-        self.fit_step_max_spin.setRange(0, 1_000_000_000)
-        self.fit_step_max_spin.setValue(1000)
-        self.fit_step_max_spin.setToolTip("Last fit sample step")
-        self.fit_step_range_check.toggled.connect(self._sync_fit_option_enabled)
-        self._sync_fit_option_enabled()
-
-        self.options_button = QtWidgets.QToolButton()
-        self.options_button.setText("Options")
-        self.options_button.setToolTip("Plot options")
-        self.options_button.setPopupMode(
-            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
-        )
-        self.options_menu = self._build_options_menu()
-        self.options_button.setMenu(self.options_menu)
-        self.run_button = QtWidgets.QPushButton("Run")
-        self.run_button.clicked.connect(self._emit_plot_request)
-
-        toolbar_layout.addWidget(self.options_button)
-        toolbar_layout.addWidget(self.run_button)
-
-        layout.addWidget(self.toolbar)
+        layout.addWidget(self.toolbar_stack)
         layout.addWidget(console_panel, 1)
+
         self._sync_plot_controls()
+        self.set_mode("system")
 
     def set_plots(self, names, current_name):
         self.current_plot_name = current_name if current_name in names else ""
@@ -426,3 +298,148 @@ class WorkspacePanel(QtWidgets.QWidget):
             options["trajectory"] = self.trajectory_spin.value()
 
         self.plot_requested.emit(kind, options)
+
+    def _build_system_toolbar(self):
+        toolbar = QtWidgets.QWidget()
+        toolbar.setObjectName("controlPanel")
+        toolbar_layout = QtWidgets.QHBoxLayout(toolbar)
+        toolbar_layout.setContentsMargins(6, 6, 6, 4)
+        toolbar_layout.setSpacing(6)
+
+        self.status_button = QtWidgets.QToolButton()
+        self.status_button.setText("Status")
+        self.status_button.setToolTip("No solution")
+        self.status_button.setFixedWidth(58)
+        self._status_text = ""
+        toolbar_layout.addWidget(self.status_button)
+
+        self.plot_kind_combo = QtWidgets.QComboBox()
+        self.plot_kind_combo.addItems(CONSOLE_PLOT_KINDS)
+        self.plot_kind_combo.currentTextChanged.connect(self._sync_plot_controls)
+        toolbar_layout.addWidget(self.plot_kind_combo)
+
+        self.live_button = QtWidgets.QToolButton()
+        self.live_button.setText("Live: 0")
+        self.live_button.setToolTip("Live traces for the current plot")
+        self.live_button.setPopupMode(
+            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        self.live_button.setMenu(QtWidgets.QMenu(self.live_button))
+        toolbar_layout.addWidget(self.live_button)
+
+        self.axis_combo = QtWidgets.QComboBox()
+        self.axis_combo.addItems(["x", "y", "z"])
+        self.x_axis_combo = QtWidgets.QComboBox()
+        self.x_axis_combo.addItems(["x", "y", "z"])
+        self.y_axis_combo = QtWidgets.QComboBox()
+        self.y_axis_combo.addItems(["x", "y", "z"])
+        self.y_axis_combo.setCurrentText("z")
+        toolbar_layout.addWidget(self.axis_combo)
+        toolbar_layout.addWidget(self.x_axis_combo)
+        toolbar_layout.addWidget(self.y_axis_combo)
+
+        self.trajectory_spin = QtWidgets.QSpinBox()
+        self.trajectory_spin.setRange(0, 99)
+        self.trajectory_spin.setToolTip("Trajectory index")
+        toolbar_layout.addWidget(self.trajectory_spin)
+
+        self.separation_a_spin = QtWidgets.QSpinBox()
+        self.separation_a_spin.setRange(0, 99)
+        self.separation_a_spin.setToolTip("First trajectory")
+        self.separation_b_spin = QtWidgets.QSpinBox()
+        self.separation_b_spin.setRange(0, 99)
+        self.separation_b_spin.setValue(1)
+        self.separation_b_spin.setToolTip("Second trajectory")
+        self.log_check = QtWidgets.QCheckBox("Log")
+        toolbar_layout.addWidget(self.separation_a_spin)
+        toolbar_layout.addWidget(self.separation_b_spin)
+        toolbar_layout.addWidget(self.log_check)
+
+        self.live_check = QtWidgets.QCheckBox("Live")
+        self.live_check.setChecked(True)
+        self.live_check.setToolTip("Keep this plot linked to parameter changes")
+        self.append_check = QtWidgets.QCheckBox("Overlay")
+        self.label_edit = QtWidgets.QLineEdit()
+        self.label_edit.setPlaceholderText("Label")
+        self.label_edit.setMinimumWidth(130)
+        toolbar_layout.addWidget(self.live_check)
+
+        self.return_samples_spin = QtWidgets.QSpinBox()
+        self.return_samples_spin.setRange(10, 200000)
+        self.return_samples_spin.setValue(2000)
+        self.return_samples_spin.setSingleStep(100)
+        self.return_samples_spin.setToolTip("Samples used for return analysis")
+        self.return_count_spin = QtWidgets.QSpinBox()
+        self.return_count_spin.setRange(1, 10000)
+        self.return_count_spin.setValue(20)
+        self.return_count_spin.setToolTip("Number of return matches")
+        self.return_unique_check = QtWidgets.QCheckBox("Unique")
+        self.return_unique_check.setChecked(True)
+        self.return_unique_check.setToolTip("Keep unique return pairs")
+
+        self.crossing_auto_value_check = QtWidgets.QCheckBox("Auto value")
+        self.crossing_auto_value_check.setChecked(True)
+        self.crossing_auto_value_check.setToolTip(
+            "Use the current default section value"
+        )
+        self.crossing_value_spin = QtWidgets.QDoubleSpinBox()
+        self.crossing_value_spin.setRange(-1_000_000.0, 1_000_000.0)
+        self.crossing_value_spin.setDecimals(4)
+        self.crossing_value_spin.setSingleStep(0.5)
+        self.crossing_value_spin.setEnabled(False)
+        self.crossing_value_spin.setToolTip("Manual crossing plane value")
+        self.crossing_auto_value_check.toggled.connect(
+            lambda checked: self.crossing_value_spin.setEnabled(not checked)
+        )
+        self.crossing_direction_combo = QtWidgets.QComboBox()
+        self.crossing_direction_combo.addItems(["Both", "Positive", "Negative"])
+        self.crossing_direction_combo.setToolTip("Crossing direction")
+
+        self.fit_time_range_check = QtWidgets.QCheckBox("Use t range")
+        self.fit_time_range_check.setToolTip("Limit the fit by time")
+        self.fit_t_min_spin = QtWidgets.QDoubleSpinBox()
+        self.fit_t_min_spin.setRange(-1_000_000.0, 1_000_000.0)
+        self.fit_t_min_spin.setDecimals(4)
+        self.fit_t_min_spin.setToolTip("Fit start time")
+        self.fit_t_max_spin = QtWidgets.QDoubleSpinBox()
+        self.fit_t_max_spin.setRange(-1_000_000.0, 1_000_000.0)
+        self.fit_t_max_spin.setDecimals(4)
+        self.fit_t_max_spin.setValue(100.0)
+        self.fit_t_max_spin.setToolTip("Fit end time")
+        self.fit_time_range_check.toggled.connect(self._sync_fit_option_enabled)
+
+        self.fit_step_range_check = QtWidgets.QCheckBox("Use step range")
+        self.fit_step_range_check.setToolTip("Limit the fit by sample step")
+        self.fit_step_min_spin = QtWidgets.QSpinBox()
+        self.fit_step_min_spin.setRange(0, 1_000_000_000)
+        self.fit_step_min_spin.setToolTip("First fit sample step")
+        self.fit_step_max_spin = QtWidgets.QSpinBox()
+        self.fit_step_max_spin.setRange(0, 1_000_000_000)
+        self.fit_step_max_spin.setValue(1000)
+        self.fit_step_max_spin.setToolTip("Last fit sample step")
+        self.fit_step_range_check.toggled.connect(self._sync_fit_option_enabled)
+        self._sync_fit_option_enabled()
+
+        self.options_button = QtWidgets.QToolButton()
+        self.options_button.setText("Options")
+        self.options_button.setToolTip("Plot options")
+        self.options_button.setPopupMode(
+            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        self.options_menu = self._build_options_menu()
+        self.options_button.setMenu(self.options_menu)
+        self.run_button = QtWidgets.QPushButton("Run")
+        self.run_button.clicked.connect(self._emit_plot_request)
+
+        toolbar_layout.addWidget(self.options_button)
+        toolbar_layout.addWidget(self.run_button)
+
+        return toolbar
+
+    def set_mode(self, mode):
+        key = str(mode).strip().lower()
+        if key not in {"system", "explore"}:
+            raise ValueError("Workspace mode must be 'system' or 'explore'")
+
+        self.toolbar_stack.setVisible(key == "system")
+        self.console_panel.set_explorer_visible(key == "explore")
