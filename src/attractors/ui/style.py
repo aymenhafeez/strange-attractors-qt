@@ -92,3 +92,66 @@ CUSTOM_TOGGLE = """
 """
 
 NO_BORDER = "border: none;"
+
+CONSOLE_PLOT_WIDGET = """
+    PlotWidget#ConsolePlotWidget {
+        border: 2px solid palette(mid);
+    }
+"""
+
+# CONSOLE_PLOT_PARAMS = """
+#     QFrame#ConsolePlotParams {
+#         background: black;
+#         color: white;
+#     }
+#
+#     QLabel#ConsolePlotParamTitle {
+#         color: white;
+#         font-weight: bold;
+#         padding-left: 2px;
+#     }
+#
+#     QFrame#ConsolePlotParamControls {
+#         background: black;
+#         border: 1px solid palette(mid);
+#         color: white;
+#     }
+#
+#     QLabel {
+#         color: white;
+#     }
+#
+#     QToolButton,
+#     QDoubleSpinBox {
+#         color: white;
+#         background: #2b2b2b;
+#         border: 1px solid #4a4a4a;
+#         padding: 1px 6px;
+#     }
+#
+#     QSlider::add-page:horizontal {
+#         background: #2b2b2b;
+#     }
+# """
+
+CONSOLE_PLOT_PARAMS = """
+    QFrame#ConsolePlotParams {
+        background: palette(window);
+        border-top: 2px solid palette(mid);
+    }
+
+    QLabel#ConsolePlotParamTitle {
+        color: palette(text);
+        font-weight: bold;
+        padding-left: 2px;
+    }
+
+    QDoubleSpinBox {
+        background: palette(window);
+    }
+
+    QFrame#ConsolePlotParamControls {
+        background: palette(base);
+        border: 1px solid palette(mid);
+    }
+"""

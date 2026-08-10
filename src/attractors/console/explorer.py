@@ -32,7 +32,7 @@ class ConsoleParam(QtCore.QObject):
         self.widget = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(self.widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(6)
 
         label = QtWidgets.QLabel(self.name)
         self.slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
@@ -44,6 +44,7 @@ class ConsoleParam(QtCore.QObject):
         self.spin.setRange(self.start, self.end)
         self.spin.setSingleStep(self.step)
         self.spin.setDecimals(6)
+        self.spin.setKeyboardTracking(False)
 
         layout.addWidget(label)
         layout.addWidget(self.slider, 1)

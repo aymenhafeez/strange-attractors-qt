@@ -5,6 +5,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.docking import AreaBoundDock as Dock
 from ..ui.docking import AreaBoundDockArea as DockArea
+from ..ui.style import CONSOLE_PLOT_PARAMS, CONSOLE_PLOT_WIDGET
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
 
@@ -31,6 +32,8 @@ PLOT_MODE_OVERLAY = "overlay"
 
 def _build_console_plot_widget():
     plot_widget = pg.PlotWidget()
+    plot_widget.setObjectName("ConsolePlotWidget")
+    # plot_widget.setStyleSheet(CONSOLE_PLOT_WIDGET)
     plot_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
     plot_widget.showGrid(x=True, y=True, alpha=0.25)
     plot_widget.setLabel("bottom", "x")
@@ -73,18 +76,52 @@ class ConsolePlot:
         self.layout.setSpacing(0)
         self.layout.addWidget(self._plot_widget)
 
-        self.param_widget = QtWidgets.QWidget()
+        self.param_widget = QtWidgets.QFrame()
+        self.param_widget.setObjectName("ConsolePlotParams")
         self.param_layout = QtWidgets.QVBoxLayout(self.param_widget)
-        self.param_layout.setContentsMargins(0, 0, 0, 0)
-        self.param_layout.setSpacing(0)
+        self.param_layout.setContentsMargins(6, 5, 6, 6)
+        self.param_layout.setSpacing(4)
         self.param_widget.setVisible(False)
+        self.param_widget.setStyleSheet(CONSOLE_PLOT_PARAMS)
+
+        header = QtWidgets.QWidget()
+        header_layout = QtWidgets.QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 2)
+        header_layout.setSpacing(4)
+
+        # self.param_title = QtWidgets.QLabel("Explore")
+        # self.param_title.setObjectName("ConsolePlotParamTitle")
+
+        clear_traces = QtWidgets.QToolButton()
+        clear_traces.setText("Traces")
+        clear_traces.setToolTip("Clear reactive traces")
+        clear_traces.clicked.connect(lambda: self.explore.clear_traces())
+
+        clear_sliders = QtWidgets.QToolButton()
+        clear_sliders.setText("Sliders")
+        clear_sliders.setToolTip("Clear sliders")
+        clear_sliders.clicked.connect(lambda: self.explore.clear_sliders())
+
+        # header_layout.addWidget(self.param_title)
+        header_layout.addStretch(1)
+        header_layout.addWidget(clear_traces)
+        header_layout.addWidget(clear_sliders)
+
+        self.param_controls = QtWidgets.QFrame()
+        self.param_controls.setObjectName("ConsolePlotParamControls")
+        self.param_controls_layout = QtWidgets.QVBoxLayout(self.param_controls)
+        self.param_controls_layout.setContentsMargins(5, 5, 5, 5)
+        self.param_controls_layout.setSpacing(3)
+
+        self.param_layout.addWidget(header)
+        self.param_layout.addWidget(self.param_controls)
 
         self.layout.addWidget(self.param_widget)
 
         self.explore = PlotExplorer(
             self,
             self.param_widget,
-            self.param_layout,
+            self.param_controls_layout,
             status_callback=status_callback,
             parent=self.host,
         )
@@ -542,7 +579,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
     def apply_explore_layout(self):
         self.set_explore_visible(True)
         self.dock_area.moveDock(self.script_dock, "left", self.plot_dock)
-        self.dock_area.moveDock(self.console_dock, "bottom", self.plot_dock)
+        self.dock_area.moveDock(self.console_dock, "bottom", self.script_dock)
         # self.dock_area.moveDock(
         #     self.explorer_params_dock,
         #     "bottom",
