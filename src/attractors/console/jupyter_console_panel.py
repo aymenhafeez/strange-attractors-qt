@@ -92,10 +92,14 @@ class ConsolePlot:
         # self.param_title = QtWidgets.QLabel("Explore")
         # self.param_title.setObjectName("ConsolePlotParamTitle")
 
-        clear_traces = QtWidgets.QToolButton()
-        clear_traces.setText("Traces")
-        clear_traces.setToolTip("Clear reactive traces")
-        clear_traces.clicked.connect(lambda: self.explore.clear_traces())
+        self.trace_menu = QtWidgets.QMenu(self.param_widget)
+        trace_button = QtWidgets.QToolButton()
+        trace_button.setText("Traces")
+        trace_button.setToolTip("Manage traces")
+        trace_button.setPopupMode(
+            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        trace_button.setMenu(self.trace_menu)
 
         clear_sliders = QtWidgets.QToolButton()
         clear_sliders.setText("Sliders")
@@ -104,7 +108,7 @@ class ConsolePlot:
 
         # header_layout.addWidget(self.param_title)
         header_layout.addStretch(1)
-        header_layout.addWidget(clear_traces)
+        header_layout.addWidget(trace_button)
         header_layout.addWidget(clear_sliders)
 
         self.param_controls = QtWidgets.QFrame()
@@ -113,14 +117,8 @@ class ConsolePlot:
         self.param_controls_layout.setContentsMargins(5, 5, 5, 5)
         self.param_controls_layout.setSpacing(3)
 
-        self.trace_controls = QtWidgets.QFrame()
-        self.trace_controls_layout = QtWidgets.QVBoxLayout(self.trace_controls)
-        self.trace_controls_layout.setContentsMargins(0, 0, 0, 0)
-        self.trace_controls_layout.setSpacing(3)
-
         self.param_layout.addWidget(header)
         self.param_layout.addWidget(self.param_controls)
-        self.param_layout.addWidget(self.trace_controls)
 
         self.layout.addWidget(self.param_widget)
 
@@ -128,7 +126,7 @@ class ConsolePlot:
             self,
             self.param_widget,
             self.param_controls_layout,
-            self.trace_controls_layout,
+            self.trace_menu,
             status_callback=status_callback,
             parent=self.host,
         )

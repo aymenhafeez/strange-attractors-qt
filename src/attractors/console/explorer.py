@@ -117,7 +117,7 @@ class PlotExplorer(QtCore.QObject):
         plot,
         param_widget,
         param_layout,
-        trace_controls_layout,
+        trace_menu,
         status_callback=None,
         parent=None,
     ):
@@ -125,42 +125,26 @@ class PlotExplorer(QtCore.QObject):
         self.plot = plot
         self.param_widget = param_widget
         self.param_layout = param_layout
-        self.trace_controls_layout = trace_controls_layout
+        self.trace_menu = trace_menu
         self.status_callback = status_callback
         self._params = {}
         self._traces = {}
-        self._trace_widgets = {}
+        self._sync_trace_menu()
 
-    def _add_trace_widget(self, name):
-        old = self._trace_widgets.pop(name, None)
-        if old is not None:
-            self.trace_controls_layout.removeWidget(old)
-            old.deleteLater()
+    def _sync_trace_menu(self):
+        self.trace_menu.clear()
 
-        row = QtWidgets.QWidget()
-        layout = QtWidgets.QHBoxLayout(row)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        if not self._traces:
+            action = self.trace_menu.addAction("No traces")
+            action.setEnabled(False)
+            return
 
-        label = QtWidgets.QLabel(name)
-        remove = QtWidgets.QToolButton()
-        remove.setText("x")
-        remove.setToolTip(f"Remove trace {name!r}")
-        remove.clicked.connect(
-            lambda _checked=False, trace_name=name: self.remove_trace(trace_name)
-        )
-
-        layout.addWidget(label, 1)
-        layout.addWidget(remove)
-
-        self._trace_widgets[name] = row
-        self.trace_controls_layout.addWidget(row)
-
-    def _remove_trace_widget(self, name):
-        row = self._trace_widgets.pop(name, None)
-        if row is not None:
-            self.trace_controls_layout.removeWidget(row)
-            row.deleteLater()
+        for name in self._traces:
+            action = self.trace_menu.addAction(name)
+            action.setToolTip(f"Remove trace {name!r}")
+            action.triggered.connect(
+                lambda checked=False, name=name: self.remove_trace(name)
+            )
 
     def slider(self, name, value=0.0, start=0.0, end=1.0, step=0.01):
         key = name.strip()
@@ -199,7 +183,7 @@ class PlotExplorer(QtCore.QObject):
             raise KeyError(f"No trace named {key!r}")
 
         trace.remove()
-        self._remove_trace_widget(key)
+        self._sync_trace_menu()
 
         return self.traces()
 
@@ -254,7 +238,7 @@ class PlotExplorer(QtCore.QObject):
         item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
         trace = ConsoleTrace(name, x, y, item, target)
         self._traces[name] = trace
-        self._add_trace_widget(name)
+        self._sync_trace_menu()
 
         return trace
 
@@ -302,7 +286,7 @@ class PlotExplorer(QtCore.QObject):
         )
         trace = ConsoleTrace(name, x, y, item, target)
         self._traces[name] = trace
-        self._add_trace_widget(name)
+        self._sync_trace_menu()
         return trace
 
     def refresh(self):
@@ -321,12 +305,7 @@ class PlotExplorer(QtCore.QObject):
             trace.remove()
 
         self._traces.clear()
-
-        for row in self._trace_widgets.values():
-            self.trace_controls_layout.removeWidget(row)
-            row.deleteLater()
-
-        self._trace_widgets.clear()
+        self._sync_trace_menu()
 
     def clear_sliders(self):
         for param in self._params.values():
