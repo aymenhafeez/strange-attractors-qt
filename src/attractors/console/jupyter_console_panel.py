@@ -113,8 +113,14 @@ class ConsolePlot:
         self.param_controls_layout.setContentsMargins(5, 5, 5, 5)
         self.param_controls_layout.setSpacing(3)
 
+        self.trace_controls = QtWidgets.QFrame()
+        self.trace_controls_layout = QtWidgets.QVBoxLayout(self.trace_controls)
+        self.trace_controls_layout.setContentsMargins(0, 0, 0, 0)
+        self.trace_controls_layout.setSpacing(3)
+
         self.param_layout.addWidget(header)
         self.param_layout.addWidget(self.param_controls)
+        self.param_layout.addWidget(self.trace_controls)
 
         self.layout.addWidget(self.param_widget)
 
@@ -122,6 +128,7 @@ class ConsolePlot:
             self,
             self.param_widget,
             self.param_controls_layout,
+            self.trace_controls_layout,
             status_callback=status_callback,
             parent=self.host,
         )
