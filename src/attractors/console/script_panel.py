@@ -45,6 +45,24 @@ class ScriptStore:
 
     def ensure_root(self):
         self.root.mkdir(parents=True, exist_ok=True)
+        self.ensure_examples()
+
+    def ensure_examples(self):
+        source = Path(__file__).resolve().parents[3] / "examples"
+
+        target = self.root / "examples"
+
+        if not source.exists():
+            return
+
+        target.mkdir(exist_ok=True)
+
+        for path in source.glob("*.py"):
+            target_path = target / path.name
+            if not target_path.exists():
+                target_path.write_text(
+                    path.read_text(encoding="utf-8"), encoding="utf-8"
+                )
 
     def resolve_script(self, path):
         path = Path(path).resolve()
