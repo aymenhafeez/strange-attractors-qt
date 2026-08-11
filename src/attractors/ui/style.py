@@ -1,3 +1,22 @@
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+
+
+def is_dark_mode():
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return False
+
+    scheme = app.styleHints().colorScheme()
+    if scheme != QtCore.Qt.ColorScheme.Unknown:
+        return scheme == QtCore.Qt.ColorScheme.Dark
+
+    palette = app.palette()
+    window = palette.color(QtGui.QPalette.ColorRole.Window)
+    text = palette.color(QtGui.QPalette.ColorRole.WindowText)
+
+    return window.lightness() < text.lightness()
+
+
 EQUATION_LABEL = """
     color: #ddd;
     font-size: 13px;
@@ -7,54 +26,17 @@ EQUATION_LABEL = """
     border-radius: 0px;
 """
 
-ATTRACTOR_INFO = "color: #ddd; font-size: 13px"
-
-SLIDER_PARAMS = "color: white; font-weight: bold;"
-
-CONTAINER = "background: #000; border: none;"
-
 SPLITTER_HANDLE_HOVER = """
     QSplitter::handle:hover {
         background-color: palette(highlight);
     }
 """
 
-LYAPUNOV_PLOT = "background-color: rgba(0, 0, 0, 0); border: 0px"
-
 SCENE_TOOLBAR = """
     QToolBar#sceneToolbar {
         border: 0px;
         border-bottom: 0px;
     }
-"""
-
-DOCK_BORDER_COLOUR = "palette(mid)"
-
-DOCK_HORIZONTAL = f"""
-    Dock > QWidget {{
-        border: 1px solid {DOCK_BORDER_COLOUR};
-        border-radius: 5px;
-        border-top-left-radius: 0px;
-        border-top-right-radius: 0px;
-        border-top-width: 0px;
-    }}
-"""
-
-DOCK_VERTICAL = f"""
-    Dock > QWidget {{
-        border: 1px solid {DOCK_BORDER_COLOUR};
-        border-radius: 5px;
-        border-top-left-radius: 0px;
-        border-bottom-left-radius: 0px;
-        border-left-width: 0px;
-    }}
-"""
-
-DOCK_NO_TITLE = f"""
-    Dock > QWidget {{
-        border: 1px solid {DOCK_BORDER_COLOUR};
-        border-radius: 5px;
-    }}
 """
 
 SIDE_PANEL = """
@@ -75,29 +57,11 @@ RIGHT_PANEL = """
     }
 """
 
-CUSTOM_TOGGLE = """
-    QPushButton {
-        background-color: rgba(0, 0, 0, 180);
-        color: white;
-        border: 1px solid #aaa;
-        border-radius: 0px;
-        padding: 3px 8px;
-        font-size: 12px;
-        text-align: left;
-    }
-    QPushButton:hover {
-        color: white;
-        background-color: rgba(40, 40, 40, 220);
-    }
-"""
-
-NO_BORDER = "border: none;"
-
-CONSOLE_PLOT_WIDGET = """
-    PlotWidget#ConsolePlotWidget {
-        border: 2px solid palette(mid);
-    }
-"""
+# CONSOLE_PLOT_WIDGET = """
+#     PlotWidget#ConsolePlotWidget {
+#         border: 2px solid palette(mid);
+#     }
+# """
 
 # CONSOLE_PLOT_PARAMS = """
 #     QFrame#ConsolePlotParams {

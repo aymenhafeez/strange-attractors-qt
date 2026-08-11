@@ -3,18 +3,18 @@ from pathlib import Path
 from PyQt6.Qsci import QsciLexerPython, QsciScintilla
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from ..ui.style import SPLITTER_HANDLE_HOVER
+from ..ui.style import SPLITTER_HANDLE_HOVER, is_dark_mode
 from .script_browser import ScriptBrowser, default_scripts_dir
 
 # dark mode palette derived from KDE Breeze Dark
 # https://qscintilla.com/#syntax_highlighting/custom_lexer_example
 # https://lxr.kde.org/source/frameworks/syntax-highlighting/data/themes/breeze-dark.theme
-EDITOR_BACKGROUND = "#232629"
-EDITOR_TEXT = "#cfcfc2"
-EDITOR_MARGIN = "#31363b"
-EDITOR_MARGIN_TEXT = "#7a7c7d"
-EDITOR_SELECTION = "#2d5c76"
-EDITOR_CARET_LINE = "#2a2e32"
+EDITOR_BACKGROUND = "#121416"
+EDITOR_TEXT = "#EEEEEE"
+EDITOR_MARGIN = "#1b1f22"
+EDITOR_MARGIN_TEXT = "#B0BEC5"
+EDITOR_SELECTION = "#244559"
+EDITOR_CARET_LINE = "#1a1d20"
 
 PYTHON_STYLE_COLOURS = {
     QsciLexerPython.ClassName: "#2980b9",
@@ -37,22 +37,6 @@ PYTHON_STYLE_COLOURS = {
     QsciLexerPython.TripleSingleQuotedString: "#da4453",
     QsciLexerPython.UnclosedString: "#da4453",
 }
-
-
-def _is_dark_mode():
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        return False
-
-    scheme = app.styleHints().colorScheme()
-    if scheme != QtCore.Qt.ColorScheme.Unknown:
-        return scheme == QtCore.Qt.ColorScheme.Dark
-
-    palette = app.palette()
-    window = palette.color(QtGui.QPalette.ColorRole.Window)
-    text = palette.color(QtGui.QPalette.ColorRole.WindowText)
-
-    return window.lightness() < text.lightness()
 
 
 class ScriptStore:
@@ -211,7 +195,7 @@ class ScriptPanel(QtWidgets.QWidget):
         self.lexer = QsciLexerPython(editor)
         self.lexer.setDefaultFont(font)
 
-        if _is_dark_mode():
+        if is_dark_mode():
             self._apply_dark_editor_colours(editor)
 
         editor.setLexer(self.lexer)

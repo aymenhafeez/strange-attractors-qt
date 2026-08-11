@@ -5,7 +5,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.docking import AreaBoundDock as Dock
 from ..ui.docking import AreaBoundDockArea as DockArea
-from ..ui.style import CONSOLE_PLOT_PARAMS
+from ..ui.style import CONSOLE_PLOT_PARAMS, is_dark_mode
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
 
@@ -53,7 +53,9 @@ class _RichJupyterConsole(_BaseJupyterConsole):
 
         if script_dir is not None:
             self.kernel_manager.kernel.shell.run_line_magic("cd", str(script_dir))
-        # self.set_default_style("linux")
+
+        if is_dark_mode():
+            self.set_default_style("linux")
 
     def shutdown_kernel(self):
         self.kernel_client.stop_channels()
