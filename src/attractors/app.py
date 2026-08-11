@@ -656,9 +656,23 @@ class Window(QtWidgets.QMainWindow):
         if mode is not None:
             self._set_workspace_mode(mode)
 
+    def _enter_explore_workspace(self):
+        self.jupyter_console_panel.ensure_console()
+        self._open_workspace_dock()
+        self.jupyter_console_panel.apply_explore_layout()
+
+    def _restore_explore_layout(self):
+        self._set_workspace_mode("explore")
+        self.jupyter_console_panel.apply_explore_layout()
+        self._set_temporary_app_status("Restored Explore layout")
+
     def _set_workspace_mode(self, mode):
         key = str(mode).strip().lower()
         self._workspace_focus(key)
+
+        if key == "explore":
+            self._enter_explore_workspace()
+
         self.workspace_panel.set_mode(key)
 
         if hasattr(self, "workspace_mode_combo"):
@@ -674,11 +688,6 @@ class Window(QtWidgets.QMainWindow):
             ):
                 self.workspace_system_mode_action.setChecked(key == "system")
                 self.workspace_explore_mode_action.setChecked(key == "explore")
-
-    def _apply_explore_layout(self):
-        self._set_workspace_mode("explore")
-        self.jupyter_console_panel.apply_explore_layout()
-        self._set_temporary_app_status("Applied Explore layout")
 
     def _workspace_focus(self, mode):
         if mode == "explore":
@@ -754,11 +763,6 @@ class Window(QtWidgets.QMainWindow):
         )
         self._submenu_context_actions(
             view_menu,
-            "Console",
-            self.toolbar_jupyter_console_action,
-        )
-        self._submenu_context_actions(
-            view_menu,
             "Status bar",
             self.toolbar_process_status_action,
         )
@@ -821,7 +825,10 @@ class Window(QtWidgets.QMainWindow):
             lambda: self._set_workspace_mode("explore")
         )
         workspace_menu.addSeparator()
-        workspace_menu.addAction("Apply Explore layout", self._apply_explore_layout)
+        workspace_menu.addAction(
+            "Explore workspace", lambda: self._set_workspace_mode("explore")
+        )
+        workspace_menu.addAction("Restore Explore layout", self._restore_explore_layout)
         workspace_menu.addSeparator()
         workspace_menu.addAction("New plot", self._new_live_plot)
         workspace_menu.addAction(
@@ -890,6 +897,11 @@ class Window(QtWidgets.QMainWindow):
             analysis_menu,
             "Bifurcation diagram",
             self.toolbar_bifurcation_action,
+        )
+        self._submenu_context_actions(
+            analysis_menu,
+            "Console",
+            self.toolbar_jupyter_console_action,
         )
 
         explore_menu = menu_bar.addMenu("&Explore")
