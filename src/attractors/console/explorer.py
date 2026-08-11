@@ -313,7 +313,7 @@ class PlotExplorer(QtCore.QObject):
             param.widget.deleteLater()
 
         self._params.clear()
-        self.param_widget.setVisible(False)
+        # self.param_widget.setVisible(False)
 
     def _set_status(self, message):
         if self.status_callback is not None:

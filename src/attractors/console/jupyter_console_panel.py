@@ -5,7 +5,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.docking import AreaBoundDock as Dock
 from ..ui.docking import AreaBoundDockArea as DockArea
-from ..ui.style import CONSOLE_PLOT_PARAMS, CONSOLE_PLOT_WIDGET
+from ..ui.style import CONSOLE_PLOT_PARAMS
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
 
@@ -53,7 +53,7 @@ class _RichJupyterConsole(_BaseJupyterConsole):
 
         if script_dir is not None:
             self.kernel_manager.kernel.shell.run_line_magic("cd", str(script_dir))
-        self.set_default_style("linux")
+        # self.set_default_style("linux")
 
     def shutdown_kernel(self):
         self.kernel_client.stop_channels()
@@ -625,7 +625,14 @@ class ConsolePlotZoom(QtWidgets.QWidget):
 
     def add_item(self, item):
         x, y = item.getData()
-        clone = self.zoom_widget.plot(x, y, pen=item.opts.get("pen"))
+        clone_options = {
+            "pen": item.opts.get("pen"),
+            "symbol": item.opts.get("symbol"),
+            "symbolSize": item.opts.get("symbolSize"),
+            "symbolPen": item.opts.get("symbolPen"),
+            "symbolBrush": item.opts.get("symbolBrush"),
+        }
+        clone = self.zoom_widget.plot(x, y, **clone_options)
         self.items[item] = clone
 
         if x is not None and len(x):
