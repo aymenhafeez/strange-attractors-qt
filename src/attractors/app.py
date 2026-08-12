@@ -597,34 +597,27 @@ class Window(QtWidgets.QMainWindow):
             lambda: self._on_controls_solve_requested(True)
         )
 
-        tools_menu = QtWidgets.QMenu(self)
         self.toolbar_lyapunov_action = self._add_panel_menu_action(
-            tools_menu,
             "Lyapunov spectrum",
             self._toggle_lyapunov_panel,
         )
         self.toolbar_projection_action = self._add_panel_menu_action(
-            tools_menu,
             "Projection heatmaps",
             self._toggle_projections,
         )
         self.toolbar_poincare_action = self._add_panel_menu_action(
-            tools_menu,
             "Poincare section",
             self._toggle_poincare,
         )
         self.toolbar_bifurcation_action = self._add_panel_menu_action(
-            tools_menu,
             "Bifurcation diagram",
             self._toggle_bifurcation,
         )
         self.toolbar_jupyter_console_action = self._add_panel_menu_action(
-            tools_menu,
             "Console",
             self._toggle_jupyter_console,
         )
         self.toolbar_process_status_action = self._add_panel_menu_action(
-            tools_menu,
             "Status bar",
             lambda: self._toggle_process_status(),
         )
@@ -779,11 +772,7 @@ class Window(QtWidgets.QMainWindow):
             "Right panel",
             self.toolbar_right_panel_action,
         )
-        self._submenu_context_actions(
-            view_menu,
-            "Status bar",
-            self.toolbar_process_status_action,
-        )
+        view_menu.addAction(self.toolbar_process_status_action)
         view_menu.addSeparator()
         self._submenu_context_actions(
             view_menu,
@@ -891,31 +880,11 @@ class Window(QtWidgets.QMainWindow):
             )
 
         analysis_menu = menu_bar.addMenu("&Analysis")
-        self._submenu_context_actions(
-            analysis_menu,
-            "Lyapunov spectrum",
-            self.toolbar_lyapunov_action,
-        )
-        self._submenu_context_actions(
-            analysis_menu,
-            "Projection heatmaps",
-            self.toolbar_projection_action,
-        )
-        self._submenu_context_actions(
-            analysis_menu,
-            "Poincare section",
-            self.toolbar_poincare_action,
-        )
-        self._submenu_context_actions(
-            analysis_menu,
-            "Bifurcation diagram",
-            self.toolbar_bifurcation_action,
-        )
-        self._submenu_context_actions(
-            analysis_menu,
-            "Console",
-            self.toolbar_jupyter_console_action,
-        )
+        analysis_menu.addAction(self.toolbar_lyapunov_action)
+        analysis_menu.addAction(self.toolbar_projection_action)
+        analysis_menu.addAction(self.toolbar_poincare_action)
+        analysis_menu.addAction(self.toolbar_bifurcation_action)
+        analysis_menu.addAction(self.toolbar_jupyter_console_action)
 
         explore_menu = menu_bar.addMenu("&Explore")
         explore_menu.addAction(
@@ -1053,10 +1022,10 @@ class Window(QtWidgets.QMainWindow):
 
         return dock
 
-    def _add_panel_menu_action(self, menu, text, callback):
-        action = menu.addAction(text)
+    def _add_panel_menu_action(self, text, callback):
+        action = QtGui.QAction(text, self)
         action.setCheckable(True)
-        action.triggered.connect(lambda: callback())
+        action.triggered.connect(lambda _checked=False: callback())
         return action
 
     def _sync_toolbar_panel_actions(self):
