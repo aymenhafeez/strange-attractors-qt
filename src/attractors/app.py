@@ -115,11 +115,20 @@ class Window(QtWidgets.QMainWindow):
         self._left_panel_splitter_size = int(WINDOW_WIDTH * 0.22)
         self._right_panel_splitter_size = int(WINDOW_WIDTH * 0.23)
         self._pre_explore_side_panel_state = None
+
         self.workspace_dock = None
+        self.workspace_mode_combo = None
+        self.workspace_system_mode_action = None
+        self.workspace_explore_mode_action = None
+        self.workspace_mode = "system"
+        self._explore_toolbar_actions = []
+        self._connected_explorer = None
+
         self.current_n = 100000
         self.current_t_max = 50
         self.current_name = next(iter(ATTRACTORS.keys()))
         self._custom_config = None
+
         app_data_location = QtCore.QStandardPaths.writableLocation(
             QtCore.QStandardPaths.StandardLocation.AppDataLocation
         )
@@ -240,6 +249,9 @@ class Window(QtWidgets.QMainWindow):
         )
         self.jupyter_console_panel.plots.current_changed.connect(
             lambda _name: self.live_plot_controller._sync_plots()
+        )
+        self.jupyter_console_panel.plots.current_changed.connect(
+            lambda _name: self._sync_explore_actions()
         )
         self.workspace_panel.set_solve_state(self._solve_state)
         self.live_plot_controller._sync_plots()
@@ -668,20 +680,26 @@ class Window(QtWidgets.QMainWindow):
 
     def _set_workspace_mode(self, mode):
         key = str(mode).strip().lower()
+        self.workspace_mode = key
         self._workspace_focus(key)
 
         if key == "explore":
             self._enter_explore_workspace()
 
         self.workspace_panel.set_mode(key)
+        self._sync_jupyter_workspace_state()
+        self._sync_explore_actions()
 
-        if hasattr(self, "workspace_mode_combo"):
+        if self.workspace_mode_combo is not None:
             index = self.workspace_mode_combo.findData(key)
             if index >= 0 and self.workspace_mode_combo.currentIndex() != index:
                 with QtCore.QSignalBlocker(self.workspace_mode_combo):
                     self.workspace_mode_combo.setCurrentIndex(index)
 
-        if hasattr(self, "workspace_system_mode_action"):
+        if (
+            self.workspace_system_mode_action is not None
+            and self.workspace_explore_mode_action is not None
+        ):
             with (
                 QtCore.QSignalBlocker(self.workspace_system_mode_action),
                 QtCore.QSignalBlocker(self.workspace_explore_mode_action),
@@ -795,7 +813,7 @@ class Window(QtWidgets.QMainWindow):
         )
         self._submenu_context_actions(
             system_menu,
-            "Show points",
+            "Show leading point",
             self.toolbar_point_action,
         )
         self._submenu_context_actions(
@@ -831,11 +849,6 @@ class Window(QtWidgets.QMainWindow):
         workspace_menu.addAction("Restore Explore layout", self._restore_explore_layout)
         workspace_menu.addSeparator()
         workspace_menu.addAction("New plot", self._new_live_plot)
-        workspace_menu.addAction(
-            "Rename current plot",
-            self._rename_current_live_plot,
-        )
-        workspace_menu.addSeparator()
         workspace_menu.addAction(
             "Clear current plot",
             self.live_plot_controller._clear_plot,
@@ -1034,7 +1047,7 @@ class Window(QtWidgets.QMainWindow):
         return dock
 
     def _build_workspace_dock(self):
-        dock = Dock("Console", size=(10, 12), closable=True)
+        dock = Dock("Workspace", size=(10, 12), closable=True)
         dock.addWidget(self.workspace_panel)
         dock.sigClosed.connect(lambda _dock: self._on_workspace_dock_closed())
 
@@ -1267,6 +1280,101 @@ class Window(QtWidgets.QMainWindow):
             self._keep_toolbar_action_from_taking_focus(toolbar, action)
         self.live_plot_controller._sync_plots()
 
+        self.explore_trace_button = QtWidgets.QToolButton()
+        self.explore_trace_button.setText("Traces: 0")
+        self.explore_trace_button.setToolTip(
+            "Manage reactive traces for the current plot"
+        )
+        self.explore_trace_button.setPopupMode(
+            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        self.explore_trace_menu = QtWidgets.QMenu(self.explore_trace_button)
+        self.explore_trace_button.setMenu(self.explore_trace_menu)
+        trace_action = toolbar.addWidget(self.explore_trace_button)
+
+        self.explore_clear_sliders_action = toolbar.addAction(
+            self._toolbar_icon(
+                "edit-clear", QtWidgets.QStyle.StandardPixmap.SP_DialogDiscardButton
+            ),
+            "Sliders",
+            self._clear_current_explore_sliders,
+        )
+        self.explore_clear_sliders_action.setToolTip(
+            "Clear sliders for the current plot"
+        )
+
+        self.explore_clear_state_action = toolbar.addAction(
+            self._toolbar_icon(
+                "edit-delete", QtWidgets.QStyle.StandardPixmap.SP_TrashIcon
+            ),
+            "Explore",
+            self._clear_current_explore,
+        )
+        self.explore_clear_state_action.setToolTip(
+            "Clear sliders and reactive traces for the current plot"
+        )
+
+        self._jupyter_toolbar_actions.extend(
+            [
+                trace_action,
+                self.explore_clear_sliders_action,
+                self.explore_clear_state_action,
+            ]
+        )
+        self._explore_toolbar_actions.extend(
+            [
+                trace_action,
+                self.explore_clear_sliders_action,
+                self.explore_clear_state_action,
+            ]
+        )
+
+    def _sync_explore_actions(self):
+        # putting this check in while refactoring the toolbar actions
+        if not self._explore_toolbar_actions:
+            return
+
+        explore_visible = self.workspace_mode == "explore" and _workspace_visible(self)
+
+        for action in self._explore_toolbar_actions:
+            action.setVisible(explore_visible)
+
+        if not explore_visible:
+            return
+
+        plot = self.jupyter_console_panel.plots.current
+        if self._connected_explorer is not plot.explore:
+            if self._connected_explorer is not None:
+                try:
+                    self._connected_explorer.changed.disconnect(
+                        self._sync_explore_actions
+                    )
+                except TypeError:
+                    pass
+            self._connected_explorer = plot.explore
+            self._connected_explorer.changed.connect(self._sync_explore_actions)
+
+        trace_names = plot.explore.trace_names()
+        slider_names = plot.explore.slider_names()
+
+        self.explore_trace_button.setText(f"Traces: {len(trace_names)}")
+        self.explore_clear_sliders_action.setEnabled(bool(slider_names))
+        self.explore_clear_state_action.setEnabled(bool(trace_names or slider_names))
+
+        self.explore_trace_menu.clear()
+        if not trace_names:
+            action = self.explore_trace_menu.addAction("No traces")
+            action.setEnabled(False)
+            return
+
+        for name in trace_names:
+            action = self.explore_trace_menu.addAction(f"Remove {name}")
+            action.triggered.connect(
+                lambda _checked=False, name=name: self._remove_current_explore_trace(
+                    name
+                )
+            )
+
     def _toolbar_icon(self, theme_name, fallback_icon):
         icon = QtGui.QIcon.fromTheme(theme_name)
         if icon.isNull():
@@ -1386,6 +1494,8 @@ class Window(QtWidgets.QMainWindow):
 
         for action in self._jupyter_toolbar_actions:
             action.setVisible(visible)
+
+        self._sync_explore_actions()
 
     def _sync_jupyter_workspace_state(self):
         self._watch_workspace_tab_stacks()
@@ -2199,14 +2309,25 @@ class Window(QtWidgets.QMainWindow):
     def _clear_current_explore_traces(self):
         self.jupyter_console_panel.plots.current.explore.clear_traces()
         self.jupyter_console_panel.set_explore_visible(True)
+        self._sync_explore_actions()
 
     def _clear_current_explore_sliders(self):
         self.jupyter_console_panel.plots.current.explore.clear_sliders()
         self.jupyter_console_panel.set_explore_visible(True)
+        self._sync_explore_actions()
 
     def _clear_current_explore(self):
         self.jupyter_console_panel.plots.current.explore.clear()
         self.jupyter_console_panel.set_explore_visible(True)
+        self._sync_explore_actions()
+
+    def _remove_current_explore_trace(self, name):
+        try:
+            self.jupyter_console_panel.plots.current.explore.remove_trace(name)
+        except KeyError as exc:
+            self._set_app_status(str(exc), error=True)
+
+        self._sync_explore_actions()
 
     def _rename_current_live_plot(self):
         old_name = self.jupyter_console_panel.plots.current_name

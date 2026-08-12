@@ -95,23 +95,11 @@ class ConsolePlot:
         # self.param_title.setObjectName("ConsolePlotParamTitle")
 
         self.trace_menu = QtWidgets.QMenu(self.param_widget)
-        trace_button = QtWidgets.QToolButton()
-        trace_button.setText("Traces")
-        trace_button.setToolTip("Manage traces")
-        trace_button.setPopupMode(
-            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
-        )
-        trace_button.setMenu(self.trace_menu)
+        self.param_title = QtWidgets.QLabel("Parameters")
+        self.param_title.setObjectName("ConsolePlotParamTitle")
 
-        clear_sliders = QtWidgets.QToolButton()
-        clear_sliders.setText("Sliders")
-        clear_sliders.setToolTip("Clear sliders")
-        clear_sliders.clicked.connect(lambda: self.explore.clear_sliders())
-
-        # header_layout.addWidget(self.param_title)
+        header_layout.addWidget(self.param_title)
         header_layout.addStretch(1)
-        header_layout.addWidget(trace_button)
-        header_layout.addWidget(clear_sliders)
 
         self.param_controls = QtWidgets.QFrame()
         self.param_controls.setObjectName("ConsolePlotParamControls")

@@ -112,6 +112,8 @@ class ConsoleTrace:
 class PlotExplorer(QtCore.QObject):
     """Manage reactive plots and parameters for a single console plot"""
 
+    changed = QtCore.pyqtSignal()
+
     def __init__(
         self,
         plot,
@@ -130,6 +132,12 @@ class PlotExplorer(QtCore.QObject):
         self._params = {}
         self._traces = {}
         self._sync_trace_menu()
+
+    def trace_names(self):
+        return list(self._traces)
+
+    def slider_names(self):
+        return list(self._params)
 
     def _sync_trace_menu(self):
         self.trace_menu.clear()
@@ -161,6 +169,7 @@ class PlotExplorer(QtCore.QObject):
         self._params[key] = param
         self.param_layout.addWidget(param.widget)
         self.param_widget.setVisible(True)
+        self.changed.emit()
 
         return param
 
@@ -184,6 +193,7 @@ class PlotExplorer(QtCore.QObject):
 
         trace.remove()
         self._sync_trace_menu()
+        self.changed.emit()
 
         return self.traces()
 
@@ -196,6 +206,7 @@ class PlotExplorer(QtCore.QObject):
         self.param_layout.removeWidget(param.widget)
         param.widget.deleteLater()
         self.param_widget.setVisible(bool(self._params))
+        self.changed.emit()
 
         return self.params()
 
@@ -239,6 +250,7 @@ class PlotExplorer(QtCore.QObject):
         trace = ConsoleTrace(name, x, y, item, target)
         self._traces[name] = trace
         self._sync_trace_menu()
+        self.changed.emit()
 
         return trace
 
@@ -287,6 +299,8 @@ class PlotExplorer(QtCore.QObject):
         trace = ConsoleTrace(name, x, y, item, target)
         self._traces[name] = trace
         self._sync_trace_menu()
+        self.changed.emit()
+
         return trace
 
     def refresh(self):
@@ -306,6 +320,7 @@ class PlotExplorer(QtCore.QObject):
 
         self._traces.clear()
         self._sync_trace_menu()
+        self.changed.emit()
 
     def clear_sliders(self):
         for param in self._params.values():
@@ -313,7 +328,8 @@ class PlotExplorer(QtCore.QObject):
             param.widget.deleteLater()
 
         self._params.clear()
-        # self.param_widget.setVisible(False)
+        self.changed.emit()
+        self.param_widget.setVisible(bool(self._params))
 
     def _set_status(self, message):
         if self.status_callback is not None:
