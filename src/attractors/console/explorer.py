@@ -1,4 +1,7 @@
+import functools
+
 import numpy as np
+import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 PLOT_MODE_REPLACE = "replace"
@@ -14,6 +17,17 @@ def check_array_dim(value, name):
         raise ValueError(f"{name} contains non finite values")
 
     return data
+
+
+def check_scalar(value, name):
+    value = np.asarray(value, dtype=np.float64)
+
+    if value.shape != ():
+        raise ValueError(f"{name} must be a scalar")
+    if not np.isfinite(value):
+        raise ValueError(f"{name} must be finite")
+
+    return float(value)
 
 
 class ConsoleParam(QtCore.QObject):
@@ -85,24 +99,14 @@ class ConsoleParam(QtCore.QObject):
 class ConsoleTrace:
     """Reactive 2D plot item. Data recomputed on command"""
 
-    def __init__(self, name, x, y, item, plot):
+    def __init__(self, name, item, plot, update_callback):
         self.name = name
-        self.x = x
-        self.y = y
         self.item = item
         self.plot = plot
+        self.update_callback = update_callback
 
     def update(self):
-        # callable for reactive plots, otherwise static
-        x_data = self.x() if callable(self.x) else self.x
-        y_data = self.y() if callable(self.y) else self.y
-        x_array = check_array_dim(x_data, "x")
-        y_array = check_array_dim(y_data, "y")
-
-        if len(x_array) != len(y_array):
-            raise ValueError("x and y must be the same length")
-
-        self.item.setData(x_array, y_array)
+        self.update_callback(self.item)
 
     def remove(self):
         if self.plot.has_item(self.item):
@@ -210,6 +214,33 @@ class PlotExplorer(QtCore.QObject):
 
         return self.params()
 
+    def _replace_trace(self, name, trace):
+        key = str(name).strip()
+        old = self._traces.pop(key, None)
+
+        if old is not None:
+            old.remove()
+
+        self._traces[key] = trace
+        self._sync_trace_menu()
+        self.changed.emit()
+
+        return trace
+
+    def _data_trace_update(self, x, y):
+        return functools.partial(self._update_trace_data, x, y)
+
+    def _update_trace_data(self, x, y, item):
+        x_data = x() if callable(x) else x
+        y_data = y() if callable(y) else y
+        x_array = check_array_dim(x_data, "x")
+        y_array = check_array_dim(y_data, "y")
+
+        if len(x_array) != len(y_array):
+            raise ValueError("x and y must be the same length")
+
+        item.setData(x=x_array, y=y_array)
+
     # TODO: write a helper around curve() and scatter()
     def curve(
         self,
@@ -242,17 +273,10 @@ class PlotExplorer(QtCore.QObject):
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
 
-        old = self._traces.pop(str(name), None)
-        if old is not None:
-            old.remove()
-
         item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
-        trace = ConsoleTrace(name, x, y, item, target)
-        self._traces[name] = trace
-        self._sync_trace_menu()
-        self.changed.emit()
+        trace = ConsoleTrace(name, item, target, self._data_trace_update(x, y))
 
-        return trace
+        return self._replace_trace(name, trace)
 
     def scatter(
         self,
@@ -284,10 +308,6 @@ class PlotExplorer(QtCore.QObject):
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
 
-        old = self._traces.pop(str(name), None)
-        if old is not None:
-            old.remove()
-
         item = target.scatter(
             x_array,
             y_array,
@@ -296,12 +316,69 @@ class PlotExplorer(QtCore.QObject):
             symbol_size=symbol_size,
             **plot_kwargs,
         )
-        trace = ConsoleTrace(name, x, y, item, target)
-        self._traces[name] = trace
-        self._sync_trace_menu()
-        self.changed.emit()
+        trace = ConsoleTrace(name, item, target, self._data_trace_update(x, y))
 
-        return trace
+        return self._replace_trace(name, trace)
+
+    def vline(self, name, x, *, pen=None, label=None, movable=False, **kwargs):
+        return self.line(
+            name,
+            x,
+            angle=90,
+            value_name="x",
+            pen=pen,
+            label=label,
+            movable=movable,
+            **kwargs,
+        )
+
+    def hline(self, name, y, *, pen=None, label=None, movable=False, **kwargs):
+        return self.line(
+            name,
+            y,
+            angle=0,
+            value_name="y",
+            pen=pen,
+            label=label,
+            movable=movable,
+            **kwargs,
+        )
+
+    def _update_line(self, value, value_name, line):
+        raw_value = value() if callable(value) else value
+        line.setValue(check_scalar(raw_value, value_name))
+
+    def line(
+        self,
+        name,
+        value,
+        *,
+        angle,
+        value_name,
+        pen=None,
+        label=None,
+        movable=False,
+        **kwargs,
+    ):
+        plot_kwargs = kwargs.copy()
+        if pen is not None:
+            plot_kwargs["pen"] = pen
+        if label is not None:
+            plot_kwargs["label"] = str(label)
+
+        raw_value = value() if callable(value) else value
+        item = pg.InfiniteLine(
+            pos=check_scalar(raw_value, value_name),
+            angle=angle,
+            movable=movable,
+            **plot_kwargs,
+        )
+        self.plot._plot_widget.addItem(item)
+
+        update = functools.partial(self._update_line, value, value_name)
+        trace = ConsoleTrace(name, item, self.plot, update)
+
+        return self._replace_trace(name, trace)
 
     def refresh(self):
         for trace in list(self._traces.values()):
