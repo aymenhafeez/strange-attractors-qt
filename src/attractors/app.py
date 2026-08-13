@@ -30,6 +30,7 @@ from .ui.process_metrics import ProcessUsageStatus
 from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
 from .ui.style import SCENE_TOOLBAR, SPLITTER_HANDLE_HOVER
+from .ui.system_toolbar import SystemToolbar
 from .ui.workspace_panel import WorkspacePanel
 from .view.grid_overlay import DEFAULT_GRID_HALF_SIZE
 from .view.view_manager import ViewManager
@@ -39,10 +40,6 @@ WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 850
 PARTIAL_N = 40000
 PROJECTION_UPDATE_INTERVAL = 100  # ms
-MAIN_VIEW_MARGIN = 4
-TOOLBAR_ICON_SIZE = 18
-LIVE_PLOT_COMBO_WIDTH = 132
-PROCESS_STATUS_DEFAULT_VISIBLE = True
 
 
 def _panel_visible(window, panel_name):
@@ -102,7 +99,7 @@ class Window(QtWidgets.QMainWindow):
         self._last_live_preview_update = None
         self._latest_projection_solutions = None
         self._perf = PerfProfiler()
-        self._process_status_visible = PROCESS_STATUS_DEFAULT_VISIBLE
+        self._process_status_visible = True
         self._app_status_message = ""
         self._app_status_clear_timer = None
         self._panel_docks = {}
@@ -112,6 +109,7 @@ class Window(QtWidgets.QMainWindow):
         self._closing_workspace_dock = False
         self._workspace_tab_stacks = weakref.WeakSet()
         self._jupyter_toolbar_actions = []
+        self.system_toolbar_action = None
         self._menu_actions = []
         self._left_panel_splitter_size = int(WINDOW_WIDTH * 0.22)
         self._right_panel_splitter_size = int(WINDOW_WIDTH * 0.23)
@@ -228,21 +226,24 @@ class Window(QtWidgets.QMainWindow):
         self.jupyter_console_panel = JupyterConsolePanel(
             self._jupyter_console_namespace, script_dir=self._scripts_directory
         )
+        self.system_toolbar = SystemToolbar()
         self.jupyter_console_panel.script_panel.status_changed.connect(
             lambda message: self._set_temporary_app_status(message)
         )
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
+
         self.workspace_panel = WorkspacePanel(self.jupyter_console_panel)
+
         self.jupyter_console_panel.set_explore_status_callback(
-            self.workspace_panel.set_status
+            self.system_toolbar.set_status
         )
-        self.workspace_panel.plot_requested.connect(
+        self.system_toolbar.plot_requested.connect(
             self.live_plot_controller._on_plot_requested
         )
-        self.workspace_panel.live_trace_remove_requested.connect(
+        self.system_toolbar.live_trace_remove_requested.connect(
             self.live_plot_controller._remove_live_trace
         )
-        self.workspace_panel.live_plot_clear_requested.connect(
+        self.system_toolbar.live_plot_clear_requested.connect(
             self.live_plot_controller._clear_live_plot
         )
         self.jupyter_console_panel.plots.plots_changed.connect(
@@ -254,7 +255,7 @@ class Window(QtWidgets.QMainWindow):
         self.jupyter_console_panel.plots.current_changed.connect(
             lambda _name: self._sync_explore_actions()
         )
-        self.workspace_panel.set_solve_state(self._solve_state)
+        self.system_toolbar.set_solve_state(self._solve_state)
         self.live_plot_controller._sync_plots()
 
         self._build_toolbar()
@@ -300,9 +301,9 @@ class Window(QtWidgets.QMainWindow):
         main_area_layout = QtWidgets.QVBoxLayout(main_area)
         main_area_layout.setContentsMargins(
             0,
-            MAIN_VIEW_MARGIN,
+            4,
             0,
-            MAIN_VIEW_MARGIN,
+            4,
         )
         main_area_layout.addWidget(self.workspace_dock_area)
 
@@ -454,7 +455,7 @@ class Window(QtWidgets.QMainWindow):
         toolbar.setObjectName("sceneToolbar")
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
-        toolbar.setIconSize(QtCore.QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
+        toolbar.setIconSize(QtCore.QSize(18, 18))
         toolbar.setStyleSheet(SCENE_TOOLBAR)
         self.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
         self.scene_toolbar = toolbar
@@ -615,7 +616,7 @@ class Window(QtWidgets.QMainWindow):
             self._toggle_bifurcation,
         )
         self.toolbar_jupyter_console_action = self._add_panel_menu_action(
-            "Console",
+            "System workspace",
             self._toggle_jupyter_console,
         )
         self.toolbar_process_status_action = self._add_panel_menu_action(
@@ -631,6 +632,17 @@ class Window(QtWidgets.QMainWindow):
         )
         toolbar.addWidget(spacer)
 
+        self.system_toolbar_action = toolbar.addWidget(self.system_toolbar)
+        self._jupyter_toolbar_actions.append(self.system_toolbar_action)
+
+        # spacer = QtWidgets.QWidget()
+        # spacer.setSizePolicy(
+        #     QtWidgets.QSizePolicy.Policy.Expanding,
+        #     QtWidgets.QSizePolicy.Policy.Preferred,
+        # )
+        # toolbar.addWidget(spacer)
+
+        toolbar.addSeparator()
         self._build_jupyter_toolbar_actions(toolbar)
         self.toolbar_right_panel_action = self._add_checked_icon_toolbar_action(
             toolbar,
@@ -684,6 +696,7 @@ class Window(QtWidgets.QMainWindow):
         self._sync_jupyter_workspace_state()
         self._sync_explore_actions()
 
+        # sync workspace mode controls
         if self.workspace_mode_combo is not None:
             index = self.workspace_mode_combo.findData(key)
             if index >= 0 and self.workspace_mode_combo.currentIndex() != index:
@@ -700,6 +713,7 @@ class Window(QtWidgets.QMainWindow):
             ):
                 self.workspace_system_mode_action.setChecked(key == "system")
                 self.workspace_explore_mode_action.setChecked(key == "explore")
+
         self._sync_menu_actions()
 
     def _workspace_focus(self, mode):
@@ -843,6 +857,10 @@ class Window(QtWidgets.QMainWindow):
             self.live_plot_controller._clear_all_plots,
         )
         workspace_menu.addSeparator()
+        workspace_menu.addAction("Clear sliders", self._clear_current_explore_sliders)
+        workspace_menu.addAction("Clear traces", self._clear_current_explore_traces)
+        workspace_menu.addAction("Clear explore state", self._clear_current_explore)
+        workspace_menu.addSeparator()
         self._add_menu_action(workspace_menu, "View all", self.plot_view_all_action)
         self._add_menu_action(workspace_menu, "Pan", self.plot_pan_action)
         self._add_menu_action(workspace_menu, "Zoom", self.plot_zoom_action)
@@ -870,23 +888,11 @@ class Window(QtWidgets.QMainWindow):
         analysis_menu.addAction(self.toolbar_bifurcation_action)
         analysis_menu.addAction(self.toolbar_jupyter_console_action)
 
-        explore_menu = menu_bar.addMenu("&Explore")
-        explore_menu.addAction(
-            "Clear traces",
-            self._clear_current_explore_traces,
-        )
-        explore_menu.addAction(
-            "Clear sliders",
-            self._clear_current_explore_sliders,
-        )
-        explore_menu.addAction("Clear all", self._clear_current_explore)
-
         self._hide_menu_icons(file_menu)
         self._hide_menu_icons(view_menu)
         self._hide_menu_icons(system_menu)
         self._hide_menu_icons(workspace_menu)
         self._hide_menu_icons(analysis_menu)
-        self._hide_menu_icons(explore_menu)
         self._sync_menu_actions()
 
     def _build_status_bar(self):
@@ -1177,7 +1183,8 @@ class Window(QtWidgets.QMainWindow):
         self._jupyter_toolbar_actions.append(toolbar.addWidget(label))
 
         self.toolbar_live_plot_combo = QtWidgets.QComboBox()
-        self.toolbar_live_plot_combo.setFixedWidth(LIVE_PLOT_COMBO_WIDTH)
+        self.toolbar_live_plot_combo.setMinimumWidth(50)
+        self.toolbar_live_plot_combo.setMaximumWidth(130)
         self.toolbar_live_plot_combo.currentIndexChanged.connect(
             lambda _index: self.live_plot_controller._on_toolbar_plot_selected()
         )
@@ -1451,6 +1458,11 @@ class Window(QtWidgets.QMainWindow):
         for action in self._jupyter_toolbar_actions:
             action.setVisible(visible)
 
+        if self.system_toolbar_action is not None:
+            self.system_toolbar_action.setVisible(
+                visible and self.workspace_mode == "system"
+            )
+
         self._sync_explore_actions()
 
     def _sync_jupyter_workspace_state(self):
@@ -1675,7 +1687,8 @@ class Window(QtWidgets.QMainWindow):
         state = dict(self._solve_state)
         state.update(updates)
         self._solve_state = state
-        self.workspace_panel.set_solve_state(state)
+        self.system_toolbar.set_solve_state(state)
+
         return state
 
     def _clear_data_view(self):

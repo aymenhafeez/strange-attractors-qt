@@ -54,7 +54,7 @@ class LivePlotController:
         try:
             self.window.jupyter_console_panel.plots.rename(old_name, new_name)
         except (KeyError, ValueError) as exc:
-            self.window.workspace_panel.set_status(str(exc))
+            self.window.system_toolbar.set_status(str(exc))
             return
 
         if live_specs is not None:
@@ -89,7 +89,7 @@ class LivePlotController:
             if current_index >= 0:
                 combo.setCurrentIndex(current_index)
         name_edit.setText(current_name if current_name in names else "")
-        self.window.workspace_panel.set_plots(names, current_name)
+        self.window.system_toolbar.set_plots(names, current_name)
         self._sync_live_menu(current_name)
 
     def _plot_combo_label(self, plot_name):
@@ -121,7 +121,7 @@ class LivePlotController:
             }
             for index, spec in enumerate(specs)
         ]
-        self.window.workspace_panel.set_live_traces(plot_name, traces)
+        self.window.system_toolbar.set_live_traces(plot_name, traces)
 
     def _live_trace_label(self, spec):
         label = spec.get("label")
@@ -197,7 +197,7 @@ class LivePlotController:
             kwargs["label"] = label
         plotter(*args, plot=target, mode=mode, **kwargs)
 
-        self.window.workspace_panel.set_status(f"Ran {kind} plot")
+        self.window.system_toolbar.set_status(f"Ran {kind} plot")
         self._sync_plots()
 
     def _console_plot_call(self, kind, options):
@@ -267,13 +267,16 @@ class LivePlotController:
     def _clear_plot(self):
         plot_name = self.window.jupyter_console_panel.plots.current_name
         self.window.jupyter_console_panel.plots.clear()
+        self.live_plots.pop(plot_name, None)
         self._clear_live_items(plot_name)
+        self.window.system_toolbar.set_status(self._live_status_text())
+        self._sync_live_menu(plot_name)
 
     def _clear_all_plots(self):
         self.window.jupyter_console_panel.plots.clear_all()
         self.live_plots.clear()
         self.live_items.clear()
-        self.window.workspace_panel.set_status("Cleared live plots")
+        self.window.system_toolbar.set_status("Cleared live plots")
         self._sync_live_menu()
 
     def _close_plot(self):
@@ -363,7 +366,7 @@ class LivePlotController:
         live_plots.pop(plot_name, None)
         self._clear_live_items(plot_name)
         self._live_plot_target(plot_name).clear()
-        self.window.workspace_panel.set_status(self._live_status_text())
+        self.window.system_toolbar.set_status(self._live_status_text())
         self._sync_live_menu(plot_name)
 
         return self._live_plot_frame()
@@ -389,7 +392,7 @@ class LivePlotController:
             self._refresh_live_plot(plot_name)
         else:
             live_plots.pop(plot_name, None)
-            self.window.workspace_panel.set_status(self._live_status_text())
+            self.window.system_toolbar.set_status(self._live_status_text())
 
         self._sync_live_menu(plot_name)
 
@@ -398,7 +401,7 @@ class LivePlotController:
     def _clear_all_live_plots(self):
         self.live_plots.clear()
         self.live_items.clear()
-        self.window.workspace_panel.set_status("No live plots")
+        self.window.system_toolbar.set_status("No live plots")
         self._sync_live_menu()
 
         return self._live_plot_frame()
@@ -454,10 +457,10 @@ class LivePlotController:
             for index, spec in enumerate(specs):
                 self._plot_live_spec(spec, trace_index=index)
         except (IndexError, KeyError, TypeError, ValueError) as exc:
-            self.window.workspace_panel.set_status(str(exc))
+            self.window.system_toolbar.set_status(str(exc))
             return
 
-        self.window.workspace_panel.set_status(self._live_status_text())
+        self.window.system_toolbar.set_status(self._live_status_text())
 
     def _refresh_live_preview(self, solutions=None, *, kinds=None):
         live_plots = self.live_plots
