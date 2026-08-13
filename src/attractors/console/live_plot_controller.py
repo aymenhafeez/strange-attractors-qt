@@ -17,6 +17,7 @@ PREVIEW = {
     "vector_field",
 }
 TIMESERIES = {"displacement", "radius", "speed"}
+AUTO_PENS = ["w", "r", "g", "b", "c", "m", "y"]
 
 
 def _plot_mode(mode=PLOT_MODE_REPLACE):
@@ -32,6 +33,7 @@ def _plot_mode(mode=PLOT_MODE_REPLACE):
 class LivePlotController:
     def __init__(self, window):
         self.window = window
+        self._auto_pen_indices = {}
 
     @property
     def live_plots(self):
@@ -51,6 +53,7 @@ class LivePlotController:
 
     def _rename_plot(self, old_name, new_name):
         live_specs = self.live_plots.get(old_name)
+        auto_pen_index = self._auto_pen_indices.get(old_name)
         try:
             self.window.jupyter_console_panel.plots.rename(old_name, new_name)
         except (KeyError, ValueError) as exc:
@@ -66,6 +69,9 @@ class LivePlotController:
                 renamed_specs.append(renamed_spec)
             self.live_plots[new_name] = renamed_specs
             self._rename_live_items(old_name, new_name)
+        if auto_pen_index is not None:
+            self._auto_pen_indices.pop(old_name, None)
+            self._auto_pen_indices[new_name] = auto_pen_index
 
     def _sync_plots(self):
         window_state = vars(self.window)
@@ -182,11 +188,31 @@ class LivePlotController:
         else:
             self._run_console_plot_request(kind, plot=plot, **plot_options)
 
+    def _auto_pen(self, plot_name, mode):
+        if mode == PLOT_MODE_OVERLAY:
+            index = self._auto_pen_indices.get(plot_name, 0)
+        else:
+            index = 0
+        pen = AUTO_PENS[index % len(AUTO_PENS)]
+        self._auto_pen_indices[plot_name] = index + 1
+
+        return pen
+
+    def _plot_pen(self, plot_name, mode, pen):
+        if pen is None:
+            return self._auto_pen(plot_name, mode)
+
+        if mode != PLOT_MODE_OVERLAY:
+            self._auto_pen_indices[plot_name] = 0
+
+        return pen
+
     def _run_console_plot_request(self, kind, *, plot=None, **options):
         plot_name = self._plot_name(plot)
         target = self._live_plot_target(plot_name)
         mode = _plot_mode(options.pop("mode", PLOT_MODE_REPLACE))
         label = options.pop("label", None)
+        pen = self._plot_pen(plot_name, mode, options.pop("pen", None))
 
         if mode == PLOT_MODE_REPLACE:
             self.live_plots.pop(plot_name, None)
@@ -195,6 +221,8 @@ class LivePlotController:
         plotter, args, kwargs, accepts_label = self._console_plot_call(kind, options)
         if accepts_label:
             kwargs["label"] = label
+        if pen is not None:
+            kwargs["pen"] = pen
         plotter(*args, plot=target, mode=mode, **kwargs)
 
         self.window.system_toolbar.set_status(f"Ran {kind} plot")
@@ -262,6 +290,7 @@ class LivePlotController:
             if name not in names:
                 live_plots.pop(name, None)
                 self._clear_live_items(name)
+                self._auto_pen_indices.pop(name, None)
         self._sync_plots()
 
     def _clear_plot(self):
@@ -269,6 +298,7 @@ class LivePlotController:
         self.window.jupyter_console_panel.plots.clear()
         self.live_plots.pop(plot_name, None)
         self._clear_live_items(plot_name)
+        self._auto_pen_indices.pop(plot_name, None)
         self.window.system_toolbar.set_status(self._live_status_text())
         self._sync_live_menu(plot_name)
 
@@ -276,6 +306,7 @@ class LivePlotController:
         self.window.jupyter_console_panel.plots.clear_all()
         self.live_plots.clear()
         self.live_items.clear()
+        self._auto_pen_indices.clear()
         self.window.system_toolbar.set_status("Cleared live plots")
         self._sync_live_menu()
 
@@ -284,6 +315,7 @@ class LivePlotController:
         self.window.jupyter_console_panel.plots.close()
         self.live_plots.pop(plot_name, None)
         self._clear_live_items(plot_name)
+        self._auto_pen_indices.pop(plot_name, None)
         self._sync_live_menu()
 
     def _register_live_plot(
@@ -291,11 +323,13 @@ class LivePlotController:
     ):
         plot_name = self._plot_name(plot)
         mode = _plot_mode(mode)
+        pen = self._plot_pen(plot_name, mode, options.pop("pen", None))
         spec = {
             "source": "main",
             "kind": kind,
             "plot": plot_name,
             "mode": mode,
+            "pen": pen,
             **options,
         }
         specs = self.live_plots.setdefault(plot_name, [])
@@ -365,6 +399,7 @@ class LivePlotController:
 
         live_plots.pop(plot_name, None)
         self._clear_live_items(plot_name)
+        self._auto_pen_indices.pop(plot_name, None)
         self._live_plot_target(plot_name).clear()
         self.window.system_toolbar.set_status(self._live_status_text())
         self._sync_live_menu(plot_name)
@@ -401,6 +436,7 @@ class LivePlotController:
     def _clear_all_live_plots(self):
         self.live_plots.clear()
         self.live_items.clear()
+        self._auto_pen_indices.clear()
         self.window.system_toolbar.set_status("No live plots")
         self._sync_live_menu()
 
