@@ -842,10 +842,13 @@ class Window(QtWidgets.QMainWindow):
             lambda: self._set_workspace_mode("explore")
         )
         workspace_menu.addSeparator()
+        workspace_menu.addAction("Summary", self.show_workspace_summary)
         workspace_menu.addAction(
             "Explore workspace", lambda: self._set_workspace_mode("explore")
         )
         workspace_menu.addAction("Restore Explore layout", self._restore_explore_layout)
+        examples_menu = workspace_menu.addMenu("Examples")
+        self._populate_examples_menu(examples_menu)
         workspace_menu.addSeparator()
         workspace_menu.addAction("New plot", self._new_live_plot)
         workspace_menu.addAction(
@@ -1390,6 +1393,36 @@ class Window(QtWidgets.QMainWindow):
             action.triggered.connect(source_action.trigger)
 
         return menu
+
+    def _populate_examples_menu(self, menu):
+        menu.clear()
+
+        scripts = self.jupyter_console_panel.script_panel.example_scripts()
+        if not scripts:
+            action = menu.addAction("No examples available")
+            action.setEnabled(False)
+            return
+
+        example_labels = {
+            "curve_example.py": "Reactive curves",
+            "lissajous_example.py": "Lissajous curve",
+            "fourier_example.py": "Fourier series",
+            "dejong_attractor_example.py": "De Jong attractor",
+            "param_sweep_example.py": "Parameter sweep",
+        }
+
+        for path in scripts:
+            label = example_labels.get(path.name, path.stem.replace("_", " ").title())
+            action = menu.addAction(label)
+            action.setToolTip(str(path))
+            action.triggered.connect(
+                lambda _checked=False, path=path: self._open_example_script(path)
+            )
+
+    def _open_example_script(self, path):
+        if self.jupyter_console_panel.script_panel.load_script(path):
+            self._set_workspace_mode("explore")
+            self._set_temporary_app_status(f"Opened example: {path.name}")
 
     def _populate_proxy_menu(self, menu, source_menu):
         source_actions = source_menu.actions()
@@ -2303,6 +2336,29 @@ class Window(QtWidgets.QMainWindow):
         new_name = self.toolbar_live_plot_name.text().strip()
         if new_name:
             self.live_plot_controller._rename_plot(old_name, new_name)
+
+    def _workspace_summary(self):
+        plots = self.jupyter_console_panel.plots
+        current_plot = plots.current
+        plot_names = plots.names()
+        slider_names = current_plot.explore.slider_names()
+        trace_names = current_plot.explore.trace_names()
+
+        return "\n".join(
+            [
+                f"Plots: {', '.join(plot_names)}",
+                f"Current plot: {plots.current_name}",
+                f"Sliders: {', '.join(slider_names)}",
+                f"Traces: {', '.join(trace_names)}",
+            ]
+        )
+
+    def show_workspace_summary(self):
+        QtWidgets.QMessageBox.information(
+            self,
+            "Jupyter Workspace Summary",
+            self._workspace_summary(),
+        )
 
     def _on_workspace_dock_closed(self):
         if not self._closing_workspace_dock:
