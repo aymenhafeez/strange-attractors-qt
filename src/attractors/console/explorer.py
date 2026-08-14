@@ -138,8 +138,11 @@ class ConsoleTrace:
         self.update_callback(self.item)
 
     def remove(self):
-        if self.plot.has_item(self.item):
-            self.plot._plot_widget.removeItem(self.item)
+        # avoid trying to remove the same item twice
+        if self.item.scene() is None:
+            return
+
+        self.plot._plot_widget.removeItem(self.item)
 
 
 class PlotExplorer(QtCore.QObject):
