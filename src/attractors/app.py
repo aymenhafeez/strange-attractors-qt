@@ -1630,6 +1630,8 @@ class Window(QtWidgets.QMainWindow):
             "plot": plot,
             "plots": self.jupyter_console_panel.plots,
             "current_plot": lambda: self.jupyter_console_panel.plots.current,
+            "view3d": self.jupyter_console_panel.view3d,
+            "views3d": self.jupyter_console_panel.views3d,
             "current_values": lambda: self.system.values,
             "scripts_dir": self._scripts_directory,
         }

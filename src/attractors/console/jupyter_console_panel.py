@@ -8,6 +8,7 @@ from ..ui.docking import AreaBoundDockArea as DockArea
 from ..ui.style import CONSOLE_PLOT_PARAMS, is_dark_mode
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
+from .view3d import ConsoleView3D, ConsoleView3DManager
 
 try:
     from qtconsole import inprocess
@@ -48,6 +49,9 @@ class _RichJupyterConsole(_BaseJupyterConsole):
         self.kernel_manager = inprocess.QtInProcessKernelManager()
         self.kernel_manager.start_kernel()
         self.kernel_client = self.kernel_manager.client()
+        self.kernel_manager.kernel.shell.banner2 = (
+            "Use system.help() to see available system commands"
+        )
         self.kernel_client.start_channels()
         self.kernel_manager.kernel.shell.push(namespace)
 
@@ -479,13 +483,28 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.dock_area = DockArea()
         self._layout.addWidget(self.dock_area)
 
+        self.view3d = ConsoleView3D(status_callback=self._explore_status_callback)
+        self.view3d_dock = Dock("3D View", size=(10, 6), closable=False)
+        self.view3d_dock.addWidget(self.view3d.host)
+        self.dock_area.addDock(self.view3d_dock)
+
+        self.views3d = ConsoleView3DManager(
+            self.dock_area,
+            "3D View",
+            self.view3d,
+            self.view3d_dock,
+            status_callback=self._explore_status_callback,
+        )
+
         self.plot_widget = _build_console_plot_widget()
         self.plot = ConsolePlot(
             self.plot_widget, status_callback=self._explore_status_callback
         )
         self.plot_dock = Dock("Plot", size=(10, 6))
         self.plot_dock.addWidget(self.plot.host)
-        self.dock_area.addDock(self.plot_dock)
+        self.dock_area.addDock(
+            self.plot_dock, position="above", relativeTo=self.view3d_dock
+        )
         self.plots = ConsolePlotManager(
             self.dock_area,
             "Plot",
@@ -584,6 +603,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
     def set_explore_status_callback(self, callback):
         self._explore_status_callback = callback
         self.plots.set_status_callback(callback)
+        self.views3d.set_status_callback(callback)
 
 
 class ConsolePlotZoom(QtWidgets.QWidget):
