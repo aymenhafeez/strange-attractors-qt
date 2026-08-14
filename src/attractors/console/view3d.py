@@ -112,6 +112,36 @@ class ConsoleView3D:
 
         return item
 
+    def scatter3d(
+        self,
+        x,
+        y=None,
+        z=None,
+        *,
+        mode="replace",
+        colour=(1.0, 1.0, 1.0, 1.0),
+        size=5.0,
+        px_mode=True,
+    ):
+        points = check_points(x, y, z)
+
+        if self.clear_for_mode(mode):
+            self.clear()
+
+        item = gl.GLScatterPlotItem(
+            pos=points,
+            color=colour,
+            size=size,
+            pxMode=px_mode,
+        )
+
+        item.setGLOptions("additive")
+        self.view.addItem(item)
+        self._items.append(item)
+        self.camera_controller.fit_camera_to_solutions([points])
+
+        return item
+
 
 # adapting this from ConsolePlotManager, will need to generalise to 3D
 class ConsoleView3DManager(QtCore.QObject):
