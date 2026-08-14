@@ -30,6 +30,35 @@ def check_scalar(value, name):
     return float(value)
 
 
+def check_bins(value):
+    value = value() if callable(value) else value
+
+    if np.isscalar(value):
+        bins = int(value)
+        if bins < 1:
+            raise ValueError("N bins must be atleast 1")
+        return bins
+
+    bins = check_array_dim(value, "bins")
+    if len(bins) < 2:
+        raise ValueError("bins must have atleast 2 edges")
+    if not np.all(np.diff(bins) > 0):
+        raise ValueError("bins must be increasing")
+
+    return bins
+
+
+def hist_step(values, bins, *, density=False):
+    values = check_array_dim(values, "values")
+    bins = check_bins(bins)
+    counts, edges = np.histogram(values, bins=bins, density=density)
+
+    x = np.repeat(edges, 2)[1:-1]
+    y = np.repeat(counts, 2)
+
+    return x, y
+
+
 class ConsoleParam(QtCore.QObject):
     """Console created parameter backed by a slider and spinbox"""
 
@@ -216,6 +245,10 @@ class PlotExplorer(QtCore.QObject):
 
     def _replace_trace(self, name, trace):
         key = str(name).strip()
+
+        if not key:
+            raise ValueError("Trace name cannot be empty")
+
         old = self._traces.pop(key, None)
 
         if old is not None:
@@ -238,6 +271,15 @@ class PlotExplorer(QtCore.QObject):
 
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
+
+        item.setData(x=x_array, y=y_array)
+
+    def _hist_trace_update(self, values, bins, density):
+        return functools.partial(self._update_hist_data, values, bins, density)
+
+    def _update_hist_data(self, values, bins, density, item):
+        values_data = values() if callable(values) else values
+        x_array, y_array = hist_step(values_data, bins, density=density)
 
         item.setData(x=x_array, y=y_array)
 
@@ -317,6 +359,41 @@ class PlotExplorer(QtCore.QObject):
             **plot_kwargs,
         )
         trace = ConsoleTrace(name, item, target, self._data_trace_update(x, y))
+
+        return self._replace_trace(name, trace)
+
+    # TODO: add brush and fill bars rather than a simple step curve
+    def hist(
+        self,
+        name,
+        values,
+        *,
+        bins=50,
+        density=False,
+        mode=PLOT_MODE_REPLACE,
+        label=None,
+        pen=None,
+        **kwargs,
+    ):
+        target = self.plot
+        mode = mode.strip().lower()
+
+        if mode not in {PLOT_MODE_REPLACE, PLOT_MODE_OVERLAY}:
+            raise ValueError("Plot mode must be either 'replace' or 'overlay'")
+
+        plot_kwargs = kwargs.copy()
+        if pen is not None:
+            plot_kwargs["pen"] = pen
+        if label is not None:
+            plot_kwargs["name"] = str(label)
+
+        values_data = values() if callable(values) else values
+        x_array, y_array = hist_step(values_data, bins, density=density)
+
+        item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
+        trace = ConsoleTrace(
+            name, item, target, self._hist_trace_update(values, bins, density)
+        )
 
         return self._replace_trace(name, trace)
 
