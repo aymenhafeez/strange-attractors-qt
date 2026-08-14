@@ -33,25 +33,20 @@ This is a local, more performant version of
 
 ```bash
 git clone https://github.com/aymenhafeez/strange-attractors-qt
-cd analysis
+cd stange-attractors-qt
 ```
 
 With uv:
 
 ```bash
 uv sync
-# uv sync --extra jupyter-console
-
 uv run analysis  # --fullscreen
 ```
-
-`ipykernel` and `qtconsole` are optional dependencies for the integrated Jupyter console, so use the extras install
-flags to install them.
 
 ## Development
 
 ```bash
-uv sync --extra jupyter-console
+uv sync
 uv run analysis
 ```
 

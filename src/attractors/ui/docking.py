@@ -11,27 +11,27 @@ class AreaBoundDockDrop(DockDrop):
             return False
         return getattr(source, "area", None) is getattr(self.dndWidget, "area", None)
 
-    def dragEnterEvent(self, event):
-        if self._source_matches_target_area(event):
-            event.accept()
+    def dragEnterEvent(self, ev):
+        if self._source_matches_target_area(ev):
+            ev.accept()
         else:
-            event.ignore()
+            ev.ignore()
 
-    def dragMoveEvent(self, event):
-        if self._source_matches_target_area(event):
-            super().dragMoveEvent(event)
+    def dragMoveEvent(self, ev):
+        if self._source_matches_target_area(ev):
+            super().dragMoveEvent(ev)
         else:
             self.dropArea = None
             self.overlay.setDropArea(None)
-            event.ignore()
+            ev.ignore()
 
-    def dropEvent(self, event):
-        if self._source_matches_target_area(event):
-            super().dropEvent(event)
+    def dropEvent(self, ev):
+        if self._source_matches_target_area(ev):
+            super().dropEvent(ev)
         else:
             self.dropArea = None
             self.overlay.setDropArea(None)
-            event.ignore()
+            ev.ignore()
 
 
 class AreaBoundDock(Dock):
@@ -44,8 +44,9 @@ class AreaBoundDock(Dock):
         self.dockdrop = AreaBoundDockDrop(self)
         self.dockdrop.raiseOverlay()
 
-    def containerChanged(self, container):
-        super().containerChanged(container)
+    def containerChanged(self, c):
+        # c is a container object
+        super().containerChanged(c)
         self.container_changed.emit()
 
 

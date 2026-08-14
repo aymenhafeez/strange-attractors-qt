@@ -1237,6 +1237,7 @@ name = "strange-attractors-qt"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "ipykernel" },
     { name = "matplotlib" },
     { name = "numba" },
     { name = "numpy" },
@@ -1247,13 +1248,8 @@ dependencies = [
     { name = "pyqt6" },
     { name = "pyqt6-qscintilla" },
     { name = "pyqtgraph" },
-    { name = "scipy" },
-]
-
-[package.optional-dependencies]
-jupyter-console = [
-    { name = "ipykernel" },
     { name = "qtconsole" },
+    { name = "scipy" },
 ]
 
 [package.dev-dependencies]
@@ -1265,7 +1261,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "ipykernel", marker = "extra == 'jupyter-console'", specifier = ">=7.1.0" },
+    { name = "ipykernel", specifier = ">=7.1.0" },
     { name = "matplotlib", specifier = ">=3.11.1" },
     { name = "numba", specifier = ">=0.65.1" },
     { name = "numpy", specifier = ">=2.4.6" },
@@ -1276,10 +1272,9 @@ requires-dist = [
     { name = "pyqt6", specifier = ">=6.11.0" },
     { name = "pyqt6-qscintilla", specifier = ">=2.14.1" },
     { name = "pyqtgraph", specifier = ">=0.14.0" },
-    { name = "qtconsole", marker = "extra == 'jupyter-console'", specifier = ">=5.7.0" },
+    { name = "qtconsole", specifier = ">=5.7.0" },
     { name = "scipy", specifier = ">=1.18.0" },
 ]
-provides-extras = ["jupyter-console"]
 
 [package.metadata.requires-dev]
 dev = [

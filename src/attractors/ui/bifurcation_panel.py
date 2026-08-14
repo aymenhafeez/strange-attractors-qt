@@ -7,6 +7,100 @@ from pyqtgraph.Qt.QtCore import QThreadPool
 from ..workers.bifurcation_worker import BifurcationWorker
 
 
+class BifurcationZoom(QtWidgets.QWidget):
+    def __init__(self, plot_widget, parent=None):
+        super().__init__(parent)
+        self.plot_widget = plot_widget
+        self.zoom_widget = pg.PlotWidget()
+        self.region = pg.LinearRegionItem()
+        self.updating = False
+        self.x_bounds = None
+
+        self.zoom_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+        self.zoom_widget.showGrid(x=True, y=True, alpha=0.25)
+        self.zoom_widget.setLabel("bottom", "Parameter value")
+
+        self.region.setZValue(10)
+        self.plot_widget.addItem(self.region, ignoreBounds=True)
+
+        self.zoom_data = self.zoom_widget.plot(
+            [], [], pen=None, symbol="o", symbolSize=0.25, symbolBrush="white"
+        )
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addWidget(self.zoom_widget, 2)
+        layout.addWidget(self.plot_widget, 1)
+
+        self.region.sigRegionChanged.connect(self._region_changed)
+        self.zoom_widget.sigXRangeChanged.connect(self._zoom_range_changed)
+
+    def set_label(self, label):
+        self.zoom_widget.setLabel("left", label)
+
+    def set_data(self, x, y):
+        self.zoom_data.setData(x, y)
+
+        if x is None or len(x) == 0:
+            self.x_bounds = None
+            return
+
+        finite = np.asarray(x)[np.isfinite(x)]
+        if len(finite) == 0:
+            self.x_bounds = None
+            return
+
+        x_min = float(np.min(finite))
+        x_max = float(np.max(finite))
+        if x_max <= x_min:
+            self.x_bounds = None
+            return
+
+        old_bounds = self.x_bounds
+        self.x_bounds = (x_min, x_max)
+        self.region.setBounds(self.x_bounds)
+
+        if old_bounds is None:
+            self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
+        else:
+            region_min, region_max = self.region.getRegion()
+            if region_max <= x_min or region_min >= x_max:
+                self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
+            else:
+                self.region.setRegion((max(region_min, x_min), min(region_max, x_max)))
+
+    def auto_range(self):
+        self.plot_widget.autoRange()
+        self.zoom_widget.autoRange()
+
+    def clear(self):
+        self.zoom_data.setData([], [])
+        self.x_bounds = None
+
+    def _region_changed(self):
+        if self.updating:
+            return
+
+        self.updating = True
+        x_min, x_max = self.region.getRegion()
+        self.zoom_widget.setXRange(x_min, x_max)
+        self.updating = False
+
+    def _zoom_range_changed(self, *_args):
+        if self.updating:
+            return
+
+        self.updating = True
+        self.region.setRegion(self.zoom_widget.getViewBox().viewRange()[0])
+        self.updating = False
+
+    def detach_plot(self):
+        self.plot_widget.removeItem(self.region)
+        self.layout().removeWidget(self.plot_widget)
+        self.plot_widget.setParent(None)
+
+
 class BifurcationPanel(QtWidgets.QWidget):
     close_requested = QtCore.pyqtSignal()
 
@@ -16,6 +110,9 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.config = None
         self.current_values = None
         self._sweep_gen = 0
+        self._zoom = None
+        self._plot_x = np.array([], dtype=np.float64)
+        self._plot_y = np.array([], dtype=np.float64)
 
         self.setMinimumHeight(200)
 
@@ -75,6 +172,11 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.export_btn = QtWidgets.QPushButton("Export PNG...")
         self.export_btn.clicked.connect(self._export_plot)
         row3.addWidget(self.export_btn)
+
+        self.zoom_check = QtWidgets.QCheckBox("ROI")
+        self.zoom_check.toggled.connect(self._set_zoom_enabled)
+        row3.addWidget(self.zoom_check)
+
         layout.addLayout(row3)
 
         self.progress = QtWidgets.QProgressBar()
@@ -87,6 +189,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         layout.addWidget(self._error_label)
 
         self.plot_widget = pg.PlotWidget()
+        self.plot_widget.showGrid(x=True, y=True, alpha=0.25)
         self.plot_widget.setBackground("k")
         self.plot_widget.setLabel("bottom", "Parameter value")
         self.plot_widget.setLabel("left", "x")
@@ -98,7 +201,13 @@ class BifurcationPanel(QtWidgets.QWidget):
             symbolSize=0.25,
             symbolBrush=(255, 255, 255),
         )
-        layout.addWidget(self.plot_widget)
+
+        self.plot_layout = QtWidgets.QVBoxLayout()
+        self.plot_layout.setContentsMargins(0, 0, 0, 0)
+        self.plot_layout.setSpacing(0)
+        self.plot_layout.addWidget(self.plot_widget)
+
+        layout.addLayout(self.plot_layout, 1)
 
     def _update_defaults(self):
         if self.config is None:
@@ -121,7 +230,45 @@ class BifurcationPanel(QtWidgets.QWidget):
         self._update_axis_label()
 
     def _update_axis_label(self):
-        self.plot_widget.setLabel("left", self.var_combo.currentText())
+        label = self.var_combo.currentText()
+        self.plot_widget.setLabel("left", label)
+        if self._zoom is not None:
+            self._zoom.set_label(label)
+
+    def _set_zoom_enabled(self, enabled):
+        if enabled and self._zoom is None:
+            self.plot_layout.removeWidget(self.plot_widget)
+            self._zoom = BifurcationZoom(self.plot_widget)
+            self._zoom.set_label(self.var_combo.currentText())
+
+            x, y = self._plot_x, self._plot_y
+            if len(x) == 0:
+                current_x, current_y = self.plot_data.getData()
+                if current_x is not None and current_y is not None:
+                    x, y = current_x, current_y
+                    self._plot_x = np.asarray(x, dtype=np.float64)
+                    self._plot_y = np.asarray(y, dtype=np.float64)
+
+            self._zoom.set_data(x, y)
+            self.plot_layout.addWidget(self._zoom)
+
+        elif not enabled and self._zoom is not None:
+            zoom = self._zoom
+            self._zoom = None
+
+            zoom.detach_plot()
+            zoom.setParent(None)
+
+            self.plot_layout.addWidget(self.plot_widget)
+            self.plot_widget.show()
+
+    def _set_plot_data(self, x, y):
+        self._plot_x = np.asarray(x, dtype=np.float64)
+        self._plot_y = np.asarray(y, dtype=np.float64)
+        self.plot_data.setData(self._plot_x, self._plot_y)
+
+        if self._zoom is not None:
+            self._zoom.set_data(self._plot_x, self._plot_y)
 
     def set_config(self, config, current_values):
         self.cancel_sweep()
@@ -135,7 +282,10 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.param_combo.addItems([p.name for p in config.params])
         self.param_combo.blockSignals(False)
 
-        self.plot_data.setData([], [])
+        # self.plot_data.setData([], [])
+        self._set_plot_data([], [])
+        if self._zoom is not None:
+            self._zoom.clear()
 
         has_params = bool(config.params)
         self.run_btn.setEnabled(has_params)
@@ -210,15 +360,17 @@ class BifurcationPanel(QtWidgets.QWidget):
             return
 
         if not peaks_list:
-            self.plot_data.setData([], [])
+            self._set_plot_data([], [])
             return
 
         lens = [len(p) for p in peaks_list]
         if sum(lens) == 0:
-            self.plot_data.setData([], [])
+            self._set_plot_data([], [])
             return
 
-        self.plot_data.setData(np.repeat(vals, lens), np.concatenate(peaks_list))
+        x = np.repeat(vals, lens)
+        y = np.concatenate(peaks_list)
+        self._set_plot_data(x, y)
 
     def _on_worker_finished(self, gen):
         if gen != self._sweep_gen:

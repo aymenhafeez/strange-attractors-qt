@@ -30,6 +30,7 @@ from .ui.process_metrics import ProcessUsageStatus
 from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
 from .ui.style import SCENE_TOOLBAR, SPLITTER_HANDLE_HOVER
+from .ui.system_toolbar import SystemToolbar
 from .ui.workspace_panel import WorkspacePanel
 from .view.grid_overlay import DEFAULT_GRID_HALF_SIZE
 from .view.view_manager import ViewManager
@@ -39,10 +40,6 @@ WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 850
 PARTIAL_N = 40000
 PROJECTION_UPDATE_INTERVAL = 100  # ms
-MAIN_VIEW_MARGIN = 4
-TOOLBAR_ICON_SIZE = 18
-LIVE_PLOT_COMBO_WIDTH = 132
-PROCESS_STATUS_DEFAULT_VISIBLE = True
 
 
 def _panel_visible(window, panel_name):
@@ -102,7 +99,7 @@ class Window(QtWidgets.QMainWindow):
         self._last_live_preview_update = None
         self._latest_projection_solutions = None
         self._perf = PerfProfiler()
-        self._process_status_visible = PROCESS_STATUS_DEFAULT_VISIBLE
+        self._process_status_visible = True
         self._app_status_message = ""
         self._app_status_clear_timer = None
         self._panel_docks = {}
@@ -112,13 +109,25 @@ class Window(QtWidgets.QMainWindow):
         self._closing_workspace_dock = False
         self._workspace_tab_stacks = weakref.WeakSet()
         self._jupyter_toolbar_actions = []
+        self.system_toolbar_action = None
+        self._menu_actions = []
         self._left_panel_splitter_size = int(WINDOW_WIDTH * 0.22)
         self._right_panel_splitter_size = int(WINDOW_WIDTH * 0.23)
+        self._pre_explore_side_panel_state = None
+
         self.workspace_dock = None
+        self.workspace_mode_combo = None
+        self.workspace_system_mode_action = None
+        self.workspace_explore_mode_action = None
+        self.workspace_mode = "system"
+        self._explore_toolbar_actions = []
+        self._connected_explorer = None
+
         self.current_n = 100000
         self.current_t_max = 50
         self.current_name = next(iter(ATTRACTORS.keys()))
         self._custom_config = None
+
         app_data_location = QtCore.QStandardPaths.writableLocation(
             QtCore.QStandardPaths.StandardLocation.AppDataLocation
         )
@@ -217,18 +226,24 @@ class Window(QtWidgets.QMainWindow):
         self.jupyter_console_panel = JupyterConsolePanel(
             self._jupyter_console_namespace, script_dir=self._scripts_directory
         )
+        self.system_toolbar = SystemToolbar()
         self.jupyter_console_panel.script_panel.status_changed.connect(
             lambda message: self._set_temporary_app_status(message)
         )
         self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
+
         self.workspace_panel = WorkspacePanel(self.jupyter_console_panel)
-        self.workspace_panel.plot_requested.connect(
+
+        self.jupyter_console_panel.set_explore_status_callback(
+            self.system_toolbar.set_status
+        )
+        self.system_toolbar.plot_requested.connect(
             self.live_plot_controller._on_plot_requested
         )
-        self.workspace_panel.live_trace_remove_requested.connect(
+        self.system_toolbar.live_trace_remove_requested.connect(
             self.live_plot_controller._remove_live_trace
         )
-        self.workspace_panel.live_plot_clear_requested.connect(
+        self.system_toolbar.live_plot_clear_requested.connect(
             self.live_plot_controller._clear_live_plot
         )
         self.jupyter_console_panel.plots.plots_changed.connect(
@@ -237,10 +252,14 @@ class Window(QtWidgets.QMainWindow):
         self.jupyter_console_panel.plots.current_changed.connect(
             lambda _name: self.live_plot_controller._sync_plots()
         )
-        self.workspace_panel.set_solve_state(self._solve_state)
+        self.jupyter_console_panel.plots.current_changed.connect(
+            lambda _name: self._sync_explore_actions()
+        )
+        self.system_toolbar.set_solve_state(self._solve_state)
         self.live_plot_controller._sync_plots()
 
         self._build_toolbar()
+        self._build_menu_bar()
         self._build_status_bar()
 
         self.workspace_dock_area = DockArea()
@@ -282,9 +301,9 @@ class Window(QtWidgets.QMainWindow):
         main_area_layout = QtWidgets.QVBoxLayout(main_area)
         main_area_layout.setContentsMargins(
             0,
-            MAIN_VIEW_MARGIN,
+            4,
             0,
-            MAIN_VIEW_MARGIN,
+            4,
         )
         main_area_layout.addWidget(self.workspace_dock_area)
 
@@ -436,7 +455,7 @@ class Window(QtWidgets.QMainWindow):
         toolbar.setObjectName("sceneToolbar")
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
-        toolbar.setIconSize(QtCore.QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
+        toolbar.setIconSize(QtCore.QSize(18, 18))
         toolbar.setStyleSheet(SCENE_TOOLBAR)
         self.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
         self.scene_toolbar = toolbar
@@ -479,34 +498,34 @@ class Window(QtWidgets.QMainWindow):
 
         toolbar.addSeparator()
 
-        reset_action = toolbar.addAction(
+        self.toolbar_reset_action = toolbar.addAction(
             self.style().standardIcon(style_icon.SP_BrowserReload), "Reset"
         )
-        reset_action.setToolTip("Reset parameters")
-        reset_action.triggered.connect(self.controls.reset_to_defaults)
+        self.toolbar_reset_action.setToolTip("Reset parameters")
+        self.toolbar_reset_action.triggered.connect(self.controls.reset_to_defaults)
 
-        reset_camera_action = toolbar.addAction(
+        self.toolbar_reset_camera_action = toolbar.addAction(
             QtGui.QIcon.fromTheme("zoom-original"),
             "Reset camera",
             self._reset_camera,
         )
-        reset_camera_action.setToolTip("Reset camera")
+        self.toolbar_reset_camera_action.setToolTip("Reset camera")
 
-        fit_camera_action = toolbar.addAction(
+        self.toolbar_fit_camera_action = toolbar.addAction(
             QtGui.QIcon.fromTheme("view-fullscreen"),
             "Fit",
             lambda: self.scene.camera_controller.fit_camera_to_solutions(
                 self.scene.trajectory_renderer.solutions
             ),
         )
-        fit_camera_action.setToolTip("Fit view to trajectories")
+        self.toolbar_fit_camera_action.setToolTip("Fit view to trajectories")
 
-        save_action = toolbar.addAction(
+        self.toolbar_save_view_action = toolbar.addAction(
             self.style().standardIcon(style_icon.SP_DialogSaveButton),
             "Save",
             self.scene.viewport_overlay.save_view_as_png,
         )
-        save_action.setToolTip("Save view as PNG")
+        self.toolbar_save_view_action.setToolTip("Save view as PNG")
 
         toolbar.addSeparator()
 
@@ -568,58 +587,42 @@ class Window(QtWidgets.QMainWindow):
 
         toolbar.addSeparator()
 
-        solve_action = toolbar.addAction(
+        self.toolbar_solve_action = toolbar.addAction(
             self._toolbar_icon(
                 "system-run",
                 QtWidgets.QStyle.StandardPixmap.SP_MediaPlay,
             ),
             "Solve",
         )
-        solve_action.setToolTip("Run a full solve")
-        solve_action.triggered.connect(lambda: self._on_controls_solve_requested(True))
-
-        self.tools_button = QtWidgets.QToolButton()
-        self.tools_button.setText("Tools")
-        self.tools_button.setToolTip("Open analysis and maintenance tools")
-        self.tools_button.setPopupMode(
-            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
+        self.toolbar_solve_action.setToolTip("Run a full solve")
+        self.toolbar_solve_action.triggered.connect(
+            lambda: self._on_controls_solve_requested(True)
         )
-        tools_menu = QtWidgets.QMenu(self.tools_button)
+
         self.toolbar_lyapunov_action = self._add_panel_menu_action(
-            tools_menu,
             "Lyapunov spectrum",
             self._toggle_lyapunov_panel,
         )
         self.toolbar_projection_action = self._add_panel_menu_action(
-            tools_menu,
             "Projection heatmaps",
             self._toggle_projections,
         )
         self.toolbar_poincare_action = self._add_panel_menu_action(
-            tools_menu,
             "Poincare section",
             self._toggle_poincare,
         )
         self.toolbar_bifurcation_action = self._add_panel_menu_action(
-            tools_menu,
             "Bifurcation diagram",
             self._toggle_bifurcation,
         )
         self.toolbar_jupyter_console_action = self._add_panel_menu_action(
-            tools_menu,
-            "Console",
+            "System workspace",
             self._toggle_jupyter_console,
         )
         self.toolbar_process_status_action = self._add_panel_menu_action(
-            tools_menu,
             "Status bar",
             lambda: self._toggle_process_status(),
         )
-        tools_menu.addSeparator()
-        open_folder_action = tools_menu.addAction("Open preset folder")
-        open_folder_action.triggered.connect(self._open_preset_folder)
-        self.tools_button.setMenu(tools_menu)
-        toolbar.addWidget(self.tools_button)
 
         toolbar.addSeparator()
         spacer = QtWidgets.QWidget()
@@ -629,6 +632,17 @@ class Window(QtWidgets.QMainWindow):
         )
         toolbar.addWidget(spacer)
 
+        self.system_toolbar_action = toolbar.addWidget(self.system_toolbar)
+        self._jupyter_toolbar_actions.append(self.system_toolbar_action)
+
+        # spacer = QtWidgets.QWidget()
+        # spacer.setSizePolicy(
+        #     QtWidgets.QSizePolicy.Policy.Expanding,
+        #     QtWidgets.QSizePolicy.Policy.Preferred,
+        # )
+        # toolbar.addWidget(spacer)
+
+        toolbar.addSeparator()
         self._build_jupyter_toolbar_actions(toolbar)
         self.toolbar_right_panel_action = self._add_checked_icon_toolbar_action(
             toolbar,
@@ -642,6 +656,247 @@ class Window(QtWidgets.QMainWindow):
         toolbar.addWidget(end_pad)
 
         self._sync_toolbar_panel_actions()
+
+    def _workspace_mode_toolbar_control(self, toolbar):
+        self.workspace_mode_combo = QtWidgets.QComboBox()
+        self.workspace_mode_combo.setToolTip("Workspace mode")
+        self.workspace_mode_combo.addItem("System", "system")
+        self.workspace_mode_combo.addItem("Explore", "explore")
+        self.workspace_mode_combo.currentIndexChanged.connect(
+            lambda _index: self._on_workspace_mode_selected()
+        )
+        self._jupyter_toolbar_actions.append(
+            toolbar.addWidget(self.workspace_mode_combo)
+        )
+
+    def _on_workspace_mode_selected(self):
+        mode = self.workspace_mode_combo.currentData()
+        if mode is not None:
+            self._set_workspace_mode(mode)
+
+    def _enter_explore_workspace(self):
+        self.jupyter_console_panel.ensure_console()
+        self._open_workspace_dock()
+        self.jupyter_console_panel.apply_explore_layout()
+
+    def _restore_explore_layout(self):
+        self._set_workspace_mode("explore")
+        self.jupyter_console_panel.apply_explore_layout()
+        self._set_temporary_app_status("Restored Explore layout")
+
+    def _set_workspace_mode(self, mode):
+        key = str(mode).strip().lower()
+        self.workspace_mode = key
+        self._workspace_focus(key)
+
+        if key == "explore":
+            self._enter_explore_workspace()
+
+        self.workspace_panel.set_mode(key)
+        self._sync_jupyter_workspace_state()
+        self._sync_explore_actions()
+
+        # sync workspace mode controls
+        if self.workspace_mode_combo is not None:
+            index = self.workspace_mode_combo.findData(key)
+            if index >= 0 and self.workspace_mode_combo.currentIndex() != index:
+                with QtCore.QSignalBlocker(self.workspace_mode_combo):
+                    self.workspace_mode_combo.setCurrentIndex(index)
+
+        if (
+            self.workspace_system_mode_action is not None
+            and self.workspace_explore_mode_action is not None
+        ):
+            with (
+                QtCore.QSignalBlocker(self.workspace_system_mode_action),
+                QtCore.QSignalBlocker(self.workspace_explore_mode_action),
+            ):
+                self.workspace_system_mode_action.setChecked(key == "system")
+                self.workspace_explore_mode_action.setChecked(key == "explore")
+
+        self._sync_menu_actions()
+
+    def _workspace_focus(self, mode):
+        if mode == "explore":
+            if self._pre_explore_side_panel_state is None:
+                self._pre_explore_side_panel_state = {
+                    "left": self.controls.isVisible(),
+                    "right": self.right_panel.isVisible(),
+                }
+            self._set_side_panel_actions(left=False, right=False)
+            return
+
+        if mode == "system" and self._pre_explore_side_panel_state is not None:
+            state = self._pre_explore_side_panel_state
+            self._pre_explore_side_panel_state = None
+            self._set_side_panel_actions(left=state["left"], right=state["right"])
+
+    def _set_side_panel_actions(self, *, left, right):
+        with (
+            QtCore.QSignalBlocker(self.toolbar_left_panel_action),
+            QtCore.QSignalBlocker(self.toolbar_right_panel_action),
+        ):
+            self.toolbar_left_panel_action.setChecked(bool(left))
+            self.toolbar_right_panel_action.setChecked(bool(right))
+        self._set_left_panel_visible(left)
+        self._set_right_panel_visible(right)
+        self._sync_menu_actions()
+
+    def _hide_menu_icons(self, menu):
+        for action in menu.actions():
+            action.setIconVisibleInMenu(False)
+            submenu = action.menu()
+            if submenu is not None:
+                self._hide_menu_icons(submenu)
+
+    def _add_menu_action(self, menu, text, source_action):
+        action = QtGui.QAction(text, self)
+        action.setCheckable(source_action.isCheckable())
+        action.setToolTip(source_action.toolTip())
+        action.triggered.connect(
+            lambda checked=False, source_action=source_action: source_action.trigger()
+        )
+        source_action.changed.connect(
+            lambda action=action, source_action=source_action: self._sync_menu_action(
+                action, source_action
+            )
+        )
+        menu.addAction(action)
+        self._menu_actions.append((action, source_action))
+        self._sync_menu_action(action, source_action)
+
+        return action
+
+    def _sync_menu_action(self, action, source_action):
+        action.setEnabled(source_action.isEnabled())
+        if action.isCheckable():
+            with QtCore.QSignalBlocker(action):
+                action.setChecked(source_action.isChecked())
+
+    def _sync_menu_actions(self):
+        for action, source_action in self._menu_actions:
+            self._sync_menu_action(action, source_action)
+
+    def _build_menu_bar(self):
+        menu_bar = self.menuBar()
+        menu_bar.clear()
+        self._menu_actions = []
+
+        file_menu = menu_bar.addMenu("&File")
+        file_menu.addAction(
+            "Save view as PNG",
+            self.scene.viewport_overlay.save_view_as_png,
+        )
+        file_menu.addSeparator()
+        file_menu.addAction("Open preset folder", self._open_preset_folder)
+
+        view_menu = menu_bar.addMenu("&View")
+        self._add_menu_action(view_menu, "Left panel", self.toolbar_left_panel_action)
+        self._add_menu_action(view_menu, "Right panel", self.toolbar_right_panel_action)
+        self._add_menu_action(
+            view_menu, "Status bar", self.toolbar_process_status_action
+        )
+        view_menu.addSeparator()
+        view_menu.addAction(
+            "Reset camera",
+            self._reset_camera,
+        )
+        view_menu.addAction(
+            "Fit view",
+            lambda: self.scene.camera_controller.fit_camera_to_solutions(
+                self.scene.trajectory_renderer.solutions
+            ),
+        )
+        self._add_menu_action(view_menu, "Grid", self.toolbar_grid_action)
+        self._add_menu_action(view_menu, "Orbit", self.toolbar_orbit_action)
+
+        system_menu = menu_bar.addMenu("&System")
+        system_menu.addAction("Solve", lambda: self._on_controls_solve_requested(True))
+        system_menu.addAction(
+            "Reset parameters",
+            self.controls.reset_to_defaults,
+        )
+        system_menu.addSeparator()
+        self._add_menu_action(system_menu, "Loop animation", self.toolbar_loop_action)
+        self._add_menu_action(
+            system_menu, "Show leading point", self.toolbar_point_action
+        )
+        self._add_menu_action(system_menu, "Show lines", self.toolbar_line_action)
+        self._add_menu_action(system_menu, "Show trail", self.toolbar_trail_action)
+
+        workspace_menu = menu_bar.addMenu("&Workspace")
+        mode_menu = workspace_menu.addMenu("Mode")
+        mode_group = QtGui.QActionGroup(self)
+        mode_group.setExclusive(True)
+        self.workspace_system_mode_action = mode_menu.addAction("System")
+        self.workspace_system_mode_action.setCheckable(True)
+        self.workspace_system_mode_action.setChecked(True)
+        self.workspace_explore_mode_action = mode_menu.addAction("Explore")
+        self.workspace_explore_mode_action.setCheckable(True)
+        mode_group.addAction(self.workspace_system_mode_action)
+        mode_group.addAction(self.workspace_explore_mode_action)
+        self.workspace_system_mode_action.triggered.connect(
+            lambda: self._set_workspace_mode("system")
+        )
+        self.workspace_explore_mode_action.triggered.connect(
+            lambda: self._set_workspace_mode("explore")
+        )
+        workspace_menu.addSeparator()
+        workspace_menu.addAction("Summary", self.show_workspace_summary)
+        workspace_menu.addAction(
+            "Explore workspace", lambda: self._set_workspace_mode("explore")
+        )
+        workspace_menu.addAction("Restore Explore layout", self._restore_explore_layout)
+        examples_menu = workspace_menu.addMenu("Examples")
+        self._populate_examples_menu(examples_menu)
+        workspace_menu.addSeparator()
+        workspace_menu.addAction("New plot", self._new_live_plot)
+        workspace_menu.addAction(
+            "Clear current plot",
+            self.live_plot_controller._clear_plot,
+        )
+        workspace_menu.addAction(
+            "Clear all plots",
+            self.live_plot_controller._clear_all_plots,
+        )
+        workspace_menu.addSeparator()
+        workspace_menu.addAction("Clear sliders", self._clear_current_explore_sliders)
+        workspace_menu.addAction("Clear traces", self._clear_current_explore_traces)
+        workspace_menu.addAction("Clear explore state", self._clear_current_explore)
+        workspace_menu.addSeparator()
+        self._add_menu_action(workspace_menu, "View all", self.plot_view_all_action)
+        self._add_menu_action(workspace_menu, "Pan", self.plot_pan_action)
+        self._add_menu_action(workspace_menu, "Zoom", self.plot_zoom_action)
+        workspace_menu.addSeparator()
+        self._add_menu_action(workspace_menu, "X grid", self.plot_x_grid_action)
+        self._add_menu_action(workspace_menu, "Y grid", self.plot_y_grid_action)
+        if self.plot_options_menu is not None:
+            workspace_menu.addSeparator()
+            self._add_proxy_menu(
+                workspace_menu,
+                "Plot options",
+                self.plot_options_menu,
+            )
+        if self.plot_view_menu is not None:
+            self._add_proxy_menu(
+                workspace_menu,
+                "ViewBox options",
+                self.plot_view_menu,
+            )
+
+        analysis_menu = menu_bar.addMenu("&Analysis")
+        analysis_menu.addAction(self.toolbar_lyapunov_action)
+        analysis_menu.addAction(self.toolbar_projection_action)
+        analysis_menu.addAction(self.toolbar_poincare_action)
+        analysis_menu.addAction(self.toolbar_bifurcation_action)
+        analysis_menu.addAction(self.toolbar_jupyter_console_action)
+
+        self._hide_menu_icons(file_menu)
+        self._hide_menu_icons(view_menu)
+        self._hide_menu_icons(system_menu)
+        self._hide_menu_icons(workspace_menu)
+        self._hide_menu_icons(analysis_menu)
+        self._sync_menu_actions()
 
     def _build_status_bar(self):
         status_bar = QtWidgets.QStatusBar()
@@ -755,16 +1010,16 @@ class Window(QtWidgets.QMainWindow):
         return dock
 
     def _build_workspace_dock(self):
-        dock = Dock("Console", size=(10, 12), closable=True)
+        dock = Dock("Workspace", size=(10, 12), closable=True)
         dock.addWidget(self.workspace_panel)
         dock.sigClosed.connect(lambda _dock: self._on_workspace_dock_closed())
 
         return dock
 
-    def _add_panel_menu_action(self, menu, text, callback):
-        action = menu.addAction(text)
+    def _add_panel_menu_action(self, text, callback):
+        action = QtGui.QAction(text, self)
         action.setCheckable(True)
-        action.triggered.connect(lambda: callback())
+        action.triggered.connect(lambda _checked=False: callback())
         return action
 
     def _sync_toolbar_panel_actions(self):
@@ -790,6 +1045,7 @@ class Window(QtWidgets.QMainWindow):
             )
             self.toolbar_jupyter_console_action.setChecked(_workspace_visible(self))
             self.toolbar_process_status_action.setChecked(self._process_status_visible)
+        self._sync_menu_actions()
         self._sync_jupyter_workspace_state()
 
     def _set_process_status_visible(self, visible):
@@ -809,6 +1065,7 @@ class Window(QtWidgets.QMainWindow):
                 )
 
         self._sync_status_bar_visibility()
+        self._sync_menu_actions()
 
     def _toggle_process_status(self):
         self._set_process_status_visible(not self._process_status_visible)
@@ -863,71 +1120,62 @@ class Window(QtWidgets.QMainWindow):
         plot_item = self.jupyter_console_panel.plot_widget.getPlotItem()
         view_box = plot_item.getViewBox()
 
-        view_all_action = toolbar.addAction(
+        self.plot_view_all_action = QtGui.QAction(
             self._toolbar_icon(
                 "zoom-fit-best",
                 QtWidgets.QStyle.StandardPixmap.SP_TitleBarMaxButton,
             ),
             "View all",
+            self,
         )
-        view_all_action.setToolTip("Fit all plot data")
-        view_all_action.triggered.connect(view_box.autoRange)
-        self._jupyter_toolbar_actions.append(view_all_action)
-        self._keep_toolbar_action_from_taking_focus(toolbar, view_all_action)
+        self.plot_view_all_action.setToolTip("Fit all plot data")
+        self.plot_view_all_action.triggered.connect(view_box.autoRange)
 
-        mouse_group = QtGui.QActionGroup(toolbar)
+        mouse_group = QtGui.QActionGroup(self)
         mouse_group.setExclusive(True)
-        pan_action = toolbar.addAction(
+        self.plot_pan_action = QtGui.QAction(
             self._toolbar_icon(
                 "transform-move",
                 QtWidgets.QStyle.StandardPixmap.SP_ArrowUp,
             ),
             "Pan",
+            self,
         )
-        pan_action.setCheckable(True)
-        pan_action.setChecked(True)
-        pan_action.setToolTip("Pan with left mouse button")
-        zoom_action = toolbar.addAction(
+        self.plot_pan_action.setCheckable(True)
+        self.plot_pan_action.setChecked(True)
+        self.plot_pan_action.setToolTip("Pan with left mouse button")
+        self.plot_zoom_action = QtGui.QAction(
             self._toolbar_icon(
                 "zoom-in",
                 QtWidgets.QStyle.StandardPixmap.SP_FileDialogContentsView,
             ),
             "Zoom",
+            self,
         )
-        zoom_action.setCheckable(True)
-        zoom_action.setToolTip("Zoom to rectangle with left mouse button")
-        mouse_group.addAction(pan_action)
-        mouse_group.addAction(zoom_action)
-        pan_action.triggered.connect(lambda: view_box.setLeftButtonAction("pan"))
-        zoom_action.triggered.connect(lambda: view_box.setLeftButtonAction("rect"))
-        self._jupyter_toolbar_actions.extend([pan_action, zoom_action])
-        self._keep_toolbar_action_from_taking_focus(toolbar, pan_action)
-        self._keep_toolbar_action_from_taking_focus(toolbar, zoom_action)
+        self.plot_zoom_action.setCheckable(True)
+        self.plot_zoom_action.setToolTip("Zoom to rectangle with left mouse button")
+        mouse_group.addAction(self.plot_pan_action)
+        mouse_group.addAction(self.plot_zoom_action)
+        self.plot_pan_action.triggered.connect(
+            lambda: view_box.setLeftButtonAction("pan")
+        )
+        self.plot_zoom_action.triggered.connect(
+            lambda: view_box.setLeftButtonAction("rect")
+        )
 
-        self._jupyter_toolbar_actions.append(toolbar.addSeparator())
-        for text, widget in [
-            ("X grid", plot_item.ctrl.xGridCheck),
-            ("Y grid", plot_item.ctrl.yGridCheck),
-        ]:
-            self._jupyter_toolbar_actions.append(
-                self._add_plot_option_action(toolbar, text, widget)
-            )
+        self.plot_x_grid_action = self._plot_option_action(
+            "X grid",
+            plot_item.ctrl.xGridCheck,
+        )
+        self.plot_y_grid_action = self._plot_option_action(
+            "Y grid",
+            plot_item.ctrl.yGridCheck,
+        )
 
-        self._jupyter_toolbar_actions.append(toolbar.addSeparator())
+        self._workspace_mode_toolbar_control(toolbar)
         self._add_jupyter_plot_controls(toolbar)
-        self._jupyter_toolbar_actions.append(toolbar.addSeparator())
-        self._jupyter_toolbar_actions.append(
-            self._add_toolbar_menu_button(
-                toolbar, "Plot", plot_item.getMenu(), "Plot options"
-            )
-        )
-        view_menu = view_box.menu
-        if view_menu is not None:
-            self._jupyter_toolbar_actions.append(
-                self._add_toolbar_menu_button(
-                    toolbar, "View", view_menu, "ViewBox options"
-                )
-            )
+        self.plot_options_menu = plot_item.getMenu()
+        self.plot_view_menu = view_box.menu
 
         for action in self._jupyter_toolbar_actions:
             action.setVisible(False)
@@ -938,7 +1186,8 @@ class Window(QtWidgets.QMainWindow):
         self._jupyter_toolbar_actions.append(toolbar.addWidget(label))
 
         self.toolbar_live_plot_combo = QtWidgets.QComboBox()
-        self.toolbar_live_plot_combo.setFixedWidth(LIVE_PLOT_COMBO_WIDTH)
+        self.toolbar_live_plot_combo.setMinimumWidth(50)
+        self.toolbar_live_plot_combo.setMaximumWidth(130)
         self.toolbar_live_plot_combo.currentIndexChanged.connect(
             lambda _index: self.live_plot_controller._on_toolbar_plot_selected()
         )
@@ -997,6 +1246,101 @@ class Window(QtWidgets.QMainWindow):
             self._keep_toolbar_action_from_taking_focus(toolbar, action)
         self.live_plot_controller._sync_plots()
 
+        self.explore_trace_button = QtWidgets.QToolButton()
+        self.explore_trace_button.setText("Traces: 0")
+        self.explore_trace_button.setToolTip(
+            "Manage reactive traces for the current plot"
+        )
+        self.explore_trace_button.setPopupMode(
+            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        self.explore_trace_menu = QtWidgets.QMenu(self.explore_trace_button)
+        self.explore_trace_button.setMenu(self.explore_trace_menu)
+        trace_action = toolbar.addWidget(self.explore_trace_button)
+
+        self.explore_clear_sliders_action = toolbar.addAction(
+            self._toolbar_icon(
+                "edit-clear", QtWidgets.QStyle.StandardPixmap.SP_DialogDiscardButton
+            ),
+            "Sliders",
+            self._clear_current_explore_sliders,
+        )
+        self.explore_clear_sliders_action.setToolTip(
+            "Clear sliders for the current plot"
+        )
+
+        self.explore_clear_state_action = toolbar.addAction(
+            self._toolbar_icon(
+                "edit-delete", QtWidgets.QStyle.StandardPixmap.SP_TrashIcon
+            ),
+            "Explore",
+            self._clear_current_explore,
+        )
+        self.explore_clear_state_action.setToolTip(
+            "Clear sliders and reactive traces for the current plot"
+        )
+
+        self._jupyter_toolbar_actions.extend(
+            [
+                trace_action,
+                self.explore_clear_sliders_action,
+                self.explore_clear_state_action,
+            ]
+        )
+        self._explore_toolbar_actions.extend(
+            [
+                trace_action,
+                self.explore_clear_sliders_action,
+                self.explore_clear_state_action,
+            ]
+        )
+
+    def _sync_explore_actions(self):
+        # putting this check in while refactoring the toolbar actions
+        if not self._explore_toolbar_actions:
+            return
+
+        explore_visible = self.workspace_mode == "explore" and _workspace_visible(self)
+
+        for action in self._explore_toolbar_actions:
+            action.setVisible(explore_visible)
+
+        if not explore_visible:
+            return
+
+        plot = self.jupyter_console_panel.plots.current
+        if self._connected_explorer is not plot.explore:
+            if self._connected_explorer is not None:
+                try:
+                    self._connected_explorer.changed.disconnect(
+                        self._sync_explore_actions
+                    )
+                except TypeError:
+                    pass
+            self._connected_explorer = plot.explore
+            self._connected_explorer.changed.connect(self._sync_explore_actions)
+
+        trace_names = plot.explore.trace_names()
+        slider_names = plot.explore.slider_names()
+
+        self.explore_trace_button.setText(f"Traces: {len(trace_names)}")
+        self.explore_clear_sliders_action.setEnabled(bool(slider_names))
+        self.explore_clear_state_action.setEnabled(bool(trace_names or slider_names))
+
+        self.explore_trace_menu.clear()
+        if not trace_names:
+            action = self.explore_trace_menu.addAction("No traces")
+            action.setEnabled(False)
+            return
+
+        for name in trace_names:
+            action = self.explore_trace_menu.addAction(f"Remove {name}")
+            action.triggered.connect(
+                lambda _checked=False, name=name: self._remove_current_explore_trace(
+                    name
+                )
+            )
+
     def _toolbar_icon(self, theme_name, fallback_icon):
         icon = QtGui.QIcon.fromTheme(theme_name)
         if icon.isNull():
@@ -1016,6 +1360,98 @@ class Window(QtWidgets.QMainWindow):
         widget.toggled.connect(action.setChecked)
         self._keep_toolbar_action_from_taking_focus(toolbar, action)
         return action
+
+    def _plot_option_action(self, text, widget):
+        action = QtGui.QAction(text, self)
+        action.setCheckable(True)
+        action.setChecked(widget.isChecked())
+        action.toggled.connect(widget.setChecked)
+        widget.toggled.connect(action.setChecked)
+        return action
+
+    def _popup_menu(self, menu):
+        if menu is not None:
+            menu.popup(QtGui.QCursor.pos())
+
+    def _add_proxy_menu(self, parent_menu, title, source_menu):
+        menu = parent_menu.addMenu(title)
+        for source_action in source_menu.actions():
+            if source_action.isSeparator():
+                menu.addSeparator()
+                continue
+
+            source_submenu = source_action.menu()
+            if source_submenu is not None:
+                submenu = menu.addMenu(source_action.text())
+                self._populate_proxy_menu(submenu, source_submenu)
+                continue
+
+            action = menu.addAction(source_action.text())
+            action.setCheckable(source_action.isCheckable())
+            action.setChecked(source_action.isChecked())
+            action.setEnabled(source_action.isEnabled())
+            action.triggered.connect(source_action.trigger)
+
+        return menu
+
+    def _populate_examples_menu(self, menu):
+        menu.clear()
+
+        scripts = self.jupyter_console_panel.script_panel.example_scripts()
+        if not scripts:
+            action = menu.addAction("No examples available")
+            action.setEnabled(False)
+            return
+
+        example_labels = {
+            "plotting_methods_example.py": "Plotting methods",
+            "curve_example.py": "Reactive curves",
+            "lissajous_example.py": "Lissajous curve",
+            "fourier_example.py": "Fourier series",
+            "dejong_attractor_example.py": "De Jong attractor",
+            "param_sweep_example.py": "Parameter sweep",
+        }
+
+        for path in scripts:
+            label = example_labels.get(path.name, path.stem.replace("_", " ").title())
+            action = menu.addAction(label)
+            action.setToolTip(str(path))
+            action.triggered.connect(
+                lambda _checked=False, path=path: self._open_example_script(path)
+            )
+
+    def _open_example_script(self, path):
+        if self.jupyter_console_panel.script_panel.load_script(path):
+            self._set_workspace_mode("explore")
+            self._set_temporary_app_status(f"Opened example: {path.name}")
+
+    def _populate_proxy_menu(self, menu, source_menu):
+        source_actions = source_menu.actions()
+        if any(
+            isinstance(action, QtWidgets.QWidgetAction) for action in source_actions
+        ):
+            menu.addAction(
+                f"Open {source_menu.title()}...",
+                lambda checked=False, menu=source_menu: self._popup_menu(menu),
+            )
+            return
+
+        for source_action in source_actions:
+            if source_action.isSeparator():
+                menu.addSeparator()
+                continue
+
+            source_submenu = source_action.menu()
+            if source_submenu is not None:
+                submenu = menu.addMenu(source_action.text())
+                self._populate_proxy_menu(submenu, source_submenu)
+                continue
+
+            action = menu.addAction(source_action.text())
+            action.setCheckable(source_action.isCheckable())
+            action.setChecked(source_action.isChecked())
+            action.setEnabled(source_action.isEnabled())
+            action.triggered.connect(source_action.trigger)
 
     def _add_toolbar_menu_button(self, toolbar, text, menu, tooltip=None):
         button = QtWidgets.QToolButton()
@@ -1055,6 +1491,13 @@ class Window(QtWidgets.QMainWindow):
 
         for action in self._jupyter_toolbar_actions:
             action.setVisible(visible)
+
+        if self.system_toolbar_action is not None:
+            self.system_toolbar_action.setVisible(
+                visible and self.workspace_mode == "system"
+            )
+
+        self._sync_explore_actions()
 
     def _sync_jupyter_workspace_state(self):
         self._watch_workspace_tab_stacks()
@@ -1185,9 +1628,8 @@ class Window(QtWidgets.QMainWindow):
             "pg": pg,
             "system": self.system,
             "plot": plot,
-            "console_plots": self.jupyter_console_panel.plots,
             "plots": self.jupyter_console_panel.plots,
-            "clear_plot": plot.clear,
+            "current_plot": lambda: self.jupyter_console_panel.plots.current,
             "current_values": lambda: self.system.values,
             "scripts_dir": self._scripts_directory,
         }
@@ -1279,7 +1721,8 @@ class Window(QtWidgets.QMainWindow):
         state = dict(self._solve_state)
         state.update(updates)
         self._solve_state = state
-        self.workspace_panel.set_solve_state(state)
+        self.system_toolbar.set_solve_state(state)
+
         return state
 
     def _clear_data_view(self):
@@ -1866,11 +2309,57 @@ class Window(QtWidgets.QMainWindow):
         self.jupyter_console_panel.plots.new()
         self._sync_jupyter_workspace_state()
 
+    def _clear_current_explore_traces(self):
+        self.jupyter_console_panel.plots.current.explore.clear_traces()
+        self.jupyter_console_panel.set_explore_visible(True)
+        self._sync_explore_actions()
+
+    def _clear_current_explore_sliders(self):
+        self.jupyter_console_panel.plots.current.explore.clear_sliders()
+        self.jupyter_console_panel.set_explore_visible(True)
+        self._sync_explore_actions()
+
+    def _clear_current_explore(self):
+        self.jupyter_console_panel.plots.current.explore.clear()
+        self.jupyter_console_panel.set_explore_visible(True)
+        self._sync_explore_actions()
+
+    def _remove_current_explore_trace(self, name):
+        try:
+            self.jupyter_console_panel.plots.current.explore.remove_trace(name)
+        except KeyError as exc:
+            self._set_app_status(str(exc), error=True)
+
+        self._sync_explore_actions()
+
     def _rename_current_live_plot(self):
         old_name = self.jupyter_console_panel.plots.current_name
         new_name = self.toolbar_live_plot_name.text().strip()
         if new_name:
             self.live_plot_controller._rename_plot(old_name, new_name)
+
+    def _workspace_summary(self):
+        plots = self.jupyter_console_panel.plots
+        current_plot = plots.current
+        plot_names = plots.names()
+        slider_names = current_plot.explore.slider_names()
+        trace_names = current_plot.explore.trace_names()
+
+        return "\n".join(
+            [
+                f"Plots: {', '.join(plot_names)}",
+                f"Current plot: {plots.current_name}",
+                f"Sliders: {', '.join(slider_names)}",
+                f"Traces: {', '.join(trace_names)}",
+            ]
+        )
+
+    def show_workspace_summary(self):
+        QtWidgets.QMessageBox.information(
+            self,
+            "Jupyter Workspace Summary",
+            self._workspace_summary(),
+        )
 
     def _on_workspace_dock_closed(self):
         if not self._closing_workspace_dock:

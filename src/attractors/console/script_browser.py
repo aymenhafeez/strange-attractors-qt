@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
@@ -15,6 +16,8 @@ def default_scripts_dir():
 
 class ScriptBrowser(QtWidgets.QWidget):
     script_selected = QtCore.pyqtSignal(object)
+    path_renamed = QtCore.pyqtSignal(object, object)
+    path_deleted = QtCore.pyqtSignal(object)
 
     def __init__(self, scripts_dir, parent=None):
         super().__init__(parent)
@@ -45,8 +48,17 @@ class ScriptBrowser(QtWidgets.QWidget):
             QtGui.QIcon.fromTheme("folder-new"), "New Folder"
         )
         self.new_folder_action.setToolTip("Create a new folder")
+        self.rename_action = self.toolbar.addAction(
+            QtGui.QIcon.fromTheme("edit-rename"), "Rename"
+        )
+        self.rename_action.setToolTip("Rename the selected script or folder")
+        self.delete_action = self.toolbar.addAction(
+            QtGui.QIcon.fromTheme("edit-delete"), "Delete"
+        )
+        self.delete_action.setToolTip("Delete the selected script or folder")
 
         self.model = QtGui.QFileSystemModel(self)
+        self.model.setReadOnly(False)
         self.model.setRootPath(str(self.scripts_dir))
         self.model.setNameFilters(["*.py"])
         self.model.setNameFilterDisables(False)
@@ -71,8 +83,10 @@ class ScriptBrowser(QtWidgets.QWidget):
 
         self.new_script_action.triggered.connect(self._new_script)
         self.new_folder_action.triggered.connect(self._new_folder)
+        self.rename_action.triggered.connect(self._rename_selected)
+        self.delete_action.triggered.connect(self._delete_selected)
 
-    def select_script(self, path):
+    def select_path(self, path):
         if path is None:
             return
 
@@ -116,7 +130,7 @@ class ScriptBrowser(QtWidgets.QWidget):
             return
 
         path.write_text("", encoding="utf-8")
-        self.select_script(path)
+        self.select_path(path)
         self.script_selected.emit(path)
 
     def _new_folder(self):
@@ -144,6 +158,107 @@ class ScriptBrowser(QtWidgets.QWidget):
         if index.isValid():
             self.tree.setCurrentIndex(index)
             self.tree.expand(index)
+
+    def _selected_path(self):
+        index = self.tree.currentIndex()
+        if not index.isValid():
+            return None
+
+        return Path(self.model.filePath(index))
+
+    def _rename_selected(self):
+        index = self.tree.currentIndex()
+        if not index.isValid():
+            return
+
+        path = Path(self.model.filePath(index))
+        if path == self.scripts_dir:
+            return
+
+        name, accepted = QtWidgets.QInputDialog.getText(
+            self,
+            "Rename",
+            "New name:",
+            text=path.name,
+        )
+
+        if not accepted:
+            return
+
+        name = name.strip()
+        if not name:
+            return
+
+        if path.is_file():
+            name = self._normalise_script_name(name)
+
+        new_path = path.with_name(name)
+
+        if new_path == path:
+            return
+
+        if not self._validate_new_path(new_path):
+            return
+
+        try:
+            renamed = self.model.setData(
+                index,
+                name,
+                QtCore.Qt.ItemDataRole.EditRole,
+            )
+        except OSError as e:
+            self._show_error(str(e))
+            return
+
+        if not renamed:
+            self._show_error(f"Could not rename {path}")
+            return
+
+        self.path_renamed.emit(path, new_path)
+        QtCore.QTimer.singleShot(0, lambda path=new_path: self.select_path(path))
+
+    def _delete_selected(self):
+        index = self.tree.currentIndex()
+        if not index.isValid():
+            return
+
+        path = self._selected_path()
+        if path is None or path == self.scripts_dir:
+            return
+
+        if path.is_dir():
+            message = f"Delete folder '{path.name}' and all its contents?"
+        else:
+            message = f"Delete script '{path.name}'?"
+
+        result = QtWidgets.QMessageBox.question(
+            self,
+            "Delete",
+            message,
+            QtWidgets.QMessageBox.StandardButton.Yes
+            | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.No,
+        )
+
+        if result != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            if path.is_dir():
+                shutil.rmtree(path)
+            elif path.exists():
+                deleted = self.model.remove(index)
+                if not deleted:
+                    self._show_error(f"Could not delete {path}")
+                    return
+            else:
+                self._show_error(f"Path does not exist: {path}")
+                return
+        except OSError as e:
+            self._show_error(str(e))
+            return
+
+        self.path_deleted.emit(path)
 
     def _selected_directory(self):
         index = self.tree.currentIndex()
@@ -209,3 +324,15 @@ class ScriptBrowser(QtWidgets.QWidget):
 
     def _show_error(self, message):
         QtWidgets.QMessageBox.critical(self, "Error", message)
+
+    def resizeEvent(self, a0):
+        super().resizeEvent(a0)
+        self._update_toolbar_style()
+
+    def _update_toolbar_style(self):
+        style = (
+            QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly
+            if self.toolbar.width() < 250
+            else QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        self.toolbar.setToolButtonStyle(style)

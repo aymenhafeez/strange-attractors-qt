@@ -3,18 +3,18 @@ from pathlib import Path
 from PyQt6.Qsci import QsciLexerPython, QsciScintilla
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from ..ui.style import SPLITTER_HANDLE_HOVER
+from ..ui.style import SPLITTER_HANDLE_HOVER, is_dark_mode
 from .script_browser import ScriptBrowser, default_scripts_dir
 
 # dark mode palette derived from KDE Breeze Dark
 # https://qscintilla.com/#syntax_highlighting/custom_lexer_example
 # https://lxr.kde.org/source/frameworks/syntax-highlighting/data/themes/breeze-dark.theme
-EDITOR_BACKGROUND = "#232629"
-EDITOR_TEXT = "#cfcfc2"
-EDITOR_MARGIN = "#31363b"
-EDITOR_MARGIN_TEXT = "#7a7c7d"
-EDITOR_SELECTION = "#2d5c76"
-EDITOR_CARET_LINE = "#2a2e32"
+EDITOR_BACKGROUND = "#121416"
+EDITOR_TEXT = "#EEEEEE"
+EDITOR_MARGIN = "#1b1f22"
+EDITOR_MARGIN_TEXT = "#B0BEC5"
+EDITOR_SELECTION = "#244559"
+EDITOR_CARET_LINE = "#1a1d20"
 
 PYTHON_STYLE_COLOURS = {
     QsciLexerPython.ClassName: "#2980b9",
@@ -39,28 +39,30 @@ PYTHON_STYLE_COLOURS = {
 }
 
 
-def _is_dark_mode():
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        return False
-
-    scheme = app.styleHints().colorScheme()
-    if scheme != QtCore.Qt.ColorScheme.Unknown:
-        return scheme == QtCore.Qt.ColorScheme.Dark
-
-    palette = app.palette()
-    window = palette.color(QtGui.QPalette.ColorRole.Window)
-    text = palette.color(QtGui.QPalette.ColorRole.WindowText)
-
-    return window.lightness() < text.lightness()
-
-
 class ScriptStore:
     def __init__(self, root):
         self.root = Path(root) if root is not None else default_scripts_dir()
 
     def ensure_root(self):
         self.root.mkdir(parents=True, exist_ok=True)
+        self.ensure_examples()
+
+    def ensure_examples(self):
+        source = Path(__file__).resolve().parents[3] / "examples"
+
+        target = self.root / "examples"
+
+        if not source.exists():
+            return
+
+        target.mkdir(exist_ok=True)
+
+        for path in source.glob("*.py"):
+            target_path = target / path.name
+            if not target_path.exists():
+                target_path.write_text(
+                    path.read_text(encoding="utf-8"), encoding="utf-8"
+                )
 
     def resolve_script(self, path):
         path = Path(path).resolve()
@@ -112,6 +114,8 @@ class ScriptPanel(QtWidgets.QWidget):
 
         self.script_browser = ScriptBrowser(self.scripts_dir)
         self.script_browser.script_selected.connect(self.load_script)
+        self.script_browser.path_renamed.connect(self._on_path_renamed)
+        self.script_browser.path_deleted.connect(self._on_path_deleted)
 
         editor_host = QtWidgets.QWidget()
         editor_layout = QtWidgets.QVBoxLayout(editor_host)
@@ -177,6 +181,66 @@ class ScriptPanel(QtWidgets.QWidget):
 
         self.load()
 
+    def example_scripts(self):
+        examples_dir = self.scripts_dir / "examples"
+        if not examples_dir.exists():
+            return []
+
+        return sorted(examples_dir.glob("*.py"), key=lambda p: p.name.lower())
+
+    def _renamed_current_path(self, old_path, new_path):
+        if self.current_path is None:
+            return None
+
+        old_path = Path(old_path).resolve()
+        new_path = Path(new_path).resolve()
+        current_path = self.current_path.resolve()
+
+        if current_path == old_path:
+            return new_path
+
+        if old_path in current_path.parents:
+            return new_path / current_path.relative_to(old_path)
+
+        return None
+
+    def _on_path_renamed(self, old_path, new_path):
+        renamed_path = self._renamed_current_path(old_path, new_path)
+        if renamed_path is None:
+            return
+        self.current_path = renamed_path
+        self._update_status("Renamed")
+        self.script_changed.emit(renamed_path)
+        self.script_browser.select_path(renamed_path)
+
+    def _on_path_deleted(self, path):
+        if self.current_path is None:
+            return
+
+        if not self._check_match(path, self.current_path):
+            return
+
+        self.current_path = None
+        self._dirty = False
+        self._loading = True
+        try:
+            self._set_editor_text("")
+            self._set_editor_modified(False)
+        finally:
+            self._loading = False
+        self._update_status("")
+
+        if not self.script_path.exists():
+            self.store.write(self.script_path, "")
+
+        self.load_script(self.script_path)
+
+    def _check_match(self, parent, child):
+        parent = Path(parent).resolve()
+        child = Path(child).resolve()
+
+        return child == parent or parent in child.parents
+
     def _apply_dark_editor_colours(self, editor):
         editor.setCaretForegroundColor(QtGui.QColor(EDITOR_TEXT))
         editor.setCaretLineBackgroundColor(QtGui.QColor(EDITOR_CARET_LINE))
@@ -211,7 +275,7 @@ class ScriptPanel(QtWidgets.QWidget):
         self.lexer = QsciLexerPython(editor)
         self.lexer.setDefaultFont(font)
 
-        if _is_dark_mode():
+        if is_dark_mode():
             self._apply_dark_editor_colours(editor)
 
         editor.setLexer(self.lexer)
@@ -244,7 +308,7 @@ class ScriptPanel(QtWidgets.QWidget):
 
             self._update_status("Loaded")
             self.script_changed.emit(path)
-            self.script_browser.select_script(path)
+            self.script_browser.select_path(path)
         finally:
             self._loading = False
 

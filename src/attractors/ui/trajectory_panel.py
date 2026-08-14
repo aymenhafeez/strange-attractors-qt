@@ -70,7 +70,12 @@ class _TrajectoryRow(QtCore.QObject):
                 "limits": (-1000.0, 1000.0),
                 "step": 0.1,
             },
-            {"name": "Alpha", "type": "int", "value": 100, "limits": (0, 100)},
+            {
+                "name": "Alpha",
+                "type": "slider",
+                "value": 100,
+                "limits": (0, 100),
+            },
             {
                 "name": "Size",
                 "type": "float",
@@ -278,9 +283,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
             parent=self,
         )
         row.changed.connect(self._emit)
-        row.changed.connect(self._resize_to_content)
         row.style_changed.connect(self._emit_styles)
-        row.style_changed.connect(self._resize_to_content)
         row.remove_requested.connect(self._remove_row)
         self._rows.append(row)
         insert_at = max(0, len(self._root_param.children()) - 1)
