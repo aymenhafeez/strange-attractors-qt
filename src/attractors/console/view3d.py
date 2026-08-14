@@ -49,7 +49,7 @@ class ConsoleTrace3D:
         self.item.setData(pos=points)
 
     def remove(self):
-        self.view.removeItem(self.item)
+        self.view.remove_item(self.item)
 
 
 class ConsoleView3D:
@@ -337,13 +337,16 @@ class ConsoleView3DManager(QtCore.QObject):
         self._status_callback = callback
         for view in self._views.values():
             view._status_callback = callback
+            view.explore.status_callback = callback
 
 
 class View3DExplorer(QtCore.QObject):
     changed = QtCore.pyqtSignal()
 
-    def __init__(self, view, param_widget, param_layout, status_callback=None):
-        super().__init__(view)
+    def __init__(
+        self, view, param_widget, param_layout, status_callback=None, parent=None
+    ):
+        super().__init__(parent)
         self.view = view
         self.param_widget = param_widget
         self.param_layout = param_layout
@@ -389,3 +392,46 @@ class View3DExplorer(QtCore.QObject):
         self.changed.emit()
 
         return trace
+
+    def refresh(self):
+        for trace in list(self._traces.values()):
+            try:
+                trace.update()
+            except (TypeError, ValueError, FloatingPointError) as exc:
+                self._set_status(f"{trace.name}: {exc}")
+
+    def clear(self):
+        self.clear_sliders()
+        self.clear_traces()
+
+    def clear_traces(self):
+        for trace in list(self._traces.values()):
+            trace.remove()
+
+        self._traces.clear()
+        self.changed.emit()
+
+    def clear_sliders(self):
+        for param in self._params.values():
+            self.param_layout.removeWidget(param.widget)
+            param.widget.deleteLater()
+
+        self._params.clear()
+        self.param_widget.setVisible(False)
+        self.changed.emit()
+
+    def params(self):
+        return {name: param.value for name, param in self._params.items()}
+
+    def traces(self):
+        return {name: trace.name for name, trace in self._traces.items()}
+
+    def slider_names(self):
+        return list(self._params)
+
+    def trace_names(self):
+        return list(self._traces)
+
+    def _set_status(self, message):
+        if self.status_callback is not None:
+            self.status_callback(message)

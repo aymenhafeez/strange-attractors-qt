@@ -590,6 +590,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         for plot in self.plots._plots.values():
             plot.param_widget.setVisible(bool(visible) and bool(plot.explore.params()))
 
+        for view in self.views3d._views.values():
+            view.param_widget.setVisible(bool(visible) and bool(view.explore.params()))
+
     def apply_explore_layout(self):
         self.set_explore_visible(True)
         self.dock_area.moveDock(self.script_dock, "left", self.plot_dock)
