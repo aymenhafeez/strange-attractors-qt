@@ -1404,6 +1404,7 @@ class Window(QtWidgets.QMainWindow):
             return
 
         example_labels = {
+            "plotting_methods_example.py": "Plotting methods",
             "curve_example.py": "Reactive curves",
             "lissajous_example.py": "Lissajous curve",
             "fourier_example.py": "Fourier series",
