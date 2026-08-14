@@ -1,9 +1,38 @@
+import numpy as np
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.docking import AreaBoundDock as Dock
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
+
+
+def check_points(x, y=None, z=None, *, name="points"):
+    if y is None and z is None:
+        points = np.asarray(x, dtype=np.float64)
+        if points.ndim != 2 or points.shape[1] != 3:
+            raise ValueError(f"{name} must have shape (N, 3)")
+    else:
+        if y is None or z is None:
+            raise ValueError("Must provide x, y and z")
+
+        x_data = np.asarray(x, dtype=np.float64)
+        y_data = np.asarray(y, dtype=np.float64)
+        z_data = np.asarray(z, dtype=np.float64)
+
+        if x_data.ndim != 1 or y_data.ndim != 1 or z_data.ndim != 1:
+            raise ValueError("x, y and z must be one dimensional")
+        if not (len(x_data) == len(y_data) == len(z_data)):
+            raise ValueError("x, y and z must be the same length")
+
+        points = np.column_stack([x_data, y_data, z_data])
+
+    if len(points) == 0:
+        raise ValueError(f"{name} cannot be empty")
+    if not np.all(np.isfinite(points)):
+        raise ValueError(f"{name} can't contain non finite values")
+
+    return points
 
 
 class ConsoleView3D:
@@ -43,6 +72,45 @@ class ConsoleView3D:
     def auto_range(self):
         # TODO: fill this in once items are exposing their data
         pass
+
+    def clear_for_mode(self, mode):
+        mode = str(mode).strip().lower()
+        if mode == "replace":
+            return True
+        if mode == "overlay":
+            return False
+
+        raise ValueError("Mode must be 'replace' or 'overlay'")
+
+    def line3d(
+        self,
+        x,
+        y=None,
+        z=None,
+        *,
+        mode="replace",
+        colour=(1.0, 1.0, 1.0, 1.0),
+        width=1.0,
+        antialias=True,
+    ):
+        points = check_points(x, y, z)
+
+        if self.clear_for_mode(mode):
+            self.clear()
+
+        item = gl.GLLinePlotItem(
+            pos=points,
+            color=colour,
+            width=width,
+            antialias=antialias,
+            mode="line_strip",
+        )
+
+        self.view.addItem(item)
+        self._items.append(item)
+        self.camera_controller.fit_camera_to_solutions([points])
+
+        return item
 
 
 # adapting this from ConsolePlotManager, will need to generalise to 3D
