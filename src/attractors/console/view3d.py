@@ -5,6 +5,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 from ..ui.docking import AreaBoundDock as Dock
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
+from .explorer import ConsoleParam
 
 
 def check_points(x, y=None, z=None, *, name="points"):
@@ -33,6 +34,22 @@ def check_points(x, y=None, z=None, *, name="points"):
         raise ValueError(f"{name} can't contain non finite values")
 
     return points
+
+
+class ConsoleTrace3D:
+    def __init__(self, name, points, item, view):
+        self.name = name
+        self.points = points
+        self.item = item
+        self.view = view
+
+    def update(self):
+        points_data = self.points() if callable(self.points) else self.points
+        points = check_points(points_data)
+        self.item.setData(pos=points)
+
+    def remove(self):
+        self.view.removeItem(self.item)
 
 
 class ConsoleView3D:
@@ -65,9 +82,13 @@ class ConsoleView3D:
         return "ConsoleView3D()"
 
     def clear(self):
-        for item in self._items:
+        for item in list(self._items):
+            self.remove_item(item)
+
+    def remove_item(self, item):
+        if item in self._items:
             self.view.removeItem(item)
-        self._items.clear()
+            self._items.remove(item)
 
     def auto_range(self):
         # TODO: fill this in once items are exposing their data
@@ -316,3 +337,55 @@ class ConsoleView3DManager(QtCore.QObject):
         self._status_callback = callback
         for view in self._views.values():
             view._status_callback = callback
+
+
+class View3DExplorer(QtCore.QObject):
+    changed = QtCore.pyqtSignal()
+
+    def __init__(self, view, param_widget, param_layout, status_callback=None):
+        super().__init__(view)
+        self.view = view
+        self.param_widget = param_widget
+        self.param_layout = param_layout
+        self.status_callback = status_callback
+        self._params = {}
+        self._traces = {}
+
+    def slider(self, name, value=0.0, start=0.0, end=1.0, step=0.01):
+        key = str(name).strip()
+        if not key:
+            raise ValueError("Slider key cannot be empty")
+
+        old = self._params.pop(key, None)
+        if old is not None:
+            self.param_layout.removeWidget(old.widget)
+            old.widget.deleteLater()
+
+        param = ConsoleParam(key, value, start, end, step, parent=self)
+        param.changed.connect(self.refresh)
+        self._params[key] = param
+        self.param_layout.addWidget(param.widget)
+        self.param_widget.setVisible(True)
+        self.changed.emit()
+
+        return param
+
+    def int_slider(self, name, value=0, start=0, end=100, step=1):
+        return self.slider(name, int(value), int(start), int(end), int(step))
+
+    def line3d(self, name, points, *, mode="replace", **kwargs):
+        key = str(name).strip()
+        if not key:
+            raise ValueError("Trace name cannot be empty")
+
+        old = self._traces.pop(key, None)
+        if old is not None:
+            old.remove()
+
+        points_data = points() if callable(points) else points
+        item = self.view.line3d(points_data, mode=mode, **kwargs)
+        trace = ConsoleTrace3D(key, points, item, self.view)
+        self._traces[key] = trace
+        self.changed.emit()
+
+        return trace
