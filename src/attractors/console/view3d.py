@@ -203,6 +203,10 @@ class ConsoleView3D:
         return "ConsoleView3D()"
 
     def clear(self):
+        if hasattr(self, "explore"):
+            self.explore.clear_traces()
+
+    def clear_items(self):
         for item in list(self._items):
             self.remove_item(item)
 
@@ -517,11 +521,13 @@ class View3DExplorer(QtCore.QObject):
         if not key:
             raise ValueError("Trace name cannot be empty")
 
-        # NOTE: this means emitting changed after clear_traces emits it as well
-        # not ideal but can fix later if it causes any issues
+        # clear registered traces if mode is replace before adding a new one
         mode = mode.strip().lower()
+        plot_mode = mode
         if mode == "replace":
             self.clear_traces()
+            self.view.clear_items()
+            plot_mode = "overlay"
         elif mode != "overlay":
             raise ValueError("Mode must be 'replace' or 'overlay'")
 
@@ -541,7 +547,7 @@ class View3DExplorer(QtCore.QObject):
             kwargs["size"] = size()
 
         points = self._trace_points(x, y, z)
-        item = plotter(points, mode=mode, **kwargs)
+        item = plotter(points, mode=plot_mode, **kwargs)
         trace = ConsoleTrace3D(
             key, x, y, z, item, self, kind=kind, colour=colour, size=size
         )
