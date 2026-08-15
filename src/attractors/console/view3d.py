@@ -68,12 +68,13 @@ def normalise_colour(colour):
 
 
 class ConsoleTrace3D:
-    def __init__(self, name, x, y, z, item, explorer):
+    def __init__(self, name, x, y, z, item, explorer, colour=None):
         self.name = name
         self.x = x
         self.y = y
         self.z = z
         self.item = item
+        self.colour = colour
         self.explorer = explorer
 
     def points(self):
@@ -88,10 +89,30 @@ class ConsoleTrace3D:
         return check_points(x_data, y_data, z_data)
 
     def update(self):
-        self.item.setData(pos=self.points())
+        points = self.points()
+        kwargs = {"pos": points}
+
+        colour = self.colour_data(len(points))
+        if colour is not None:
+            # arg getting passed to GLLinePlotItem and GLScatterPlotItem which expect 'color' not 'colour'
+            kwargs["color"] = colour
+
+        self.item.setData(**kwargs)
 
     def remove(self):
         self.explorer.view.remove_item(self.item)
+
+    def colour_data(self, n):
+        if self.colour is None:
+            return None
+
+        colour_data = self.colour() if callable(self.colour) else self.colour
+        colour = normalise_colour(colour_data)
+
+        if isinstance(colour, np.ndarray) and len(colour) != n:
+            raise ValueError("Colour array must be the same length as points")
+
+        return colour
 
 
 class ConsoleView3D:
@@ -481,9 +502,15 @@ class View3DExplorer(QtCore.QObject):
         if old is not None:
             old.remove()
 
+        # user facing arg so use 'colour' here
+        colour = kwargs.get("colour")
+        if callable(colour):
+            kwargs = kwargs.copy()
+            kwargs["colour"] = colour()
+
         points = self._trace_points(x, y, z)
         item = plotter(points, mode=mode, **kwargs)
-        trace = ConsoleTrace3D(key, x, y, z, item, self)
+        trace = ConsoleTrace3D(key, x, y, z, item, self, colour)
         self._traces[key] = trace
         self.changed.emit()
 
