@@ -1410,6 +1410,7 @@ class Window(QtWidgets.QMainWindow):
             "fourier_example.py": "Fourier series",
             "dejong_attractor_example.py": "De Jong attractor",
             "param_sweep_example.py": "Parameter sweep",
+            "3d_lissajous_example.py": "3D Lissajous curve",
         }
 
         for path in scripts:
