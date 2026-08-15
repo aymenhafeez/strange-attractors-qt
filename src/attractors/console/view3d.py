@@ -3,6 +3,7 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.docking import AreaBoundDock as Dock
+from ..ui.style import CONSOLE_PLOT_PARAMS
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
 from .explorer import ConsoleParam
@@ -85,9 +86,40 @@ class ConsoleView3D:
         self.v_layout.addWidget(self.view, 1)
 
         self.param_widget = QtWidgets.QFrame()
+        self.param_widget.setObjectName("ConsolePlotParams")
+        self.param_widget.setVisible(False)
+        self.param_widget.setStyleSheet(CONSOLE_PLOT_PARAMS)
+
         self.param_layout = QtWidgets.QVBoxLayout(self.param_widget)
-        self.param_layout.setContentsMargins(0, 0, 0, 0)
+        self.param_layout.setContentsMargins(6, 5, 6, 6)
         self.param_layout.setSpacing(4)
+
+        header = QtWidgets.QWidget()
+        header_layout = QtWidgets.QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 2)
+        header_layout.setSpacing(4)
+
+        self.param_title = QtWidgets.QLabel("Parameters")
+        self.param_title.setObjectName("ConsolePlotParamTitle")
+        header_layout.addWidget(self.param_title)
+        header_layout.addStretch(1)
+
+        self.param_controls = QtWidgets.QFrame()
+        self.param_controls.setObjectName("ConsolePlotParamControls")
+        self.param_controls_layout = QtWidgets.QVBoxLayout(self.param_controls)
+        self.param_controls_layout.setContentsMargins(5, 5, 5, 5)
+        self.param_controls_layout.setSpacing(3)
+
+        self.param_layout.addWidget(header)
+        self.param_layout.addWidget(self.param_controls)
+
+        self.explore = View3DExplorer(
+            self,
+            self.param_widget,
+            self.param_controls_layout,
+            status_callback=status_callback,
+            parent=self.host,
+        )
 
         self.v_layout.addWidget(self.param_widget)
 
