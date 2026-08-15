@@ -420,6 +420,13 @@ class ConsoleView3DManager(QtCore.QObject):
     def auto_range(self):
         self.current.auto_range()
 
+    # convenience, so views3d.line/scatter3d(points) works
+    def line3d(self, *args, **kwargs):
+        return self.current.line3d(*args, **kwargs)
+
+    def scatter3d(self, *args, **kwargs):
+        return self.current.scatter3d(*args, **kwargs)
+
     def _raise_dock(self, dock):
         container = dock.container()
         raise_dock = getattr(container, "raiseDock", None)
