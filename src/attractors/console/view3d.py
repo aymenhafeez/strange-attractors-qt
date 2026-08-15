@@ -1,6 +1,6 @@
 import numpy as np
 import pyqtgraph.opengl as gl
-from pyqtgraph.Qt import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from ..ui.docking import AreaBoundDock as Dock
 from ..ui.style import CONSOLE_PLOT_PARAMS
@@ -37,14 +37,44 @@ def check_points(x, y=None, z=None, *, name="points"):
     return points
 
 
+def normalise_colour(colour):
+    if isinstance(colour, str):
+        qcolour = QtGui.QColor(colour)
+        if not qcolour.isValid():
+            raise ValueError(f"Invalid colour {colour!r}")
+
+        return qcolour.redF(), qcolour.greenF(), qcolour.blueF(), qcolour.alphaF()
+
+    data = np.asarray(colour, dtype=np.float64)
+
+    # rbg
+    if data.shape == (3,):
+        return (data[0], data[1], data[2], 1.0)
+    # rgba
+    if data.shape == (4,):
+        return tuple(v for v in data)
+
+    # per point rgb(a)
+    if data.ndim == 2 and data.shape[1] in {3, 4}:
+        if data.shape[1] == 3:
+            alpha = np.ones((len(data), 1), dtype=np.float64)
+            data = np.column_stack([data, alpha])
+
+        return data
+
+    raise ValueError(
+        "Colour must be a name, hex string, RGB(A) or an (N, 3)/(N, 4) array"
+    )
+
+
 class ConsoleTrace3D:
-    def __init__(self, name, x, y, z, item, view):
+    def __init__(self, name, x, y, z, item, explorer):
         self.name = name
         self.x = x
         self.y = y
         self.z = z
         self.item = item
-        self.view = view
+        self.explorer = explorer
 
     def points(self):
         x_data = self.x() if callable(self.x) else self.x
@@ -58,12 +88,10 @@ class ConsoleTrace3D:
         return check_points(x_data, y_data, z_data)
 
     def update(self):
-        points_data = self.points() if callable(self.points) else self.points
-        points = check_points(points_data)
-        self.item.setData(pos=points)
+        self.item.setData(pos=self.points())
 
     def remove(self):
-        self.view.remove_item(self.item)
+        self.explorer.view.remove_item(self.item)
 
 
 class ConsoleView3D:
@@ -164,6 +192,8 @@ class ConsoleView3D:
         if self.clear_for_mode(mode):
             self.clear()
 
+        colour = normalise_colour(colour)
+
         item = gl.GLLinePlotItem(
             pos=points,
             color=colour,
@@ -193,6 +223,8 @@ class ConsoleView3D:
 
         if self.clear_for_mode(mode):
             self.clear()
+
+        colour = normalise_colour(colour)
 
         item = gl.GLScatterPlotItem(
             pos=points,
@@ -451,7 +483,7 @@ class View3DExplorer(QtCore.QObject):
 
         points = self._trace_points(x, y, z)
         item = plotter(points, mode=mode, **kwargs)
-        trace = ConsoleTrace3D(key, x, y, z, item, self.view)
+        trace = ConsoleTrace3D(key, x, y, z, item, self)
         self._traces[key] = trace
         self.changed.emit()
 
