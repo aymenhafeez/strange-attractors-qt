@@ -68,12 +68,13 @@ def normalise_colour(colour):
 
 
 class ConsoleTrace3D:
-    def __init__(self, name, x, y, z, item, explorer, colour=None):
+    def __init__(self, name, x, y, z, item, explorer, colour=None, size=None):
         self.name = name
         self.x = x
         self.y = y
         self.z = z
         self.item = item
+        self.size = size
         self.colour = colour
         self.explorer = explorer
 
@@ -97,6 +98,10 @@ class ConsoleTrace3D:
             # arg getting passed to GLLinePlotItem and GLScatterPlotItem which expect 'color' not 'colour'
             kwargs["color"] = colour
 
+        size = self.size_data(len(points))
+        if size is not None:
+            kwargs["size"] = size
+
         self.item.setData(**kwargs)
 
     def remove(self):
@@ -113,6 +118,26 @@ class ConsoleTrace3D:
             raise ValueError("Colour array must be the same length as points")
 
         return colour
+
+    def size_data(self, n):
+        if self.size is None:
+            return None
+
+        size_data = self.size() if callable(self.size) else self.size
+
+        if np.isscalar(size_data):
+            return float(size_data)
+
+        size = np.asarray(size_data, dtype=np.float64)
+
+        if size.ndim != 1:
+            raise ValueError("Size must be one dimensional")
+        if len(size) != n:
+            raise ValueError("Size array must be the same length as points")
+        if not np.all(np.isfinite(size)):
+            raise ValueError("Size can't contain non finite values")
+
+        return size
 
 
 class ConsoleView3D:
@@ -508,9 +533,14 @@ class View3DExplorer(QtCore.QObject):
             kwargs = kwargs.copy()
             kwargs["colour"] = colour()
 
+        size = kwargs.get("size")
+        if callable(size):
+            kwargs = kwargs.copy()
+            kwargs["size"] = size()
+
         points = self._trace_points(x, y, z)
         item = plotter(points, mode=mode, **kwargs)
-        trace = ConsoleTrace3D(key, x, y, z, item, self, colour)
+        trace = ConsoleTrace3D(key, x, y, z, item, self, colour, size)
         self._traces[key] = trace
         self.changed.emit()
 
