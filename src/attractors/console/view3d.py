@@ -432,13 +432,13 @@ class View3DExplorer(QtCore.QObject):
     def int_slider(self, name, value=0, start=0, end=100, step=1):
         return self.slider(name, int(value), int(start), int(end), int(step))
 
-    def line3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
+    def _add_trace3d(self, name, x, y, z, mode, plotter, **kwargs):
         key = str(name).strip()
         if not key:
             raise ValueError("Trace name cannot be empty")
 
         # NOTE: this means emitting changed after clear_traces emits it as well
-        # not ideal but can fix later if if causes any issues
+        # not ideal but can fix later if it causes any issues
         mode = mode.strip().lower()
         if mode == "replace":
             self.clear_traces()
@@ -450,37 +450,22 @@ class View3DExplorer(QtCore.QObject):
             old.remove()
 
         points = self._trace_points(x, y, z)
-        item = self.view.line3d(points, mode=mode, **kwargs)
+        item = plotter(points, mode=mode, **kwargs)
         trace = ConsoleTrace3D(key, x, y, z, item, self.view)
         self._traces[key] = trace
         self.changed.emit()
 
         return trace
+
+    def line3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
+        return self._add_trace3d(
+            name, x, y, z, mode=mode, plotter=self.view.line3d, **kwargs
+        )
 
     def scatter3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
-        key = str(name).strip()
-        if not key:
-            raise ValueError("Trace name cannot be empty")
-
-        # NOTE: this means emitting changed after clear_traces emits it as well
-        # not ideal but can fix later if if causes any issues
-        mode = mode.strip().lower()
-        if mode == "replace":
-            self.clear_traces()
-        elif mode != "overlay":
-            raise ValueError("Mode must be 'replace' or 'overlay'")
-
-        old = self._traces.pop(key, None)
-        if old is not None:
-            old.remove()
-
-        points = self._trace_points(x, y, z)
-        item = self.view.scatter3d(points, mode=mode, **kwargs)
-        trace = ConsoleTrace3D(key, x, y, z, item, self.view)
-        self._traces[key] = trace
-        self.changed.emit()
-
-        return trace
+        return self._add_trace3d(
+            name, x, y, z, mode=mode, plotter=self.view.scatter3d, **kwargs
+        )
 
     def refresh(self):
         for trace in list(self._traces.values()):
