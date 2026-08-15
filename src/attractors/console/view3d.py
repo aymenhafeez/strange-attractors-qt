@@ -381,6 +381,14 @@ class View3DExplorer(QtCore.QObject):
         if not key:
             raise ValueError("Trace name cannot be empty")
 
+        # NOTE: this means emitting changed after clear_traces emits it as well
+        # not ideal but can fix later if if causes any issues
+        mode = mode.strip().lower()
+        if mode == "replace":
+            self.clear_traces()
+        elif mode != "overlay":
+            raise ValueError("Mode must be 'replace' or 'overlay'")
+
         old = self._traces.pop(key, None)
         if old is not None:
             old.remove()
