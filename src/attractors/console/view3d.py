@@ -37,11 +37,24 @@ def check_points(x, y=None, z=None, *, name="points"):
 
 
 class ConsoleTrace3D:
-    def __init__(self, name, points, item, view):
+    def __init__(self, name, x, y, z, item, view):
         self.name = name
-        self.points = points
+        self.x = x
+        self.y = y
+        self.z = z
         self.item = item
         self.view = view
+
+    def points(self):
+        x_data = self.x() if callable(self.x) else self.x
+
+        if self.y is None and self.z is None:
+            return check_points(x_data)
+
+        y_data = self.y() if callable(self.y) else self.y
+        z_data = self.z() if callable(self.z) else self.z
+
+        return check_points(x_data, y_data, z_data)
 
     def update(self):
         points_data = self.points() if callable(self.points) else self.points
@@ -354,6 +367,17 @@ class View3DExplorer(QtCore.QObject):
         self._params = {}
         self._traces = {}
 
+    def _trace_points(self, x, y=None, z=None):
+        x_data = x() if callable(x) else x
+
+        if y is None and z is None:
+            return check_points(x_data)
+
+        y_data = y() if callable(y) else y
+        z_data = z() if callable(z) else z
+
+        return check_points(x_data, y_data, z_data)
+
     def slider(self, name, value=0.0, start=0.0, end=1.0, step=0.01):
         key = str(name).strip()
         if not key:
@@ -376,7 +400,7 @@ class View3DExplorer(QtCore.QObject):
     def int_slider(self, name, value=0, start=0, end=100, step=1):
         return self.slider(name, int(value), int(start), int(end), int(step))
 
-    def line3d(self, name, points, *, mode="replace", **kwargs):
+    def line3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
         key = str(name).strip()
         if not key:
             raise ValueError("Trace name cannot be empty")
@@ -393,9 +417,34 @@ class View3DExplorer(QtCore.QObject):
         if old is not None:
             old.remove()
 
-        points_data = points() if callable(points) else points
-        item = self.view.line3d(points_data, mode=mode, **kwargs)
-        trace = ConsoleTrace3D(key, points, item, self.view)
+        points = self._trace_points(x, y, z)
+        item = self.view.line3d(points, mode=mode, **kwargs)
+        trace = ConsoleTrace3D(key, x, y, z, item, self.view)
+        self._traces[key] = trace
+        self.changed.emit()
+
+        return trace
+
+    def scatter3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
+        key = str(name).strip()
+        if not key:
+            raise ValueError("Trace name cannot be empty")
+
+        # NOTE: this means emitting changed after clear_traces emits it as well
+        # not ideal but can fix later if if causes any issues
+        mode = mode.strip().lower()
+        if mode == "replace":
+            self.clear_traces()
+        elif mode != "overlay":
+            raise ValueError("Mode must be 'replace' or 'overlay'")
+
+        old = self._traces.pop(key, None)
+        if old is not None:
+            old.remove()
+
+        points = self._trace_points(x, y, z)
+        item = self.view.scatter3d(points, mode=mode, **kwargs)
+        trace = ConsoleTrace3D(key, x, y, z, item, self.view)
         self._traces[key] = trace
         self.changed.emit()
 
