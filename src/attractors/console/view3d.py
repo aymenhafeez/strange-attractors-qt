@@ -68,12 +68,13 @@ def normalise_colour(colour):
 
 
 class ConsoleTrace3D:
-    def __init__(self, name, x, y, z, item, explorer, colour=None, size=None):
+    def __init__(self, name, x, y, z, item, explorer, kind, colour=None, size=None):
         self.name = name
         self.x = x
         self.y = y
         self.z = z
         self.item = item
+        self.kind = kind
         self.size = size
         self.colour = colour
         self.explorer = explorer
@@ -98,9 +99,10 @@ class ConsoleTrace3D:
             # arg getting passed to GLLinePlotItem and GLScatterPlotItem which expect 'color' not 'colour'
             kwargs["color"] = colour
 
-        size = self.size_data(len(points))
-        if size is not None:
-            kwargs["size"] = size
+        if self.kind == "scatter3d":
+            size = self.size_data(len(points))
+            if size is not None:
+                kwargs["size"] = size
 
         self.item.setData(**kwargs)
 
@@ -510,7 +512,7 @@ class View3DExplorer(QtCore.QObject):
     def int_slider(self, name, value=0, start=0, end=100, step=1):
         return self.slider(name, int(value), int(start), int(end), int(step))
 
-    def _add_trace3d(self, name, x, y, z, mode, plotter, **kwargs):
+    def _add_trace3d(self, name, x, y, z, mode, plotter, kind, **kwargs):
         key = str(name).strip()
         if not key:
             raise ValueError("Trace name cannot be empty")
@@ -548,12 +550,19 @@ class View3DExplorer(QtCore.QObject):
 
     def line3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
         return self._add_trace3d(
-            name, x, y, z, mode=mode, plotter=self.view.line3d, **kwargs
+            name, x, y, z, mode=mode, plotter=self.view.line3d, kind="line3d", **kwargs
         )
 
     def scatter3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
         return self._add_trace3d(
-            name, x, y, z, mode=mode, plotter=self.view.scatter3d, **kwargs
+            name,
+            x,
+            y,
+            z,
+            mode=mode,
+            plotter=self.view.scatter3d,
+            kind="scatter3d",
+            **kwargs,
         )
 
     def refresh(self):
@@ -587,7 +596,13 @@ class View3DExplorer(QtCore.QObject):
         return {name: param.value for name, param in self._params.items()}
 
     def traces(self):
-        return {name: trace.name for name, trace in self._traces.items()}
+        return {
+            name: {
+                "name": trace.name,
+                "kind": trace.kind,
+            }
+            for name, trace in self._traces.items()
+        }
 
     def slider_names(self):
         return list(self._params)
