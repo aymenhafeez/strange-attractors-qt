@@ -542,7 +542,9 @@ class View3DExplorer(QtCore.QObject):
 
         points = self._trace_points(x, y, z)
         item = plotter(points, mode=mode, **kwargs)
-        trace = ConsoleTrace3D(key, x, y, z, item, self, colour, size)
+        trace = ConsoleTrace3D(
+            key, x, y, z, item, self, kind=kind, colour=colour, size=size
+        )
         self._traces[key] = trace
         self.changed.emit()
 
