@@ -375,6 +375,14 @@ class ConsolePlotManager(QtCore.QObject):
         self._current_name = key
         self.current_changed.emit(key)
 
+    def activate(self, name):
+        key = self._plot_name(name)
+        if key not in self._plots:
+            return
+
+        self._set_current_name(key)
+        self._mark_active()
+
     def _mark_active(self):
         if self._active_callback is not None:
             self._active_callback("plot")
@@ -391,6 +399,9 @@ class ConsolePlotManager(QtCore.QObject):
         plot._manager = self
         dock = Dock(key, size=(10, 6), closable=True)
         dock.addWidget(plot.host)
+
+        dock.activated.connect(lambda plot_name=key: self.activate(plot_name))
+
         dock.sigClosed.connect(lambda _dock, plot_name=key: self._forget(plot_name))
         self._dock_area.addDock(
             dock,
@@ -514,6 +525,8 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             active_callback=self.set_active_view,
         )
 
+        self.view3d_dock.activated.connect(lambda: self.views3d.activate("3D View"))
+
         self.plot_widget = _build_console_plot_widget()
         self.plot = ConsolePlot(
             self.plot_widget, status_callback=self._explore_status_callback
@@ -531,6 +544,8 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             status_callback=self._explore_status_callback,
             active_callback=self.set_active_view,
         )
+
+        self.plot_dock.activated.connect(lambda: self.plots.activate("Plot"))
 
         # self.explorer_params = QtWidgets.QWidget()
         # self.explorer_params_layout = QtWidgets.QVBoxLayout(self.explorer_params)

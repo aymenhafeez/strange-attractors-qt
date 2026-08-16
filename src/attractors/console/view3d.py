@@ -429,6 +429,9 @@ class ConsoleView3DManager(QtCore.QObject):
         view._manager = self
         dock = Dock(key, size=(10, 6), closable=True)
         dock.addWidget(view.host)
+
+        dock.activated.connect(lambda view_name=key: self.activate(view_name))
+
         dock.sigClosed.connect(lambda _dock, view_name=key: self._forget(view_name))
         self._dock_area.addDock(
             dock,
@@ -499,6 +502,14 @@ class ConsoleView3DManager(QtCore.QObject):
 
         self._current_name = key
         self.current_changed.emit(key)
+
+    def activate(self, name):
+        key = self._view_name(name)
+        if key not in self._views:
+            return
+
+        self._set_current_name(key)
+        self._mark_active()
 
     def _mark_active(self):
         if self._active_callback is not None:

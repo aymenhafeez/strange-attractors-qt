@@ -36,9 +36,11 @@ class AreaBoundDockDrop(DockDrop):
 
 class AreaBoundDock(Dock):
     container_changed = QtCore.pyqtSignal()
+    activated = QtCore.pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.label.sigClicked.connect(lambda _label, _event: self.activated.emit())
         self.dockdrop.overlay.setParent(None)
         self.dockdrop.overlay.deleteLater()
         self.dockdrop = AreaBoundDockDrop(self)
@@ -48,6 +50,10 @@ class AreaBoundDock(Dock):
         # c is a container object
         super().containerChanged(c)
         self.container_changed.emit()
+
+    def raiseDock(self):
+        super().raiseDock()
+        self.activated.emit()
 
 
 class AreaBoundDockArea(DockArea):
