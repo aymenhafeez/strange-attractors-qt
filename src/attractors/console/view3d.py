@@ -219,8 +219,18 @@ class ConsoleView3D:
             self._items.pop(index)
             self._points_set.pop(index)
 
+    def point_sets(self):
+        # get the current points from registered traces for fitting the camera
+        point_sets = list(self._points_set)
+
+        if hasattr(self, "explore"):
+            for trace in self.explore._traces.values():
+                point_sets.append(trace.points())
+
+        return point_sets
+
     def fit(self):
-        self.camera_controller.fit_camera_to_solutions(self._points_set)
+        self.camera_controller.fit_camera_to_solutions(self.point_sets())
         return self
 
     def reset_camera(self):
