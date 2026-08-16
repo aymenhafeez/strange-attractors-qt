@@ -255,6 +255,9 @@ class Window(QtWidgets.QMainWindow):
         self.jupyter_console_panel.plots.current_changed.connect(
             lambda _name: self._sync_explore_actions()
         )
+        self.jupyter_console_panel.active_view_changed.connect(
+            self._sync_explore_actions
+        )
         self.system_toolbar.set_solve_state(self._solve_state)
         self.live_plot_controller._sync_plots()
 
@@ -730,6 +733,9 @@ class Window(QtWidgets.QMainWindow):
             state = self._pre_explore_side_panel_state
             self._pre_explore_side_panel_state = None
             self._set_side_panel_actions(left=state["left"], right=state["right"])
+
+    def _current_explorer(self):
+        return self.jupyter_console_panel.plots.current.explore
 
     def _set_side_panel_actions(self, *, left, right):
         with (
@@ -1308,8 +1314,8 @@ class Window(QtWidgets.QMainWindow):
         if not explore_visible:
             return
 
-        plot = self.jupyter_console_panel.plots.current
-        if self._connected_explorer is not plot.explore:
+        explorer = self.jupyter_console_panel.active_explorer()
+        if self._connected_explorer is not explorer:
             if self._connected_explorer is not None:
                 try:
                     self._connected_explorer.changed.disconnect(
@@ -1317,11 +1323,11 @@ class Window(QtWidgets.QMainWindow):
                     )
                 except TypeError:
                     pass
-            self._connected_explorer = plot.explore
+            self._connected_explorer = explorer
             self._connected_explorer.changed.connect(self._sync_explore_actions)
 
-        trace_names = plot.explore.trace_names()
-        slider_names = plot.explore.slider_names()
+        trace_names = explorer.trace_names()
+        slider_names = explorer.slider_names()
 
         self.explore_trace_button.setText(f"Traces: {len(trace_names)}")
         self.explore_clear_sliders_action.setEnabled(bool(slider_names))
@@ -2314,23 +2320,23 @@ class Window(QtWidgets.QMainWindow):
         self._sync_jupyter_workspace_state()
 
     def _clear_current_explore_traces(self):
-        self.jupyter_console_panel.plots.current.explore.clear_traces()
+        self.jupyter_console_panel.active_explorer().clear_traces()
         self.jupyter_console_panel.set_explore_visible(True)
         self._sync_explore_actions()
 
     def _clear_current_explore_sliders(self):
-        self.jupyter_console_panel.plots.current.explore.clear_sliders()
+        self.jupyter_console_panel.active_explorer().clear_sliders()
         self.jupyter_console_panel.set_explore_visible(True)
         self._sync_explore_actions()
 
     def _clear_current_explore(self):
-        self.jupyter_console_panel.plots.current.explore.clear()
+        self.jupyter_console_panel.active_explorer().clear()
         self.jupyter_console_panel.set_explore_visible(True)
         self._sync_explore_actions()
 
     def _remove_current_explore_trace(self, name):
         try:
-            self.jupyter_console_panel.plots.current.explore.remove_trace(name)
+            self.jupyter_console_panel.active_explorer().remove_trace(name)
         except KeyError as exc:
             self._set_app_status(str(exc), error=True)
 

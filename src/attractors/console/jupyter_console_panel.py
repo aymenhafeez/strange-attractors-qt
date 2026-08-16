@@ -285,7 +285,13 @@ class ConsolePlotManager(QtCore.QObject):
     plot_cleared = QtCore.pyqtSignal(str, object)
 
     def __init__(
-        self, dock_area, default_name, default_plot, default_dock, status_callback=None
+        self,
+        dock_area,
+        default_name,
+        default_plot,
+        default_dock,
+        status_callback=None,
+        active_callback=None,
     ):
         super().__init__(dock_area)
         self._dock_area = dock_area
@@ -294,6 +300,7 @@ class ConsolePlotManager(QtCore.QObject):
         self._current_name = default_name
         self._default_name = default_name
         self._status_callback = status_callback
+        self._active_callback = active_callback
         default_plot.explore.status_callback = status_callback
         default_plot._manager = self
 
@@ -321,6 +328,7 @@ class ConsolePlotManager(QtCore.QObject):
 
     def get(self, name, *, activate=True):
         key = self._plot_name(name)
+        self._mark_active()
         try:
             plot = self._plots[key]
         except KeyError as exc:
@@ -344,6 +352,8 @@ class ConsolePlotManager(QtCore.QObject):
             self._set_current_name(new_key)
             return self._plots[new_key]
 
+        self._mark_active()
+
         plot = self._plots.pop(old_key)
         dock = self._docks.pop(old_key)
         self._plots[new_key] = plot
@@ -365,8 +375,13 @@ class ConsolePlotManager(QtCore.QObject):
         self._current_name = key
         self.current_changed.emit(key)
 
+    def _mark_active(self):
+        if self._active_callback is not None:
+            self._active_callback("plot")
+
     def new(self, name=None, *, activate=True):
         key = self._next_name() if name is None else self._plot_name(name)
+        self._mark_active()
         if key in self._plots:
             return self.get(key, activate=activate)
 
@@ -467,6 +482,7 @@ class ConsolePlotManager(QtCore.QObject):
 
 class JupyterConsolePanel(QtWidgets.QWidget):
     close_requested = QtCore.pyqtSignal()
+    active_view_changed = QtCore.pyqtSignal()
 
     def __init__(self, namespace_factory, script_dir=None, parent=None):
         super().__init__(parent)
@@ -474,6 +490,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self._console = None
         self._script_dir = script_dir
         self._explore_status_callback = None
+        self._active_view = "plot"
         self.setMinimumHeight(180)
 
         self._layout = QtWidgets.QVBoxLayout(self)
@@ -494,6 +511,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             self.view3d,
             self.view3d_dock,
             status_callback=self._explore_status_callback,
+            active_callback=self.set_active_view,
         )
 
         self.plot_widget = _build_console_plot_widget()
@@ -511,6 +529,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             self.plot,
             self.plot_dock,
             status_callback=self._explore_status_callback,
+            active_callback=self.set_active_view,
         )
 
         # self.explorer_params = QtWidgets.QWidget()
@@ -558,6 +577,22 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             )
             message.setWordWrap(True)
             self._console_layout.addWidget(message)
+
+    def active_view(self):
+        if self._active_view == "view3d":
+            return self.views3d.current
+        return self.plots.current
+
+    def active_explorer(self):
+        return self.active_view().explore
+
+    def set_active_view(self, kind):
+        key = str(kind).strip().lower()
+        if key not in {"plot", "view3d"}:
+            raise ValueError("Active view kind must be 'plot' or 'view3d'")
+
+        self._active_view = key
+        self.active_view_changed.emit()
 
     def ensure_console(self):
         if self._console is not None or CONSOLE_IMPORT_ERROR is not None:

@@ -159,7 +159,7 @@ class ConsoleView3D:
         self._items = []
         self._status_callback = status_callback
 
-        self._point_set = []
+        self._point_sets = []
 
         self.host = QtWidgets.QWidget()
         # layout reserved name in Qt so using v_layout instead
@@ -230,11 +230,11 @@ class ConsoleView3D:
             index = self._items.index(item)
             self.view.removeItem(item)
             self._items.pop(index)
-            self._point_set.pop(index)
+            self._point_sets.pop(index)
 
     def point_sets(self):
         # get the current points from registered traces for fitting the camera
-        point_sets = list(self._point_set)
+        point_sets = list(self._point_sets)
 
         if hasattr(self, "explore"):
             for trace in self.explore._traces.values():
@@ -293,7 +293,7 @@ class ConsoleView3D:
 
         self.view.addItem(item)
         self._items.append(item)
-        self._point_set.append(points)
+        self._point_sets.append(points)
         self.camera_controller.fit_camera_to_solutions([points])
 
         return item
@@ -330,7 +330,7 @@ class ConsoleView3D:
         item.setGLOptions("additive")
         self.view.addItem(item)
         self._items.append(item)
-        self._point_set.append(points)
+        self._point_sets.append(points)
         self.camera_controller.fit_camera_to_solutions([points])
 
         return item
@@ -344,7 +344,13 @@ class ConsoleView3DManager(QtCore.QObject):
     view_cleared = QtCore.pyqtSignal(str, object)
 
     def __init__(
-        self, dock_area, default_name, default_view, default_dock, status_callback=None
+        self,
+        dock_area,
+        default_name,
+        default_view,
+        default_dock,
+        status_callback=None,
+        active_callback=None,
     ):
         super().__init__(dock_area)
         self._dock_area = dock_area
@@ -353,6 +359,7 @@ class ConsoleView3DManager(QtCore.QObject):
         self._default_name = default_name
         self._current_name = default_name
         self._status_callback = status_callback
+        self._active_callback = active_callback
         default_view._manager = self
 
     @property
@@ -368,6 +375,7 @@ class ConsoleView3DManager(QtCore.QObject):
 
     def get(self, name, *, activate=True):
         key = self._view_name(name)
+        self._mark_active()
         try:
             view = self._views[key]
         except KeyError as exc:
@@ -392,6 +400,8 @@ class ConsoleView3DManager(QtCore.QObject):
             self._set_current_name(new_key)
             return self._views[new_key]
 
+        self._mark_active()
+
         view = self._views.pop(old_key)
         dock = self._docks.pop(old_key)
         self._views[new_key] = view
@@ -410,6 +420,7 @@ class ConsoleView3DManager(QtCore.QObject):
 
     def new(self, name=None, *, activate=True):
         key = self._next_name() if name is None else self._view_name(name)
+        self._mark_active()
         if key in self._views:
             return self.get(key, activate=activate)
 
@@ -488,6 +499,10 @@ class ConsoleView3DManager(QtCore.QObject):
 
         self._current_name = key
         self.current_changed.emit(key)
+
+    def _mark_active(self):
+        if self._active_callback is not None:
+            self._active_callback("view3d")
 
     def _forget(self, name):
         if name == self._default_name:
@@ -655,6 +670,17 @@ class View3DExplorer(QtCore.QObject):
         self._params.clear()
         self.param_widget.setVisible(False)
         self.changed.emit()
+
+    def remove_trace(self, name):
+        key = str(name).strip()
+        trace = self._traces.pop(key, None)
+        if trace is None:
+            raise KeyError(f"No trace named {key!r}")
+
+        trace.remove()
+        self.changed.emit()
+
+        return self.traces()
 
     def params(self):
         return {name: param.value for name, param in self._params.items()}
