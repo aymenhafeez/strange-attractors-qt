@@ -148,6 +148,8 @@ class ConsoleView3D:
         self._items = []
         self._status_callback = status_callback
 
+        self._points_set = []
+
         self.host = QtWidgets.QWidget()
         # layout reserved name in Qt so using v_layout instead
         self.v_layout = QtWidgets.QVBoxLayout(self.host)
@@ -212,8 +214,22 @@ class ConsoleView3D:
 
     def remove_item(self, item):
         if item in self._items:
+            index = self._items.index(item)
             self.view.removeItem(item)
-            self._items.remove(item)
+            self._items.pop(index)
+            self._points_set.pop(index)
+
+    def fit(self):
+        self.camera_controller.fit_camera_to_solutions(self._points_set)
+        return self
+
+    def reset_camera(self):
+        self.view.setCameraPosition(distance=10, elevation=20, azimuth=45)
+        return self
+
+    def grid(self, visible=True):
+        self.grid_overlay.set_grid_visible(visible)
+        return self
 
     def auto_range(self):
         # TODO: fill this in once items are exposing their data
@@ -256,6 +272,7 @@ class ConsoleView3D:
 
         self.view.addItem(item)
         self._items.append(item)
+        self._points_set.append(points)
         self.camera_controller.fit_camera_to_solutions([points])
 
         return item
@@ -288,6 +305,7 @@ class ConsoleView3D:
         item.setGLOptions("additive")
         self.view.addItem(item)
         self._items.append(item)
+        self._points_set.append(points)
         self.camera_controller.fit_camera_to_solutions([points])
 
         return item
@@ -426,6 +444,15 @@ class ConsoleView3DManager(QtCore.QObject):
 
     def scatter3d(self, *args, **kwargs):
         return self.current.scatter3d(*args, **kwargs)
+
+    def fit(self):
+        return self.current.fit()
+
+    def reset_camera(self):
+        return self.current.reset_camera()
+
+    def grid(self, visible=True):
+        return self.current.grid(visible)
 
     def _raise_dock(self, dock):
         container = dock.container()
