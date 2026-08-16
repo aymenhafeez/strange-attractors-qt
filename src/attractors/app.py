@@ -872,12 +872,11 @@ class Window(QtWidgets.QMainWindow):
         workspace_menu.addSeparator()
         workspace_menu.addAction("New plot", self._new_live_plot)
         workspace_menu.addAction(
-            "Clear current plot",
-            self.live_plot_controller._clear_plot,
+            "Clear current view",
+            self._clear_current_workspace_view,
         )
         workspace_menu.addAction(
-            "Clear all plots",
-            self.live_plot_controller._clear_all_plots,
+            "Clear all workspace views", self._clear_all_workspace_views
         )
         workspace_menu.addSeparator()
         workspace_menu.addAction("Clear sliders", self._clear_current_explore_sliders)
@@ -1201,7 +1200,7 @@ class Window(QtWidgets.QMainWindow):
             action.setVisible(False)
 
     def _add_jupyter_plot_controls(self, toolbar):
-        label = QtWidgets.QLabel("Plot")
+        label = QtWidgets.QLabel("View")
         label.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self._jupyter_toolbar_actions.append(toolbar.addWidget(label))
 
@@ -1226,35 +1225,58 @@ class Window(QtWidgets.QMainWindow):
         )
 
         icon_specs = [
-            (
-                "New",
-                "list-add",
-                QtWidgets.QStyle.StandardPixmap.SP_FileIcon,
-                lambda: self._new_live_plot(),
-                "Create a new console plot",
-            ),
+            # (
+            #     "New",
+            #     "list-add",
+            #     QtWidgets.QStyle.StandardPixmap.SP_FileIcon,
+            #     lambda: self._new_live_plot(),
+            #     "Create a new workspace view",
+            # ),
             (
                 "Rename",
                 "edit-rename",
                 QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
                 lambda: self._rename_current_live_plot(),
-                "Rename the current console plot",
+                "Rename the current workspace view",
             ),
             (
                 "Clear",
                 "edit-clear-history",
                 QtWidgets.QStyle.StandardPixmap.SP_DialogDiscardButton,
-                lambda: self.live_plot_controller._clear_plot(),
-                "Clear the current console plot",
+                lambda: self._clear_current_workspace_view(),
+                "Clear the current view",
             ),
             (
                 "Clear all",
                 "edit-delete",
                 QtWidgets.QStyle.StandardPixmap.SP_TrashIcon,
-                lambda: self.live_plot_controller._clear_all_plots(),
-                "Clear all console plots",
+                lambda: self._clear_all_workspace_views(),
+                "Clear all workspace views",
             ),
         ]
+
+        new_button = QtWidgets.QToolButton()
+        new_button.setText("New")
+        new_button.setIcon(
+            self._toolbar_icon(
+                "list-add", QtWidgets.QStyle.StandardPixmap.SP_FileDialogNewFolder
+            )
+        )
+        new_button.setToolTip("Create a new workspace view")
+        new_button.setPopupMode(
+            QtWidgets.QToolButton.ToolButtonPopupMode.MenuButtonPopup
+        )
+
+        new_menu = QtWidgets.QMenu(new_button)
+        new_plot_action = new_menu.addAction("New 2D plot")
+        new_plot_action.triggered.connect(lambda: self._new_live_plot())
+        new_view3d_action = new_menu.addAction("New 3D view")
+        new_view3d_action.triggered.connect(lambda: self._new_3d_view())
+        new_button.setMenu(new_menu)
+
+        new_action = toolbar.addWidget(new_button)
+        self._jupyter_toolbar_actions.append(new_action)
+
         for text, theme_name, fallback_icon, callback, tooltip in icon_specs:
             action = toolbar.addAction(
                 self._toolbar_icon(theme_name, fallback_icon),
@@ -1265,11 +1287,12 @@ class Window(QtWidgets.QMainWindow):
             self._jupyter_toolbar_actions.append(action)
             self._keep_toolbar_action_from_taking_focus(toolbar, action)
         self.live_plot_controller._sync_plots()
+        self._keep_toolbar_action_from_taking_focus(toolbar, new_action)
 
         self.explore_trace_button = QtWidgets.QToolButton()
         self.explore_trace_button.setText("Traces: 0")
         self.explore_trace_button.setToolTip(
-            "Manage reactive traces for the current plot"
+            "Manage reactive traces for the current view"
         )
         self.explore_trace_button.setPopupMode(
             QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
@@ -1286,7 +1309,7 @@ class Window(QtWidgets.QMainWindow):
             self._clear_current_explore_sliders,
         )
         self.explore_clear_sliders_action.setToolTip(
-            "Clear sliders for the current plot"
+            "Clear sliders for the current view"
         )
 
         self.explore_clear_state_action = toolbar.addAction(
@@ -1297,7 +1320,7 @@ class Window(QtWidgets.QMainWindow):
             self._clear_current_explore,
         )
         self.explore_clear_state_action.setToolTip(
-            "Clear sliders and reactive traces for the current plot"
+            "Clear sliders and reactive traces for the current view"
         )
 
         self._jupyter_toolbar_actions.extend(
@@ -2333,6 +2356,28 @@ class Window(QtWidgets.QMainWindow):
         self.jupyter_console_panel.plots.new()
         self._sync_jupyter_workspace_state()
 
+    def _new_3d_view(self):
+        self.jupyter_console_panel.views3d.new()
+        self._sync_jupyter_workspace_state()
+
+    def _clear_current_workspace_view(self):
+        kind, name = self.jupyter_console_panel.active_view_key()
+
+        if kind == "plot":
+            self.live_plot_controller._clear_plot()
+        else:
+            self.jupyter_console_panel.views3d.clear()
+            self.system_toolbar.set_status("Cleared current 3D view")
+            self.live_plot_controller._sync_plots()
+            self._sync_explore_actions()
+
+    def _clear_all_workspace_views(self):
+        self.live_plot_controller._clear_all_plots()
+        self.jupyter_console_panel.views3d.clear_all()
+        self.system_toolbar.set_status("Cleared workspace views")
+        self.live_plot_controller._sync_plots()
+        self._sync_explore_actions()
+
     def _clear_current_explore_traces(self):
         self.jupyter_console_panel.active_explorer().clear_traces()
         self.jupyter_console_panel.set_explore_visible(True)
@@ -2380,7 +2425,7 @@ class Window(QtWidgets.QMainWindow):
         return "\n".join(
             [
                 f"Plots: {', '.join(plot_names)}",
-                f"Current plot: {plots.current_name}",
+                f"Current view: {plots.current_name}",
                 f"Sliders: {', '.join(slider_names)}",
                 f"Traces: {', '.join(trace_names)}",
             ]
