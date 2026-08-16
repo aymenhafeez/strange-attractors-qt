@@ -65,6 +65,19 @@ def normalise_colour(colour):
     )
 
 
+def normalise_size(size, n):
+    if np.isscalar(size):
+        return float(size)
+
+    data = np.asarray(size, dtype=np.float64)
+    if data.ndim != 1:
+        raise ValueError("Size must be a number of 1D array")
+    if not np.all(np.isfinite(data)):
+        raise ValueError("Size can't contain non finite values")
+
+    return data
+
+
 class ConsoleTrace3D:
     def __init__(self, name, x, y, z, item, explorer, kind, colour=None, size=None):
         self.name = name
@@ -137,7 +150,7 @@ class ConsoleTrace3D:
         if not np.all(np.isfinite(size)):
             raise ValueError("Size can't contain non finite values")
 
-        return size
+        return normalise_size(size_data, n)
 
 
 class ConsoleView3D:
@@ -241,10 +254,6 @@ class ConsoleView3D:
         self.grid_overlay.set_grid_visible(visible)
         return self
 
-    def auto_range(self):
-        # TODO: fill this in once items are exposing their data
-        pass
-
     def clear_for_mode(self, mode):
         mode = str(mode).strip().lower()
         if mode == "replace":
@@ -271,6 +280,8 @@ class ConsoleView3D:
             self.clear()
 
         colour = normalise_colour(colour)
+        if isinstance(colour, np.ndarray) and len(colour) != len(points):
+            raise ValueError("Colour array must be the same length as points")
 
         item = gl.GLLinePlotItem(
             pos=points,
@@ -304,6 +315,10 @@ class ConsoleView3D:
             self.clear()
 
         colour = normalise_colour(colour)
+        if isinstance(colour, np.ndarray) and len(colour) != len(points):
+            raise ValueError("Colour array must be the same length as points")
+
+        size = normalise_size(size, len(points))
 
         item = gl.GLScatterPlotItem(
             pos=points,
@@ -444,9 +459,6 @@ class ConsoleView3DManager(QtCore.QObject):
         view = self.current
         view.clear()
         self.view_cleared.emit(self._current_name, view)
-
-    def auto_range(self):
-        self.current.auto_range()
 
     # convenience, so views3d.line/scatter3d(points) works
     def line3d(self, *args, **kwargs):
