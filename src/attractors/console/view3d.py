@@ -208,6 +208,8 @@ class ConsoleView3D:
         if hasattr(self, "explore"):
             self.explore.clear_traces()
 
+        self.clear_items()
+
     def clear_items(self):
         for item in list(self._items):
             self.remove_item(item)
