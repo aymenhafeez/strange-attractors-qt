@@ -8,6 +8,7 @@ from ..ui.docking import AreaBoundDockArea as DockArea
 from ..ui.style import CONSOLE_PLOT_PARAMS, is_dark_mode
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
+from .view3d import ConsoleView3D, ConsoleView3DManager
 
 try:
     from qtconsole import inprocess
@@ -48,6 +49,9 @@ class _RichJupyterConsole(_BaseJupyterConsole):
         self.kernel_manager = inprocess.QtInProcessKernelManager()
         self.kernel_manager.start_kernel()
         self.kernel_client = self.kernel_manager.client()
+        self.kernel_manager.kernel.shell.banner2 = (
+            "Use system.help() to see available system commands"
+        )
         self.kernel_client.start_channels()
         self.kernel_manager.kernel.shell.push(namespace)
 
@@ -281,7 +285,13 @@ class ConsolePlotManager(QtCore.QObject):
     plot_cleared = QtCore.pyqtSignal(str, object)
 
     def __init__(
-        self, dock_area, default_name, default_plot, default_dock, status_callback=None
+        self,
+        dock_area,
+        default_name,
+        default_plot,
+        default_dock,
+        status_callback=None,
+        active_callback=None,
     ):
         super().__init__(dock_area)
         self._dock_area = dock_area
@@ -290,6 +300,7 @@ class ConsolePlotManager(QtCore.QObject):
         self._current_name = default_name
         self._default_name = default_name
         self._status_callback = status_callback
+        self._active_callback = active_callback
         default_plot.explore.status_callback = status_callback
         default_plot._manager = self
 
@@ -317,6 +328,7 @@ class ConsolePlotManager(QtCore.QObject):
 
     def get(self, name, *, activate=True):
         key = self._plot_name(name)
+        self._mark_active()
         try:
             plot = self._plots[key]
         except KeyError as exc:
@@ -340,6 +352,8 @@ class ConsolePlotManager(QtCore.QObject):
             self._set_current_name(new_key)
             return self._plots[new_key]
 
+        self._mark_active()
+
         plot = self._plots.pop(old_key)
         dock = self._docks.pop(old_key)
         self._plots[new_key] = plot
@@ -361,8 +375,21 @@ class ConsolePlotManager(QtCore.QObject):
         self._current_name = key
         self.current_changed.emit(key)
 
+    def activate(self, name):
+        key = self._plot_name(name)
+        if key not in self._plots:
+            return
+
+        self._set_current_name(key)
+        self._mark_active()
+
+    def _mark_active(self):
+        if self._active_callback is not None:
+            self._active_callback("plot")
+
     def new(self, name=None, *, activate=True):
         key = self._next_name() if name is None else self._plot_name(name)
+        self._mark_active()
         if key in self._plots:
             return self.get(key, activate=activate)
 
@@ -372,6 +399,9 @@ class ConsolePlotManager(QtCore.QObject):
         plot._manager = self
         dock = Dock(key, size=(10, 6), closable=True)
         dock.addWidget(plot.host)
+
+        dock.activated.connect(lambda plot_name=key: self.activate(plot_name))
+
         dock.sigClosed.connect(lambda _dock, plot_name=key: self._forget(plot_name))
         self._dock_area.addDock(
             dock,
@@ -463,6 +493,7 @@ class ConsolePlotManager(QtCore.QObject):
 
 class JupyterConsolePanel(QtWidgets.QWidget):
     close_requested = QtCore.pyqtSignal()
+    active_view_changed = QtCore.pyqtSignal()
 
     def __init__(self, namespace_factory, script_dir=None, parent=None):
         super().__init__(parent)
@@ -470,6 +501,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self._console = None
         self._script_dir = script_dir
         self._explore_status_callback = None
+        self._active_view = "plot"
         self.setMinimumHeight(180)
 
         self._layout = QtWidgets.QVBoxLayout(self)
@@ -479,20 +511,41 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.dock_area = DockArea()
         self._layout.addWidget(self.dock_area)
 
+        self.view3d = ConsoleView3D(status_callback=self._explore_status_callback)
+        self.view3d_dock = Dock("3D View", size=(10, 6), closable=False)
+        self.view3d_dock.addWidget(self.view3d.host)
+        self.dock_area.addDock(self.view3d_dock)
+
+        self.views3d = ConsoleView3DManager(
+            self.dock_area,
+            "3D View",
+            self.view3d,
+            self.view3d_dock,
+            status_callback=self._explore_status_callback,
+            active_callback=self.set_active_view,
+        )
+
+        self.view3d_dock.activated.connect(lambda: self.views3d.activate("3D View"))
+
         self.plot_widget = _build_console_plot_widget()
         self.plot = ConsolePlot(
             self.plot_widget, status_callback=self._explore_status_callback
         )
         self.plot_dock = Dock("Plot", size=(10, 6))
         self.plot_dock.addWidget(self.plot.host)
-        self.dock_area.addDock(self.plot_dock)
+        self.dock_area.addDock(
+            self.plot_dock, position="above", relativeTo=self.view3d_dock
+        )
         self.plots = ConsolePlotManager(
             self.dock_area,
             "Plot",
             self.plot,
             self.plot_dock,
             status_callback=self._explore_status_callback,
+            active_callback=self.set_active_view,
         )
+
+        self.plot_dock.activated.connect(lambda: self.plots.activate("Plot"))
 
         # self.explorer_params = QtWidgets.QWidget()
         # self.explorer_params_layout = QtWidgets.QVBoxLayout(self.explorer_params)
@@ -540,6 +593,63 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             message.setWordWrap(True)
             self._console_layout.addWidget(message)
 
+    def active_view(self):
+        if self._active_view == "view3d":
+            return self.views3d.current
+        return self.plots.current
+
+    def active_explorer(self):
+        return self.active_view().explore
+
+    def workspace_view_items(self):
+        items = []
+
+        for name in self.plots.names():
+            items.append(
+                {
+                    "kind": "plot",
+                    "name": name,
+                    "label": name,
+                }
+            )
+
+        for name in self.views3d.names():
+            items.append(
+                {
+                    "kind": "view3d",
+                    "name": name,
+                    "label": f"3D: {name}",
+                }
+            )
+
+        return items
+
+    def active_view_key(self):
+        if self._active_view == "view3d":
+            return ("view3d", self.views3d.current_name)
+
+        return ("plot", self.plots.current_name)
+
+    def set_active_workspace_view(self, kind, name, *, activate=True):
+        key = str(kind).strip().lower()
+        if key == "view3d":
+            return self.views3d.get(name, activate=activate)
+        if key == "plot":
+            return self.plots.get(name, activate=activate)
+
+        raise ValueError("Workspace view kind must be 'plot' or 'view3d'")
+
+    def set_active_view(self, kind):
+        key = str(kind).strip().lower()
+        if key not in {"plot", "view3d"}:
+            raise ValueError("Active view kind must be 'plot' or 'view3d'")
+
+        if self._active_view == key:
+            return
+
+        self._active_view = key
+        self.active_view_changed.emit()
+
     def ensure_console(self):
         if self._console is not None or CONSOLE_IMPORT_ERROR is not None:
             return
@@ -571,6 +681,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         for plot in self.plots._plots.values():
             plot.param_widget.setVisible(bool(visible) and bool(plot.explore.params()))
 
+        for view in self.views3d._views.values():
+            view.param_widget.setVisible(bool(visible) and bool(view.explore.params()))
+
     def apply_explore_layout(self):
         self.set_explore_visible(True)
         self.dock_area.moveDock(self.script_dock, "left", self.plot_dock)
@@ -584,6 +697,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
     def set_explore_status_callback(self, callback):
         self._explore_status_callback = callback
         self.plots.set_status_callback(callback)
+        self.views3d.set_status_callback(callback)
 
 
 class ConsolePlotZoom(QtWidgets.QWidget):

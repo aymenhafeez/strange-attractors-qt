@@ -72,8 +72,12 @@ class SystemToolbar(QtWidgets.QWidget):
 
         self._sync_plot_controls()
 
-    def set_plots(self, names, current_name):
-        self.current_plot_name = current_name if current_name in names else ""
+    def set_plots(self, names, current_key):
+        keys = {(item["kind"], item["name"]) for item in names}
+        if current_key in keys and current_key[0] == "plot":
+            self.current_plot_name = current_key[1]
+        else:
+            self.current_plot_name = ""
 
     def set_live_traces(self, plot_name, traces):
         count = len(traces)

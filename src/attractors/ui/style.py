@@ -100,22 +100,6 @@ RIGHT_PANEL = """
 
 CONSOLE_PLOT_PARAMS = """
     QFrame#ConsolePlotParams {
-        background: palette(window);
         border-top: 2px solid palette(mid);
-    }
-
-    QLabel#ConsolePlotParamTitle {
-        color: palette(text);
-        font-weight: bold;
-        padding-left: 2px;
-    }
-
-    QDoubleSpinBox {
-        background: palette(window);
-    }
-
-    QFrame#ConsolePlotParamControls {
-        background: palette(base);
-        border: 1px solid palette(mid);
     }
 """
