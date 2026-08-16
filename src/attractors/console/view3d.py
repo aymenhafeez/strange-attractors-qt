@@ -47,10 +47,8 @@ def normalise_colour(colour):
 
     data = np.asarray(colour, dtype=np.float64)
 
-    # rbg
     if data.shape == (3,):
         return (data[0], data[1], data[2], 1.0)
-    # rgba
     if data.shape == (4,):
         return tuple(v for v in data)
 
@@ -148,7 +146,7 @@ class ConsoleView3D:
         self._items = []
         self._status_callback = status_callback
 
-        self._points_set = []
+        self._point_set = []
 
         self.host = QtWidgets.QWidget()
         # layout reserved name in Qt so using v_layout instead
@@ -219,11 +217,11 @@ class ConsoleView3D:
             index = self._items.index(item)
             self.view.removeItem(item)
             self._items.pop(index)
-            self._points_set.pop(index)
+            self._point_set.pop(index)
 
     def point_sets(self):
         # get the current points from registered traces for fitting the camera
-        point_sets = list(self._points_set)
+        point_sets = list(self._point_set)
 
         if hasattr(self, "explore"):
             for trace in self.explore._traces.values():
@@ -284,7 +282,7 @@ class ConsoleView3D:
 
         self.view.addItem(item)
         self._items.append(item)
-        self._points_set.append(points)
+        self._point_set.append(points)
         self.camera_controller.fit_camera_to_solutions([points])
 
         return item
@@ -317,7 +315,7 @@ class ConsoleView3D:
         item.setGLOptions("additive")
         self.view.addItem(item)
         self._items.append(item)
-        self._points_set.append(points)
+        self._point_set.append(points)
         self.camera_controller.fit_camera_to_solutions([points])
 
         return item
