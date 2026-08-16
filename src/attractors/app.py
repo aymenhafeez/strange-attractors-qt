@@ -258,6 +258,20 @@ class Window(QtWidgets.QMainWindow):
         self.jupyter_console_panel.active_view_changed.connect(
             self._sync_explore_actions
         )
+        # toolbar actions currently controlled in live plot controller
+        # TODO: some sort of toolbar syncing with explore workspace separate from live plot controller
+        self.jupyter_console_panel.views3d.views_changed.connect(
+            self.live_plot_controller._sync_plots
+        )
+        self.jupyter_console_panel.active_view_changed.connect(
+            self.live_plot_controller._sync_plots
+        )
+        self.jupyter_console_panel.views3d.current_changed.connect(
+            lambda _name: self.live_plot_controller._sync_plots()
+        )
+        self.jupyter_console_panel.views3d.current_changed.connect(
+            lambda _name: self._sync_explore_actions()
+        )
         self.system_toolbar.set_solve_state(self._solve_state)
         self.live_plot_controller._sync_plots()
 
@@ -2343,6 +2357,14 @@ class Window(QtWidgets.QMainWindow):
         self._sync_explore_actions()
 
     def _rename_current_live_plot(self):
+        if self.jupyter_console_panel._active_view == "view3d":
+            old_name = self.jupyter_console_panel.views3d.current_name
+            new_name = self.toolbar_live_plot_name.text().strip()
+            if new_name:
+                self.jupyter_console_panel.views3d.rename(old_name, new_name)
+                self.live_plot_controller._sync_plots()
+            return
+
         old_name = self.jupyter_console_panel.plots.current_name
         new_name = self.toolbar_live_plot_name.text().strip()
         if new_name:

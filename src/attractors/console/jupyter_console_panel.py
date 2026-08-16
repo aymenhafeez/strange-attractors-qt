@@ -586,10 +586,51 @@ class JupyterConsolePanel(QtWidgets.QWidget):
     def active_explorer(self):
         return self.active_view().explore
 
+    def workspace_view_items(self):
+        items = []
+
+        for name in self.plots.names():
+            items.append(
+                {
+                    "kind": "plot",
+                    "name": name,
+                    "label": name,
+                }
+            )
+
+        for name in self.views3d.names():
+            items.append(
+                {
+                    "kind": "view3d",
+                    "name": name,
+                    "label": f"3D: {name}",
+                }
+            )
+
+        return items
+
+    def active_view_key(self):
+        if self._active_view == "view3d":
+            return ("view3d", self.views3d.current_name)
+
+        return ("plot", self.plots.current_name)
+
+    def set_active_workspace_view(self, kind, name, *, activate=True):
+        key = str(kind).strip().lower()
+        if key == "view3d":
+            return self.views3d.get(name, activate=activate)
+        if key == "plot":
+            return self.plots.get(name, activate=activate)
+
+        raise ValueError("Workspace view kind must be 'plot' or 'view3d'")
+
     def set_active_view(self, kind):
         key = str(kind).strip().lower()
         if key not in {"plot", "view3d"}:
             raise ValueError("Active view kind must be 'plot' or 'view3d'")
+
+        if self._active_view == key:
+            return
 
         self._active_view = key
         self.active_view_changed.emit()
