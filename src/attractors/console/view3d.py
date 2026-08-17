@@ -244,6 +244,9 @@ class ConsoleView3D:
         self.grid_overlay.set_grid_visible(visible)
         return self
 
+    def grid_visible(self):
+        return self.grid_overlay._grid_visible
+
     def clear_for_mode(self, mode):
         mode = str(mode).strip().lower()
         if mode == "replace":
@@ -365,13 +368,13 @@ class ConsoleView3DManager(QtCore.QObject):
 
     def get(self, name, *, activate=True):
         key = self._view_name(name)
-        self._mark_active()
         try:
             view = self._views[key]
         except KeyError as exc:
             raise KeyError(f"No console view named {key!r}") from exc
 
         if activate:
+            self._mark_active()
             self._set_current_name(key)
             dock = self._docks[key]
             self._raise_dock(dock)
@@ -410,7 +413,6 @@ class ConsoleView3DManager(QtCore.QObject):
 
     def new(self, name=None, *, activate=True):
         key = self._next_name() if name is None else self._view_name(name)
-        self._mark_active()
         if key in self._views:
             return self.get(key, activate=activate)
 
@@ -431,6 +433,7 @@ class ConsoleView3DManager(QtCore.QObject):
         self._views[key] = view
         self._docks[key] = dock
         if activate:
+            self._mark_active()
             self._set_current_name(key)
             dock.raiseDock()
         self.views_changed.emit()
@@ -485,6 +488,9 @@ class ConsoleView3DManager(QtCore.QObject):
 
     def grid(self, visible=True):
         return self.current.grid(visible)
+
+    def grid_visible(self):
+        return self.current.grid_visible()
 
     def _raise_dock(self, dock):
         container = dock.container()

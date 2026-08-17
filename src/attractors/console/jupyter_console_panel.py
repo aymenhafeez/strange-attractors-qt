@@ -174,6 +174,16 @@ class ConsolePlot:
         if self._zoom is not None:
             self._zoom.set_labels(bottom=bottom, left=left)
 
+    def grid_visible(self):
+        plot_item = self._plot_widget.getPlotItem()
+        return (
+            plot_item.ctrl.xGridCheck.isChecked()
+            and plot_item.ctrl.yGridCheck.isChecked()
+        )
+
+    def set_grid_visible(self, visible):
+        self._plot_widget.showGrid(x=visible, y=visible, alpha=0.25)
+
     def has_item(self, item):
         return item in self._plot_widget.listDataItems()
 
@@ -328,12 +338,12 @@ class ConsolePlotManager(QtCore.QObject):
 
     def get(self, name, *, activate=True):
         key = self._plot_name(name)
-        self._mark_active()
         try:
             plot = self._plots[key]
         except KeyError as exc:
             raise KeyError(f"No console plot named {key!r}") from exc
         if activate:
+            self._mark_active()
             self._set_current_name(key)
             dock = self._docks[key]
             self._raise_dock(dock)
@@ -389,7 +399,6 @@ class ConsolePlotManager(QtCore.QObject):
 
     def new(self, name=None, *, activate=True):
         key = self._next_name() if name is None else self._plot_name(name)
-        self._mark_active()
         if key in self._plots:
             return self.get(key, activate=activate)
 
@@ -410,7 +419,9 @@ class ConsolePlotManager(QtCore.QObject):
         )
         self._plots[key] = plot
         self._docks[key] = dock
+
         if activate:
+            self._mark_active()
             self._set_current_name(key)
             dock.raiseDock()
         self.plots_changed.emit()
@@ -455,6 +466,12 @@ class ConsolePlotManager(QtCore.QObject):
 
     def set_labels(self, **kwargs):
         self.current.set_labels(**kwargs)
+
+    def grid_visible(self):
+        return self.current.grid_visible()
+
+    def set_grid_visible(self, visible):
+        return self.current.set_grid_visible(visible)
 
     def line(self, *args, zoom_region=False, **kwargs):
         return self.current.line(*args, zoom_region=zoom_region, **kwargs)

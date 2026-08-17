@@ -9,6 +9,7 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 from .console.jupyter_console_panel import JupyterConsolePanel
 from .console.live_plot_controller import LivePlotController
 from .console.system import SystemInspector
+from .console.workspace_controller import WorkspaceController
 from .core.solution_validation import validate_solutions
 from .perf import PerfProfiler, perf_finish, perf_start
 from .presets import (
@@ -146,6 +147,7 @@ class Window(QtWidgets.QMainWindow):
         self._live_plots = {}
         self._live_items = {}
         self.live_plot_controller = LivePlotController(self)
+        self.workspace_controller = WorkspaceController(self)
         self.system = SystemInspector(self)
 
         self.solver = SolveManager(self)
@@ -250,7 +252,7 @@ class Window(QtWidgets.QMainWindow):
             self.live_plot_controller._on_plots_changed
         )
         self.jupyter_console_panel.plots.current_changed.connect(
-            lambda _name: self.live_plot_controller._sync_plots()
+            lambda _name: self.workspace_controller.sync_views()
         )
         self.jupyter_console_panel.plots.current_changed.connect(
             lambda _name: self._sync_explore_actions()
@@ -261,19 +263,19 @@ class Window(QtWidgets.QMainWindow):
         # toolbar actions currently controlled in live plot controller
         # TODO: some sort of toolbar syncing with explore workspace separate from live plot controller
         self.jupyter_console_panel.views3d.views_changed.connect(
-            self.live_plot_controller._sync_plots
+            self.workspace_controller.sync_views
         )
         self.jupyter_console_panel.active_view_changed.connect(
-            self.live_plot_controller._sync_plots
+            self.workspace_controller.sync_views
         )
         self.jupyter_console_panel.views3d.current_changed.connect(
-            lambda _name: self.live_plot_controller._sync_plots()
+            lambda _name: self.workspace_controller.sync_views()
         )
         self.jupyter_console_panel.views3d.current_changed.connect(
             lambda _name: self._sync_explore_actions()
         )
         self.system_toolbar.set_solve_state(self._solve_state)
-        self.live_plot_controller._sync_plots()
+        self.workspace_controller.sync_views()
 
         self._build_toolbar()
         self._build_menu_bar()
@@ -870,13 +872,13 @@ class Window(QtWidgets.QMainWindow):
         examples_menu = workspace_menu.addMenu("Examples")
         self._populate_examples_menu(examples_menu)
         workspace_menu.addSeparator()
-        workspace_menu.addAction("New plot", self._new_live_plot)
+        workspace_menu.addAction("New plot", self.workspace_controller.new_plot)
         workspace_menu.addAction(
             "Clear current view",
-            self._clear_current_workspace_view,
+            self.workspace_controller.clear_current_view,
         )
         workspace_menu.addAction(
-            "Clear all workspace views", self._clear_all_workspace_views
+            "Clear all views", self.workspace_controller.clear_all_views
         )
         workspace_menu.addSeparator()
         workspace_menu.addAction("Clear sliders", self._clear_current_explore_sliders)
@@ -1204,24 +1206,24 @@ class Window(QtWidgets.QMainWindow):
         label.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self._jupyter_toolbar_actions.append(toolbar.addWidget(label))
 
-        self.toolbar_live_plot_combo = QtWidgets.QComboBox()
-        self.toolbar_live_plot_combo.setMinimumWidth(50)
-        self.toolbar_live_plot_combo.setMaximumWidth(130)
-        self.toolbar_live_plot_combo.currentIndexChanged.connect(
-            lambda _index: self.live_plot_controller._on_toolbar_plot_selected()
+        self.toolbar_workspace_combo = QtWidgets.QComboBox()
+        self.toolbar_workspace_combo.setMinimumWidth(50)
+        self.toolbar_workspace_combo.setMaximumWidth(130)
+        self.toolbar_workspace_combo.currentIndexChanged.connect(
+            lambda _index: self.workspace_controller.on_toolbar_view_selected()
         )
         self._jupyter_toolbar_actions.append(
-            toolbar.addWidget(self.toolbar_live_plot_combo)
+            toolbar.addWidget(self.toolbar_workspace_combo)
         )
 
-        self.toolbar_live_plot_name = QtWidgets.QLineEdit()
-        self.toolbar_live_plot_name.setPlaceholderText("Plot name")
-        self.toolbar_live_plot_name.setMaximumWidth(130)
-        self.toolbar_live_plot_name.returnPressed.connect(
-            lambda: self._rename_current_live_plot()
+        self.toolbar_workspace_name = QtWidgets.QLineEdit()
+        self.toolbar_workspace_name.setPlaceholderText("Plot name")
+        self.toolbar_workspace_name.setMaximumWidth(130)
+        self.toolbar_workspace_name.returnPressed.connect(
+            lambda: self.workspace_controller.rename_current_view()
         )
         self._jupyter_toolbar_actions.append(
-            toolbar.addWidget(self.toolbar_live_plot_name)
+            toolbar.addWidget(self.toolbar_workspace_name)
         )
 
         icon_specs = [
@@ -1236,22 +1238,38 @@ class Window(QtWidgets.QMainWindow):
                 "Rename",
                 "edit-rename",
                 QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
-                lambda: self._rename_current_live_plot(),
+                lambda: self.workspace_controller.rename_current_view(),
                 "Rename the current workspace view",
             ),
             (
                 "Clear",
                 "edit-clear-history",
                 QtWidgets.QStyle.StandardPixmap.SP_DialogDiscardButton,
-                lambda: self._clear_current_workspace_view(),
+                lambda: self.workspace_controller.clear_current_view(),
                 "Clear the current view",
             ),
             (
                 "Clear all",
                 "edit-delete",
                 QtWidgets.QStyle.StandardPixmap.SP_TrashIcon,
-                lambda: self._clear_all_workspace_views(),
-                "Clear all workspace views",
+                lambda: self.workspace_controller.clear_all_views(),
+                "Clear all views",
+            ),
+            (
+                "Fit",
+                "view-fullscreen",
+                # QtGui.QIcon.fromTheme("view-fullscreen"),
+                QtWidgets.QStyle.StandardPixmap.SP_TitleBarMaxButton,
+                lambda: self.workspace_controller.fit_current_view(),
+                "Fit current view",
+            ),
+            (
+                "Reset",
+                "zoom-original",
+                # QtGui.QIcon.fromTheme("zoom-original"),
+                QtWidgets.QStyle.StandardPixmap.SP_BrowserReload,
+                lambda: self.workspace_controller.reset_current_view(),
+                "Reset camera",
             ),
         ]
 
@@ -1269,9 +1287,11 @@ class Window(QtWidgets.QMainWindow):
 
         new_menu = QtWidgets.QMenu(new_button)
         new_plot_action = new_menu.addAction("New 2D plot")
-        new_plot_action.triggered.connect(lambda: self._new_live_plot())
+        new_plot_action.triggered.connect(lambda: self.workspace_controller.new_plot())
         new_view3d_action = new_menu.addAction("New 3D view")
-        new_view3d_action.triggered.connect(lambda: self._new_3d_view())
+        new_view3d_action.triggered.connect(
+            lambda: self.workspace_controller.new_view3d()
+        )
         new_button.setMenu(new_menu)
 
         new_action = toolbar.addWidget(new_button)
@@ -1286,8 +1306,24 @@ class Window(QtWidgets.QMainWindow):
             action.triggered.connect(callback)
             self._jupyter_toolbar_actions.append(action)
             self._keep_toolbar_action_from_taking_focus(toolbar, action)
-        self.live_plot_controller._sync_plots()
+        self.workspace_controller.sync_views()
         self._keep_toolbar_action_from_taking_focus(toolbar, new_action)
+
+        self.workspace_grid_action = toolbar.addAction(
+            self._toolbar_icon(
+                "view-grid", QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView
+            ),
+            "Grid",
+        )
+        self.workspace_grid_action.setCheckable(True)
+        self.workspace_grid_action.setChecked(True)
+        self.workspace_grid_action.setToolTip("Toggle grid visibility")
+        self.workspace_grid_action.toggled.connect(
+            self.workspace_controller.set_current_grid_visible
+        )
+        self._jupyter_toolbar_actions.append(self.workspace_grid_action)
+        self._keep_toolbar_action_from_taking_focus(toolbar, self.workspace_grid_action)
+        self.workspace_controller.sync_grid_action()
 
         self.explore_trace_button = QtWidgets.QToolButton()
         self.explore_trace_button.setText("Traces: 0")
@@ -2352,32 +2388,6 @@ class Window(QtWidgets.QMainWindow):
             )
             self._sync_toolbar_panel_actions()
 
-    def _new_live_plot(self):
-        self.jupyter_console_panel.plots.new()
-        self._sync_jupyter_workspace_state()
-
-    def _new_3d_view(self):
-        self.jupyter_console_panel.views3d.new()
-        self._sync_jupyter_workspace_state()
-
-    def _clear_current_workspace_view(self):
-        kind, name = self.jupyter_console_panel.active_view_key()
-
-        if kind == "plot":
-            self.live_plot_controller._clear_plot()
-        else:
-            self.jupyter_console_panel.views3d.clear()
-            self.system_toolbar.set_status("Cleared current 3D view")
-            self.live_plot_controller._sync_plots()
-            self._sync_explore_actions()
-
-    def _clear_all_workspace_views(self):
-        self.live_plot_controller._clear_all_plots()
-        self.jupyter_console_panel.views3d.clear_all()
-        self.system_toolbar.set_status("Cleared workspace views")
-        self.live_plot_controller._sync_plots()
-        self._sync_explore_actions()
-
     def _clear_current_explore_traces(self):
         self.jupyter_console_panel.active_explorer().clear_traces()
         self.jupyter_console_panel.set_explore_visible(True)
@@ -2400,20 +2410,6 @@ class Window(QtWidgets.QMainWindow):
             self._set_app_status(str(exc), error=True)
 
         self._sync_explore_actions()
-
-    def _rename_current_live_plot(self):
-        if self.jupyter_console_panel._active_view == "view3d":
-            old_name = self.jupyter_console_panel.views3d.current_name
-            new_name = self.toolbar_live_plot_name.text().strip()
-            if new_name:
-                self.jupyter_console_panel.views3d.rename(old_name, new_name)
-                self.live_plot_controller._sync_plots()
-            return
-
-        old_name = self.jupyter_console_panel.plots.current_name
-        new_name = self.toolbar_live_plot_name.text().strip()
-        if new_name:
-            self.live_plot_controller._rename_plot(old_name, new_name)
 
     def _workspace_summary(self):
         plots = self.jupyter_console_panel.plots

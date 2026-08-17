@@ -51,7 +51,7 @@ class LivePlotController:
     def live_items(self, value):
         self.window._live_items = value
 
-    def _rename_plot(self, old_name, new_name):
+    def rename_plot(self, old_name, new_name):
         live_specs = self.live_plots.get(old_name)
         auto_pen_index = self._auto_pen_indices.get(old_name)
         try:
@@ -72,55 +72,6 @@ class LivePlotController:
         if auto_pen_index is not None:
             self._auto_pen_indices.pop(old_name, None)
             self._auto_pen_indices[new_name] = auto_pen_index
-
-    def _sync_plots(self):
-        window_state = vars(self.window)
-        combo = window_state.get("toolbar_live_plot_combo")
-        name_edit = window_state.get("toolbar_live_plot_name")
-        if combo is None or name_edit is None:
-            return
-
-        items = self.window.jupyter_console_panel.workspace_view_items()
-        active_key = self.window.jupyter_console_panel.active_view_key()
-        with QtCore.QSignalBlocker(combo):
-            combo.clear()
-
-            current_index = -1
-            for item in items:
-                key = (item["kind"], item["name"])
-                combo.addItem(item["label"], key)
-                combo.setItemData(
-                    combo.count() - 1,
-                    self._plot_combo_tooltip(item["name"])
-                    if item["kind"] == "plot"
-                    else f"{item['name']}: 3D view",
-                    QtCore.Qt.ItemDataRole.ToolTipRole,
-                )
-
-                if key == active_key:
-                    current_index = combo.count() - 1
-
-            if current_index >= 0:
-                combo.setCurrentIndex(current_index)
-
-        _, name = active_key
-        name_edit.setText(name)
-
-        self.window.system_toolbar.set_plots(items, active_key)
-
-        kind, name = active_key
-        # keep solve linked traces 2D only
-        if kind == "plot":
-            self._sync_live_menu(name)
-        else:
-            self.window.system_toolbar.set_live_traces("", [])
-
-    def _plot_combo_label(self, plot_name):
-        count = len(self.live_plots.get(plot_name, []))
-        if count == 0:
-            return str(plot_name)
-
-        return f"{plot_name} ({count})"
 
     def _plot_combo_tooltip(self, plot_name):
         count = len(self.live_plots.get(plot_name, []))
@@ -183,24 +134,6 @@ class LivePlotController:
 
         return "full solve"
 
-    def _on_toolbar_plot_selected(self):
-        combo = self.window.toolbar_live_plot_combo
-        data = combo.currentData()
-
-        if isinstance(data, tuple) and len(data) == 2:
-            kind, name = data
-            self.window.jupyter_console_panel.set_active_workspace_view(kind, name)
-            self._sync_plots()
-            self.window._sync_explore_actions()
-            return
-
-        plot_name = combo.currentText().strip()
-        if not plot_name:
-            return
-
-        self.window.toolbar_live_plot_name.setText(plot_name)
-        self.window.jupyter_console_panel.plots.get(plot_name)
-
     def _on_plot_requested(self, kind, options):
         plot_options = dict(options)
         live = bool(plot_options.pop("live", True))
@@ -249,7 +182,7 @@ class LivePlotController:
         plotter(*args, plot=target, mode=mode, **kwargs)
 
         self.window.system_toolbar.set_status(f"Ran {kind} plot")
-        self._sync_plots()
+        self.window.workspace_controller.sync_views()
 
     def _console_plot_call(self, kind, options):
         if kind == "axis":
@@ -309,12 +242,14 @@ class LivePlotController:
     def _on_plots_changed(self):
         names = set(self.window.jupyter_console_panel.plots.names())
         live_plots = self.live_plots
+
         for name in list(live_plots):
             if name not in names:
                 live_plots.pop(name, None)
                 self._clear_live_items(name)
                 self._auto_pen_indices.pop(name, None)
-        self._sync_plots()
+
+        self.window.workspace_controller.sync_views()
 
     def _clear_plot(self):
         plot_name = self.window.jupyter_console_panel.plots.current_name
@@ -362,7 +297,8 @@ class LivePlotController:
             self.live_plots[plot_name] = [spec]
             self._clear_live_items(plot_name)
         self._refresh_live_plot(plot_name)
-        self._sync_plots()
+        self.window.workspace_controller.sync_views()
+
         return pd.Series(spec)
 
     def _live_plot_frame(self):
