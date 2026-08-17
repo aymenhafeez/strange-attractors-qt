@@ -50,7 +50,8 @@ class _RichJupyterConsole(_BaseJupyterConsole):
         self.kernel_manager.start_kernel()
         self.kernel_client = self.kernel_manager.client()
         self.kernel_manager.kernel.shell.banner2 = (
-            "Use system.help() to see available system commands"
+            "Use system.help() to see available system commands\n"
+            "Use workspace.help() to see available workspace commands"
         )
         self.kernel_client.start_channels()
         self.kernel_manager.kernel.shell.push(namespace)

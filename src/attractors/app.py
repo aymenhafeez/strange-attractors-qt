@@ -6,10 +6,12 @@ import pandas as pd
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
+from .console.colour import colourmap
 from .console.jupyter_console_panel import JupyterConsolePanel
 from .console.live_plot_controller import LivePlotController
 from .console.system import SystemInspector
 from .console.workspace_controller import WorkspaceController
+from .console.workspace_inspector import WorkspaceInspector
 from .core.solution_validation import validate_solutions
 from .perf import PerfProfiler, perf_finish, perf_start
 from .presets import (
@@ -280,6 +282,8 @@ class Window(QtWidgets.QMainWindow):
         self._build_toolbar()
         self._build_menu_bar()
         self._build_status_bar()
+
+        self.workspace_inspector = WorkspaceInspector(self.jupyter_console_panel)
 
         self.workspace_dock_area = DockArea()
         self.viewport_dock = Dock("Viewport", size=(10, 12))
@@ -1706,6 +1710,7 @@ class Window(QtWidgets.QMainWindow):
             "np": np,
             "pd": pd,
             "pg": pg,
+            "colourmap": colourmap,
             "system": self.system,
             "plot": plot,
             "plots": self.jupyter_console_panel.plots,
@@ -1715,6 +1720,7 @@ class Window(QtWidgets.QMainWindow):
             "current_view3d": lambda: self.jupyter_console_panel.views3d.current,
             "current_values": lambda: self.system.values,
             "scripts_dir": self._scripts_directory,
+            "workspace": self.workspace_inspector,
         }
 
     def _set_console_parameters(self, values, *, solve=False):
