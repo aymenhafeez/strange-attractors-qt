@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from pyqtgraph.Qt import QtWidgets
+from pyqtgraph.Qt import QtGui, QtWidgets
 
 from attractors.console.jupyter_console_panel import JupyterConsolePanel
 from attractors.console.workspace_controller import WorkspaceController
@@ -145,3 +145,41 @@ def test_workspace_controller_2d_renames(qapp):
 
     assert panel.plots.names() == ["Plot", "New 2D Test"]
     assert window.live_plot_controller.renames == [("2D Test", "New 2D Test")]
+
+
+def test_workspace_controller_grid_action_3d_sync(qapp):
+    panel = JupyterConsolePanel(dict)
+    panel.views3d.new("A", activate=False)
+    panel.views3d.new("B", activate=False)
+
+    view_a = panel.views3d.get("A", activate=False)
+    view_b = panel.views3d.get("B", activate=False)
+    view_a.grid(False)
+    view_b.grid(True)
+
+    window = _workspace_window(panel)
+    window.workspace_grid_action = QtGui.QAction()
+    window.workspace_grid_action.setCheckable(True)
+    controller = WorkspaceController(window)
+    window.toolbar_workspace_combo.currentIndexChanged.connect(
+        lambda _index: controller.on_toolbar_view_selected()
+    )
+
+    controller.sync_views()
+
+    index_a = _find_combo_data(window.toolbar_workspace_combo, ("view3d", "A"))
+    assert index_a >= 0
+    window.toolbar_workspace_combo.setCurrentIndex(index_a)
+
+    assert panel.active_view_key() == ("view3d", "A")
+    assert window.workspace_grid_action.isChecked() is False
+    assert view_a.grid_visible() is False
+
+    index_b = _find_combo_data(window.toolbar_workspace_combo, ("view3d", "B"))
+    assert index_b >= 0
+    window.toolbar_workspace_combo.setCurrentIndex(index_b)
+
+    assert panel.active_view_key() == ("view3d", "B")
+    assert window.workspace_grid_action.isChecked() is True
+    assert view_b.grid_visible() is True
+    assert view_a.grid_visible() is False
