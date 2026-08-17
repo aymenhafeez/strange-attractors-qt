@@ -77,6 +77,8 @@ class Window(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("Systems analysis")
 
+        self.session_save_state = False
+
         self._initial_full_solves = 0
         self._solve_pending = False
         self._solve_needed = False
@@ -839,8 +841,11 @@ class Window(QtWidgets.QMainWindow):
                 self.scene.trajectory_renderer.solutions
             ),
         )
+
         self._add_menu_action(view_menu, "Grid", self.toolbar_grid_action)
-        self._add_menu_action(view_menu, "Orbit", self.toolbar_orbit_action)
+
+        view_menu.addSeparator()
+        view_menu.addAction("Reset session state", self._reset_session_state)
 
         system_menu = menu_bar.addMenu("&System")
         system_menu.addAction("Solve", lambda: self._on_controls_solve_requested(True))
@@ -2509,7 +2514,7 @@ class Window(QtWidgets.QMainWindow):
                 self.jupyter_console_panel.plots.new(name, activate=False)
 
         for name in view_names:
-            if name != "View 3D":
+            if name != "3D View":
                 self.jupyter_console_panel.views3d.new(name, activate=False)
 
         kind = settings.value("workspace/active_kind", "plot")
@@ -2571,7 +2576,7 @@ class Window(QtWidgets.QMainWindow):
             else:
                 self._close_panel_dock(panel)
 
-        workspace_visible = settings.value("layout/workspace_visible", True, type=bool)
+        workspace_visible = settings.value("layout/workspace_visible", False, type=bool)
         if workspace_visible:
             self._open_workspace_dock()
         else:
@@ -2584,10 +2589,22 @@ class Window(QtWidgets.QMainWindow):
         self._sync_toolbar_panel_actions()
         self.workspace_controller.sync_views()
 
+    def _reset_session_state(self):
+        settings = app_settings()
+        settings.remove("layout")
+        settings.remove("workspace")
+        settings.sync()
+
+        self.session_save_state = True
+        self._set_temporary_app_status("Reset session state for next launch")
+
     def closeEvent(self, a0):
         self.jupyter_console_panel.shutdown_kernel()
         self.scene.camera_controller.set_orbit_mode(False)
         self.scene.animation_controller.stop()
         self.solver.shutdown()
-        self._save_app_layout()
+
+        if not self.session_save_state:
+            self._save_app_layout()
+
         super().closeEvent(a0)
