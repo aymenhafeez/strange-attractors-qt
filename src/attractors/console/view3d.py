@@ -71,7 +71,9 @@ def normalise_size(size, n):
 
     data = np.asarray(size, dtype=np.float64)
     if data.ndim != 1:
-        raise ValueError("Size must be a number of 1D array")
+        raise ValueError("Size must be a number or 1D array")
+    if len(data) != n:
+        raise ValueError("Size array must be the same length as points")
     if not np.all(np.isfinite(data)):
         raise ValueError("Size can't contain non finite values")
 
@@ -137,18 +139,6 @@ class ConsoleTrace3D:
             return None
 
         size_data = self.size() if callable(self.size) else self.size
-
-        if np.isscalar(size_data):
-            return float(size_data)
-
-        size = np.asarray(size_data, dtype=np.float64)
-
-        if size.ndim != 1:
-            raise ValueError("Size must be one dimensional")
-        if len(size) != n:
-            raise ValueError("Size array must be the same length as points")
-        if not np.all(np.isfinite(size)):
-            raise ValueError("Size can't contain non finite values")
 
         return normalise_size(size_data, n)
 
@@ -431,8 +421,8 @@ class ConsoleView3DManager(QtCore.QObject):
         dock.addWidget(view.host)
 
         dock.activated.connect(lambda view_name=key: self.activate(view_name))
+        dock.sigClosed.connect(self._forget_dock)
 
-        dock.sigClosed.connect(lambda _dock, view_name=key: self._forget(view_name))
         self._dock_area.addDock(
             dock,
             position="above",
@@ -446,6 +436,12 @@ class ConsoleView3DManager(QtCore.QObject):
         self.views_changed.emit()
 
         return view
+
+    def _forget_dock(self, dock):
+        for name, known_dock in self._docks.items():
+            if known_dock is dock:
+                self._forget(name)
+                return
 
     def close(self, name=None):
         key = self._current_name if name is None else self._view_name(name)

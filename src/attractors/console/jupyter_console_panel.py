@@ -401,8 +401,8 @@ class ConsolePlotManager(QtCore.QObject):
         dock.addWidget(plot.host)
 
         dock.activated.connect(lambda plot_name=key: self.activate(plot_name))
+        dock.sigClosed.connect(self._forget_dock)
 
-        dock.sigClosed.connect(lambda _dock, plot_name=key: self._forget(plot_name))
         self._dock_area.addDock(
             dock,
             position="above",
@@ -416,6 +416,12 @@ class ConsolePlotManager(QtCore.QObject):
         self.plots_changed.emit()
 
         return plot
+
+    def _forget_dock(self, dock):
+        for name, known_dock in self._docks.items():
+            if known_dock is dock:
+                self._forget(name)
+                return
 
     def close(self, name=None):
         key = self._current_name if name is None else self._plot_name(name)
