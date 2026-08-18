@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from pyqtgraph.Qt import QtWidgets
 
-from attractors.custom_panel import CustomPanel
+from attractors.ui.custom_panel import CustomPanel
 
 
 @pytest.fixture(scope="session")

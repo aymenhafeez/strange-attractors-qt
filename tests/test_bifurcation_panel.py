@@ -1,7 +1,7 @@
 import pytest
 from pyqtgraph.Qt import QtWidgets
 
-from attractors.bifurcation_panel import BifurcationPanel
+from attractors.ui.bifurcation_panel import BifurcationPanel
 
 
 @pytest.fixture(scope="session")

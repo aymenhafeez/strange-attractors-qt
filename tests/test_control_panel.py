@@ -1,8 +1,8 @@
 import pytest
 from pyqtgraph.Qt import QtWidgets
 
-from attractors.control_panel import _slider_index, _slider_value, ControlPanel
-from attractors.models import AttractorConfig, AttractorParam
+from attractors.core.models import AttractorConfig, AttractorParam
+from attractors.ui.control_panel import ControlPanel, _slider_index, _slider_value
 
 
 @pytest.fixture(scope="session")

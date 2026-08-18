@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from attractors.trajectory_renderer import TrajectoryRenderer
+from attractors.view.trajectory_renderer import TrajectoryRenderer
 
 
 def _manager(trail_mode=False):

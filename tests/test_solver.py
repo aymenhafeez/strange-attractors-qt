@@ -2,9 +2,9 @@ import numba
 import numpy as np
 import pytest
 
-from attractors.expression_parser import compile_system
-from attractors.models import AttractorConfig, AttractorParam
-from attractors.solver import solve_attractor, solve_rk4
+from attractors.core.expression_parser import compile_system
+from attractors.core.models import AttractorConfig, AttractorParam
+from attractors.core.solver import solve_attractor, solve_rk4
 
 
 @numba.njit(nogil=True)

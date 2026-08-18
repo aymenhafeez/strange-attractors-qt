@@ -1,6 +1,6 @@
 import numpy as np
 
-from attractors.view_manager import _decimate_for_display, _decimate_indices
+from attractors.view.trajectory_renderer import _decimate_for_display, _decimate_indices
 
 
 def test_decimate_indices_returns_none_for_short_arrays():

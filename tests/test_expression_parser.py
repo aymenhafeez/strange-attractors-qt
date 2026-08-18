@@ -1,19 +1,20 @@
-import pytest
 import math
-import numpy as np
 
-from attractors.expression_parser import (
+import numpy as np
+import pytest
+
+from attractors.core.expression_parser import (
     BinOp,
     Call,
+    Num,
+    ParseError,
+    UnaryOp,
+    Var,
     _emit,
     compile_system,
     detect_parameters,
-    Num,
-    ParseError,
     parse_expression,
     tokenise,
-    UnaryOp,
-    Var,
 )
 
 

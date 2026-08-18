@@ -2,7 +2,7 @@ import numba
 import numpy as np
 import pytest
 
-from attractors.lyapunov import (
+from attractors.core.lyapunov import (
     _gram_schmidt,
     _numerical_jacobian,
     compute_lyapunov,

@@ -1,7 +1,7 @@
 import numpy as np
 
-from attractors.models import AttractorConfig, TimeDefaults
-from attractors.registry import ATTRACTORS
+from attractors.core.models import AttractorConfig, TimeDefaults
+from attractors.systems.registry import ATTRACTORS
 
 
 def _default_param_values(config):

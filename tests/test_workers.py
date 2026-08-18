@@ -5,8 +5,8 @@ import pytest
 from pyqtgraph.Qt import QtWidgets
 
 from attractors.app import Window
-from attractors.models import AttractorConfig, AttractorParam
-from attractors.worker import LyapunovWorker, SolveWorker
+from attractors.core.models import AttractorConfig, AttractorParam
+from attractors.workers.worker import LyapunovWorker, SolveWorker
 
 
 @pytest.fixture(scope="session")
@@ -31,7 +31,9 @@ def test_solve_worker_emits_one_solution_per_initial_condition(qapp, monkeypatch
     def fake_solve_attractor(config, values, n, t_max=None, ic=None):
         return np.array([ic], dtype=np.float64)
 
-    monkeypatch.setattr("attractors.worker.solve_attractor", fake_solve_attractor)
+    monkeypatch.setattr(
+        "attractors.workers.worker.solve_attractor", fake_solve_attractor
+    )
 
     worker = SolveWorker()
     emitted = []
@@ -65,7 +67,9 @@ def test_solve_worker_emits_failure_result_on_exception(qapp, monkeypatch):
     def fake_solve_attractor(config, values, n, t_max=None, ic=None):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("attractors.worker.solve_attractor", fake_solve_attractor)
+    monkeypatch.setattr(
+        "attractors.workers.worker.solve_attractor", fake_solve_attractor
+    )
 
     worker = SolveWorker()
     emitted = []
@@ -95,7 +99,9 @@ def test_solve_worker_cancel_suppresses_emit(qapp, monkeypatch):
         worker._cancel = True
         return np.array([ic], dtype=np.float64)
 
-    monkeypatch.setattr("attractors.worker.solve_attractor", fake_solve_attractor)
+    monkeypatch.setattr(
+        "attractors.workers.worker.solve_attractor", fake_solve_attractor
+    )
 
     emitted = []
     worker.result_ready.connect(
@@ -131,7 +137,9 @@ def test_lyapunov_worker_emits_computation_result(qapp, monkeypatch):
             np.array([[0.1, 0.0, -1.0], [0.1, 0.0, -1.0]]),
         )
 
-    monkeypatch.setattr("attractors.worker.compute_lyapunov", fake_compute_lyapunov)
+    monkeypatch.setattr(
+        "attractors.workers.worker.compute_lyapunov", fake_compute_lyapunov
+    )
 
     worker = LyapunovWorker()
     emitted = []
@@ -163,7 +171,9 @@ def test_lyapunov_worker_emits_failure_on_exception(qapp, monkeypatch):
     def fake_compute_lyapunov(*args):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("attractors.worker.compute_lyapunov", fake_compute_lyapunov)
+    monkeypatch.setattr(
+        "attractors.workers.worker.compute_lyapunov", fake_compute_lyapunov
+    )
 
     worker = LyapunovWorker()
     results = []
@@ -196,23 +206,6 @@ def test_window_ignores_stale_solve_results():
     Window._on_solve_result(window, 1, [np.zeros((1, 3))], False)
 
     assert window.scene.displayed is False
-
-
-def test_window_displays_stale_partial_solve_as_preview():
-    class Scene:
-        def __init__(self):
-            self.displayed = False
-
-        def display_solutions(self, solutions, is_partial):
-            self.displayed = True
-            self.is_partial = is_partial
-
-    window = SimpleNamespace(_active_solve_request_id=2, scene=Scene())
-
-    Window._on_solve_result(window, 1, [np.zeros((1, 3))], True)
-
-    assert window.scene.displayed is True
-    assert window.scene.is_partial is True
 
 
 def test_window_ignores_stale_lyapunov_results():

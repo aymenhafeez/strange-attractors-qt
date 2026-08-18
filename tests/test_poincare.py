@@ -2,7 +2,8 @@ import numpy as np
 import pytest
 from pyqtgraph.Qt import QtWidgets
 
-from attractors.poincare_panel import compute_poincare_crossings, PoincarePanel
+from attractors.core.sections import plane_crossings
+from attractors.ui.poincare_panel import PoincarePanel
 
 
 @pytest.fixture(scope="session")
@@ -23,7 +24,7 @@ def test_returns_empty_arrays_when_no_crossings():
         dtype=np.float64,
     )
 
-    h, v = compute_poincare_crossings(sol, "x", 10.0)
+    h, v = plane_crossings(sol, "x", 10.0).section_coordinates()
 
     assert h.shape == (0,)
     assert v.shape == (0,)
@@ -38,7 +39,7 @@ def test_rising_crossing_interpolates_plane_x_to_yz():
         dtype=np.float64,
     )
 
-    h, v = compute_poincare_crossings(sol, "x", 0.0, direction="positive")
+    h, v = plane_crossings(sol, "x", 0.0, direction="positive").section_coordinates()
 
     assert h == pytest.approx([15.0])
     assert v == pytest.approx([150.0])
@@ -53,7 +54,7 @@ def test_falling_crossing_interpolates_plane_x_to_yz():
         dtype=np.float64,
     )
 
-    h, v = compute_poincare_crossings(sol, "x", 0.0, direction="negative")
+    h, v = plane_crossings(sol, "x", 0.0, direction="negative").section_coordinates()
 
     assert h == pytest.approx([15.0])
     assert v == pytest.approx([150.0])
@@ -68,7 +69,7 @@ def test_positive_direction_ignores_falling_crossings():
         dtype=np.float64,
     )
 
-    h, v = compute_poincare_crossings(sol, "x", 0.0, direction="positive")
+    h, v = plane_crossings(sol, "x", 0.0, direction="positive").section_coordinates()
 
     assert h.shape == (0,)
     assert v.shape == (0,)
@@ -83,7 +84,7 @@ def test_negative_direction_ignores_rising_crossings():
         dtype=np.float64,
     )
 
-    h, v = compute_poincare_crossings(sol, "x", 0.0, direction="negative")
+    h, v = plane_crossings(sol, "x", 0.0, direction="negative").section_coordinates()
 
     assert h.shape == (0,)
     assert v.shape == (0,)
@@ -100,7 +101,7 @@ def test_both_directions_returns_crossings_in_time_order():
         dtype=np.float64,
     )
 
-    h, v = compute_poincare_crossings(sol, "x", 0.0, direction="both")
+    h, v = plane_crossings(sol, "x", 0.0, direction="both").section_coordinates()
 
     assert h == pytest.approx([15.0, 30.0, 60.0])
     assert v == pytest.approx([150.0, 300.0, 600.0])
@@ -115,7 +116,7 @@ def test_plane_y_returns_xz_coordinates():
         dtype=np.float64,
     )
 
-    h, v = compute_poincare_crossings(sol, "y", 0.0)
+    h, v = plane_crossings(sol, "y", 0.0).section_coordinates()
 
     assert h == pytest.approx([15.0])
     assert v == pytest.approx([150.0])
@@ -130,7 +131,7 @@ def test_plane_z_returns_xy_coordinates():
         dtype=np.float64,
     )
 
-    h, v = compute_poincare_crossings(sol, "z", 0.0)
+    h, v = plane_crossings(sol, "z", 0.0).section_coordinates()
 
     assert h == pytest.approx([15.0])
     assert v == pytest.approx([150.0])
@@ -140,12 +141,16 @@ def test_cancel_solve_marks_worker_cancelled_and_clears_reference(qapp):
     panel = PoincarePanel()
 
     class Worker:
-        _cancel = False
+        def __init__(self):
+            self.cancelled = False
+
+        def cancel(self):
+            self.cancelled = True
 
     worker = Worker()
     panel._worker = worker
 
     panel.cancel_solve()
 
-    assert worker._cancel is True
+    assert worker.cancelled is True
     assert panel._worker is None
