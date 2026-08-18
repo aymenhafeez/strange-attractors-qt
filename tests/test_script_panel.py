@@ -45,3 +45,49 @@ def test_script_restore_rejects_outisde_path(qapp, tmp_path):
 
     assert panel.restore_script(outside) is True
     assert panel.current_script_path() == (scripts_dir / "scratch.py").resolve()
+
+
+def test_script_panel_run_selection(qapp, tmp_path):
+    panel = ScriptPanel(tmp_path / "scripts")
+    emitted = []
+    panel.run_requested.connect(emitted.append)
+
+    panel.editor.setText("x = 1\ny = 2\nprint(x + y)\n")
+    panel.editor.setSelection(1, 0, 1, 5)
+
+    panel.run_selection()
+
+    assert emitted == ["y = 2"]
+
+
+def test_script_panel_run_selection_no_selection(qapp, tmp_path):
+    panel = ScriptPanel(tmp_path / "scripts")
+    emitted = []
+    statuses = []
+    panel.run_requested.connect(emitted.append)
+    panel.status_changed.connect(statuses.append)
+
+    panel.editor.setText("x = 1\n")
+    panel.run_selection()
+
+    assert emitted == []
+    assert statuses[-1] == "No selection scratch.py"
+
+
+def test_script_panel_run_saves_and_emits_full_script(qapp, tmp_path):
+    scripts_dir = tmp_path / "scripts"
+    script = scripts_dir / "test_script.py"
+    scripts_dir.mkdir()
+    script.write_text("old = 1\n", encoding="utf-8")
+
+    panel = ScriptPanel(scripts_dir)
+    panel.load_script(script)
+    panel.editor.setText("new = 2\n")
+
+    emitted = []
+    panel.run_requested.connect(emitted.append)
+
+    panel.run()
+
+    assert emitted == ["new = 2\n"]
+    assert script.read_text(encoding="utf-8") == "new = 2\n"
