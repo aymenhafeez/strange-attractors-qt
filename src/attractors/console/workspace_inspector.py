@@ -58,6 +58,9 @@ HELP_ROWS = [
         "colourmap(values, cmap='viridis')",
         "Map scalar values to RGBA colours",
     ),
+    ("tables", "workspace.help(table=True)", "Show workspace commands in a table dock"),
+    ("tables", "workspace.views(table=True)", "Show workspace views in a table dock"),
+    ("tables", "workspace.summary(table=True)", "Show workspace summary in a table dock"),
 ]
 
 
@@ -71,14 +74,23 @@ class WorkspaceInspector:
 
         return f"ExploreInspector(plots={plots}, views3d={views3d})"
 
-    def help(self):
-        return pd.DataFrame(HELP_ROWS, columns=["category", "command", "description"])
+    def _optional_help_table(self, data, table, name):
+        if not table:
+            return data
 
-    def summary(self):
+        self._console_panel.tables.show(data, name=name)
+        return data
+
+    def help(self, table=False):
+        data = pd.DataFrame(HELP_ROWS, columns=["category", "command", "description"])
+
+        return self._optional_help_table(data, table, "Explore help")
+
+    def summary(self, table=False):
         items = self._console_panel.workspace_view_items()
         active_kind, active_name = self._console_panel.active_view_key()
 
-        return pd.Series(
+        data = pd.Series(
             {
                 "active_kind": active_kind,
                 "active_name": active_name,
@@ -88,7 +100,9 @@ class WorkspaceInspector:
             }
         )
 
-    def views(self):
+        return self._optional_help_table(data, table, "Explore summary")
+
+    def views(self, table=False):
         rows = []
         active_key = self._console_panel.active_view_key()
 
@@ -111,4 +125,6 @@ class WorkspaceInspector:
                 }
             )
 
-        return pd.DataFrame(rows)
+        data = pd.DataFrame(rows)
+
+        return self._optional_help_table(data, table, "Workspace views")

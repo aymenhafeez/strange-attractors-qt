@@ -1731,7 +1731,7 @@ class Window(QtWidgets.QMainWindow):
             "current_view3d": lambda: self.jupyter_console_panel.views3d.current,
             "tables": self.jupyter_console_panel.tables,
             "table": self.jupyter_console_panel.table,
-            "current_table": self.jupyter_console_panel.tables.current,
+            "current_table": lambda: self.jupyter_console_panel.tables.current,
             "current_values": lambda: self.system.values,
             "scripts_dir": self._scripts_directory,
             "workspace": self.workspace_inspector,
