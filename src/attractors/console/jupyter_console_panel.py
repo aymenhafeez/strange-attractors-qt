@@ -8,6 +8,7 @@ from ..ui.docking import AreaBoundDockArea as DockArea
 from ..ui.style import CONSOLE_PLOT_PARAMS, is_dark_mode
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
+from .table import ConsoleTable, ConsoleTableManager
 from .view3d import ConsoleView3D, ConsoleView3DManager
 
 try:
@@ -569,7 +570,22 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             active_callback=self.set_active_view,
         )
 
+        self.table = ConsoleTable()
+        self.table_dock = Dock("Table", size=(10, 6), closable=False)
+        self.table_dock.addWidget(self.table.host)
+        self.dock_area.addDock(
+            self.table_dock, position="above", relativeTo=self.plot_dock
+        )
+        self.tables = ConsoleTableManager(
+            self.dock_area,
+            "Table",
+            self.table,
+            self.table_dock,
+            status_callback=self._explore_status_callback,
+        )
+
         self.plot_dock.activated.connect(lambda: self.plots.activate("Plot"))
+        self.table_dock.activated.connect(lambda: self.tables.activate("Table"))
 
         # self.explorer_params = QtWidgets.QWidget()
         # self.explorer_params_layout = QtWidgets.QVBoxLayout(self.explorer_params)
@@ -722,6 +738,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self._explore_status_callback = callback
         self.plots.set_status_callback(callback)
         self.views3d.set_status_callback(callback)
+        self.tables.set_status_callback(callback)
 
 
 class ConsolePlotZoom(QtWidgets.QWidget):
