@@ -12,11 +12,15 @@ def qapp():
     return app
 
 
-def test_cancel_sweep_marks_worker_cancelled_and_clears_reference(qapp):
+def test_cancel_sweep_cancels_worker(qapp):
     panel = BifurcationPanel()
 
     class Worker:
-        _cancel = False
+        def __init__(self):
+            self.cancelled = False
+
+        def cancel(self):
+            self.cancelled = True
 
     worker = Worker()
     panel._worker = worker
@@ -25,7 +29,7 @@ def test_cancel_sweep_marks_worker_cancelled_and_clears_reference(qapp):
 
     panel.cancel_sweep()
 
-    assert worker._cancel is True
+    assert worker.cancelled is True
     assert panel._worker is None
     assert panel.run_btn.isEnabled()
     assert not panel.cancel_btn.isEnabled()
