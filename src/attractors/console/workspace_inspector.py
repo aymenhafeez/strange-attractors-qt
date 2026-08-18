@@ -61,6 +61,8 @@ HELP_ROWS = [
     ("tables", "workspace.help(table=True)", "Show workspace commands in a table dock"),
     ("tables", "workspace.views(table=True)", "Show workspace views in a table dock"),
     ("tables", "workspace.summary(table=True)", "Show workspace summary in a table dock"),
+    ("tables", "tables.to_csv(path)", "Export the default table to CSV"),
+    ("tables", "tables.export(path, name=None)", "Export a named table to CSV"),
 ]
 
 

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from pyqtgraph.Qt import QtCore, QtWidgets
@@ -159,6 +161,13 @@ class ConsoleTable:
     def dataframe(self):
         return self.model.dataframe()
 
+    def to_csv(self, path, *, index=True, **kwargs):
+        target = Path(path).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        self.dataframe().to_csv(target, index=index, **kwargs)
+
+        return target
+
     def clear(self):
         self.model.set_dataframe(pd.DataFrame())
 
@@ -206,7 +215,7 @@ class ConsoleTableManager(QtCore.QObject):
     def names(self):
         return list(self._tables)
 
-    def get(self, name, *, activate=False):
+    def get(self, name, *, activate=True):
         key = self._table_name(name)
         try:
             table = self._tables[key]
@@ -258,6 +267,17 @@ class ConsoleTableManager(QtCore.QObject):
             self._status_callback(f"Updated table {self._current_name}")
 
         return table
+
+    def export(self, path, name=None, *, index=True, **kwargs):
+        # use the actual table name so status message is accurate if activate=False
+        table_name = self._current_name if name is None else self._table_name(name)
+        table = self.current if name is None else self.get(table_name, activate=False)
+        target = table.to_csv(path, index=index, **kwargs)
+
+        if self._status_callback is not None:
+            self._status_callback(f"Exported table {table_name} to {target}")
+
+        return target
 
     def rename(self, old_name, new_name):
         old_key = self._table_name(old_name)
