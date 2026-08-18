@@ -128,8 +128,11 @@ class ConsoleTable:
         self.view = QtWidgets.QTableView()
         self.view.setAlternatingRowColors(True)
         self.view.setSortingEnabled(False)
+        self.view.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection
+        )
         self.view.setSelectionBehavior(
-            QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows
+            QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
         )
         self.view.setEditTriggers(
             QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers
