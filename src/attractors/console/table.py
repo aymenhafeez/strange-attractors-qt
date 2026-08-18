@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from pyqtgraph.Qt import QtCore, QtWidgets
-from scipy.sparse import data
 
 
 def normalise_table_data(data):
@@ -68,13 +67,13 @@ class ConsoleTableModel(QtCore.QAbstractTableModel):
         super().__init__(parent)
         self._dataframe = pd.DataFrame() if dataframe is None else dataframe.copy()
 
-    def rowCount(self, parent=QtCore.QModelIndex()):
-        if parent.isValid():
+    def rowCount(self, parent=None):
+        if parent is not None and parent.isValid():
             return 0
         return len(self._dataframe)
 
-    def columnCount(self, parent=QtCore.QModelIndex()):
-        if parent.isValid():
+    def columnCount(self, parent=None):
+        if parent is not None and parent.isValid():
             return 0
         return len(self._dataframe.columns)
 
@@ -115,3 +114,47 @@ class ConsoleTableModel(QtCore.QAbstractTableModel):
 
     def dataframe(self):
         return self._dataframe.copy()
+
+
+class ConsoleTable:
+    def __init__(self):
+        self.host = QtWidgets.QWidget()
+        self.layout = QtWidgets.QVBoxLayout(self.host)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+
+        self.view = QtWidgets.QTableView()
+        self.view.setAlternatingRowColors(True)
+        self.view.setSortingEnabled(False)
+        self.view.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.view.setEditTriggers(
+            QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+
+        self.model = ConsoleTableModel(parent=self.view)
+        self.view.setModel(self.model)
+
+        self.layout.addWidget(self.view)
+
+    def __repr__(self):
+        rows = self.model.rowCount()
+        columns = self.model.columnCount()
+
+        return f"ConsoleTable(rows={rows}, columns={columns})"
+
+    def set_data(self, data):
+        dataframe = normalise_table_data(data)
+        self.model.set_dataframe(dataframe)
+        self.view.resizeColumnsToContents()
+
+        return self
+
+    def dataframe(self):
+        return self.model.dataframe()
+
+    def clear(self):
+        self.model.set_dataframe(pd.DataFrame())
+
+        return self
