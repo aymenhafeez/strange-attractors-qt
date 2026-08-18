@@ -280,3 +280,25 @@ def test_workspace_inepector_shows_summary_table(qapp):
 
     assert "Workspace summary" in panel.tables.names()
     assert panel.tables.current.dataframe()["value"].equals(data)
+
+
+def test_console_table_exports_csv(tmp_path, qapp):
+    table = ConsoleTable()
+    table.set_data({"a": [1, 2], "b": ["x", "y"]})
+
+    path = table.to_csv(tmp_path / "table.csv", index=False)
+
+    assert path == tmp_path / "table.csv"
+    assert path.read_text() == "a,b\n1,x\n2,y\n"
+
+
+def test_console_table_manager_exports_named_table(tmp_path, qapp):
+    manager = table_manager()
+    manager.show({"a": [1, 2]}, name="TestTable")
+    manager.show({"b": [3, 4]}, name="AnotherTable")
+
+    path = manager.export(tmp_path / "test.csv", name="TestTable", index=False)
+
+    assert path == tmp_path / "test.csv"
+    assert path.read_text() == "a\n1\n2\n"
+    assert manager.current_name == "AnotherTable"
