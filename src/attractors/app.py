@@ -77,7 +77,7 @@ class Window(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("Systems analysis")
 
-        self.session_save_state = False
+        self.reset_session_state = False
 
         self._initial_full_solves = 0
         self._solve_pending = False
@@ -2498,12 +2498,18 @@ class Window(QtWidgets.QMainWindow):
 
     def _save_workspace_shell(self, settings):
         kind, name = self.jupyter_console_panel.active_view_key()
+        script_path = self.jupyter_console_panel.script_panel.current_script_path()
         settings.setValue("workspace/plots", self.jupyter_console_panel.plots.names())
         settings.setValue(
             "workspace/views3d", self.jupyter_console_panel.views3d.names()
         )
         settings.setValue("workspace/active_kind", kind)
         settings.setValue("workspace/active_name", name)
+
+        if script_path is not None:
+            settings.setValue("workspace/current_script", str(script_path))
+        else:
+            settings.remove("workspace/current_script")
 
     def _restore_workspace_shell(self, settings):
         plot_names = settings.value("workspace/plots", [], type=list)
@@ -2524,6 +2530,9 @@ class Window(QtWidgets.QMainWindow):
             self.jupyter_console_panel.set_active_workspace_view(kind, name)
         except (KeyError, ValueError):
             pass
+
+        script_path = settings.value("workspace/current_script")
+        self.jupyter_console_panel.script_panel.restore_script(script_path)
 
     def _save_app_layout(self):
         settings = app_settings()
@@ -2595,7 +2604,7 @@ class Window(QtWidgets.QMainWindow):
         settings.remove("workspace")
         settings.sync()
 
-        self.session_save_state = True
+        self.reset_session_state = True
         self._set_temporary_app_status("Reset session state for next launch")
 
     def closeEvent(self, a0):
@@ -2604,7 +2613,7 @@ class Window(QtWidgets.QMainWindow):
         self.scene.animation_controller.stop()
         self.solver.shutdown()
 
-        if not self.session_save_state:
+        if not self.reset_session_state:
             self._save_app_layout()
 
         super().closeEvent(a0)

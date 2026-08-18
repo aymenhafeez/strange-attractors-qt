@@ -314,6 +314,23 @@ class ScriptPanel(QtWidgets.QWidget):
 
         return True
 
+    def current_script_path(self):
+        return self.current_path
+
+    def restore_script(self, path):
+        if path is None:
+            return self.load_script(self.script_path)
+
+        try:
+            path = self.store.resolve_script(path)
+        except ValueError:
+            return self.load_script(self.script_path)
+
+        if not path.exists():
+            return self.load_script(self.script_path)
+
+        return self.load_script(path)
+
     def save(self):
         if self.current_path is None:
             self.load()
