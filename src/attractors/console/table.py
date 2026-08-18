@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+from pyqtgraph.Qt import QtCore, QtWidgets
+from scipy.sparse import data
 
 
 def normalise_table_data(data):
@@ -59,3 +61,57 @@ def _noramlise_mapping(data):
 
     except ValueError:
         return pd.DataFrame({"value": data})
+
+
+class ConsoleTableModel(QtCore.QAbstractTableModel):
+    def __init__(self, dataframe=None, parent=None):
+        super().__init__(parent)
+        self._dataframe = pd.DataFrame() if dataframe is None else dataframe.copy()
+
+    def rowCount(self, parent=QtCore.QModelIndex()):
+        if parent.isValid():
+            return 0
+        return len(self._dataframe)
+
+    def columnCount(self, parent=QtCore.QModelIndex()):
+        if parent.isValid():
+            return 0
+        return len(self._dataframe.columns)
+
+    def data(self, index, role=QtCore.Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+
+        if role != QtCore.Qt.ItemDataRole.DisplayRole:
+            return None
+
+        value = self._dataframe.iat[index.row(), index.column()]
+        if pd.isna(value):
+            return ""
+
+        return str(value)
+
+    def headerData(self, section, orientation, role=QtCore.Qt.ItemDataRole.DisplayRole):
+        if role != QtCore.Qt.ItemDataRole.DisplayRole:
+            return None
+
+        if orientation == QtCore.Qt.Orientation.Horizontal:
+            return str(self._dataframe.columns[section])
+
+        return str(self._dataframe.index[section])
+
+    def flags(self, index):
+        if not index.isValid():
+            return QtCore.Qt.ItemFlag.NoItemFlags
+
+        return QtCore.Qt.ItemFlag.ItemIsEnabled | QtCore.Qt.ItemFlag.ItemIsSelectable
+
+    def set_dataframe(self, dataframe):
+        self.beginResetModel()
+        try:
+            self._dataframe = dataframe.copy()
+        finally:
+            self.endResetModel()
+
+    def dataframe(self):
+        return self._dataframe.copy()
