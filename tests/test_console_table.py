@@ -70,6 +70,7 @@ def test_workspace_shell_persists_table_names(qapp):
     assert restored_panel.tables.names() == ["Table", "Test table"]
     assert restored_panel.tables.current_name == "Table"
 
+
 def test_normalise_table_copies_df():
     data = pd.DataFrame({"a": [1, 2], "b": [2, 3]})
 
@@ -248,34 +249,34 @@ def test_console_panel_exposes_table_manager(qapp):
 
 
 def test_workspace_inspector_shows_help_table(qapp):
-	panel = JupyterConsolePanel(dict)
-	inspector = WorkspaceInspector(panel)
+    panel = JupyterConsolePanel(dict)
+    inspector = WorkspaceInspector(panel)
 
-	data = inspector.help(table=True)
+    data = inspector.help(table=True)
 
-	assert "Workspace help" in panel.tables.names()
-	assert panel.tables.current_name == "Workspace help"
-	assert panel.tables.current.dataframe().equals(data)
+    assert "Workspace help" in panel.tables.names()
+    assert panel.tables.current_name == "Workspace help"
+    assert panel.tables.current.dataframe().equals(data)
 
 
 def test_workspace_inspector_shows_views_table(qapp):
-	panel = JupyterConsolePanel(dict)
-	panel.plots.new("Plot test", activate=False)
-	panel.views3d.new("3D test", activate=False)
+    panel = JupyterConsolePanel(dict)
+    panel.plots.new("Plot test", activate=False)
+    panel.views3d.new("3D test", activate=False)
 
-	inspector = WorkspaceInspector(panel)
+    inspector = WorkspaceInspector(panel)
 
-	data = inspector.views(table=True)
+    data = inspector.views(table=True)
 
-	assert "Workspace views" in panel.tables.names()
-	assert panel.tables.current.dataframe().equals(data)
+    assert "Workspace views" in panel.tables.names()
+    assert panel.tables.current.dataframe().equals(data)
 
 
 def test_workspace_inepector_shows_summary_table(qapp):
-	panel = JupyterConsolePanel(dict)
-	inspector = WorkspaceInspector(panel)
+    panel = JupyterConsolePanel(dict)
+    inspector = WorkspaceInspector(panel)
 
-	data = inspector.summary(table=True)
+    data = inspector.summary(table=True)
 
-	assert "Workspace summary" in panel.tables.names()
-	assert panel.tables.current.dataframe()["value"].equals(data)
+    assert "Workspace summary" in panel.tables.names()
+    assert panel.tables.current.dataframe()["value"].equals(data)
