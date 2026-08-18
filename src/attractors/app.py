@@ -268,8 +268,6 @@ class Window(QtWidgets.QMainWindow):
         self.jupyter_console_panel.active_view_changed.connect(
             self._sync_explore_actions
         )
-        # toolbar actions currently controlled in live plot controller
-        # TODO: some sort of toolbar syncing with explore workspace separate from live plot controller
         self.jupyter_console_panel.views3d.views_changed.connect(
             self.workspace_controller.sync_views
         )
@@ -281,6 +279,9 @@ class Window(QtWidgets.QMainWindow):
         )
         self.jupyter_console_panel.views3d.current_changed.connect(
             lambda _name: self._sync_explore_actions()
+        )
+        self.jupyter_console_panel.tables.tables_changed.connect(
+            self._sync_jupyter_workspace_state
         )
         self.system_toolbar.set_solve_state(self._solve_state)
         self.workspace_controller.sync_views()
@@ -2506,6 +2507,7 @@ class Window(QtWidgets.QMainWindow):
         settings.setValue(
             "workspace/views3d", self.jupyter_console_panel.views3d.names()
         )
+        settings.setValue("workspace/tables", self.jupyter_console_panel.tables.names())
         settings.setValue("workspace/active_kind", kind)
         settings.setValue("workspace/active_name", name)
 
@@ -2517,6 +2519,7 @@ class Window(QtWidgets.QMainWindow):
     def _restore_workspace_shell(self, settings):
         plot_names = settings.value("workspace/plots", [], type=list)
         view_names = settings.value("workspace/views3d", [], type=list)
+        table_names = settings.value("workspace/tables", [], type=list)
 
         for name in plot_names:
             if name != "Plot":
@@ -2525,6 +2528,10 @@ class Window(QtWidgets.QMainWindow):
         for name in view_names:
             if name != "3D View":
                 self.jupyter_console_panel.views3d.new(name, activate=False)
+
+        for name in table_names:
+            if name != "Table":
+                self.jupyter_console_panel.tables.new(name, activate=False)
 
         kind = settings.value("workspace/active_kind", "plot")
         name = settings.value("workspace/active_name", "Plot")

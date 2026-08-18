@@ -190,7 +190,7 @@ class ConsoleTableManager(QtCore.QObject):
         self._active_callback = active_callback
 
     def __repr__(self):
-        return "ConsoleTableManager(current={self._current_name!r})"
+        return f"ConsoleTableManager(current={self._current_name!r})"
 
     def __call__(self, data, name=None, *, activate=True):
         return self.show(data, name=name, activate=activate)

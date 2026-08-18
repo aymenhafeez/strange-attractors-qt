@@ -72,7 +72,7 @@ class WorkspaceInspector:
         plots = len(self._console_panel.names())
         views3d = len(self._console_panel.views3d.names())
 
-        return f"ExploreInspector(plots={plots}, views3d={views3d})"
+        return f"WorkspaceInspector(plots={plots}, views3d={views3d})"
 
     def _optional_help_table(self, data, table, name):
         if not table:
@@ -84,7 +84,7 @@ class WorkspaceInspector:
     def help(self, table=False):
         data = pd.DataFrame(HELP_ROWS, columns=["category", "command", "description"])
 
-        return self._optional_help_table(data, table, "Explore help")
+        return self._optional_help_table(data, table, "Workspace help")
 
     def summary(self, table=False):
         items = self._console_panel.workspace_view_items()
@@ -100,7 +100,7 @@ class WorkspaceInspector:
             }
         )
 
-        return self._optional_help_table(data, table, "Explore summary")
+        return self._optional_help_table(data, table, "Workspace summary")
 
     def views(self, table=False):
         rows = []
