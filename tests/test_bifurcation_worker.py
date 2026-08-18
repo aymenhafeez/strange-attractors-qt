@@ -2,12 +2,12 @@ import numpy as np
 import pytest
 from pyqtgraph.Qt import QtWidgets
 
-from attractors.bifurcation_worker import (
+from attractors.core.models import AttractorConfig, AttractorParam
+from attractors.workers.bifurcation_worker import (
     BifurcationWorker,
     _axis_midplane_crossings,
     _sweep_sample_count,
 )
-from attractors.models import AttractorConfig, AttractorParam
 
 
 @pytest.fixture(scope="session")
@@ -54,7 +54,7 @@ def test_worker_emits_cumulative_chunks_during_two_way_sweep(qapp, monkeypatch):
     def fake_solve_rk4(equation, y0, t_min, t_max, n, params):
         return _crossing_solution(params[0])
 
-    monkeypatch.setattr("attractors.bifurcation_worker.solve_rk4", fake_solve_rk4)
+    monkeypatch.setattr("attractors.workers.bifurcation_worker.solve_rk4", fake_solve_rk4)
 
     worker = BifurcationWorker(
         _config(),
@@ -100,7 +100,7 @@ def test_worker_does_not_emit_final_chunk_after_cancel(qapp, monkeypatch):
             worker.cancel()
         return _crossing_solution(params[0])
 
-    monkeypatch.setattr("attractors.bifurcation_worker.solve_rk4", fake_solve_rk4)
+    monkeypatch.setattr("attractors.workers.bifurcation_worker.solve_rk4", fake_solve_rk4)
 
     chunks = []
     finished = []
@@ -143,7 +143,7 @@ def test_worker_passes_configured_t_min_to_solver(qapp, monkeypatch):
         calls.append((t_min, t_max, n))
         return _crossing_solution(params[0])
 
-    monkeypatch.setattr("attractors.bifurcation_worker.solve_rk4", fake_solve_rk4)
+    monkeypatch.setattr("attractors.workers.bifurcation_worker.solve_rk4", fake_solve_rk4)
 
     worker = BifurcationWorker(
         _config_with_t_min(),
@@ -185,7 +185,7 @@ def test_worker_emits_peak_snapshots_not_mutable_working_lists(qapp, monkeypatch
     def fake_solve_rk4(equation, y0, t_min, t_max, n, params):
         return _crossing_solution(params[0])
 
-    monkeypatch.setattr("attractors.bifurcation_worker.solve_rk4", fake_solve_rk4)
+    monkeypatch.setattr("attractors.workers.bifurcation_worker.solve_rk4", fake_solve_rk4)
 
     worker = BifurcationWorker(
         _config(),
@@ -218,7 +218,7 @@ def test_worker_continues_from_previous_parameter_state_and_turns_round(
         starts.append(y0.copy())
         return _crossing_solution(params[0])
 
-    monkeypatch.setattr("attractors.bifurcation_worker.solve_rk4", fake_solve_rk4)
+    monkeypatch.setattr("attractors.workers.bifurcation_worker.solve_rk4", fake_solve_rk4)
 
     worker = BifurcationWorker(
         _config(),
