@@ -154,6 +154,12 @@ class ScriptPanel(QtWidgets.QWidget):
             QtGui.QIcon.fromTheme("system-run"), "Run"
         )
         self.run_action.setToolTip("Run script")
+
+        self.run_selection_action = self.toolbar.addAction(
+            QtGui.QIcon.fromTheme("system-run"), "Run selection"
+        )
+        self.run_selection_action.setToolTip("Run selection")
+
         self.save_action = self.toolbar.addAction(
             QtGui.QIcon.fromTheme("document-save"), "Save"
         )
@@ -177,6 +183,7 @@ class ScriptPanel(QtWidgets.QWidget):
         self.editor.textChanged.connect(self._on_editor_text_changed)
 
         self.run_action.triggered.connect(self.run)
+        self.run_selection_action.triggered.connect(self.run_selection)
         self.save_action.triggered.connect(self.save)
 
         self.load()
@@ -350,6 +357,15 @@ class ScriptPanel(QtWidgets.QWidget):
         self.save()
         self.run_requested.emit(self._editor_text())
         self._update_status("Ran")
+
+    def run_selection(self):
+        text = self.editor.selectedText()
+        if not text:
+            self._update_status("No selection")
+            return
+
+        self.run_requested.emit(text)
+        self._update_status("Ran selection")
 
     def _set_editor_text(self, text):
         self.editor.setText(text)
