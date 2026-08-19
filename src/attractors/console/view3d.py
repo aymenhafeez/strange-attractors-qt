@@ -240,6 +240,14 @@ class ConsoleView3D:
         self.view.setCameraPosition(distance=10, elevation=20, azimuth=45)
         return self
 
+    def orbit(self, enabled):
+        self.camera_controller.set_orbit_mode(enabled)
+        return self
+
+    def orbit_speed(self, speed):
+        self.camera_controller.set_orbit_speed(speed)
+        return self
+
     def grid(self, visible=True):
         self.grid_overlay.set_grid_visible(visible)
         return self
@@ -485,6 +493,12 @@ class ConsoleView3DManager(QtCore.QObject):
 
     def reset_camera(self):
         return self.current.reset_camera()
+
+    def orbit(self, enabled):
+        return self.current.orbit(enabled)
+
+    def orbit_speed(self, speed):
+        return self.current.orbit_speed(speed)
 
     def grid(self, visible=True):
         return self.current.grid(visible)
