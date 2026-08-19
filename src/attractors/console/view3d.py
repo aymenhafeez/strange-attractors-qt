@@ -92,6 +92,22 @@ def check_surface_grid(x, y=None, z=None, *, name="surface"):
     return x_grid, y_grid, z_grid, points
 
 
+# GLSurfacePlotItem works cleanly with rectilinear x, y for surface3d
+def rectilinear_surface_axes(x_grid, y_grid):
+    x_axis = x_grid[0, :]
+    y_axis = y_grid[:, 0]
+
+    expected_x = np.tile(x_axis, (x_grid.shape[0], 1))
+    expected_y = np.tile(y_axis[:, np.newaxis], (1, y_grid.shape[1]))
+
+    if not np.allclose(x_grid, expected_x):
+        raise ValueError("surface3d requires a rectilinear x grid")
+    if not np.allclose(y_grid, expected_y):
+        raise ValueError("surface3d requires a rectilinear y grid")
+
+    return x_axis, y_axis
+
+
 def normalise_colour(colour):
     if isinstance(colour, str):
         qcolour = QtGui.QColor(colour)
@@ -391,6 +407,38 @@ class ConsoleView3D:
 
         return item
 
+    def surface3d(
+        self,
+        x,
+        y=None,
+        z=None,
+        *,
+        mode="replace",
+        colour=(0.2, 0.8, 1.0, 1.0),
+        shader="shaded",
+        smooth=True,
+    ):
+        x_grid, y_grid, z_grid, points = check_surface_grid(x, y, z)
+        x_axis, y_axis = rectilinear_surface_axes(x_grid, y_grid)
+
+        if self.clear_for_mode(mode):
+            self.clear()
+
+        colour = normalise_colour(colour)
+        if isinstance(colour, np.ndarray):
+            raise TypeError("surface3d colour must be a single colour")
+
+        item = gl.GLSurfacePlotItem(
+            x=x_axis, y=y_axis, z=z_grid, color=colour, shader=shader, smooth=smooth
+        )
+
+        self.view.addItem(item)
+        self._items.append(item)
+        self._point_sets.append(points)
+        self.camera_controller.fit_camera_to_solutions([points])
+
+        return item
+
 
 # adapting this from ConsolePlotManager, will need to generalise to 3D
 class ConsoleView3DManager(QtCore.QObject):
@@ -542,6 +590,9 @@ class ConsoleView3DManager(QtCore.QObject):
 
     def scatter3d(self, *args, **kwargs):
         return self.current.scatter3d(*args, **kwargs)
+
+    def surface3d(self, *args, **kwargs):
+        return self.current.surface3d(*args, **kwargs)
 
     def fit(self):
         return self.current.fit()
