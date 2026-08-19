@@ -10,7 +10,6 @@ b = v.explore.slider("b", value=1, start=0.0, end=5, step=0.01)
 s = v.explore.slider("size", value=25, start=1, end=50, step=1)
 
 t = np.linspace(0, 8 * np.pi, 2000)
-cmap = pg.colormap.get("viridis", source="matplotlib")
 
 
 def points(a=a, b=b, t=t):
@@ -25,10 +24,7 @@ def points(a=a, b=b, t=t):
 
 def colours(a=a, b=b, t=t, cmap=cmap):
     values = np.sin(a.value * t) + np.cos(b.value * t)
-    # normalise values, colourmaps are clearer when values are mapped 0 to 1
-    values = (values - values.min()) / (values.max() - values.min())
-
-    return cmap.map(values, mode="float")
+    return colourmap(values, cmap="magam")
 
 
 def sample_points(points=points):
