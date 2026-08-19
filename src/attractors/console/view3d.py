@@ -108,6 +108,25 @@ def rectilinear_surface_axes(x_grid, y_grid):
     return x_axis, y_axis
 
 
+def surface_wireframe_lines(x_grid, y_grid, z_grid):
+    rows = []
+
+    for row in range(z_grid.shape[0]):
+        rows.append(np.column_stack([x_grid[row], y_grid[row], z_grid[row]]))
+        rows.append(np.full((1, 3), np.nan))
+
+    for column in range(z_grid.shape[1]):
+        rows.append(
+            np.column_stack([x_grid[:, column], y_grid[:, column], z_grid[:, column]])
+        )
+        rows.append(np.full((1, 3), np.nan))
+
+    if not rows:
+        return np.empty((0, 3))
+
+    return np.vstack(rows[:-1])
+
+
 def normalise_colour(colour):
     if isinstance(colour, str):
         qcolour = QtGui.QColor(colour)
@@ -439,6 +458,41 @@ class ConsoleView3D:
 
         return item
 
+    def wireframe3d(
+        self,
+        x,
+        y=None,
+        z=None,
+        *,
+        mode="replace",
+        colour=(0.8, 0.8, 0.8, 1.0),
+        width=1.0,
+        antialias=True,
+    ):
+        x_grid, y_grid, z_grid, points = check_surface_grid(x, y, z)
+
+        if self.clear_for_mode(mode):
+            self.clear()
+
+        colour = normalise_colour(colour)
+        if isinstance(colour, np.ndarray):
+            raise TypeError("wireframe3d colour must be a single colour")
+
+        item = gl.GLLinePlotItem(
+            pos=surface_wireframe_lines(x_grid, y_grid, z_grid),
+            color=colour,
+            width=width,
+            antialias=antialias,
+            mode="line_strip",
+        )
+
+        self.view.addItem(item)
+        self._items.append(item)
+        self._point_sets.append(points)
+        self.camera_controller.fit_camera_to_solutions([points])
+
+        return item
+
 
 # adapting this from ConsolePlotManager, will need to generalise to 3D
 class ConsoleView3DManager(QtCore.QObject):
@@ -593,6 +647,9 @@ class ConsoleView3DManager(QtCore.QObject):
 
     def surface3d(self, *args, **kwargs):
         return self.current.surface3d(*args, **kwargs)
+
+    def wireframe3d(self, *args, **kwargs):
+        return self.current.wireframe3d(*args, **kwargs)
 
     def fit(self):
         return self.current.fit()
