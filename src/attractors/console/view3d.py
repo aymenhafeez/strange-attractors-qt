@@ -29,8 +29,11 @@ def check_points(x, y=None, z=None, *, name="points"):
 
         points = np.column_stack([x_data, y_data, z_data])
 
-    if len(points) == 0:
-        raise ValueError(f"{name} cannot be empty")
+    # removing this check for now to allow initialising plots with empty arrays
+    # for 3D animations to keep things consisten with 2D animations
+    # if len(points) == 0:
+    #     raise ValueError(f"{name} cannot be empty")
+
     if not np.all(np.isfinite(points)):
         raise ValueError(f"{name} can't contain non finite values")
 
