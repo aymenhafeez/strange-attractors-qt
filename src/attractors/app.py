@@ -893,6 +893,7 @@ class Window(QtWidgets.QMainWindow):
             "Clear current view",
             self.workspace_controller.clear_current_view,
         )
+        workspace_menu.addAction("Export current table", self._export_current_table)
         workspace_menu.addAction(
             "Clear all views", self.workspace_controller.clear_all_views
         )
@@ -2456,6 +2457,25 @@ class Window(QtWidgets.QMainWindow):
             "Jupyter Workspace Summary",
             self._workspace_summary(),
         )
+
+    def _export_current_table(self):
+        name = self.jupyter_console_panel.tables.current_name
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Export current table", f"{name}.csv", "CSV (*.csv)"
+        )
+
+        if not path:
+            return
+
+        try:
+            target = self.jupyter_console_panel.tables.export(
+                path, name=name, index=False
+            )
+        except OSError as e:
+            self._set_app_status(f"Failed to export table: {e}", error=True)
+            return
+
+        self._set_app_status(f"Exported table to {target}")
 
     def _on_workspace_dock_closed(self):
         if not self._closing_workspace_dock:

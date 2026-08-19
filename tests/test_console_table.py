@@ -302,3 +302,45 @@ def test_console_table_manager_exports_named_table(tmp_path, qapp):
     assert path == tmp_path / "test.csv"
     assert path.read_text() == "a\n1\n2\n"
     assert manager.current_name == "AnotherTable"
+
+
+def test_export_current_table_from_menu(tmp_path, qapp, monkeypatch):
+    panel = JupyterConsolePanel(dict)
+    panel.tables.show({"a": [1, 2]}, name="Test")
+
+    path = tmp_path / "test.csv"
+    statuses = []
+    window = SimpleNamespace(
+        jupyter_console_panel=panel,
+        _set_app_status=lambda text, error=False: statuses.append((text, error)),
+    )
+
+    monkeypatch.setattr(
+        QtWidgets.QFileDialog,
+        "getSaveFileName",
+        lambda *args, **kwargs: (str(path), "CSV (*.csv)"),
+    )
+
+    Window._export_current_table(window)
+
+    assert path.read_text() == "a\n1\n2\n"
+    assert statuses == [(f"Exported table to {path}", False)]
+
+
+def test_export_current_table_ignores_cancel(qapp, monkeypatch):
+    panel = JupyterConsolePanel(dict)
+    statuses = []
+    window = SimpleNamespace(
+        jupyter_console_panel=panel,
+        _set_app_status=lambda text, error=False: statuses.append((text, error)),
+    )
+
+    monkeypatch.setattr(
+        QtWidgets.QFileDialog,
+        "getSaveFileName",
+        lambda *args, **kwargs: ("", ""),
+    )
+
+    Window._export_current_table(window)
+
+    assert statuses == []
