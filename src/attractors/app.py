@@ -908,6 +908,10 @@ class Window(QtWidgets.QMainWindow):
         workspace_menu.addSeparator()
         self._add_menu_action(workspace_menu, "X grid", self.plot_x_grid_action)
         self._add_menu_action(workspace_menu, "Y grid", self.plot_y_grid_action)
+        workspace_menu.addSeparator()
+
+        workspace_menu.addAction("Workspace help", lambda: self.system.help(table=True))
+
         if self.plot_options_menu is not None:
             workspace_menu.addSeparator()
             self._add_proxy_menu(

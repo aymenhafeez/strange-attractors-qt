@@ -415,13 +415,22 @@ class SystemInspector:
     def has_solutions(self):
         return bool(self._window.scene.trajectory_renderer.solutions)
 
-    def help(self):
-        return pd.DataFrame(HELP_ROWS, columns=["category", "method", "description"])
+    def _optional_help_table(self, data, table, name):
+        if not table:
+            return data
 
-    def examples(self):
-        return pd.DataFrame(EXAMPLE_ROWS, columns=["task", "commands"])
+        self._window.jupyter_console_panel.tables.show(data, name=name)
+        return data
 
-    def summary(self):
+    def help(self, table=False):
+        data = pd.DataFrame(HELP_ROWS, columns=["category", "method", "description"])
+        return self._optional_help_table(data, table, "System help")
+
+    def examples(self, table=False):
+        data = pd.DataFrame(EXAMPLE_ROWS, columns=["task", "commands"])
+        return self._optional_help_table(data, table, "System examples")
+
+    def summary(self, table=False):
         bounds = self.bounds()
         result = {
             "name": self.name,
@@ -440,7 +449,10 @@ class SystemInspector:
             result[f"{axis}_max"] = (
                 None if axis not in bounds.index else bounds.loc[axis, "max"]
             )
-        return pd.Series(result)
+
+        data = pd.Series(result)
+
+        return self._optional_help_table(data, table, "System summary")
 
     def status(self):
         state = dict(self._window._solve_state)
