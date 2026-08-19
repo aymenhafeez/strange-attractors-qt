@@ -53,6 +53,8 @@ HELP_ROWS = [
     ("3D view", "v.fit()", "Fit the 3D camera to visible data"),
     ("3D view", "v.reset_camera()", "Reset the 3D camera"),
     ("3D view", "v.grid(visible=True)", "Show or hide the 3D grid"),
+    ("3D view", "v.orbit(False)", "Orbit the current view"),
+    ("3D view", "v.orbit_speed(100)", "Set the speed of orbit"),
     (
         "colours",
         "colourmap(values, cmap='viridis')",
@@ -60,7 +62,11 @@ HELP_ROWS = [
     ),
     ("tables", "workspace.help(table=True)", "Show workspace commands in a table dock"),
     ("tables", "workspace.views(table=True)", "Show workspace views in a table dock"),
-    ("tables", "workspace.summary(table=True)", "Show workspace summary in a table dock"),
+    (
+        "tables",
+        "workspace.summary(table=True)",
+        "Show workspace summary in a table dock",
+    ),
     ("tables", "tables.to_csv(path)", "Export the default table to CSV"),
     ("tables", "tables.export(path, name=None)", "Export a named table to CSV"),
 ]
