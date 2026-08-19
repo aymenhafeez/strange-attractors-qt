@@ -37,7 +37,7 @@ def normalise_table_data(data):
         columns = [str(i) for i in range(array.shape[1])]
         return pd.DataFrame(array, columns=columns)
 
-    raise ValueError("Table data must be scaler, 1D or 2D")
+    raise ValueError("Table data must be scalar, 1D or 2D")
 
 
 def _record_rows(data):
@@ -322,7 +322,7 @@ class ConsoleTableManager(QtCore.QObject):
         if old_key not in self._tables:
             raise KeyError(f"No console table named {old_key!r}")
         if new_key != old_key and new_key in self._tables:
-            raise ValueError(f"Console table {new_key!r} alread exists")
+            raise ValueError(f"Console table {new_key!r} already exists")
 
         if new_key == old_key:
             self._set_current_name(new_key)

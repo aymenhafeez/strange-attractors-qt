@@ -482,7 +482,7 @@ class SystemInspector:
         }
         data = pd.Series(result)
 
-        return self._optional_help_table(data, table, "Sytem status")
+        return self._optional_help_table(data, table, "System status")
 
     def describe(self, table=False):
         config = self.config

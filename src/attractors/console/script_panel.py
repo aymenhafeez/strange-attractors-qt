@@ -119,8 +119,8 @@ class ScriptPanel(QtWidgets.QWidget):
 
         editor_host = QtWidgets.QWidget()
         editor_layout = QtWidgets.QVBoxLayout(editor_host)
-        editor_layout.setContentsMargins(6, 6, 6, 6)
-        editor_layout.setSpacing(6)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.setSpacing(0)
 
         self.toolbar = QtWidgets.QToolBar(self)
         self.toolbar.setIconSize(QtCore.QSize(16, 16))
