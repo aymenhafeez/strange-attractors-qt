@@ -908,9 +908,6 @@ class Window(QtWidgets.QMainWindow):
         workspace_menu.addSeparator()
         self._add_menu_action(workspace_menu, "X grid", self.plot_x_grid_action)
         self._add_menu_action(workspace_menu, "Y grid", self.plot_y_grid_action)
-        workspace_menu.addSeparator()
-
-        workspace_menu.addAction("Workspace help", lambda: self.system.help(table=True))
 
         if self.plot_options_menu is not None:
             workspace_menu.addSeparator()
@@ -925,6 +922,20 @@ class Window(QtWidgets.QMainWindow):
                 "ViewBox options",
                 self.plot_view_menu,
             )
+
+        workspace_menu.addSeparator()
+
+        workspace_menu.addAction(
+            "System summary", lambda: self.system.summary(table=True)
+        )
+        workspace_menu.addAction(
+            "Workspace summary", lambda: self.workspace_inspector.summary(table=True)
+        )
+        workspace_menu.addSeparator()
+        workspace_menu.addAction("System help", lambda: self.system.help(table=True))
+        workspace_menu.addAction(
+            "Workspace help", lambda: self.workspace_inspector.help(table=True)
+        )
 
         analysis_menu = menu_bar.addMenu("&Analysis")
         analysis_menu.addAction(self.toolbar_lyapunov_action)

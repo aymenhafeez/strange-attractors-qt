@@ -454,7 +454,7 @@ class SystemInspector:
 
         return self._optional_help_table(data, table, "System summary")
 
-    def status(self):
+    def status(self, table=True):
         state = dict(self._window._solve_state)
         result = {
             "solving": bool(state.get("solving", False)),
@@ -476,7 +476,9 @@ class SystemInspector:
             ),
             "console_solution_count": len(self.solutions),
         }
-        return pd.Series(result)
+        data = pd.Series(result)
+
+        return self._optional_help_table(data, table, "Sytem status")
 
     def describe(self):
         config = self.config
