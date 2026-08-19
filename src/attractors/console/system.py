@@ -27,10 +27,14 @@ PLOT_MODE_REPLACE = "replace"
 PLOT_MODE_OVERLAY = "overlay"
 
 HELP_ROWS = [
-    ("context", "summary()", "Current system, solve size, bounds and camera"),
-    ("context", "status()", "Solve freshness and last error state"),
-    ("context", "describe()", "System description and equation text"),
-    ("context", "parameters()", "Parameter values, defaults and ranges"),
+    (
+        "context",
+        "summary(table=False)",
+        "Current system, solve size, bounds and camera",
+    ),
+    ("context", "status(table=False)", "Solve freshness and last error state"),
+    ("context", "describe(table=False)", "System description and equation text"),
+    ("context", "parameters(table=False)", "Parameter values, defaults and ranges"),
     ("control", "set_parameters(values, solve=False)", "Update main parameters"),
     ("control", "set_time(n=None, t_max=None, solve=False)", "Update main solve time"),
     ("control", "solve()", "Run a full solve for the current main state"),
@@ -102,7 +106,7 @@ HELP_ROWS = [
         "plot_vector_field(x_axis='x', y_axis='y', live=True)",
         "Keep a vector field slice linked to main parameters",
     ),
-    ("live", "live_plots()", "List plots linked to the main solution"),
+    ("live", "live_plots(table=False)", "List plots linked to the main solution"),
     ("live", "unfollow(plot=None)", "Stop one live plot"),
     ("live", "unfollow_all()", "Stop all live plots"),
 ]
@@ -480,12 +484,12 @@ class SystemInspector:
 
         return self._optional_help_table(data, table, "Sytem status")
 
-    def describe(self):
+    def describe(self, table=False):
         config = self.config
         if config is None:
             return pd.Series({"name": self.name, "description": ""})
 
-        return pd.Series(
+        data = pd.Series(
             {
                 "name": self.name,
                 "config_name": config.name,
@@ -494,7 +498,9 @@ class SystemInspector:
             }
         )
 
-    def parameters(self):
+        return self._optional_help_table(data, table, "System description")
+
+    def parameters(self, table=False):
         config = self.config
         if config is None:
             return pd.DataFrame(
@@ -521,7 +527,9 @@ class SystemInspector:
                 index=pd.Index([], name="name"),
             )
 
-        return pd.DataFrame(rows).set_index("name")
+        data = pd.DataFrame(rows).set_index("name")
+
+        return self._optional_help_table(data, table, "System parameters")
 
     # these three are controls for updating the main viewport plot from the console
     def set_parameters(self, values, *, solve=False):
@@ -1506,8 +1514,9 @@ class SystemInspector:
             **plot_kwargs,
         )
 
-    def live_plots(self):
-        return self._window.live_plot_controller._live_plot_frame()
+    def live_plots(self, table=False):
+        data = self._window.live_plot_controller._live_plot_frame()
+        return self._optional_help_table(data, table, "Live plots")
 
     def unfollow(self, plot=None):
         return self._window.live_plot_controller._clear_live_plot(plot)

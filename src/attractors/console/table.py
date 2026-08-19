@@ -2,7 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pyqtgraph.Qt import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from ..ui.docking import AreaBoundDock as Dock
 
@@ -145,6 +145,11 @@ class ConsoleTable:
 
         self.layout.addWidget(self.view)
 
+        self.copy_shortcut = QtGui.QShortcut(
+            QtGui.QKeySequence.StandardKey.Copy, self.view
+        )
+        self.copy_shortcut.activated.connect(self.copy_selection)
+
     def __repr__(self):
         rows = self.model.rowCount()
         columns = self.model.columnCount()
@@ -160,6 +165,38 @@ class ConsoleTable:
 
     def dataframe(self):
         return self.model.dataframe()
+
+    def selected_text(self):
+        indexes = self.view.selectedIndexes()
+        if not indexes:
+            return ""
+
+        rows = sorted({idx.row() for idx in indexes})
+        columns = sorted({idx.column() for idx in indexes})
+        selected = {(idx.row(), idx.column()) for idx in indexes}
+
+        lines = []
+        for row in rows:
+            values = []
+            for column in columns:
+                if (row, column) in selected:
+                    model_index = self.model.index(row, column)
+                    value = self.model.data(
+                        model_index, QtCore.Qt.ItemDataRole.DisplayRole
+                    )
+                    values.append("" if value is None else str(value))
+                else:
+                    values.append("")
+            lines.append("\t".join(values))
+
+        return "\n".join(lines)
+
+    def copy_selection(self):
+        text = self.selected_text()
+        if text:
+            QtWidgets.QApplication.clipboard().setText(text)
+
+        return text
 
     def to_csv(self, path, *, index=True, **kwargs):
         target = Path(path).expanduser()
