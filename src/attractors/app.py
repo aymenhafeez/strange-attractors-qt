@@ -1522,6 +1522,7 @@ class Window(QtWidgets.QMainWindow):
             "dejong_attractor_example.py": "De Jong attractor",
             "param_sweep_example.py": "Parameter sweep",
             "3d_lissajous_example.py": "3D Lissajous curve",
+            "3D_pendulum.py": "3D pendulum animation",
         }
 
         for path in scripts:
