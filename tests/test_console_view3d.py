@@ -6,8 +6,10 @@ from attractors.console.view3d import (
     ConsoleView3D,
     ConsoleView3DManager,
     check_points,
+    check_surface_grid,
     normalise_colour,
     normalise_size,
+    rectilinear_surface_axes,
 )
 from attractors.ui.docking import AreaBoundDock, AreaBoundDockArea
 
@@ -119,3 +121,43 @@ def test_view3d_manager_replace_and_overlay(qapp):
     view.explore.line3d("replace", second, mode="replace")
     assert view.explore.trace_names() == ["replace"]
     assert len(view._items) == 1
+
+
+def test_check_surface_grid_accepts_1d_x_y():
+    x = np.array([-1, 0, 1], dtype=np.float64)
+    y = np.array([10, 20], dtype=np.float64)
+    z = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float64)
+
+    x_grid, y_grid, z_grid, points = check_surface_grid(x, y, z)
+
+    np.testing.assert_allclose(
+        x_grid,
+        [[-1, 0, 1], [-1, 0, 1]],
+    )
+    np.testing.assert_allclose(
+        y_grid,
+        [[10, 10, 10], [20, 20, 20]],
+    )
+    np.testing.assert_allclose(z_grid, z)
+    assert points.shape == (6, 3)
+
+
+def test_check_surface_grid_accepts_2d_meshgrid():
+    x = np.array([[0, 1], [0.5, 1.5]], dtype=np.float64)
+    y = np.array([[0, 0], [1, 1]], dtype=np.float64)
+    z = np.array([[2, 3], [4, 5]], dtype=np.float64)
+
+    x_grid, y_grid, z_grid, points = check_surface_grid(x, y, z)
+
+    np.testing.assert_allclose(x_grid, x)
+    np.testing.assert_allclose(y_grid, y)
+    np.testing.assert_allclose(z_grid, z)
+    np.testing.assert_allclose(
+        points,
+        [
+            [0, 0, 2],
+            [1, 0, 3],
+            [0.5, 1, 4],
+            [1.5, 1, 5],
+        ],
+    )
