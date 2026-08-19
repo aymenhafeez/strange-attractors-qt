@@ -344,3 +344,31 @@ def test_export_current_table_ignores_cancel(qapp, monkeypatch):
     Window._export_current_table(window)
 
     assert statuses == []
+
+
+def test_console_table_selected_text(qapp):
+    table = ConsoleTable()
+    table.set_data({"a": [1, 2], "b": ["x", "y"]})
+
+    selection = table.view.selectionModel()
+    first = table.model.index(0, 0)
+    second = table.model.index(1, 1)
+
+    selection.select(first, QtCore.QItemSelectionModel.SelectionFlag.Select)
+    selection.select(second, QtCore.QItemSelectionModel.SelectionFlag.Select)
+
+    assert table.selected_text() == "1\t\n\ty"
+
+
+def test_console_table_copies_selection(qapp):
+    table = ConsoleTable()
+    table.set_data({"a": [1, 2], "b": ["x", "y"]})
+
+    selection = table.view.selectionModel()
+    block = QtCore.QItemSelection(table.model.index(0, 0), table.model.index(1, 1))
+    selection.select(block, QtCore.QItemSelectionModel.SelectionFlag.Select)
+
+    text = table.copy_selection()
+
+    assert text == "1\tx\n2\ty"
+    assert QtWidgets.QApplication.clipboard().text() == "1\tx\n2\ty"
