@@ -40,6 +40,58 @@ def check_points(x, y=None, z=None, *, name="points"):
     return points
 
 
+def check_surface_grid(x, y=None, z=None, *, name="surface"):
+    if y is None and z is None:
+        z_grid = np.asarray(x)
+        if z_grid.ndim != 2:
+            raise ValueError(f"{name} z must be two dimensional")
+
+        rows, columns = z_grid.shape
+        y_grid, x_grid = np.mgrid[0:rows, 0:columns]
+    else:
+        if y is None or z is None:
+            raise ValueError("Must provide x, y and z")
+
+        x_data = np.asarray(x)
+        y_data = np.asarray(y)
+        z_grid = np.asarray(z)
+
+        if z_grid.ndim != 2:
+            raise ValueError(f"{name} z must be two dimensional")
+
+        if x_data.ndim == 1 and y_data.ndim == 1:
+            if len(x_data) != z_grid.shape[1]:
+                raise ValueError("x length must match z columns")
+            if len(y_data) != z_grid.shape[0]:
+                raise ValueError("y length must match z rows")
+
+            x_grid, y_grid = np.meshgrid(x_data, y_data)
+
+        elif x_data.ndim == 2 and y_data.ndim == 2:
+            if x_data.shape != z_grid.shape or y_data.shape != z_grid.shape:
+                raise ValueError("x, y and z grids must have the same shape")
+
+            x_grid = x_data
+            y_grid = y_data
+
+        else:
+            raise ValueError("x and y must both be 1D or both be 2D")
+
+    if z_grid.size == 0:
+        raise ValueError(f"{name} grid can't be empty")
+
+    if not (
+        np.all(np.isfinite(x_grid))
+        and np.all(np.isfinite(y_grid))
+        and np.all(np.isfinite(z_grid))
+    ):
+        raise ValueError(f"{name} grid can't contain non finite values")
+
+    points = np.column_stack([x_grid.ravel(), y_grid.ravel(), z_grid.ravel()])
+
+    return x_grid, y_grid, z_grid, points
+
+
 def normalise_colour(colour):
     if isinstance(colour, str):
         qcolour = QtGui.QColor(colour)
