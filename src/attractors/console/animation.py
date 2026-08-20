@@ -1,6 +1,6 @@
 import inspect
 
-from pyqtgraph.Qt import QtCore
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 
 class ConsoleAnimation(QtCore.QObject):
@@ -111,3 +111,60 @@ class ConsoleAnimation(QtCore.QObject):
     def __repr__(self):
         state = "playing" if self.is_active() else "paused"
         return f"ConsoleAnimation({self.name!r}, frame={self.frame}, state={state})"
+
+
+class ConsoleAnimationWidget(QtWidgets.QWidget):
+    def __init__(self, animation, parent=None):
+        super().__init__(parent)
+        self.animation = animation
+
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        self.name_label = QtWidgets.QLabel(animation.name)
+
+        self.play_button = QtWidgets.QToolButton()
+        self.play_button.setText("Play or pause animation")
+
+        self.stop_button = QtWidgets.QToolButton()
+        self.stop_button.setText("Stop")
+        self.stop_button.setToolTip("Stop animation and reset to first frame")
+
+        self.step_button = QtWidgets.QToolButton()
+        self.step_button.setText("Step")
+        self.step_button.setToolTip("Advance animation to next step")
+
+        self.interval_spin = QtWidgets.QSpinBox()
+        self.interval_spin.setRange(1, 10000)
+        self.interval_spin.setSuffix(" ms")
+        self.interval_spin.setKeyboardTracking(False)
+        self.interval_spin.setValue(animation.interval)
+        self.interval_spin.setToolTip("Animation interval")
+
+        layout.addWidget(self.name_label)
+        layout.addStretch(1)
+        layout.addWidget(self.play_button)
+        layout.addWidget(self.stop_button)
+        layout.addWidget(self.step_button)
+        layout.addWidget(self.interval_spin)
+
+        self.play_button.clicked.connect(self.toggle_play)
+        self.stop_button.clicked.connect(self.animation.stop)
+        self.step_button.clicked.connect(self.animation.step)
+        self.interval_spin.valueChanged.connect(self.animation.set_interval)
+        self.animation.changed.connect(self.sync)
+
+        self.sync()
+
+    def toggle_play(self):
+        if self.animation.is_active():
+            self.animation.pause()
+        else:
+            self.animation.play()
+
+    def sync(self):
+        self.play_button.setText("Pause" if self.animation.is_active() else "Play")
+
+        with QtCore.QSignalBlocker(self.interval_spin):
+            self.interval_spin.setValue(self.animation.interval)
