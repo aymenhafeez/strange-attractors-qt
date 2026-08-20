@@ -233,6 +233,71 @@ class ConsoleTrace3D:
         return normalise_size(size_data, n)
 
 
+class ConsoleSurfaceTrace3D:
+    def __init__(
+        self, name, x, y, z, item, explorer, kind, colour=None, wireframe=False
+    ):
+        self.name = name
+        self.x = x
+        self.y = y
+        self.z = z
+        self.item = item
+        self.explorer = explorer
+        self.kind = kind
+        self.colour = colour
+        self.wireframe = wireframe
+
+    def grid(self):
+        x_data = self.x() if callable(self.x) else self.x
+
+        if self.y is None and self.z is None:
+            return check_surface_grid(x_data)
+
+        y_data = self.y() if callable(self.y) else self.y
+        z_data = self.z() if callable(self.z) else self.z
+
+        return check_surface_grid(x_data, y_data, z_data)
+
+    def points(self):
+        return self.grid()[3]
+
+    def update(self):
+        x_grid, y_grid, z_grid, _points = self.grid()
+
+        colour = self.colour_data()
+        if self.wireframe:
+            kwargs = {"pos": surface_wireframe_lines(x_grid, y_grid, z_grid)}
+            if colour is not None:
+                # getting passed to OpenGL so use 'color' for the internal arg and
+                # colour for the user facing arg
+                kwargs["color"] = colour
+            self.item.setData(**kwargs)
+            return
+
+        x_axis, y_axis = rectilinear_surface_axes(x_grid, y_grid)
+        kwargs = {"x": x_axis, "y": y_axis, "z": z_grid}
+
+        if colour is not None:
+            kwargs["color"] = colour
+
+        self.item.setData(**kwargs)
+
+    def colour_data(self):
+        if self.colour is None:
+            return
+
+        colour_data = self.colour() if callable(self.colour) else self.colour
+        colour = normalise_colour(colour_data)
+
+        if isinstance(colour, np.ndarray):
+            raise TypeError(f"{self.kind} colour must be a single colour")
+
+        return colour
+
+    def remove(self):
+        self.explorer.view.remove_item(self.item)
+
+
 class ConsoleView3D:
     def __init__(self, status_callback=None):
         self._manager = None
@@ -817,6 +882,45 @@ class View3DExplorer(QtCore.QObject):
 
         return trace
 
+    def _add_surface_trace3d(
+        self, name, x, y, z, mode, plotter, kind, wireframe, **kwargs
+    ):
+        key = name.strip()
+        if not key:
+            raise ValueError("Trace name can't be empty")
+
+        mode = mode.strip().lower()
+        if mode == "replace":
+            self.clear_traces()
+            self.view.clear_items()
+            plot_mode = "overlay"
+        elif mode == "overlay":
+            plot_mode = "overlay"
+        else:
+            raise ValueError("Mode must be 'replace' or 'overlay'")
+
+        colour = kwargs.get("colour")
+        if callable(colour):
+            kwargs = kwargs.copy()
+            kwargs["colour"] = colour()
+
+        x_data = x() if callable(x) else x
+
+        if y is None and z is None:
+            item = plotter(x_data, mode=plot_mode, **kwargs)
+        else:
+            y_data = y() if callable(y) else y
+            z_data = z() if callable(z) else z
+            item = plotter(x_data, y_data, z_data, mode=plot_mode, **kwargs)
+
+        trace = ConsoleSurfaceTrace3D(
+            key, x, y, z, item, self, kind=kind, colour=colour, wireframe=wireframe
+        )
+        self._traces[key] = trace
+        self.changed.emit()
+
+        return trace
+
     def line3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
         return self._add_trace3d(
             name, x, y, z, mode=mode, plotter=self.view.line3d, kind="line3d", **kwargs
@@ -831,6 +935,32 @@ class View3DExplorer(QtCore.QObject):
             mode=mode,
             plotter=self.view.scatter3d,
             kind="scatter3d",
+            **kwargs,
+        )
+
+    def surface3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
+        return self._add_surface_trace3d(
+            name,
+            x,
+            y,
+            z,
+            mode=mode,
+            plotter=self.view.surface3d,
+            kind="surface3d",
+            wireframe=False,
+            **kwargs,
+        )
+
+    def wireframe3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
+        return self._add_surface_trace3d(
+            name,
+            x,
+            y,
+            z,
+            mode=mode,
+            plotter=self.view.wireframe3d,
+            kind="wireframe3d",
+            wireframe=True,
             **kwargs,
         )
 
