@@ -4,6 +4,8 @@ import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .animation import ConsoleAnimation, ConsoleAnimationWidget
+
 PLOT_MODE_REPLACE = "replace"
 PLOT_MODE_OVERLAY = "overlay"
 
@@ -167,6 +169,7 @@ class PlotExplorer(QtCore.QObject):
         self.status_callback = status_callback
         self._params = {}
         self._traces = {}
+        self._animations = {}
         self._sync_trace_menu()
 
     def trace_names(self):
@@ -174,6 +177,13 @@ class PlotExplorer(QtCore.QObject):
 
     def slider_names(self):
         return list(self._params)
+
+    def animation_names(self):
+        return list(self._animations)
+
+    # should make panel visibility easier
+    def has_controls(self):
+        return bool(self._params or self._animations)
 
     def _sync_trace_menu(self):
         self.trace_menu.clear()
@@ -215,11 +225,55 @@ class PlotExplorer(QtCore.QObject):
             name, value=int(value), start=int(start), end=int(end), step=int(step)
         )
 
+    def animation(self, name, callback, *, interval=16, dt=None, start=False):
+        key = str(name).strip()
+        if not key:
+            raise ValueError("Animation name can't be empty")
+
+        old = self._animations.pop(key, None)
+        if old is not None:
+            self.param_layout.removeWidget(old.widget)
+            old.pause()
+            old.widget.deleteLater()
+
+        animation = ConsoleAnimation(
+            key,
+            callback,
+            interval=interval,
+            dt=dt,
+            status_callback=self.status_callback,
+            parent=self,
+        )
+        widget = ConsoleAnimationWidget(animation)
+        animation.widget = widget
+
+        self._animations[key] = animation
+        self.param_layout.addWidget(widget)
+        self.param_widget.setVisible(True)
+        animation.changed.connect(self.changed)
+        self.changed.emit()
+
+        if start:
+            animation.play()
+
+        return animation
+
     def traces(self):
         return {name: trace.name for name, trace in self._traces.items()}
 
     def params(self):
         return {name: param.value for name, param in self._params.items()}
+
+    def animations(self):
+        return {
+            name: {
+                "name": animation.name,
+                "interval": animation.interval,
+                "frame": animation.frame,
+                "active": animation.is_active(),
+            }
+            for name, animation in self._animations.items()
+        }
 
     def remove_trace(self, name):
         key = str(name).strip()
@@ -241,10 +295,24 @@ class PlotExplorer(QtCore.QObject):
 
         self.param_layout.removeWidget(param.widget)
         param.widget.deleteLater()
-        self.param_widget.setVisible(bool(self._params))
+        self.param_widget.setVisible(self.has_controls())
         self.changed.emit()
 
         return self.params()
+
+    def remove_animation(self, name):
+        key = str(name).strip()
+        animation = self._animations.pop(key, None)
+        if animation is None:
+            raise KeyError(f"No animation named {key!r}")
+
+        animation.pause()
+        self.param_layout.removeWidget(animation.widget)
+        animation.widget.deleteLater()
+        self.param_widget.setVisible(self.has_controls())
+        self.changed.emit()
+
+        return self.animations()
 
     def _replace_trace(self, name, trace):
         key = str(name).strip()
@@ -468,6 +536,7 @@ class PlotExplorer(QtCore.QObject):
                 self._set_status(f"{trace.name}: {exc}")
 
     def clear(self):
+        self.clear_animations()
         self.clear_sliders()
         self.clear_traces()
 
@@ -486,7 +555,17 @@ class PlotExplorer(QtCore.QObject):
 
         self._params.clear()
         self.changed.emit()
-        self.param_widget.setVisible(bool(self._params))
+        self.param_widget.setVisible(self.has_controls())
+
+    def clear_animations(self):
+        for animation in self._animations.values():
+            animation.pause()
+            self.param_layout.removeWidget(animation.widget)
+            animation.widget.deleteLater()
+
+        self._animations.clear()
+        self.changed.emit()
+        self.param_widget.setVisible(self.has_controls())
 
     def _set_status(self, message):
         if self.status_callback is not None:
