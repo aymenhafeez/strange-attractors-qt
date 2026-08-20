@@ -1,4 +1,5 @@
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numba
@@ -200,10 +201,17 @@ class Parser:
 
         return self.advance()
 
+    def advance_operator(self) -> str:
+        _tok_type, tok_val, pos = self.advance()
+        if not isinstance(tok_val, str):
+            raise ParseError(f"Expected operator at position {pos}", pos)
+
+        return tok_val
+
     def parse_expr(self) -> Node:
         node = self.parse_term()
         while self.peek()[0] == "OP" and self.peek()[1] in ("+", "-"):
-            op = self.advance()[1]
+            op = self.advance_operator()
             right = self.parse_term()
             node = BinOp(op, node, right)
 
@@ -212,7 +220,7 @@ class Parser:
     def parse_term(self) -> Node:
         node = self.parse_unary()
         while self.peek()[0] == "OP" and self.peek()[1] in ("*", "/"):
-            op = self.advance()[1]
+            op = self.advance_operator()
             right = self.parse_unary()
             node = BinOp(op, node, right)
 
@@ -220,7 +228,7 @@ class Parser:
 
     def parse_unary(self) -> Node:
         if self.peek()[0] == "OP" and self.peek()[1] in ("+", "-"):
-            op = self.advance()[1]
+            op = self.advance_operator()
             operand = self.parse_unary()
             return UnaryOp(op, operand)
 
@@ -228,10 +236,9 @@ class Parser:
 
     def parse_power(self) -> Node:
         node = self.parse_atom()
-        if self.peek()[0] == "OP" and self.peek()[1] == "**":
-            op = self.advance()[1]
-            right = self.parse_unary()
-            node = BinOp(op, node, right)
+        op = self.advance_operator()
+        right = self.parse_unary()
+        node = BinOp(op, node, right)
 
         return node
 
@@ -240,6 +247,8 @@ class Parser:
 
         if tok_type == "NUMBER":
             self.advance()
+            if not isinstance(tok_val, float):
+                raise ParseError(f"Expected number at position {pos}", pos)
             return Num(tok_val)
 
         if tok_type == "LPAREN":
@@ -249,6 +258,9 @@ class Parser:
             return node
 
         if tok_type == "NAME":
+            if not isinstance(tok_val, str):
+                raise ParseError(f"Expected name at position {pos}", pos)
+
             name = tok_val
             self.advance()
 
@@ -410,7 +422,7 @@ def _custom(x_var, t, params):
 """
 
 
-def compile_system(equations: tuple[str, str, str]) -> tuple[callable, list[str]]:
+def compile_system(equations: tuple[str, str, str]) -> tuple[Callable, list[str]]:
     """
     Parse the ODE's and compile them to Numba JIT'd functions
     """
