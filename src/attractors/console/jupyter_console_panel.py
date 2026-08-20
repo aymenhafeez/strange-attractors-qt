@@ -722,7 +722,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             plot.param_widget.setVisible(bool(visible) and plot.explore.has_controls())
 
         for view in self.views3d._views.values():
-            view.param_widget.setVisible(bool(visible) and bool(view.explore.params()))
+            view.param_widget.setVisible(bool(visible) and view.explore.has_controls())
 
     def apply_explore_layout(self):
         self.set_explore_visible(True)

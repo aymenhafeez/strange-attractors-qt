@@ -6,6 +6,7 @@ from ..ui.docking import AreaBoundDock as Dock
 from ..ui.style import CONSOLE_PLOT_PARAMS
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
+from .animation import ConsoleAnimation, ConsoleAnimationWidget
 from .explorer import ConsoleParam
 
 
@@ -808,6 +809,7 @@ class View3DExplorer(QtCore.QObject):
         self.status_callback = status_callback
         self._params = {}
         self._traces = {}
+        self._animations = {}
 
     def _trace_points(self, x, y=None, z=None):
         x_data = x() if callable(x) else x
@@ -838,6 +840,49 @@ class View3DExplorer(QtCore.QObject):
         self.changed.emit()
 
         return param
+
+    def animation(self, name, callback, *, interval=16, dt=None, start=False):
+        key = str(name).strip()
+        if not key:
+            raise ValueError("Animation name can't be empty")
+
+        old = self._animations.pop(key, None)
+        if old is not None:
+            old.pause()
+            self.param_layout.removeWidget(old.widget)
+            old.deleteLater()
+
+        animation = ConsoleAnimation(
+            key,
+            callback,
+            interval=interval,
+            dt=dt,
+            status_callback=self.status_callback,
+            parent=self,
+        )
+        widget = ConsoleAnimationWidget(animation)
+        animation.widget = widget
+
+        self._animations[key] = animation
+        self.param_layout.addWidget(widget)
+        self.param_widget.setVisible(True)
+        self.changed.emit()
+
+        if start:
+            animation.play()
+
+        return animation
+
+    def animations(self):
+        return {
+            name: {
+                "name": animation.name,
+                "interval": animation.interval,
+                "frame": animation.frame,
+                "active": animation.is_active(),
+            }
+            for name, animation in self._animations.items()
+        }
 
     def int_slider(self, name, value=0, start=0, end=100, step=1):
         return self.slider(name, int(value), int(start), int(end), int(step))
@@ -972,6 +1017,7 @@ class View3DExplorer(QtCore.QObject):
                 self._set_status(f"{trace.name}: {exc}")
 
     def clear(self):
+        self.clear_animations()
         self.clear_sliders()
         self.clear_traces()
 
@@ -988,8 +1034,18 @@ class View3DExplorer(QtCore.QObject):
             param.widget.deleteLater()
 
         self._params.clear()
-        self.param_widget.setVisible(False)
+        self.param_widget.setVisible(self.has_controls())
         self.changed.emit()
+
+    def clear_animations(self):
+        for animation in self._animations.values():
+            animation.pause()
+            self.param_layout.removeWidget(animation.widget)
+            animation.widget.deleteLater()
+
+        self._animations.clear()
+        self.changed.emit()
+        self.param_widget.setVisible(self.has_controls())
 
     def remove_trace(self, name):
         key = str(name).strip()
@@ -1001,6 +1057,20 @@ class View3DExplorer(QtCore.QObject):
         self.changed.emit()
 
         return self.traces()
+
+    def remove_animation(self, name):
+        key = str(name).strip()
+        animation = self._animations.pop(key, None)
+        if animation is None:
+            raise KeyError(f"No animation named {key!r}")
+
+        animation.pause()
+        self.param_layout.removeWidget(animation.widget)
+        animation.widget.deleteLater()
+        self.param_widget.setVisible(self.has_controls())
+        self.changed.emit()
+
+        return self.animations()
 
     def params(self):
         return {name: param.value for name, param in self._params.items()}
@@ -1019,6 +1089,12 @@ class View3DExplorer(QtCore.QObject):
 
     def trace_names(self):
         return list(self._traces)
+
+    def animation_names(self):
+        return list(self._animations)
+
+    def has_controls(self):
+        return bool(self._params or self._animations)
 
     def _set_status(self, message):
         if self.status_callback is not None:
