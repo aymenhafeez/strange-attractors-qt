@@ -19,7 +19,13 @@ class ConsoleAnimation(QtCore.QObject):
         self.name = key
         self.callback = callback
         self.interval = interval
+        if self.interval < 1:
+            raise ValueError("Animation interval must be at least 1ms")
+
         self.dt = self.interval / 1000.0 if dt is None else dt
+        if self.dt <= 0:
+            raise ValueError("Animation dt must be positive")
+
         self.status_callback = status_callback
         self.frame = 0
         self.time = 0.0
@@ -78,10 +84,10 @@ class ConsoleAnimation(QtCore.QObject):
         return self.timer.isActive()
 
     def set_interval(self, interval):
-        self.interval = interval
-
         if interval < 1:
             raise ValueError("Animation interval must be at least 1ms")
+
+        self.interval = interval
         self.timer.setInterval(interval)
         self.dt = self.interval / 1000.0
         self.changed.emit()
@@ -125,7 +131,7 @@ class ConsoleAnimationWidget(QtWidgets.QWidget):
         self.name_label = QtWidgets.QLabel(animation.name)
 
         self.play_button = QtWidgets.QToolButton()
-        self.play_button.setText("Play or pause animation")
+        self.play_button.setToolTip("Play or pause animation")
 
         self.stop_button = QtWidgets.QToolButton()
         self.stop_button.setText("Stop")
