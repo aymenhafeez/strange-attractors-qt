@@ -6,6 +6,7 @@ import pandas as pd
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
+from .console import analysis
 from .console.colour import colourmap
 from .console.jupyter_console_panel import JupyterConsolePanel
 from .console.live_plot_controller import LivePlotController
@@ -1523,7 +1524,7 @@ class Window(QtWidgets.QMainWindow):
             "param_sweep_example.py": "Parameter sweep",
             "3d_lissajous_example.py": "3D Lissajous curve",
             "3d_pendulum.py": "3D pendulum animation",
-            "surface_example.py": "Surface and wireframe plot"
+            "surface_example.py": "Surface and wireframe plot",
         }
 
         for path in scripts:
@@ -1754,6 +1755,7 @@ class Window(QtWidgets.QMainWindow):
             "current_values": lambda: self.system.values,
             "scripts_dir": self._scripts_directory,
             "workspace": self.workspace_inspector,
+            "analysis": analysis,
         }
 
     def _set_console_parameters(self, values, *, solve=False):
