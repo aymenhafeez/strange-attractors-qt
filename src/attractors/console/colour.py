@@ -28,7 +28,7 @@ def colourmap(values, cmap="viridis", *, alpha=1.0, vmin=None, vmax=None):
         normalised = np.clip(normalised, 0.0, 1.0)
 
     colours = pg.colormap.get(cmap, source="matplotlib").map(normalised, mode="float")
-    colours = np.asarray(colours, dtype=np.float64)
+    colours = np.asarray(colours)
 
     if colours.shape[1] == 3:
         colours = np.column_stack(

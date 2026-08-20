@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -194,7 +195,9 @@ class ConsoleTable:
     def copy_selection(self):
         text = self.selected_text()
         if text:
-            QtWidgets.QApplication.clipboard().setText(text)
+            clipboard = QtWidgets.QApplication.clipboard()
+            if clipboard is not None:
+                clipboard.setText(text)
 
         return text
 
@@ -276,7 +279,7 @@ class ConsoleTableManager(QtCore.QObject):
         dock.addWidget(table.host)
 
         dock.activated.connect(lambda table_name=key: self.activate(table_name))
-        dock.sigClosed.connect(self._forget_dock)
+        cast(Any, dock).sigClosed.connect(self._forget_dock)
 
         self._dock_area.addDock(
             dock, position="above", relativeTo=self._docks[self._default_name]
