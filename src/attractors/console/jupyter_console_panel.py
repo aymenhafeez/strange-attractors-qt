@@ -92,20 +92,20 @@ class ConsolePlot:
         self.param_widget.setVisible(False)
         self.param_widget.setStyleSheet(CONSOLE_PLOT_PARAMS)
 
-        header = QtWidgets.QWidget()
-        header_layout = QtWidgets.QHBoxLayout(header)
-        header_layout.setContentsMargins(0, 0, 0, 2)
-        header_layout.setSpacing(4)
+        # header = QtWidgets.QWidget()
+        # header_layout = QtWidgets.QHBoxLayout(header)
+        # header_layout.setContentsMargins(0, 0, 0, 2)
+        # header_layout.setSpacing(4)
 
         # self.param_title = QtWidgets.QLabel("Explore")
         # self.param_title.setObjectName("ConsolePlotParamTitle")
 
         self.trace_menu = QtWidgets.QMenu(self.param_widget)
-        self.param_title = QtWidgets.QLabel("Parameters")
-        self.param_title.setObjectName("ConsolePlotParamTitle")
+        # self.param_title = QtWidgets.QLabel("Parameters")
+        # self.param_title.setObjectName("ConsolePlotParamTitle")
 
-        header_layout.addWidget(self.param_title)
-        header_layout.addStretch(1)
+        # header_layout.addWidget(self.param_title)
+        # header_layout.addStretch(1)
 
         self.param_controls = QtWidgets.QFrame()
         self.param_controls.setObjectName("ConsolePlotParamControls")
@@ -113,7 +113,7 @@ class ConsolePlot:
         self.param_controls_layout.setContentsMargins(5, 5, 5, 5)
         self.param_controls_layout.setSpacing(3)
 
-        self.param_layout.addWidget(header)
+        # self.param_layout.addWidget(header)
         self.param_layout.addWidget(self.param_controls)
 
         self.layout.addWidget(self.param_widget)

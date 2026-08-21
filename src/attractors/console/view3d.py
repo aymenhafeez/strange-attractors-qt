@@ -136,7 +136,7 @@ def normalise_colour(colour):
 
         return qcolour.redF(), qcolour.greenF(), qcolour.blueF(), qcolour.alphaF()
 
-    data = np.asarray(colour, dtype=np.float64)
+    data = np.asarray(colour, dtype=np.float32)
 
     if data.shape == (3,):
         return (data[0], data[1], data[2], 1.0)
@@ -146,7 +146,7 @@ def normalise_colour(colour):
     # per point rgb(a)
     if data.ndim == 2 and data.shape[1] in {3, 4}:
         if data.shape[1] == 3:
-            alpha = np.ones((len(data), 1), dtype=np.float64)
+            alpha = np.ones((len(data), 1), dtype=np.float32)
             data = np.column_stack([data, alpha])
 
         return data
@@ -345,7 +345,7 @@ class ConsoleView3D:
         self.param_controls_layout.setContentsMargins(5, 5, 5, 5)
         self.param_controls_layout.setSpacing(3)
 
-        self.param_layout.addWidget(header)
+        # self.param_layout.addWidget(header)
         self.param_layout.addWidget(self.param_controls)
 
         self.explore = View3DExplorer(

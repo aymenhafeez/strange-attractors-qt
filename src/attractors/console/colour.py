@@ -22,7 +22,7 @@ def colourmap(values, cmap="viridis", *, alpha=1.0, vmin=None, vmax=None):
         raise ValueError("vmax must be greater than or equal to vmin")
 
     if vmax == vmin:
-        normalised = np.full(values.shape, 0.5, dtype=np.float64)
+        normalised = np.full(values.shape, 0.5)
     else:
         normalised = (values - vmin) / (vmax - vmin)
         normalised = np.clip(normalised, 0.0, 1.0)
@@ -31,9 +31,7 @@ def colourmap(values, cmap="viridis", *, alpha=1.0, vmin=None, vmax=None):
     colours = np.asarray(colours)
 
     if colours.shape[1] == 3:
-        colours = np.column_stack(
-            [colours, np.full(len(colours), alpha, dtype=np.float64)]
-        )
+        colours = np.column_stack([colours, np.full(len(colours), alpha)])
     else:
         colours[:, 3] *= alpha
 
