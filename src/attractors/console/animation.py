@@ -1,6 +1,6 @@
 import inspect
 
-from pyqtgraph.Qt import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 
 class ConsoleAnimation(QtCore.QObject):
@@ -80,6 +80,23 @@ class ConsoleAnimation(QtCore.QObject):
 
         return self
 
+    def step_back(self, *, rewind=True):
+        try:
+            if self.callback_accepts_animation:
+                self.callback(self)
+            else:
+                self.callback()
+        except Exception as e:
+            self.pause()
+            self.set_status(f"{self.name}: {e}")
+            raise
+
+        if rewind:
+            self.frame -= 1
+            self.time -= self.dt
+
+        return self
+
     def is_active(self):
         return self.timer.isActive()
 
@@ -135,10 +152,17 @@ class ConsoleAnimationWidget(QtWidgets.QWidget):
 
         self.stop_button = QtWidgets.QToolButton()
         self.stop_button.setText("Stop")
+        self.stop_button.setIcon(QtGui.QIcon.fromTheme("media-playback-stop"))
         self.stop_button.setToolTip("Stop animation and reset to first frame")
+
+        self.rewind_button = QtWidgets.QToolButton()
+        self.rewind_button.setText("Rewind")
+        self.rewind_button.setIcon(QtGui.QIcon.fromTheme("media-skip-backward"))
+        self.rewind_button.setToolTip("Rewind animation to previous step")
 
         self.step_button = QtWidgets.QToolButton()
         self.step_button.setText("Step")
+        self.step_button.setIcon(QtGui.QIcon.fromTheme("media-skip-forward"))
         self.step_button.setToolTip("Advance animation to next step")
 
         self.interval_spin = QtWidgets.QSpinBox()
@@ -150,14 +174,17 @@ class ConsoleAnimationWidget(QtWidgets.QWidget):
 
         layout.addWidget(self.name_label)
         layout.addStretch(1)
+        layout.addWidget(self.rewind_button)
         layout.addWidget(self.play_button)
         layout.addWidget(self.stop_button)
         layout.addWidget(self.step_button)
+
         layout.addWidget(self.interval_spin)
 
         self.play_button.clicked.connect(self.toggle_play)
         self.stop_button.clicked.connect(self.animation.stop)
         self.step_button.clicked.connect(self.animation.step)
+        self.rewind_button.clicked.connect(self.animation.step_back)
         self.interval_spin.valueChanged.connect(self.animation.set_interval)
         self.animation.changed.connect(self.sync)
 
@@ -170,7 +197,12 @@ class ConsoleAnimationWidget(QtWidgets.QWidget):
             self.animation.play()
 
     def sync(self):
+        pause_icon = QtGui.QIcon.fromTheme("media-playback-pause")
+        play_icon = QtGui.QIcon.fromTheme("media-playback-start")
         self.play_button.setText("Pause" if self.animation.is_active() else "Play")
+        self.play_button.setIcon(
+            pause_icon if self.animation.is_active() else play_icon
+        )
 
         with QtCore.QSignalBlocker(self.interval_spin):
             self.interval_spin.setValue(self.animation.interval)
