@@ -1434,10 +1434,13 @@ class Window(QtWidgets.QMainWindow):
 
         trace_names = explorer.trace_names()
         slider_names = explorer.slider_names()
+        animation_names = explorer.animation_names()
 
         self.explore_trace_button.setText(f"Traces: {len(trace_names)}")
         self.explore_clear_sliders_action.setEnabled(bool(slider_names))
-        self.explore_clear_state_action.setEnabled(bool(trace_names or slider_names))
+        self.explore_clear_state_action.setEnabled(
+            bool(trace_names or slider_names or animation_names)
+        )
 
         self.explore_trace_menu.clear()
         if not trace_names:

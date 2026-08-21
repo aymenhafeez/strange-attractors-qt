@@ -20,6 +20,11 @@ HELP_ROWS = [
         "p.explore.slider(name, value, start, end, step)",
         "Add a plot-local slider",
     ),
+    (
+        "2D plotting",
+        "p.explore.animation(name, callback, interval=16)",
+        "Add a plot local animation",
+    ),
     ("2D plotting", "p.explore.curve(name, x, y)", "Add a reactive line trace"),
     ("2D plotting", "p.explore.scatter(name, x, y)", "Add a reactive scatter trace"),
     (
@@ -43,6 +48,11 @@ HELP_ROWS = [
         "3D plotting",
         "v.explore.slider(name, value, start, end, step)",
         "Add a view-local slider",
+    ),
+    (
+        "3D plotting",
+        "v.explore.animation(name, callback, interval=16)",
+        "Add a view local animation",
     ),
     ("3D plotting", "v.explore.line3d(name, points)", "Add a reactive 3D line trace"),
     (
@@ -130,6 +140,7 @@ class WorkspaceInspector:
                     "active": key == active_key,
                     "sliders": len(view.explore.slider_names()),
                     "traces": len(view.explore.trace_names()),
+                    "animations": len(view.explore.animation_names()),
                 }
             )
 
