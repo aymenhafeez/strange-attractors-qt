@@ -80,7 +80,12 @@ class ConsoleAnimation(QtCore.QObject):
 
         return self
 
-    def step_back(self, *, rewind=True):
+    def step_back(self, *, emit=True):
+        if self.frame > 0:
+            self.frame -= 1
+            # ensure time doesn't go negative
+            self.time = max(0, self.time - self.dt)
+
         try:
             if self.callback_accepts_animation:
                 self.callback(self)
@@ -91,9 +96,8 @@ class ConsoleAnimation(QtCore.QObject):
             self.set_status(f"{self.name}: {e}")
             raise
 
-        if rewind:
-            self.frame -= 1
-            self.time -= self.dt
+        if emit:
+            self.changed.emit()
 
         return self
 
