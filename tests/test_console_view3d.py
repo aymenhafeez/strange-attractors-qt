@@ -123,6 +123,33 @@ def test_view3d_manager_replace_and_overlay(qapp):
     assert len(view._items) == 1
 
 
+def test_check_surface_grid_accepts_just_z():
+    z = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float64)
+
+    x_grid, y_grid, z_grid, points = check_surface_grid(z)
+
+    np.testing.assert_allclose(
+        x_grid,
+        [[0, 1, 2], [0, 1, 2]],
+    )
+    np.testing.assert_allclose(
+        y_grid,
+        [[0, 0, 0], [1, 1, 1]],
+    )
+    np.testing.assert_allclose(z_grid, z)
+    np.testing.assert_allclose(
+        points,
+        [
+            [0, 0, 1],
+            [1, 0, 2],
+            [2, 0, 3],
+            [0, 1, 4],
+            [1, 1, 5],
+            [2, 1, 6],
+        ],
+    )
+
+
 def test_check_surface_grid_accepts_1d_x_y():
     x = np.array([-1, 0, 1], dtype=np.float64)
     y = np.array([10, 20], dtype=np.float64)
@@ -161,3 +188,51 @@ def test_check_surface_grid_accepts_2d_meshgrid():
             [1.5, 1, 5],
         ],
     )
+
+
+def test_surface3d_adds_surface_item(qapp):
+    view = ConsoleView3D()
+    z = np.array([[0, 1], [2, 3]], dtype=np.float64)
+
+    item = view.surface3d(z)
+
+    assert item in view._items
+    assert len(view._items) == 1
+    assert len(view._point_sets) == 1
+    np.testing.assert_allclose(
+        view._point_sets[0],
+        [
+            [0, 0, 0],
+            [1, 0, 1],
+            [0, 1, 2],
+            [1, 1, 3],
+        ],
+    )
+
+
+def test_surface3d_replace_clears_existing_items(qapp):
+    view = ConsoleView3D()
+    points = np.array([[0, 0, 0], [1, 1, 1]], dtype=np.float64)
+
+    view.line3d(points)
+    surface = view.surface3d([[0, 1], [2, 3]])
+
+    assert view._items == [surface]
+    assert len(view._point_sets) == 1
+
+
+def test_surface3d_overlay_preserves_existing_items(qapp):
+    view = ConsoleView3D()
+    line = view.line3d([[0, 0, 0], [1, 1, 1]])
+    surface = view.surface3d([[0, 1], [2, 3]], mode="overlay")
+
+    assert view._items == [line, surface]
+    assert len(view._point_sets) == 2
+
+
+def test_surface3d_rejects_per_point_colour(qapp):
+    view = ConsoleView3D()
+    colours = np.ones((4, 4), dtype=np.float64)
+
+    with pytest.raises(TypeError, match="single colour"):
+        view.surface3d([[0, 1], [2, 3]], colour=colours)
