@@ -1,22 +1,15 @@
-"""
-Animated parameter sweep of an iterative attractor
-
-
-Redraw the plot as QTimer advances the parameter 'a'. The value gets reset to
-its initial value when it reaches its end bound so run timer.stop() in the console
-to pause the animation
-"""
-
 import gc
 
+import numpy as np
 from numba import njit
-from pyqtgraph.Qt.QtCore import QTimer
 
 # disable garbage collection to stop periodic stuttering from repeated array allocation
 # enable again with gc.enable() if continuing with the console session after this example
 gc.disable()
 
-line = plot(
+attr = plots.new("Param sweep")
+
+item = attr.line(
     [],
     [],
     pen=None,
@@ -24,26 +17,18 @@ line = plot(
     symbolPen=None,
     symbolBrush="w",
     symbolSize=1,
-    plot="Sweep",
 )
 
 # fix view range so bounds don't get recomputed every frame
-pw = line.getViewBox().parentWidget()
+pw = item.getViewBox().parentWidget()
 pw.disableAutoRange()
 pw.setXRange(-1.1, 1.1)
 pw.setYRange(-1.1, 1.1)
 # pw.showGrid(x=False, y=False)
 
-a_start = -20
-a_end = 20
-a_current = a_start
-step = 0.025
-b = 1
-n = 50000
-
 
 @njit
-def itr_attr(a, b, n):
+def attractor(a, b, n):
     x = np.empty(n)
     y = np.empty(n)
 
@@ -66,17 +51,29 @@ def itr_attr(a, b, n):
     return x, y
 
 
-def update():
-    global step, a_current
-
-    x, y = itr_attr(a_current, b, n)
-    line.setData(x, y)
-    a_current += step
-
-    if a_current >= a_end:
-        a_current = a_start
+a_start = -20
+a_end = 20
+b = 1
+step = 0.01
+n = 20000
 
 
-timer = QTimer()
-timer.timeout.connect(update)
-timer.start(16)
+# use anim.frame, anim.time, anim.dt in animation callbacks
+# bind callback inputs so other console scripts don't overwrite them
+def update(
+    anim,
+    item=item,
+    attractor=attractor,
+    a_start=a_start,
+    a_end=a_end,
+    b=b,
+    n=n,
+    step=step,
+):
+    anim_span = a_end - a_start
+    a = a_start + (step * anim.frame) % anim_span
+    x, y = attractor(a, b, n)
+    item.setData(x, y)
+
+
+attr.explore.animation("Param sweep", callback=update, start=True)

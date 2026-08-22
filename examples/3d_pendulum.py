@@ -1,11 +1,4 @@
-"""Animated spherical pendulum in a 3D Explore view.
-
-The bob moves on the surface of a sphere. The rod, bob, and trail are updated
-with a QTimer while the solved trajectory stays fixed.
-"""
-
 import numpy as np
-from pyqtgraph.Qt.QtCore import QTimer
 from scipy.integrate import solve_ivp
 
 g = 9.81
@@ -50,7 +43,6 @@ y = L * np.sin(theta) * np.sin(phi)
 z = -L * np.cos(theta)
 
 view = views3d.new("Spherical pendulum")
-view.clear()
 
 rod = view.line3d(
     [],
@@ -110,28 +102,34 @@ axis = view.line3d(
 
 view.fit()
 
-frame = 0
 step = 5
 trail_length = 1200
 
 
-def as_points(x_values, y_values, z_values):
-    return np.column_stack([x_values, y_values, z_values])
+def as_points(x, y, z):
+    return np.column_stack([x, y, z])
 
 
-def update():
-    global frame
-
-    i = frame % samples
+# bind callback inputs so other console scripts don't overwrite them
+def update(
+    anim,
+    rod=rod,
+    bob=bob,
+    trail=trail,
+    x=x,
+    y=y,
+    z=z,
+    samples=samples,
+    trail_length=trail_length,
+    frame_step=step,
+    as_points=as_points,
+):
+    i = (anim.frame * frame_step) % samples
     start = max(0, i - trail_length)
 
     rod.setData(pos=as_points([0.0, x[i]], [0.0, y[i]], [0.0, z[i]]))
     bob.setData(pos=as_points([x[i]], [y[i]], [z[i]]))
     trail.setData(pos=as_points(x[start : i + 1], y[start : i + 1], z[start : i + 1]))
 
-    frame += step
 
-
-timer = QTimer()
-timer.timeout.connect(update)
-timer.start(16)
+view.explore.animation("Pendulum", callback=update)

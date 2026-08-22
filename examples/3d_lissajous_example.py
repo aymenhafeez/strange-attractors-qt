@@ -3,6 +3,8 @@
 a and b control the oscillation frequencies in the x and y directions.
 """
 
+import numpy as np
+
 v = views3d.new("Lissajous helix")
 
 a = v.explore.slider("a", value=1, start=0.0, end=5, step=0.01)
@@ -24,7 +26,7 @@ def points(a=a, b=b, t=t):
 
 def colours(a=a, b=b, t=t, cmap=cmap):
     values = np.sin(a.value * t) + np.cos(b.value * t)
-    return colourmap(values, cmap="magam")
+    return colourmap(values, cmap="viridis")
 
 
 def sample_points(points=points):
