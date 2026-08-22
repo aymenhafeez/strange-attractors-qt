@@ -50,18 +50,17 @@ class ConsoleAnimation(QtCore.QObject):
         return self
 
     def stop(self):
-        was_active = self.timer.isActive()
         self.timer.stop()
         self.frame = 0
         self.time = 0.0
-        self.step(advance=False)
-
-        if was_active:
-            self.changed.emit()
+        # NOTE: step calls the callback so if it has side effects other than updating the frame
+        # stopping the animation will trigger those effects
+        self.step(advance=False, emit=False)
+        self.changed.emit()
 
         return self
 
-    def step(self, *, advance=True):
+    def step(self, *, advance=True, emit=True):
         try:
             if self.callback_accepts_animation:
                 self.callback(self)
@@ -76,7 +75,8 @@ class ConsoleAnimation(QtCore.QObject):
             self.frame += 1
             self.time += self.dt
 
-        self.changed.emit()
+        if emit:
+            self.changed.emit()
 
         return self
 
