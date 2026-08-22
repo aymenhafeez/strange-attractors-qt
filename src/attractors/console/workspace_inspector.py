@@ -87,10 +87,11 @@ class WorkspaceInspector:
         self._console_panel = console_panel
 
     def __repr__(self):
-        plots = len(self._console_panel.names())
+        plots = len(self._console_panel.plots.names())
         views3d = len(self._console_panel.views3d.names())
+        animations = self._animation_count()
 
-        return f"WorkspaceInspector(plots={plots}, views3d={views3d})"
+        return f"WorkspaceInspector(plots={plots}, views3d={views3d}, animations={animations})"
 
     def _optional_help_table(self, data, table, name):
         if not table:
@@ -98,6 +99,20 @@ class WorkspaceInspector:
 
         self._console_panel.tables.show(data, name=name)
         return data
+
+    def _animation_count(self):
+        count = 0
+
+        for name in self._console_panel.plots.names():
+            plot = self._console_panel.plots.get(name, activate=False)
+            count += len(plot.explore.animation_names())
+
+        for name in self._console_panel.views3d.names():
+            view = self._console_panel.views3d.get(name, activate=False)
+            count += len(view.explore.animation_names())
+
+        return count
+
 
     def help(self, table=False):
         data = pd.DataFrame(HELP_ROWS, columns=["category", "command", "description"])
@@ -114,6 +129,7 @@ class WorkspaceInspector:
                 "active_name": active_name,
                 "plots": len(self._console_panel.plots.names()),
                 "views3d": len(self._console_panel.views3d.names()),
+                "animations": self._animation_count(),
                 "workspace_items": len(items),
             }
         )
