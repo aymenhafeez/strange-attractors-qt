@@ -7,7 +7,16 @@ class ConsoleAnimation(QtCore.QObject):
     changed = QtCore.pyqtSignal()
 
     def __init__(
-        self, name, callback, *, interval=16, dt=None, status_callback=None, parent=None
+        self,
+        name,
+        callback,
+        *,
+        interval=16,
+        dt=None,
+        frames=None,
+        loop=True,
+        status_callback=None,
+        parent=None,
     ):
         super().__init__(parent)
         key = str(name).strip()
@@ -26,6 +35,11 @@ class ConsoleAnimation(QtCore.QObject):
         if self.dt <= 0:
             raise ValueError("Animation dt must be positive")
 
+        self.frames = None if frames is None else int(frames)
+        if self.frames is not None and self.frames < 1:
+            raise ValueError("Animation frames must be at least 1")
+
+        self.loop = loop
         self.status_callback = status_callback
         self.frame = 0
         self.time = 0.0
@@ -34,6 +48,48 @@ class ConsoleAnimation(QtCore.QObject):
         self.timer = QtCore.QTimer(self)
         self.timer.setInterval(self.interval)
         self.timer.timeout.connect(self.step)
+
+    def has_timeline(self):
+        return self.frames is not None
+
+    def _clamp_frame(self, frame):
+        frame = int(frame)
+
+        if self.frames is None:
+            return max(0, frame)
+
+        if self.loop:
+            return frame % self.frames
+
+        return max(0, min(frame, self.frames - 1))
+
+    def seek(self, frame, *, emit=True):
+        if self.frames is None:
+            raise ValueError("Can't seek animation without finite frame count")
+
+        self.frame = self._clamp_frame(frame)
+        self.time = self.frame * self.dt
+
+        return self.refresh(emit=emit)
+
+    def _run_callback(self):
+        try:
+            if self.callback_accepts_animation:
+                self.callback(self)
+            else:
+                self.callback()
+        except Exception as e:
+            self.pause()
+            self.set_status(f"{self.name}: {e}")
+            raise
+
+    def refresh(self, *, emit=True):
+        self._run_callback()
+
+        if emit:
+            self.changed.emit()
+
+        return self
 
     def play(self):
         if not self.timer.isActive():
@@ -53,53 +109,32 @@ class ConsoleAnimation(QtCore.QObject):
         self.timer.stop()
         self.frame = 0
         self.time = 0.0
-        # NOTE: step calls the callback so if it has side effects other than updating the frame
-        # stopping the animation will trigger those effects
-        self.step(advance=False, emit=False)
+        self.refresh(emit=False)
         self.changed.emit()
 
         return self
 
-    def step(self, *, advance=True, emit=True):
-        try:
-            if self.callback_accepts_animation:
-                self.callback(self)
-            else:
-                self.callback()
-        except Exception as e:
-            self.pause()
-            self.set_status(f"{self.name}: {e}")
-            raise
+    def step(self, *, emit=True):
+        next_frame = self._clamp_frame(self.frame + 1)
+        reached_end = (
+            self.frames is not None and not self.loop and next_frame == self.frames - 1
+        )
 
-        if advance:
-            self.frame += 1
-            self.time += self.dt
+        self.frame = next_frame
+        self.time = self.frame * self.dt
+        self.refresh(emit=emit)
 
-        if emit:
-            self.changed.emit()
+        if reached_end:
+            self.timer.stop()
 
         return self
 
     def step_back(self, *, emit=True):
         if self.frame > 0:
             self.frame -= 1
-            # ensure time doesn't go negative
-            self.time = max(0, self.time - self.dt)
+            self.time = self.frame * self.dt
 
-        try:
-            if self.callback_accepts_animation:
-                self.callback(self)
-            else:
-                self.callback()
-        except Exception as e:
-            self.pause()
-            self.set_status(f"{self.name}: {e}")
-            raise
-
-        if emit:
-            self.changed.emit()
-
-        return self
+        return self.refresh(emit=emit)
 
     def is_active(self):
         return self.timer.isActive()
