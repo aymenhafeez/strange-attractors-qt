@@ -225,7 +225,17 @@ class PlotExplorer(QtCore.QObject):
             name, value=int(value), start=int(start), end=int(end), step=int(step)
         )
 
-    def animation(self, name, callback, *, interval=16, dt=None, start=False):
+    def animation(
+        self,
+        name,
+        callback,
+        *,
+        interval=16,
+        dt=None,
+        frames=None,
+        loop=False,
+        start=False,
+    ):
         key = str(name).strip()
         if not key:
             raise ValueError("Animation name can't be empty")
@@ -241,6 +251,8 @@ class PlotExplorer(QtCore.QObject):
             callback,
             interval=interval,
             dt=dt,
+            frames=frames,
+            loop=loop,
             status_callback=self.status_callback,
             parent=self,
         )

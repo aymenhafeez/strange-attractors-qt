@@ -211,8 +211,23 @@ class ConsoleAnimationWidget(QtWidgets.QWidget):
         self.interval_spin.setValue(animation.interval)
         self.interval_spin.setToolTip("Animation interval")
 
+        self.timeline = None
+        self._resume_after_scrub = False
+
+        if animation.has_timeline():
+            self.timeline = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+            self.timeline.setRange(0, animation.frames - 1)
+            self.timeline.setValue(animation.frame)
+            self.timeline.setToolTip("Animation timeline")
+
         layout.addWidget(self.name_label)
-        layout.addStretch(1)
+
+        if self.timeline is not None:
+            layout.addWidget(self.timeline)
+        else:
+            layout.addStretch(1)
+
+        # layout.addStretch(1)
         layout.addWidget(self.rewind_button)
         layout.addWidget(self.play_button)
         layout.addWidget(self.stop_button)
@@ -227,7 +242,25 @@ class ConsoleAnimationWidget(QtWidgets.QWidget):
         self.interval_spin.valueChanged.connect(self.animation.set_interval)
         self.animation.changed.connect(self.sync)
 
+        if self.timeline is not None:
+            self.timeline.sliderPressed.connect(self.begin_scrub)
+            self.timeline.sliderMoved.connect(self.animation.seek)
+            self.timeline.sliderReleased.connect(self.end_scrub)
+
         self.sync()
+
+    def begin_scrub(self):
+        self._resume_after_scrub = self.animation.is_active()
+        self.animation.pause()
+
+    def end_scrub(self):
+        if self.timeline is not None:
+            self.animation.seek(self.timeline.value())
+
+        if self._resume_after_scrub:
+            self.animation.play()
+
+        self._resume_after_scrub = False
 
     def toggle_play(self):
         if self.animation.is_active():
@@ -242,6 +275,10 @@ class ConsoleAnimationWidget(QtWidgets.QWidget):
         self.play_button.setIcon(
             pause_icon if self.animation.is_active() else play_icon
         )
+
+        if self.timeline is not None and not self.timeline.isSliderDown():
+            with QtCore.QSignalBlocker(self.timeline):
+                self.timeline.setValue(self.animation.frame)
 
         with QtCore.QSignalBlocker(self.interval_spin):
             self.interval_spin.setValue(self.animation.interval)
