@@ -100,8 +100,6 @@ axis = view.line3d(
     mode="overlay",
 )
 
-view.fit()
-
 step = 5
 trail_length = 1200
 
@@ -132,4 +130,7 @@ def update(
     trail.setData(pos=as_points(x[start : i + 1], y[start : i + 1], z[start : i + 1]))
 
 
-view.explore.animation("Pendulum", callback=update)
+view.explore.animation("Pendulum", callback=update, frames=1000)
+view.fit()
+view.orbit(True)
+view.grid(False)

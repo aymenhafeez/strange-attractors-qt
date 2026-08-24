@@ -76,4 +76,4 @@ def update(
     item.setData(x, y)
 
 
-attr.explore.animation("Param sweep", callback=update, start=True)
+attr.explore.animation("Param sweep", callback=update, start=True, frames=4000)
