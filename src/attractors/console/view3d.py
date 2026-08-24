@@ -860,7 +860,7 @@ class View3DExplorer(QtCore.QObject):
         if old is not None:
             old.pause()
             self.param_layout.removeWidget(old.widget)
-            old.deleteLater()
+            old.widget.deleteLater()
 
         animation = ConsoleAnimation(
             key,
