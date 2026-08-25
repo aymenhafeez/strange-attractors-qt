@@ -502,6 +502,7 @@ class ConsoleView3D:
         colour=(0.2, 0.8, 1.0, 1.0),
         shader="shaded",
         smooth=True,
+        show_grid=False
     ):
         x_grid, y_grid, z_grid, points = check_surface_grid(x, y, z)
         x_axis, y_axis = rectilinear_surface_axes(x_grid, y_grid)
@@ -514,7 +515,13 @@ class ConsoleView3D:
             raise TypeError("surface3d colour must be a single colour")
 
         item = gl.GLSurfacePlotItem(
-            x=x_axis, y=y_axis, z=z_grid, color=colour, shader=shader, smooth=smooth
+            x=x_axis,
+            y=y_axis,
+            z=z_grid,
+            color=colour,
+            shader=shader,
+            smooth=smooth,
+            showGrid=show_grid,
         )
 
         self.view.addItem(item)
