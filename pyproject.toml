@@ -34,7 +34,11 @@ dev = [
     "ipython>=9.15.0",
     "pytest>=9.1.1",
     "ruff>=0.16.0",
+    "ty>=0.0.73",
 ]
 
 [tool.uv]
 package = true
+
+[tool.uv.sources]
+pyqtgraph = { git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "master" }
