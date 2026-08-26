@@ -316,7 +316,7 @@ class ConsoleView3D:
         self.view = gl.GLViewWidget()
         self.camera_controller = CameraController(self.view)
         self.grid_overlay = GridOverlay(self.view)
-        self.grid_overlay.build_grid(50.0)
+        self.grid_overlay.build_grid()
 
         self.v_layout.addWidget(self.view, 1)
 
@@ -379,17 +379,27 @@ class ConsoleView3D:
             self._point_sets.pop(index)
 
     def point_sets(self):
-        # get the current points from registered traces for fitting the camera
-        point_sets = list(self._point_sets)
+        trace_items = set()
+        point_sets = []
 
         if hasattr(self, "explore"):
             for trace in self.explore._traces.values():
+                trace_items.add(trace.item)
                 point_sets.append(trace.points())
+
+        for item, points in zip(self._items, self._point_sets):
+            if item not in trace_items:
+                point_sets.append(points)
 
         return point_sets
 
     def fit(self):
+        self.grid_overlay.auto_adjust_grid(self.point_sets())
         self.camera_controller.fit_camera_to_solutions(self.point_sets())
+        return self
+
+    def auto_adjust_grid(self):
+        self.grid_overlay.auto_adjust_grid(self.point_sets())
         return self
 
     def reset_camera(self):
@@ -451,6 +461,7 @@ class ConsoleView3D:
         self.view.addItem(item)
         self._items.append(item)
         self._point_sets.append(points)
+        self.auto_adjust_grid()
         self.camera_controller.fit_camera_to_solutions([points])
 
         return item
@@ -488,6 +499,7 @@ class ConsoleView3D:
         self.view.addItem(item)
         self._items.append(item)
         self._point_sets.append(points)
+        self.auto_adjust_grid()
         self.camera_controller.fit_camera_to_solutions([points])
 
         return item
@@ -502,7 +514,7 @@ class ConsoleView3D:
         colour=(0.2, 0.8, 1.0, 1.0),
         shader="shaded",
         smooth=True,
-        show_grid=False
+        show_grid=False,
     ):
         x_grid, y_grid, z_grid, points = check_surface_grid(x, y, z)
         x_axis, y_axis = rectilinear_surface_axes(x_grid, y_grid)
@@ -527,6 +539,7 @@ class ConsoleView3D:
         self.view.addItem(item)
         self._items.append(item)
         self._point_sets.append(points)
+        self.auto_adjust_grid()
         self.camera_controller.fit_camera_to_solutions([points])
 
         return item
@@ -562,6 +575,7 @@ class ConsoleView3D:
         self.view.addItem(item)
         self._items.append(item)
         self._point_sets.append(points)
+        self.auto_adjust_grid()
         self.camera_controller.fit_camera_to_solutions([points])
 
         return item
@@ -1029,11 +1043,17 @@ class View3DExplorer(QtCore.QObject):
         )
 
     def refresh(self):
+        changed = False
+
         for trace in list(self._traces.values()):
             try:
                 trace.update()
+                changed = True
             except (TypeError, ValueError, FloatingPointError) as exc:
                 self._set_status(f"{trace.name}: {exc}")
+
+        if changed:
+            self.view.auto_adjust_grid()
 
     def clear(self):
         self.clear_animations()

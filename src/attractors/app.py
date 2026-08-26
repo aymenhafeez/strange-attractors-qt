@@ -36,7 +36,6 @@ from .ui.right_panel import RightPanel
 from .ui.style import SCENE_TOOLBAR, SPLITTER_HANDLE_HOVER
 from .ui.system_toolbar import SystemToolbar
 from .ui.workspace_panel import WorkspacePanel
-from .view.grid_overlay import DEFAULT_GRID_HALF_SIZE
 from .view.view_manager import ViewManager
 from .workers.solve_manager import SolveManager
 
@@ -361,7 +360,7 @@ class Window(QtWidgets.QMainWindow):
         if app is not None:
             app.focusChanged.connect(self._on_focus_changed)
 
-        self.scene.grid_overlay.build_grid(DEFAULT_GRID_HALF_SIZE)
+        self.scene.grid_overlay.build_grid()
         self._refresh_presets()
         self.controls.set_current_attractor(self.current_name)
         self._rebuild_view(self.current_name)
