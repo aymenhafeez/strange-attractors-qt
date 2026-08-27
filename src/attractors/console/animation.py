@@ -92,6 +92,12 @@ class ConsoleAnimation(QtCore.QObject):
         return self
 
     def play(self):
+        # ugly but reset the animation and keep the last frame showing when animation ends
+        # then clicking play again starts it from the beginning
+        if self.frames is not None and not self.loop and self.frame == self.frames - 1:
+            self.frame = 0
+            self.time = 0.0
+
         if not self.timer.isActive():
             self.timer.start()
             self.changed.emit()
@@ -125,7 +131,7 @@ class ConsoleAnimation(QtCore.QObject):
         self.refresh(emit=emit)
 
         if reached_end:
-            self.timer.stop()
+            self.pause()
 
         return self
 
