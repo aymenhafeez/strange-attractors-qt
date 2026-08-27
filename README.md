@@ -1,6 +1,6 @@
 # strange-attractors-qt
 
-[PyQtGraph](https://github.com/pyqtgraph/pyqtgraph) app for strange attractor and general mathematical visualisation and exploration.
+Python tool for mathematical visualisation and exploration.
 
 <table>
   <tr>
