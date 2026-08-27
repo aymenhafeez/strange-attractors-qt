@@ -1022,7 +1022,7 @@ wheels = [
 [[package]]
 name = "pyqtgraph"
 version = "0.15.0.dev0"
-source = { git = "https://github.com/pyqtgraph/pyqtgraph.git?rev=master#8c6ea92df8b6f86543ee72d17709c79b9c3e144b" }
+source = { git = "https://github.com/pyqtgraph/pyqtgraph.git?rev=d946dfe9dbddcc1d3068379fce36fd4257631404#d946dfe9dbddcc1d3068379fce36fd4257631404" }
 dependencies = [
     { name = "colorama" },
     { name = "numpy" },
@@ -1269,7 +1269,7 @@ requires-dist = [
     { name = "pyopengl", specifier = ">=3.1.10" },
     { name = "pyqt6", specifier = ">=6.11.0" },
     { name = "pyqt6-qscintilla", specifier = ">=2.14.1" },
-    { name = "pyqtgraph", git = "https://github.com/pyqtgraph/pyqtgraph.git?rev=master" },
+    { name = "pyqtgraph", git = "https://github.com/pyqtgraph/pyqtgraph.git?rev=d946dfe9dbddcc1d3068379fce36fd4257631404" },
     { name = "qtconsole", specifier = ">=5.7.0" },
     { name = "scipy", specifier = ">=1.18.0" },
 ]

@@ -41,4 +41,4 @@ dev = [
 package = true
 
 [tool.uv.sources]
-pyqtgraph = { git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "master" }
+pyqtgraph = { git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "d946dfe9dbddcc1d3068379fce36fd4257631404" }
