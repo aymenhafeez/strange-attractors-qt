@@ -50,13 +50,13 @@ uv sync
 uv run analysis
 ```
 
-Run tests:
+Testing:
 
 ```bash
 uv run pytest -q
 ```
 
-Enable performance logging (outputs attractor and lyapunov solve times):
+Enable performance logging (currently only outputs attractor and lyapunov solve times):
 
 ```bash
 ANALYSIS_PROFILE=1 uv run analysis
