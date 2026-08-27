@@ -22,7 +22,7 @@ HELP_ROWS = [
     ),
     (
         "2D plotting",
-        "p.explore.animation(name, callback, interval=16)",
+        "p.explore.animation(name, callback, interval=16, dt, frames, loop=False)",
         "Add a plot local animation",
     ),
     ("2D plotting", "p.explore.curve(name, x, y)", "Add a reactive line trace"),
@@ -51,7 +51,7 @@ HELP_ROWS = [
     ),
     (
         "3D plotting",
-        "v.explore.animation(name, callback, interval=16)",
+        "v.explore.animation(name, callback, interval=16, dt, frames, loop=False)",
         "Add a view local animation",
     ),
     ("3D plotting", "v.explore.line3d(name, points)", "Add a reactive 3D line trace"),
@@ -112,7 +112,6 @@ class WorkspaceInspector:
             count += len(view.explore.animation_names())
 
         return count
-
 
     def help(self, table=False):
         data = pd.DataFrame(HELP_ROWS, columns=["category", "command", "description"])
