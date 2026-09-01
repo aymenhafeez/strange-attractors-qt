@@ -4,6 +4,8 @@ from bisect import bisect_right
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .docking import Dock, DockArea
+
 SAMPLE_COLUMNS = ("trajectory", "step", "t", "x", "y", "z")
 MEASURE_COLUMNS = ("trajectory", "step", "t", "radius", "speed", "displacement")
 DEFAULT_SAMPLE_SIZE = 2000
@@ -357,11 +359,20 @@ class DataViewPanel(QtWidgets.QWidget):
         self.tabs.addTab(self.bounds_table, "Bounds")
         self.tabs.addTab(self.measures_table, "Measures")
 
+        dock_area = DockArea()
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 8)
-        layout.setSpacing(6)
-        layout.addLayout(toolbar)
-        layout.addWidget(self.tabs)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(dock_area)
+
+        table_dock = Dock("Table")
+
+        # layout.setSpacing(6)
+        table_content = QtWidgets.QWidget()
+        table_layout = QtWidgets.QVBoxLayout(table_content)
+        table_layout.addLayout(toolbar)
+        table_layout.addWidget(self.tabs)
+        table_dock.addWidget(table_content)
+        dock_area.addDock(table_dock)
 
     def set_solutions(
         self,
