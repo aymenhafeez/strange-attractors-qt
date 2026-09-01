@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from ..ui.docking import AreaBoundDock as Dock
+from ..ui.docking import AppDock as Dock
 
 
 def normalise_table_data(data):

@@ -3,8 +3,8 @@
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from ..ui.docking import AreaBoundDock as Dock
-from ..ui.docking import AreaBoundDockArea as DockArea
+from ..ui.docking import AppDock as Dock
+from ..ui.docking import AppDockArea as DockArea
 from ..ui.style import CONSOLE_PLOT_PARAMS, is_dark_mode
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel

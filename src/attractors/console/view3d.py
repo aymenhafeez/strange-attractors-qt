@@ -2,7 +2,7 @@ import numpy as np
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from ..ui.docking import AreaBoundDock as Dock
+from ..ui.docking import AppDock as Dock
 from ..ui.style import CONSOLE_PLOT_PARAMS
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
