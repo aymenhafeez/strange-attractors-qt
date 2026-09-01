@@ -3,7 +3,8 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 from .custom_panel import CustomPanel
 
 # from .style import SIDE_PANEL
-from .docking import Dock, DockArea
+from .docking import AppDock as Dock
+from .docking import AppDockArea as DockArea
 from .preset_panel import PresetPanel
 from .trajectory_panel import TrajectoryPanel
 

@@ -26,8 +26,8 @@ from .presets import (
 from .systems.registry import ATTRACTORS
 from .ui.bifurcation_panel import BifurcationPanel
 from .ui.control_panel import ControlPanel
-from .ui.docking import AreaBoundDock as Dock
-from .ui.docking import AreaBoundDockArea as DockArea
+from .ui.docking import AppDock as Dock
+from .ui.docking import AppDockArea as DockArea
 from .ui.lyapunov_panel import LyapunovPanel
 from .ui.poincare_panel import PoincarePanel
 from .ui.process_metrics import ProcessUsageStatus

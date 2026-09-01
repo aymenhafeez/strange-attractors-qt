@@ -2,7 +2,8 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..systems.registry import ATTRACTORS
 from .data_view_panel import DataViewPanel
-from .docking import Dock, DockArea
+from .docking import AppDock as Dock
+from .docking import AppDockArea as DockArea
 from .style import SIDE_PANEL
 
 STEP = 1000
