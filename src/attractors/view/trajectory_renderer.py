@@ -203,6 +203,14 @@ class TrajectoryRenderer:
 
         return traj.get("size", 1.0)
 
+    def _trajectory_line_width(self, i):
+        traj = self._trajectories[i] if i < len(self._trajectories) else None
+
+        if traj is None:
+            return self._current_line_width
+
+        return traj.get("size", self._current_line_width)
+
     def _set_trajectory_data(self, i, *, pos=None, colour=None):
         if i >= len(self._scatters):
             return
@@ -216,8 +224,7 @@ class TrajectoryRenderer:
 
         self._scatters[i].setData(size=self._trajectory_size(i), **kwargs)
         self._scatters[i].setVisible(not line_mode)
-        # self._lines[i].setData(width=self._trajectory_size(i), **kwargs)
-        self._lines[i].setData(width=self._current_line_width, **kwargs)
+        self._lines[i].setData(width=self._trajectory_size(i), **kwargs)
         self._lines[i].setVisible(line_mode)
 
         if i < len(self._heads) and colour is not None:
@@ -245,10 +252,7 @@ class TrajectoryRenderer:
                     pos=render_segment, color=colour, size=self._trajectory_size(i)
                 )
                 self._lines[i].setData(
-                    # pos=render_segment, color=colour, width=self._trajectory_size(i)
-                    pos=render_segment,
-                    color=colour,
-                    width=self._current_line_width,
+                    pos=render_segment, color=colour, width=self._trajectory_size(i)
                 )
             if i < len(self._heads):
                 self._heads[i].setData(pos=render_segment[-1:], color=colour[-1:])
