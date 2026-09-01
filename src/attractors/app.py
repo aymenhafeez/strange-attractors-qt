@@ -615,7 +615,7 @@ class Window(QtWidgets.QMainWindow):
             toolbar,
             "Orbit",
             False,
-            self.scene.camera_controller.set_orbit_mode,
+            self._set_orbit_mode,
             "Orbit camera automatically",
             icon=self._toolbar_icon(
                 "object-rotate-right",
@@ -1048,6 +1048,10 @@ class Window(QtWidgets.QMainWindow):
         self.controls.trajectory_panel.set_render_mode_all(mode)
         self.scene.trajectory_renderer.set_line_mode(checked)
         self.controls.set_linewidth_option_visible(checked)
+
+    def _set_orbit_mode(self, enabled):
+        self.scene.camera_controller.set_orbit_mode(enabled)
+        self.controls.orbit_speed_wrapper.setVisible(enabled)
 
     def _set_right_panel_visible(self, checked):
         if checked:
@@ -2667,7 +2671,7 @@ class Window(QtWidgets.QMainWindow):
 
     def closeEvent(self, a0):
         self.jupyter_console_panel.shutdown_kernel()
-        self.scene.camera_controller.set_orbit_mode(False)
+        self._set_orbit_mode(False)
         self.scene.animation_controller.stop()
         self.solver.shutdown()
 
