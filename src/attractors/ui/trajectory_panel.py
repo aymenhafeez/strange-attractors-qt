@@ -13,8 +13,6 @@ DEFAULT_PALETTE = [
 ]
 
 MAX_TRAJECTORIES = 8
-ROW_TREE_MIN_HEIGHT = 96
-ROW_HEIGHT = 26
 
 
 class _TrajectoryRow(QtCore.QObject):
@@ -152,7 +150,6 @@ class _TrajectoryRow(QtCore.QObject):
 class TrajectoryPanel(QtWidgets.QWidget):
     trajectories_changed = QtCore.pyqtSignal(list)
     styles_changed = QtCore.pyqtSignal(list)
-    layout_changed = QtCore.pyqtSignal()
 
     def __init__(self, parent=None, *, collapsible=True):
         super().__init__(parent)
@@ -160,7 +157,6 @@ class TrajectoryPanel(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
         self.toggle_btn = None
         if self._collapsible:
@@ -171,26 +167,18 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self._content = QtWidgets.QWidget()
         self._content.setObjectName("customPanelContent")
         self._content.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Preferred,
-            QtWidgets.QSizePolicy.Policy.Maximum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
         )
         content_layout = QtWidgets.QVBoxLayout(self._content)
-        content_layout.setContentsMargins(4, 6, 4, 6)
-        content_layout.setSpacing(6)
-        content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        content_layout.setContentsMargins(0, 0, 0, 0)
 
         self._rows_container = ParameterTree(showHeader=True)
-        self._rows_container.itemExpanded.connect(
-            lambda _item: self._resize_to_content()
-        )
-        self._rows_container.itemCollapsed.connect(
-            lambda _item: self._resize_to_content()
-        )
         self._rows_container.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Preferred,
-            QtWidgets.QSizePolicy.Policy.Maximum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
         )
-        self._rows_container.setMinimumHeight(ROW_TREE_MIN_HEIGHT)
+        self._rows_container.setMinimumHeight(96)
         self._root_param = Parameter.create(
             name="Trajectories",
             type="group",
@@ -230,7 +218,6 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self._content.setVisible(visible)
         self.toggle_btn.setText("Trajectories ▾" if visible else "Trajectories ▸")
         self.adjustSize()
-        self.layout_changed.emit()
 
     def _on_enable_toggled(self, enabled: bool):
         self._add_param.setOpts(enabled=enabled)
@@ -290,7 +277,6 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self._root_param.insertChild(insert_at, row.param)
         row.set_enabled(self.is_enabled())
         self._sync_row_identities()
-        self._resize_to_content()
         self._emit()
 
     def _remove_row(self, row: _TrajectoryRow):
@@ -298,34 +284,11 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self._root_param.removeChild(row.param)
         row.deleteLater()
         self._sync_row_identities()
-        self._resize_to_content()
         self._emit()
 
     def _sync_row_identities(self):
         for index, row in enumerate(self._rows):
             row.set_identity(index)
-
-    def _resize_to_content(self):
-        QtCore.QTimer.singleShot(0, self._apply_resize)
-
-    def _apply_resize(self):
-        max_item_bottom = 0
-        item_count = 0
-        for item in self._rows_container.listAllItems():
-            rect = self._rows_container.visualItemRect(item)
-            if rect.isValid():
-                max_item_bottom = max(max_item_bottom, rect.y() + rect.height())
-            item_count += 1
-        if max_item_bottom:
-            height = self._rows_container.header().height() + max_item_bottom + 6
-        else:
-            height = (
-                self._rows_container.header().height() + item_count * ROW_HEIGHT + 6
-            )
-        self._rows_container.setFixedHeight(max(ROW_TREE_MIN_HEIGHT, height))
-        self._content.adjustSize()
-        self.adjustSize()
-        self.layout_changed.emit()
 
     def _emit(self):
         if self._suppress_emit:

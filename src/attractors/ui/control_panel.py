@@ -2,6 +2,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..systems.registry import ATTRACTORS
 from .data_view_panel import DataViewPanel
+from .docking import Dock, DockArea
 from .style import SIDE_PANEL
 
 STEP = 1000
@@ -60,14 +61,13 @@ class ControlPanel(QtWidgets.QWidget):
 
         self.content_frame = QtWidgets.QFrame()
         self.content_frame.setObjectName("sidePanelFrame")
+
         content_layout = QtWidgets.QVBoxLayout(self.content_frame)
         content_layout.setContentsMargins(2, 2, 2, 2)
         content_layout.setSpacing(0)
 
-        self.content_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
-        self.content_splitter.setObjectName("sidePanelSplitter")
-        self.content_splitter.setChildrenCollapsible(False)
-        content_layout.addWidget(self.content_splitter)
+        self.dock_area = DockArea()
+        content_layout.addWidget(self.dock_area)
         self.panel_layout.addWidget(self.content_frame)
 
         self.controls_scroll = QtWidgets.QScrollArea()
@@ -79,12 +79,21 @@ class ControlPanel(QtWidgets.QWidget):
         self.controls_layout.setContentsMargins(8, 8, 8, 8)
         self.controls_layout.setSpacing(7)
         self.controls_scroll.setWidget(self.controls_tab)
-        self.content_splitter.addWidget(self.controls_scroll)
+
+        self.controls_dock = Dock("Controls", size=(1, 360), closable=False)
+        self.controls_dock.addWidget(self.controls_scroll)
+        self.dock_area.addDock(self.controls_dock)
 
         self.data_view = DataViewPanel()
         self.data_view.setMinimumHeight(190)
-        self.content_splitter.addWidget(self.data_view)
-        self.content_splitter.setSizes([360, 240])
+
+        self.data_dock = Dock("Data", size=(1, 240), closable=False)
+        self.data_dock.addWidget(self.data_view)
+        self.dock_area.addDock(
+            self.data_dock,
+            position="bottom",
+            relativeTo=self.controls_dock,
+        )
 
         options = QtWidgets.QHBoxLayout()
         options.addWidget(self.dropdown)

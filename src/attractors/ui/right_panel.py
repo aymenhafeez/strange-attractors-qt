@@ -1,10 +1,21 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .custom_panel import CustomPanel
-from .preset_panel import PresetPanel
 
 # from .style import SIDE_PANEL
+from .docking import Dock, DockArea
+from .preset_panel import PresetPanel
 from .trajectory_panel import TrajectoryPanel
+
+
+def _scrollable(widget):
+    scroll = QtWidgets.QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+    scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    scroll.setWidget(widget)
+
+    return scroll
 
 
 class _PanelTree(QtWidgets.QTreeWidget):
@@ -91,37 +102,33 @@ class RightPanel(QtWidgets.QWidget):
         layout.setContentsMargins(2, 2, 4, 4)
         layout.setSpacing(0)
 
-        self.tree = _PanelTree()
-        layout.addWidget(self.tree)
+        self.dock_area = DockArea()
+        layout.addWidget(self.dock_area)
 
         self.trajectory_panel = TrajectoryPanel(collapsible=False)
         self.preset_panel = PresetPanel()
         self.custom_panel = CustomPanel(collapsible=False)
 
-        self.trajectory_root = self.tree.add_panel(
-            "Trajectories",
-            self.trajectory_panel,
-            expanded=True,
+        self.trajectory_dock = Dock("Trajectories", size=(1, 260), closable=False)
+        self.trajectory_dock.addWidget(self.trajectory_panel)
+        self.dock_area.addDock(self.trajectory_dock)
+
+        self.preset_dock = Dock("Presets", size=(1, 260), closable=False)
+        self.preset_dock.addWidget(_scrollable(self.preset_panel))
+        self.dock_area.addDock(
+            self.preset_dock, position="bottom", relativeTo=self.trajectory_dock
         )
-        self.preset_root = self.tree.add_panel(
-            "Presets",
-            self.preset_panel,
-            expanded=True,
-        )
-        self.custom_root = self.tree.add_panel(
-            "Custom",
-            self.custom_panel,
-            expanded=False,
-        )
-        self.trajectory_panel.layout_changed.connect(
-            self.tree.schedule_embedded_size_sync
+
+        self.custom_dock = Dock("Custom", size=(1, 300), closable=False)
+        self.custom_dock.addWidget(_scrollable(self.custom_panel))
+        self.dock_area.addDock(
+            self.custom_dock, position="below", relativeTo=self.preset_dock
         )
 
         self.set_current_attractor("")
 
     def set_current_attractor(self, name):
-        custom = name == "Custom"
-        self.custom_root.setHidden(not custom)
-        self.custom_panel.setVisible(custom)
-        if custom:
-            self.custom_root.setExpanded(True)
+        if name == "Custom":
+            self.custom_dock.raiseDock()
+        else:
+            self.preset_dock.raiseDock()
