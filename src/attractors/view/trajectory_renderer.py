@@ -32,6 +32,7 @@ class TrajectoryRenderer:
         self._trajectories = []
         self._base_colour = (1.0, 1.0, 1.0)
         self._current_alpha = 1.0
+        self._current_line_width = 1.0
         self._line_mode = False
         self._trail_mode = False
         self._heads_visible = True
@@ -81,6 +82,11 @@ class TrajectoryRenderer:
         visible = self._heads_visible and self._timer_active()
         for head in self._heads:
             head.setVisible(visible)
+
+    def set_line_width(self, val):
+        self._current_line_width = val
+        for line in self._lines:
+            line.setData(width=self._current_line_width)
 
     def set_alpha(self, val):
         self._current_alpha = val / 100.0 if val > 1 else val
@@ -210,7 +216,8 @@ class TrajectoryRenderer:
 
         self._scatters[i].setData(size=self._trajectory_size(i), **kwargs)
         self._scatters[i].setVisible(not line_mode)
-        self._lines[i].setData(width=self._trajectory_size(i), **kwargs)
+        # self._lines[i].setData(width=self._trajectory_size(i), **kwargs)
+        self._lines[i].setData(width=self._current_line_width, **kwargs)
         self._lines[i].setVisible(line_mode)
 
         if i < len(self._heads) and colour is not None:
@@ -238,7 +245,10 @@ class TrajectoryRenderer:
                     pos=render_segment, color=colour, size=self._trajectory_size(i)
                 )
                 self._lines[i].setData(
-                    pos=render_segment, color=colour, width=self._trajectory_size(i)
+                    # pos=render_segment, color=colour, width=self._trajectory_size(i)
+                    pos=render_segment,
+                    color=colour,
+                    width=self._current_line_width,
                 )
             if i < len(self._heads):
                 self._heads[i].setData(pos=render_segment[-1:], color=colour[-1:])

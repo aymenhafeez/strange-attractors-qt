@@ -186,6 +186,26 @@ class ControlPanel(QtWidgets.QWidget):
         self.traj_tail_wrapper.setVisible(False)
         self.controls_layout.addWidget(self.traj_tail_wrapper)
 
+        self.line_width_wrapper = QtWidgets.QWidget()
+        self.line_width_row = QtWidgets.QHBoxLayout()
+        self.line_width_row.setSpacing(10)
+        self.line_width_label = QtWidgets.QLabel("LW")
+        self.line_width_row.addWidget(self.line_width_label)
+        self.line_width_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.line_width_slider.setRange(1, 10)
+        self.line_width_slider.setValue(1)
+        self.line_width_spin = QtWidgets.QSpinBox()
+        self.line_width_spin.setRange(1, 10)
+        self.line_width_spin.setKeyboardTracking(False)
+        self.line_width_spin.setValue(1)
+        self.line_width_slider.valueChanged.connect(self.line_width_spin.setValue)
+        self.line_width_spin.valueChanged.connect(self.line_width_slider.setValue)
+        self.line_width_row.addWidget(self.line_width_slider)
+        self.line_width_row.addWidget(self.line_width_spin)
+        self.line_width_wrapper.setLayout(self.line_width_row)
+        self.line_width_wrapper.setVisible(False)
+        self.controls_layout.addWidget(self.line_width_wrapper)
+
     def _on_attractor_selected(self, name):
         self.set_current_attractor(name)
         self.attractor_changed.emit(name)
@@ -208,6 +228,9 @@ class ControlPanel(QtWidgets.QWidget):
 
     def set_trail_options_visible(self, visible):
         self.traj_tail_wrapper.setVisible(bool(visible))
+
+    def set_linewidth_option_visible(self, visible):
+        self.line_width_wrapper.setVisible(bool(visible))
 
     def configure(self, config):
         self._clear_sliders()

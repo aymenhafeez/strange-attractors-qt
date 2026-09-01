@@ -195,6 +195,12 @@ class Window(QtWidgets.QMainWindow):
         self.controls.alpha_spin.valueChanged.connect(
             self.scene.trajectory_renderer.set_alpha
         )
+        self.controls.line_width_slider.valueChanged.connect(
+            self.scene.trajectory_renderer.set_line_width
+        )
+        self.controls.line_width_spin.valueChanged.connect(
+            self.scene.trajectory_renderer.set_line_width
+        )
         self.right_panel.preset_panel.preset_save_requested.connect(self._save_preset)
         self.right_panel.preset_panel.preset_load_requested.connect(self._load_preset)
         self.right_panel.preset_panel.preset_delete_requested.connect(
@@ -1041,6 +1047,7 @@ class Window(QtWidgets.QMainWindow):
         mode = "line" if checked else "points"
         self.controls.trajectory_panel.set_render_mode_all(mode)
         self.scene.trajectory_renderer.set_line_mode(checked)
+        self.controls.set_linewidth_option_visible(checked)
 
     def _set_right_panel_visible(self, checked):
         if checked:
