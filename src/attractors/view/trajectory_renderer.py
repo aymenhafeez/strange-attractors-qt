@@ -34,7 +34,7 @@ class TrajectoryRenderer:
         self._trajectories = []
         self._base_colour = plot_colours()["trajectory"]
         self._current_alpha = 1.0
-        self._current_line_width = 1.0
+        self._current_line_width = plot_colours()["is_dark"] and 1.0 or 2.0
         self._line_mode = False
         self._trail_mode = False
         self._heads_visible = True
@@ -205,10 +205,11 @@ class TrajectoryRenderer:
     def _trajectory_size(self, i):
         traj = self._trajectories[i] if i < len(self._trajectories) else None
 
+        size = plot_colours()["is_dark"] and 1.0 or 2.0
         if traj is None:
-            return 1.0
+            return size
 
-        return traj.get("size", 1.0)
+        return traj.get("size", size)
 
     def _trajectory_line_width(self, i):
         traj = self._trajectories[i] if i < len(self._trajectories) else None
