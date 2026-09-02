@@ -1,3 +1,4 @@
+from pyqtgraph.dockarea.Container import TContainer
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
 from pyqtgraph.Qt import QtCore
@@ -17,7 +18,10 @@ class AppDock(Dock):
         self.container_changed.emit()
 
     def raiseDock(self):
-        super().raiseDock()
+        container = self.container()
+        if isinstance(container, TContainer):
+            container.raiseDock(self)
+
         self.activated.emit()
 
 
