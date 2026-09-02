@@ -5,6 +5,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 from pyqtgraph.Qt.QtCore import QThreadPool
 
 from ..workers.bifurcation_worker import BifurcationWorker
+from .style import plot_colours
 
 
 class BifurcationZoom(QtWidgets.QWidget):
@@ -19,12 +20,18 @@ class BifurcationZoom(QtWidgets.QWidget):
         self.zoom_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self.zoom_widget.showGrid(x=True, y=True, alpha=0.25)
         self.zoom_widget.setLabel("bottom", "Parameter value")
+        self.zoom_widget.setBackground(plot_colours()["plot_background"])
 
         self.region.setZValue(10)
         self.plot_widget.addItem(self.region, ignoreBounds=True)
 
         self.zoom_data = self.zoom_widget.plot(
-            [], [], pen=None, symbol="o", symbolSize=0.25, symbolBrush="white"
+            [],
+            [],
+            pen=None,
+            symbol="o",
+            symbolSize=0.25,
+            symbolBrush=plot_colours()["scatter_brush"],
         )
 
         layout = QtWidgets.QVBoxLayout(self)
@@ -189,8 +196,10 @@ class BifurcationPanel(QtWidgets.QWidget):
         layout.addWidget(self._error_label)
 
         self.plot_widget = pg.PlotWidget()
-        self.plot_widget.showGrid(x=True, y=True, alpha=0.25)
-        self.plot_widget.setBackground("k")
+        self.plot_widget.showGrid(
+            x=True, y=True, alpha=plot_colours()["plot_grid_alpha"]
+        )
+        self.plot_widget.setBackground(plot_colours()["plot_background"])
         self.plot_widget.setLabel("bottom", "Parameter value")
         self.plot_widget.setLabel("left", "x")
         self.plot_data = self.plot_widget.plot(
@@ -199,7 +208,7 @@ class BifurcationPanel(QtWidgets.QWidget):
             pen=None,
             symbol="o",
             symbolSize=0.25,
-            symbolBrush=(255, 255, 255),
+            symbolBrush="black",
         )
 
         self.plot_layout = QtWidgets.QVBoxLayout()

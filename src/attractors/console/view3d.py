@@ -3,7 +3,7 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from ..ui.docking import AppDock as Dock
-from ..ui.style import CONSOLE_PLOT_PARAMS
+from ..ui.style import CONSOLE_PLOT_PARAMS, plot_colours
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
 from .animation import ConsoleAnimation, ConsoleAnimationWidget
@@ -314,6 +314,7 @@ class ConsoleView3D:
         self.v_layout.setSpacing(0)
 
         self.view = gl.GLViewWidget()
+        self.view.setBackgroundColor(plot_colours()["gl_background"])
         self.camera_controller = CameraController(self.view)
         self.grid_overlay = GridOverlay(self.view)
         self.grid_overlay.build_grid()

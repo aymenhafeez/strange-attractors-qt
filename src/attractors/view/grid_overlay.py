@@ -1,6 +1,8 @@
 import numpy as np
 import pyqtgraph.opengl as gl
 
+from ..ui.style import plot_colours
+
 DEFAULT_GRID_HALF_SIZE = 50.0
 DEFAULT_AXIS_LIMIT = 1.0
 AXIS_PADDING_FACTOR = 0.5
@@ -52,7 +54,9 @@ class GridOverlay:
             coords=coords,
             coords_labels=coords_labels,
             limits=self._bounds,
-            face_color=(0.0, 0.0, 0.0, 1.0),
+            face_color=plot_colours()["gl_grid_face"],
+            line_color=plot_colours()["gl_grid_line"],
+            label_color=plot_colours()["gl_axis_label"],
             line_width=1.0,
             line_antialias=True,
             tick_offset_factor=0.015,

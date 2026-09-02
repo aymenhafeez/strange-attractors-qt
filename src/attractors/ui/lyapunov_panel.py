@@ -1,5 +1,7 @@
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+
+from ..ui.style import plot_colours
 
 
 class LyapunovPanel(QtWidgets.QWidget):
@@ -27,8 +29,7 @@ class LyapunovPanel(QtWidgets.QWidget):
 
         self.result_label = QtWidgets.QLabel("No Lyapunov result")
         self.result_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignRight
-            | QtCore.Qt.AlignmentFlag.AlignVCenter
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         self.result_label.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
@@ -39,8 +40,8 @@ class LyapunovPanel(QtWidgets.QWidget):
         layout.addLayout(header)
 
         self.plot = pg.PlotWidget()
-        self.plot.setBackground("k")
-        self.plot.showGrid(x=True, y=True, alpha=0.25)
+        self.plot.setBackground(plot_colours()["plot_background"])
+        self.plot.showGrid(x=True, y=True, alpha=plot_colours()["plot_grid_alpha"])
         self.plot.setLabel("bottom", "t")
         self.plot.setLabel("left", "λ")
         layout.addWidget(self.plot)

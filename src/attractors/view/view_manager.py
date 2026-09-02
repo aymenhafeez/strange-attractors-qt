@@ -1,6 +1,7 @@
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from ..ui.style import plot_colours
 from .animation_controller import AnimationController
 from .camera_controller import CameraController
 from .grid_overlay import GridOverlay
@@ -20,11 +21,19 @@ class ViewManager(QtCore.QObject):
         self._repositioning = False
 
         self.container = QtWidgets.QWidget()
+        self.container.setObjectName("viewportContainer")
+        self.container.setStyleSheet("""
+            QWidget#viewportContainer {
+                border: 1px solid palette(mid);
+            }
+        """)
         container_layout = QtWidgets.QGridLayout(self.container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setContentsMargins(1, 1, 1, 1)
         container_layout.setSpacing(0)
 
         self.view = gl.GLViewWidget()
+        self.view.setBackgroundColor(plot_colours()["gl_background"])
+
         self.camera_controller = CameraController(self.view, self)
         self.grid_overlay = GridOverlay(self.view)
         container_layout.addWidget(self.view, 0, 0)

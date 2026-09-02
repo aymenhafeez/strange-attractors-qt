@@ -1,16 +1,7 @@
 from pyqtgraph.parametertree import Parameter, ParameterTree
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-DEFAULT_PALETTE = [
-    QtGui.QColor("#3b82f6"),
-    QtGui.QColor("#f97316"),
-    QtGui.QColor("#10b981"),
-    QtGui.QColor("#ef4444"),
-    QtGui.QColor("#8b5cf6"),
-    QtGui.QColor("#06b6d4"),
-    QtGui.QColor("#ec4899"),
-    QtGui.QColor("#eab308"),
-]
+from .style import plot_colours
 
 MAX_TRAJECTORIES = 8
 
@@ -259,7 +250,8 @@ class TrajectoryPanel(QtWidgets.QWidget):
         if t_max is None:
             t_max = self._rows[0].get_t_max() if self._rows else self._default_t_max
 
-        colour = DEFAULT_PALETTE[len(self._rows) % len(DEFAULT_PALETTE)]
+        palette = plot_colours()["trajectory_palette"]
+        colour = palette[len(self._rows) % len(palette)]
         row = _TrajectoryRow(
             ic,
             colour,

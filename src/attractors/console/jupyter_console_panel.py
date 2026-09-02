@@ -1,11 +1,9 @@
-"""Adapted from the Rich Jupyter Console pyqtgraph example"""
-
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.docking import AppDock as Dock
 from ..ui.docking import AppDockArea as DockArea
-from ..ui.style import CONSOLE_PLOT_PARAMS, is_dark_mode
+from ..ui.style import CONSOLE_PLOT_PARAMS, plot_colours
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
 from .table import ConsoleTable, ConsoleTableManager
@@ -37,13 +35,14 @@ def _build_console_plot_widget():
     plot_widget.setObjectName("ConsolePlotWidget")
     # plot_widget.setStyleSheet(CONSOLE_PLOT_WIDGET)
     plot_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-    plot_widget.showGrid(x=True, y=True, alpha=0.25)
+    plot_widget.setBackground(plot_colours()["plot_background"])
     plot_widget.setLabel("bottom", "x")
     plot_widget.setLabel("left", "y")
 
     return plot_widget
 
 
+# Adapted from the Rich Jupyter Console pyqtgraph example
 class _RichJupyterConsole(_BaseJupyterConsole):
     def __init__(self, namespace, script_dir=None, parent=None):
         super().__init__(parent)
@@ -60,7 +59,7 @@ class _RichJupyterConsole(_BaseJupyterConsole):
         if script_dir is not None:
             self.kernel_manager.kernel.shell.run_line_magic("cd", str(script_dir))
 
-        if is_dark_mode():
+        if plot_colours()["is_dark"]:
             self.set_default_style("linux")
 
     def shutdown_kernel(self):
@@ -74,6 +73,7 @@ class _RichJupyterConsole(_BaseJupyterConsole):
 class ConsolePlot:
     def __init__(self, plot_widget, status_callback=None):
         self._plot_widget = plot_widget
+
         self._manager = None
         self._legend = None
         self._zoom = None
@@ -198,9 +198,11 @@ class ConsolePlot:
         left=None,
         plot=None,
         mode=PLOT_MODE_REPLACE,
+        width=1.0,
         zoom_region=False,
         **kwargs,
     ):
+        kwargs.setdefault("pen", plot_colours()["scatter_brush"])
         if plot is not None:
             target = self._plot_target(plot)
             return target.line(
@@ -209,6 +211,7 @@ class ConsolePlot:
                 mode=mode,
                 bottom=bottom,
                 left=left,
+                width=1.0,
                 zoom_region=zoom_region,
                 **kwargs,
             )
@@ -244,7 +247,7 @@ class ConsolePlot:
         symbol_size=None,
         **kwargs,
     ):
-        kwargs.setdefault("pen", None)
+        kwargs.setdefault("pen", plot_colours()["scatter_brush"])
         kwargs.setdefault("symbol", symbol)
         if symbol_size is not None:
             kwargs.setdefault("symbolSize", symbol_size)
@@ -745,7 +748,10 @@ class ConsolePlotZoom(QtWidgets.QWidget):
     def __init__(self, plot_widget, parent=None):
         super().__init__(parent)
         self.plot_widget = plot_widget
+
         self.zoom_widget = pg.PlotWidget()
+        self.zoom_widget.setBackground(plot_colours()["plot_background"])
+
         self.region = pg.LinearRegionItem()
         self.items = {}
         self.x_bounds = None

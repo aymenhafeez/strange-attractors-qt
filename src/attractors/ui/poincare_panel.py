@@ -6,6 +6,7 @@ from pyqtgraph.Qt.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 from ..core.sections import axis_index, plane_crossings
 from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
+from .style import plot_colours
 
 _AXIS_LABELS = {"x": ("Y", "Z"), "y": ("X", "Z"), "z": ("X", "Y")}
 DIR_MAP = {"both": "both", "rising": "positive", "falling": "negative"}
@@ -148,7 +149,7 @@ class PoincarePanel(QtWidgets.QWidget):
         layout.addWidget(self._error_label)
 
         self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setBackground("k")
+        self.plot_widget.setBackground(plot_colours()["plot_background"])
         self.plot_widget.setAspectLocked(True)
         self.plot_widget.getPlotItem().setContentsMargins(0, 10, 0, 0)
         layout.addWidget(self.plot_widget)
@@ -159,7 +160,7 @@ class PoincarePanel(QtWidgets.QWidget):
             pen=None,
             symbol="o",
             symbolSize=1,
-            symbolBrush=(255, 255, 255),
+            symbolBrush=plot_colours()["scatter_brush"],
         )
 
         self._img = pg.ImageItem()

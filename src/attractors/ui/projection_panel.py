@@ -8,6 +8,8 @@ import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .style import plot_colours
+
 PROJECTIONS = {
     "XY": (0, 1, ("X", "Y")),
     "XZ": (0, 2, ("X", "Z")),
@@ -54,7 +56,9 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.dropdown = QtWidgets.QComboBox()
         colourmaps = pg.colormap.listMaps()
         self.dropdown.addItems(colourmaps)
-        self.dropdown.setCurrentText("inferno")
+        self.dropdown.setCurrentText(
+            "inferno" if plot_colours()["is_dark"] else "CET-L17"
+        )
         self.dropdown.currentTextChanged.connect(self._update_colourmap)
         self.dropdown.setMaxVisibleItems(12)
         # needed for setMaxVisibleItems to apply
@@ -73,7 +77,10 @@ class ProjectionPanel(QtWidgets.QWidget):
         split_layout.addLayout(plot_layout, 1)
 
         self.plot_widget = pg.PlotWidget()
-        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        self.plot_widget.setBackground(plot_colours()["plot_background"])
+        self.plot_widget.showGrid(
+            x=True, y=True, alpha=plot_colours()["plot_grid_alpha"]
+        )
         # self.plot_widget.getPlotItem().setContentsMargins(0, 10, 0, 0)
         self.plot_widget.getViewBox().setAspectLocked(True)
         plot_layout.addWidget(self.plot_widget, 2)
@@ -92,7 +99,10 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.plot_widget.addItem(self.roi_line)
 
         self.profile_plot = pg.PlotWidget()
-        self.profile_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.profile_plot.setBackground(plot_colours()["plot_background"])
+        self.profile_plot.showGrid(
+            x=True, y=True, alpha=plot_colours()["plot_grid_alpha"]
+        )
         self.profile_plot.setLabel("bottom", "Distance")
         self.profile_plot.setLabel("left", "Density")
         # self.profile_plot.getPlotItem().setContentsMargins(0, 10, 0, 0)
@@ -100,6 +110,7 @@ class ProjectionPanel(QtWidgets.QWidget):
         plot_layout.addWidget(self.profile_plot, 1)
 
         self.histogram = pg.HistogramLUTWidget()
+        self.histogram.setBackground(plot_colours()["plot_background"])
         self.histogram.item.setImageItem(self.img)
         self.histogram.item.gradient.setColorMap(
             pg.colormap.get(self.dropdown.currentText())
@@ -141,7 +152,7 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.img.setVisible(False)
         self.roi_line.setVisible(False)
         self.histogram.setVisible(False)
-        self.profile_curve.setData([], [])
+        self.profile_curve.setData([], [], pen=plot_colours()["scatter_brush"])
         self.profile_label.setText("")
 
     def _render_cached_projection_data(self):

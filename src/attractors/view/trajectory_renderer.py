@@ -2,6 +2,8 @@ import numpy as np
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtGui
 
+from ..ui.style import plot_colours
+
 STATIC_RENDER_MAX_POINTS = 80000
 ANIM_RENDER_MAX_POINTS = 30000
 
@@ -30,7 +32,7 @@ class TrajectoryRenderer:
         self._lines = []
         self._heads = []
         self._trajectories = []
-        self._base_colour = (1.0, 1.0, 1.0)
+        self._base_colour = plot_colours()["trajectory"]
         self._current_alpha = 1.0
         self._current_line_width = 1.0
         self._line_mode = False
@@ -47,11 +49,16 @@ class TrajectoryRenderer:
     def sync_gl_items(self, n):
         while len(self._scatters) < n:
             scatter = gl.GLScatterPlotItem(size=1.0)
-            scatter.setGLOptions("additive")
+            scatter.setGLOptions(
+                "additive" if plot_colours()["is_dark"] else "translucent"
+            )
             scatter.setVisible(not self._line_mode)
             self.view.addItem(scatter)
             self._scatters.append(scatter)
             line = gl.GLLinePlotItem()
+            line.setGLOptions(
+                "additive" if plot_colours()["is_dark"] else "translucent"
+            )
             line.setVisible(self._line_mode)
             self.view.addItem(line)
             self._lines.append(line)
