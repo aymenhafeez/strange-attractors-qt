@@ -72,14 +72,24 @@ def plot_colours():
     }
 
 
-EQUATION_LABEL = """
-    color: #ddd;
-    font-size: 13px;
-    padding: 2px 6px;
-    background: rgba(0, 0, 0, 0);
+if plot_colours()["is_dark"]:
+    EQUATION_LABEL = """
+        color: #ddd;
+        font-size: 13px;
+        padding: 2px 6px;
+        background: rgba(0, 0, 0, 0);
     border: 0px;
     border-radius: 0px;
-"""
+    """
+else:
+    EQUATION_LABEL = """
+        color: #000;
+        font-size: 13px;
+        padding: 2px 6px;
+        background: rgba(0, 0, 0, 0);
+        border: 0px;
+        border-radius: 0px;
+    """
 
 SPLITTER_HANDLE_HOVER = """
     QSplitter::handle:hover {

@@ -4,7 +4,7 @@ from ..systems.registry import ATTRACTORS
 from .data_view_panel import DataViewPanel
 from .docking import AppDock as Dock
 from .docking import AppDockArea as DockArea
-from .style import SIDE_PANEL
+from .style import SIDE_PANEL, plot_colours
 
 STEP = 1000
 
@@ -204,11 +204,11 @@ class ControlPanel(QtWidgets.QWidget):
         self.line_width_row.addWidget(self.line_width_label)
         self.line_width_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.line_width_slider.setRange(1, 10)
-        self.line_width_slider.setValue(1)
+        self.line_width_slider.setValue(plot_colours()["is_dark"] and 1 or 2)
         self.line_width_spin = QtWidgets.QSpinBox()
         self.line_width_spin.setRange(1, 10)
         self.line_width_spin.setKeyboardTracking(False)
-        self.line_width_spin.setValue(1)
+        self.line_width_spin.setValue(plot_colours()["is_dark"] and 1 or 2)
         self.line_width_slider.valueChanged.connect(self.line_width_spin.setValue)
         self.line_width_spin.valueChanged.connect(self.line_width_slider.setValue)
         self.line_width_row.addWidget(self.line_width_slider)

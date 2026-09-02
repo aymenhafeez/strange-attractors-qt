@@ -184,7 +184,9 @@ class ConsolePlot:
         )
 
     def set_grid_visible(self, visible):
-        self._plot_widget.showGrid(x=visible, y=visible, alpha=0.25)
+        self._plot_widget.showGrid(
+            x=visible, y=visible, alpha=plot_colours()["plot_grid_alpha"]
+        )
 
     def has_item(self, item):
         return item in self._plot_widget.listDataItems()

@@ -107,7 +107,7 @@ class RightPanel(QtWidgets.QWidget):
         self.preset_panel = PresetPanel()
         self.custom_panel = CustomPanel(collapsible=False)
 
-        self.trajectory_dock = Dock("Trajectories", size=(1, 260), closable=False)
+        self.trajectory_dock = Dock("Trajectories", size=(1, 450), closable=False)
         self.trajectory_dock.addWidget(self.trajectory_panel)
         self.dock_area.addDock(self.trajectory_dock)
 
