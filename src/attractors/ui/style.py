@@ -57,6 +57,39 @@ RIGHT_PANEL = """
     }
 """
 
+PANEL_SURFACE = """
+    QWidget#panelSurface {
+        background: palette(base);
+        border: 1px solid palette(mid);
+    }
+
+    QWidget#panelSurface QLineEdit,
+    QWidget#panelSurface QTextEdit,
+    QWidget#panelSurface QComboBox,
+    QWidget#panelSurface QAbstractSpinBox {
+        background: palette(window);
+        border: 1px solid palette(mid);
+        padding: 2px 4px;
+    }
+"""
+
+TABLE_VIEW = """
+    QWidget#dataViewPanel {
+        background: palette(base);
+        border: 1px solid palette(mid);
+    }
+
+    QTableView {
+        background: palette(base);
+        border: 1px solid palette(mid);
+    }
+
+    QTabWidget::pane {
+        border: 0px;
+        background: palette(base);
+    }
+"""
+
 # CONSOLE_PLOT_WIDGET = """
 #     PlotWidget#ConsolePlotWidget {
 #         border: 2px solid palette(mid);

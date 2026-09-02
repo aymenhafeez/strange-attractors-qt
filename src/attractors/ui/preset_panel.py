@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .style import RIGHT_PANEL
+from .style import PANEL_SURFACE
 
 
 class PresetPanel(QtWidgets.QWidget):
@@ -11,7 +11,9 @@ class PresetPanel(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet(RIGHT_PANEL)
+        self.setObjectName("panelSurface")
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(PANEL_SURFACE)
 
         layout = QtWidgets.QGridLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)

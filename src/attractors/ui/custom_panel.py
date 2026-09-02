@@ -6,7 +6,7 @@ from ..core.expression_parser import (
     format_equations,
 )
 from ..core.models import AttractorConfig, AttractorParam, TimeDefaults
-from .style import RIGHT_PANEL
+from .style import PANEL_SURFACE
 
 STEP = 0.01
 DEFAULT_RANGE = (0.0, 50.0)
@@ -22,7 +22,6 @@ class CustomPanel(QtWidgets.QWidget):
 
     def __init__(self, parent=None, *, collapsible=True):
         super().__init__(parent)
-        self.setStyleSheet(RIGHT_PANEL)
         self._collapsible = collapsible
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -36,7 +35,8 @@ class CustomPanel(QtWidgets.QWidget):
             layout.addWidget(self.toggle_btn)
 
         self._content = QtWidgets.QWidget()
-        self._content.setObjectName("customPanelContent")
+        self._content.setObjectName("panelSurface")
+        self._content.setStyleSheet(PANEL_SURFACE)
         self._content.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Preferred,
             QtWidgets.QSizePolicy.Policy.Maximum,

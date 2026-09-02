@@ -4,6 +4,8 @@ from bisect import bisect_right
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .style import TABLE_VIEW
+
 SAMPLE_COLUMNS = ("trajectory", "step", "t", "x", "y", "z")
 MEASURE_COLUMNS = ("trajectory", "step", "t", "radius", "speed", "displacement")
 DEFAULT_SAMPLE_SIZE = 2000
@@ -289,6 +291,8 @@ class DataViewPanel(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("dataViewPanel")
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(TABLE_VIEW)
 
         self.model = TrajectoryTableModel(parent=self)
         self.measures_model = TrajectoryTableModel(MEASURE_COLUMNS, self)
@@ -329,13 +333,14 @@ class DataViewPanel(QtWidgets.QWidget):
         self.export_button.clicked.connect(self._export_current_tab)
 
         toolbar = QtWidgets.QHBoxLayout()
-        toolbar.setContentsMargins(0, 0, 0, 0)
+        toolbar.setContentsMargins(6, 6, 6, 0)
         toolbar.setSpacing(6)
         # TODO: consider removing the summary label altogether, takes up too much space
         # toolbar.addWidget(self.summary_label, 1)
         toolbar.addWidget(self.sample_mode)
-        toolbar.addWidget(self.export_button)
         toolbar.addWidget(self.sample_size)
+        toolbar.addStretch(1)
+        toolbar.addWidget(self.export_button)
 
         self.table = self._table(self.model)
         self.measures_table = self._table(self.measures_model)
@@ -346,7 +351,6 @@ class DataViewPanel(QtWidgets.QWidget):
         samples_tab = QtWidgets.QWidget()
         samples_layout = QtWidgets.QVBoxLayout(samples_tab)
         samples_layout.setContentsMargins(0, 0, 0, 0)
-        samples_layout.setSpacing(6)
         # samples_layout.addLayout(toolbar)
         samples_layout.addWidget(self.table)
 
@@ -358,7 +362,7 @@ class DataViewPanel(QtWidgets.QWidget):
         self.tabs.addTab(self.measures_table, "Measures")
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 8)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
         layout.addLayout(toolbar)
         layout.addWidget(self.tabs)

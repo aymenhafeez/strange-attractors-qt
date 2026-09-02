@@ -1,8 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .custom_panel import CustomPanel
-
-# from .style import SIDE_PANEL
 from .docking import AppDock as Dock
 from .docking import AppDockArea as DockArea
 from .preset_panel import PresetPanel
@@ -97,10 +95,9 @@ class RightPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self.setObjectName("rightPanel")
         self.setMinimumWidth(260)
-        # self.setStyleSheet(SIDE_PANEL)
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(2, 2, 4, 4)
+        layout.setContentsMargins(2, 4, 4, 4)
         layout.setSpacing(0)
 
         self.dock_area = DockArea()
