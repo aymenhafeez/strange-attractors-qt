@@ -40,7 +40,6 @@ def _augmented_rhs(state, t, params, eq, out, J, dxdydz):
     out[1] = dxdydz[1]
     out[2] = dxdydz[2]
 
-    # d_theta = J @ theta, where theta is state[3:].reshape(3, 3)
     for row in range(3):
         for col in range(3):
             acc = 0.0

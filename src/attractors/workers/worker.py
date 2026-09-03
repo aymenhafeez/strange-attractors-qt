@@ -1,12 +1,15 @@
 import logging
+import time
 
 import numpy as np
 from pyqtgraph.Qt.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from ..core.lyapunov import compute_lyapunov
 from ..core.solver import solve_attractor
+from ..perf import profiling_enabled
 
 logger = logging.getLogger(__name__)
+perf_logger = logging.getLogger("attractors.perf")
 
 
 class SolveWorker(QObject):
@@ -20,8 +23,11 @@ class SolveWorker(QObject):
     def solve(self, request_id, config, values, ics, n, is_partial, t_max):
         self._cancel = False
         solutions = []
+        profile = profiling_enabled()
+        worker_start = time.perf_counter()
+
         try:
-            for entry in ics:
+            for index, entry in enumerate(ics):
                 if self._cancel:
                     return
                 if isinstance(entry, dict):
@@ -32,6 +38,8 @@ class SolveWorker(QObject):
                     ic = entry
                     solve_n = n
                     solve_t_max = t_max
+
+                kernel_start = time.perf_counter()
                 sol = solve_attractor(
                     config,
                     values,
@@ -39,7 +47,40 @@ class SolveWorker(QObject):
                     t_max=solve_t_max,
                     ic=ic,
                 )
+                kernel_ms = (time.perf_counter() - kernel_start) * 1000
+
+                if profile:
+                    perf_logger.info(
+                        "solve.kernel completed in %.3f ms "
+                        "(request_id=%s attractor=%s partial=%s trajectory=%s "
+                        "n=%s t_max=%s points=%s)",
+                        kernel_ms,
+                        request_id,
+                        config.name,
+                        is_partial,
+                        index,
+                        solve_n,
+                        solve_t_max,
+                        len(sol),
+                    )
+
                 solutions.append(sol)
+
+            worker_ms = (time.perf_counter() - worker_start) * 1000
+
+            if profile:
+                perf_logger.info(
+                    "solve.worker completed in %.3f ms "
+                    "(request_id=%s attractor=%s partial=%s trajectories=%s n=%s t_max=%s)",
+                    worker_ms,
+                    request_id,
+                    config.name,
+                    is_partial,
+                    len(solutions),
+                    n,
+                    t_max,
+                )
+
             if not self._cancel:
                 self.result_ready.emit(request_id, solutions, is_partial)
         except Exception:

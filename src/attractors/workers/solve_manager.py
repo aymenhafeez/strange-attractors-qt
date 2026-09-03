@@ -31,11 +31,12 @@ class SolveManager(QtCore.QObject):
         self._lyapunov_worker.lyapunov_ready.connect(self.lyapunov_ready)
         self._lyapunov_worker.lyapunov_failed.connect(self.lyapunov_failed)
 
-    def request_solve(self, config, values, ics, n, is_partial, t_max):
+    def next_solve_request_id(self):
         self._solve_request_id += 1
-        request_id = self._solve_request_id
-        self._solve_request.emit(request_id, config, values, ics, n, is_partial, t_max)
+        return self._solve_request_id
 
+    def request_solve(self, request_id, config, values, ics, n, is_partial, t_max):
+        self._solve_request.emit(request_id, config, values, ics, n, is_partial, t_max)
         return request_id
 
     def request_lyapunov(self, config, values, n=None, t_max=None):

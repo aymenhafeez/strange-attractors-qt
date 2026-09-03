@@ -1,3 +1,4 @@
+import time
 import weakref
 from pathlib import Path
 
@@ -1996,9 +1997,11 @@ class Window(QtWidgets.QMainWindow):
                     "t_max": float(t_max),
                 }
             ]
+
         dispatch_n = max(spec["n"] for spec in trajectory_specs)
         dispatch_t_max = max(spec["t_max"] for spec in trajectory_specs)
         self.solver.cancel_lyapunov()
+
         if full:
             n_trajectories = len(trajectory_specs)
             status_text = (
@@ -2007,9 +2010,7 @@ class Window(QtWidgets.QMainWindow):
                 else f"Solving {n_trajectories} trajectories"
             )
             self._set_app_status(status_text)
-        self._active_solve_request_id = self.solver.request_solve(
-            config, values, trajectory_specs, dispatch_n, not full, dispatch_t_max
-        )
+
         signature = {
             "attractor": config.name,
             "parameters": {str(key): float(value) for key, value in values.items()},
@@ -2027,13 +2028,17 @@ class Window(QtWidgets.QMainWindow):
                 for spec in trajectory_specs
             ],
         }
+
+        request_id = self.solver.next_solve_request_id()
+        self._active_solve_request_id = request_id
+
         self._set_solve_state(
             solving=True,
             valid=False,
             stale=bool(self.scene.trajectory_renderer.solutions),
             partial=not full,
             last_error=None,
-            request_id=self._active_solve_request_id,
+            request_id=request_id,
             attractor=signature["attractor"],
             parameters=signature["parameters"],
             n=signature["n"],
@@ -2044,8 +2049,8 @@ class Window(QtWidgets.QMainWindow):
         )
         token = perf_start(
             self,
-            "solve",
-            key=self._active_solve_request_id,
+            "solve.request",
+            key=request_id,
             attractor=config.name,
             full=full,
             partial=not full,
@@ -2054,7 +2059,17 @@ class Window(QtWidgets.QMainWindow):
             trajectories=len(trajectory_specs),
         )
         if token is not None:
-            self._solve_perf_tokens[self._active_solve_request_id] = token
+            self._solve_perf_tokens[request_id] = token
+
+        self.solver.request_solve(
+            request_id,
+            config,
+            values,
+            trajectory_specs,
+            dispatch_n,
+            not full,
+            dispatch_t_max,
+        )
 
     def _on_controls_solve_requested(self, full):
         self.scene.animation_controller.stop()
@@ -2126,7 +2141,9 @@ class Window(QtWidgets.QMainWindow):
                 self._set_app_status("Solve failed", error=True)
             return
 
+        validation_start = time.perf_counter()
         is_valid, message = validate_solutions(solutions)
+        validation_ms = (time.perf_counter() - validation_start) * 1000
         if not is_valid:
             perf_finish(self, solve_token, status="invalid", partial=is_partial)
             self._set_solve_state(
@@ -2148,6 +2165,9 @@ class Window(QtWidgets.QMainWindow):
             return
 
         perf_finish(self, solve_token, status="ok", partial=is_partial)
+
+        ui_start = time.perf_counter()
+
         self._clear_app_status()
         self.scene.trajectory_renderer.display_solutions(solutions, is_partial)
         self._update_data_view(solutions, is_partial)
@@ -2186,6 +2206,16 @@ class Window(QtWidgets.QMainWindow):
             self.scene.grid_overlay.auto_adjust_grid(solutions)
             for plot_name in list(self.live_plot_controller.live_plots):
                 self.live_plot_controller._refresh_live_plot(plot_name)
+
+        ui_ms = (time.perf_counter() - ui_start) * 1000
+        if self._perf.enabled:
+            self._perf._logger.info(
+                "solve.ui completed in %.3f ms (request_id=%s partial=%s validation_ms=%.3f)",
+                ui_ms,
+                request_id,
+                is_partial,
+                validation_ms,
+            )
 
         if self._solve_needed:
             self._solve_needed = False
