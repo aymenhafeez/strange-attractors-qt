@@ -986,6 +986,7 @@ class Window(QtWidgets.QMainWindow):
             return
 
         app.setProperty("appTheme", theme)
+        self._sync_theme_actions(theme)
         self._apply_theme()
 
     def _apply_theme(self):
@@ -1002,6 +1003,16 @@ class Window(QtWidgets.QMainWindow):
         self.bifurcation_panel.apply_theme()
         self.projection_panel.apply_theme()
         self.jupyter_console_panel.apply_theme()
+
+    def _sync_theme_actions(self, theme):
+        with (
+            QtCore.QSignalBlocker(self.view_system_action),
+            QtCore.QSignalBlocker(self.view_light_action),
+            QtCore.QSignalBlocker(self.view_dark_action),
+        ):
+            self.view_system_action.setChecked(theme is None)
+            self.view_light_action.setChecked(theme == "light")
+            self.view_dark_action.setChecked(theme == "dark")
 
     def _build_status_bar(self):
         status_bar = QtWidgets.QStatusBar()
@@ -2644,6 +2655,10 @@ class Window(QtWidgets.QMainWindow):
 
     def _save_app_layout(self):
         settings = app_settings()
+        app = QtWidgets.QApplication.instance()
+        settings.setValue(
+            "layout/plot_theme", app.property("appTheme") if app else None
+        )
         settings.setValue("layout/window_geometry", self.saveGeometry())
         settings.setValue("layout/main_splitter", self.main_splitter.saveState())
         settings.setValue("layout/workspace_mode", self.workspace_mode)
@@ -2669,6 +2684,17 @@ class Window(QtWidgets.QMainWindow):
 
     def _restore_app_layout(self):
         settings = app_settings()
+
+        theme = settings.value("layout/plot_theme", None)
+        if theme not in {"light", "dark"}:
+            theme = None
+
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.setProperty("appTheme", theme)
+
+        self._sync_theme_actions(theme)
+        self._apply_theme()
 
         geometry = settings.value("layout/window_geometry")
         if geometry is not None:

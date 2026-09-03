@@ -59,8 +59,7 @@ class _RichJupyterConsole(_BaseJupyterConsole):
         if script_dir is not None:
             self.kernel_manager.kernel.shell.run_line_magic("cd", str(script_dir))
 
-        if plot_colours()["is_dark"]:
-            self.set_default_style("linux")
+        self.set_default_style(plot_colours()["console_theme"])
 
     def shutdown_kernel(self):
         self.kernel_client.stop_channels()
@@ -766,6 +765,8 @@ class JupyterConsolePanel(QtWidgets.QWidget):
     def apply_theme(self):
         self.plots.apply_theme()
         self.views3d.apply_theme()
+        if self._console is not None:
+            self._console.set_default_style(plot_colours()["console_theme"])
 
 
 class ConsolePlotZoom(QtWidgets.QWidget):
