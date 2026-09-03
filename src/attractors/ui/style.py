@@ -28,6 +28,12 @@ def is_dark_mode():
     if app is None:
         return False
 
+    override = app.property("appTheme")
+    if override == "dark":
+        return True
+    if override == "light":
+        return False
+
     scheme = app.styleHints().colorScheme()
     if scheme != QtCore.Qt.ColorScheme.Unknown:
         return scheme == QtCore.Qt.ColorScheme.Dark
@@ -54,6 +60,7 @@ def plot_colours():
             "scatter_brush": "white",
             "plot_auto_pens": ("w", "r", "g", "b", "c", "m", "y"),
             "trajectory_palette": DARK_TRAJECTORY_PALETTE,
+            "cmap": "inferno",
         }
 
     return {
@@ -69,27 +76,21 @@ def plot_colours():
         "scatter_brush": "black",
         "plot_auto_pens": ("k", "r", "g", "b", "c", "m", "y"),
         "trajectory_palette": LIGHT_TRAJECTORY_PALETTE,
+        "cmap": "CET-L17",
     }
 
 
-if plot_colours()["is_dark"]:
-    EQUATION_LABEL = """
-        color: #ddd;
-        font-size: 13px;
-        padding: 2px 6px;
-        background: rgba(0, 0, 0, 0);
-    border: 0px;
-    border-radius: 0px;
-    """
-else:
-    EQUATION_LABEL = """
-        color: #000;
+def equation_label():
+    colour = "#ddd" if is_dark_mode() else "#000"
+    return f"""
+        color: {colour};
         font-size: 13px;
         padding: 2px 6px;
         background: rgba(0, 0, 0, 0);
         border: 0px;
         border-radius: 0px;
     """
+
 
 SPLITTER_HANDLE_HOVER = """
     QSplitter::handle:hover {

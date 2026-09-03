@@ -271,3 +271,11 @@ class GridOverlay:
 
     def _format_tick(self, value):
         return f"{value:g}"
+
+    def apply_theme(self):
+        if self._grid_axis_item is not None:
+            self._grid_axis_item.setData(
+                face_color=plot_colours()["gl_grid_face"],
+                line_color=plot_colours()["gl_grid_line"],
+                label_color=plot_colours()["gl_axis_label"],
+            )

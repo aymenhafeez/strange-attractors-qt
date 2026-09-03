@@ -67,7 +67,9 @@ class TrajectoryRenderer:
             self.view.removeItem(self._lines.pop())
         while len(self._heads) < n:
             head = gl.GLScatterPlotItem(size=20.0)
-            head.setGLOptions("additive")
+            head.setGLOptions(
+                "additive" if plot_colours()["is_dark"] else "translucent"
+            )
             self.view.addItem(head)
             self._heads.append(head)
         while len(self._heads) > n:
@@ -267,3 +269,18 @@ class TrajectoryRenderer:
             all_segments.append(segment)
 
         return all_segments
+
+    def apply_theme(self):
+        colours = plot_colours()
+        self._base_colour = colours["trajectory"]
+        self._colour_cache.clear()
+
+        gl_options = "additive" if colours["is_dark"] else "translucent"
+        for scatter in self._scatters:
+            scatter.setGLOptions(gl_options)
+        for line in self._lines:
+            line.setGLOptions(gl_options)
+        for head in self._heads:
+            head.setGLOptions(gl_options)
+
+        self.refresh_colours()

@@ -213,7 +213,7 @@ class ConsolePlot:
                 mode=mode,
                 bottom=bottom,
                 left=left,
-                width=1.0,
+                width=width,
                 zoom_region=zoom_region,
                 **kwargs,
             )
@@ -293,6 +293,20 @@ class ConsolePlot:
         if mode == PLOT_MODE_OVERLAY:
             return False
         raise ValueError("Plot mode must be 'replace' or 'overlay'")
+
+    def apply_theme(self):
+        colours = plot_colours()
+
+        plot_item = self._plot_widget.getPlotItem()
+        x_grid = plot_item.ctrl.xGridCheck.isChecked()
+        y_grid = plot_item.ctrl.yGridCheck.isChecked()
+
+        self._plot_widget.setBackground(colours["plot_background"])
+        self._plot_widget.showGrid(x=x_grid, y=y_grid, alpha=colours["plot_grid_alpha"])
+        self.param_widget.setStyleSheet(CONSOLE_PLOT_PARAMS)
+
+        if self._zoom is not None:
+            self._zoom.apply_theme()
 
 
 class ConsolePlotManager(QtCore.QObject):
@@ -520,6 +534,10 @@ class ConsolePlotManager(QtCore.QObject):
             raise ValueError("Plot name cannot be empty")
         return key
 
+    def apply_theme(self):
+        for plot in self._plots.values():
+            plot.apply_theme()
+
 
 class JupyterConsolePanel(QtWidgets.QWidget):
     close_requested = QtCore.pyqtSignal()
@@ -745,6 +763,10 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.views3d.set_status_callback(callback)
         self.tables.set_status_callback(callback)
 
+    def apply_theme(self):
+        self.plots.apply_theme()
+        self.views3d.apply_theme()
+
 
 class ConsolePlotZoom(QtWidgets.QWidget):
     def __init__(self, plot_widget, parent=None):
@@ -854,3 +876,9 @@ class ConsolePlotZoom(QtWidgets.QWidget):
         self.updating = True
         self.region.setRegion(self.zoom_widget.getViewBox().viewRange()[0])
         self.updating = False
+
+    def apply_theme(self):
+        colours = plot_colours()
+
+        self.zoom_widget.setBackground(colours["plot_background"])
+        self.zoom_widget.showGrid(x=True, y=True, alpha=colours["plot_grid_alpha"])

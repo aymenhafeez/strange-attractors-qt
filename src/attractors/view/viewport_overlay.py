@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from ..ui.style import EQUATION_LABEL
+from ..ui.style import equation_label
 
 
 class ViewportOverlay:
@@ -8,7 +8,7 @@ class ViewportOverlay:
         self.container = container
         self.view = view
         self.equation_label = QtWidgets.QLabel("")
-        self.equation_label.setStyleSheet(EQUATION_LABEL)
+        self.equation_label.setStyleSheet(equation_label())
         layout.addWidget(
             self.equation_label,
             0,
@@ -39,3 +39,6 @@ class ViewportOverlay:
         img = self.view.grabFramebuffer()
 
         return img.save(filename)
+
+    def apply_theme(self):
+        self.equation_label.setStyleSheet(equation_label())

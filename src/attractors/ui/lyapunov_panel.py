@@ -1,5 +1,5 @@
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.style import plot_colours
 
@@ -69,3 +69,7 @@ class LyapunovPanel(QtWidgets.QWidget):
         self.curve_l1.setData([], [])
         self.curve_l2.setData([], [])
         self.curve_l3.setData([], [])
+
+    def apply_theme(self):
+        self.plot.setBackground(plot_colours()["plot_background"])
+        self.plot.showGrid(x=True, y=True, alpha=plot_colours()["plot_grid_alpha"])

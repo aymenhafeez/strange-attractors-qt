@@ -33,7 +33,7 @@ from .ui.poincare_panel import PoincarePanel
 from .ui.process_metrics import ProcessUsageStatus
 from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
-from .ui.style import SCENE_TOOLBAR, SPLITTER_HANDLE_HOVER
+from .ui.style import SCENE_TOOLBAR, SPLITTER_HANDLE_HOVER, plot_colours
 from .ui.system_toolbar import SystemToolbar
 from .ui.workspace_panel import WorkspacePanel
 from .view.view_manager import ViewManager
@@ -852,6 +852,29 @@ class Window(QtWidgets.QMainWindow):
         self._add_menu_action(view_menu, "Grid", self.toolbar_grid_action)
 
         view_menu.addSeparator()
+
+        plot_theme_menu = view_menu.addMenu("Plot theme")
+        self.view_system_action = plot_theme_menu.addAction("System")
+        self.view_light_action = plot_theme_menu.addAction("Light")
+        self.view_dark_action = plot_theme_menu.addAction("Dark")
+
+        theme_group = QtGui.QActionGroup(self)
+        theme_group.setExclusive(True)
+        for action in (
+            self.view_system_action,
+            self.view_light_action,
+            self.view_dark_action,
+        ):
+            action.setCheckable(True)
+            theme_group.addAction(action)
+
+        self.view_system_action.setChecked(True)
+
+        self.view_system_action.triggered.connect(lambda: self._set_theme(None))
+        self.view_light_action.triggered.connect(lambda: self._set_theme("light"))
+        self.view_dark_action.triggered.connect(lambda: self._set_theme("dark"))
+
+        view_menu.addSeparator()
         view_menu.addAction("Reset session state", self._reset_session_state)
 
         system_menu = menu_bar.addMenu("&System")
@@ -956,6 +979,29 @@ class Window(QtWidgets.QMainWindow):
         self._hide_menu_icons(workspace_menu)
         self._hide_menu_icons(analysis_menu)
         self._sync_menu_actions()
+
+    def _set_theme(self, theme):
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            return
+
+        app.setProperty("appTheme", theme)
+        self._apply_theme()
+
+    def _apply_theme(self):
+        colours = plot_colours()
+
+        self.scene.view.setBackgroundColor(colours["gl_background"])
+        self.scene.grid_overlay.apply_theme()
+        self.scene.trajectory_renderer.apply_theme()
+
+        self.scene.viewport_overlay.apply_theme()
+
+        self.lyapunov_panel.apply_theme()
+        self.poincare_panel.apply_theme()
+        self.bifurcation_panel.apply_theme()
+        self.projection_panel.apply_theme()
+        self.jupyter_console_panel.apply_theme()
 
     def _build_status_bar(self):
         status_bar = QtWidgets.QStatusBar()

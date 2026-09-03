@@ -56,9 +56,7 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.dropdown = QtWidgets.QComboBox()
         colourmaps = pg.colormap.listMaps()
         self.dropdown.addItems(colourmaps)
-        self.dropdown.setCurrentText(
-            "inferno" if plot_colours()["is_dark"] else "CET-L17"
-        )
+        self.dropdown.setCurrentText(plot_colours()["cmap"])
         self.dropdown.currentTextChanged.connect(self._update_colourmap)
         self.dropdown.setMaxVisibleItems(12)
         # needed for setMaxVisibleItems to apply
@@ -252,3 +250,13 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.img.setLookupTable(cmap.getLookupTable())
         self.histogram.item.gradient.setColorMap(cmap)
         self._render_cached_projection_data()
+
+    def apply_theme(self):
+        colours = plot_colours()
+        self.dropdown.setCurrentText(colours["cmap"])
+        self.plot_widget.setBackground(colours["plot_background"])
+        self.plot_widget.showGrid(x=True, y=True, alpha=colours["plot_grid_alpha"])
+        self.profile_plot.setBackground(colours["plot_background"])
+        self.profile_plot.showGrid(x=True, y=True, alpha=colours["plot_grid_alpha"])
+        self.profile_curve.setPen(pg.mkPen(colours["scatter_brush"]))
+        self.histogram.setBackground(colours["plot_background"])

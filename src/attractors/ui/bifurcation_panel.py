@@ -18,7 +18,9 @@ class BifurcationZoom(QtWidgets.QWidget):
         self.x_bounds = None
 
         self.zoom_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-        self.zoom_widget.showGrid(x=True, y=True, alpha=0.25)
+        self.zoom_widget.showGrid(
+            x=True, y=True, alpha=plot_colours()["plot_grid_alpha"]
+        )
         self.zoom_widget.setLabel("bottom", "Parameter value")
         self.zoom_widget.setBackground(plot_colours()["plot_background"])
 
@@ -106,6 +108,12 @@ class BifurcationZoom(QtWidgets.QWidget):
         self.plot_widget.removeItem(self.region)
         self.layout().removeWidget(self.plot_widget)
         self.plot_widget.setParent(None)
+
+    def apply_theme(self):
+        colours = plot_colours()
+        self.zoom_widget.setBackground(colours["plot_background"])
+        self.zoom_widget.showGrid(x=True, y=True, alpha=colours["plot_grid_alpha"])
+        self.zoom_data.setSymbolBrush(colours["scatter_brush"])
 
 
 class BifurcationPanel(QtWidgets.QWidget):
@@ -208,7 +216,7 @@ class BifurcationPanel(QtWidgets.QWidget):
             pen=None,
             symbol="o",
             symbolSize=0.25,
-            symbolBrush="black",
+            symbolBrush=plot_colours()["scatter_brush"],
         )
 
         self.plot_layout = QtWidgets.QVBoxLayout()
@@ -409,3 +417,12 @@ class BifurcationPanel(QtWidgets.QWidget):
         if path:
             exporter = ImageExporter(self.plot_widget.plotItem)
             exporter.export(path)
+
+    def apply_theme(self):
+        colours = plot_colours()
+        self.plot_widget.setBackground(colours["plot_background"])
+        self.plot_widget.showGrid(x=True, y=True, alpha=colours["plot_grid_alpha"])
+        self.plot_data.setSymbolBrush(colours["scatter_brush"])
+
+        if self._zoom is not None:
+            self._zoom.apply_theme()

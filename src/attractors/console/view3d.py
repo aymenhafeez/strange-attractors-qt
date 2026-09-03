@@ -496,7 +496,7 @@ class ConsoleView3D:
             pxMode=px_mode,
         )
 
-        item.setGLOptions("additive")
+        item.setGLOptions("additive" if plot_colours()["is_dark"] else "translucent")
         self.view.addItem(item)
         self._items.append(item)
         self._point_sets.append(points)
@@ -580,6 +580,17 @@ class ConsoleView3D:
         self.camera_controller.fit_camera_to_solutions([points])
 
         return item
+
+    def apply_theme(self):
+        colours = plot_colours()
+        gl_options = "additive" if colours["is_dark"] else "translucent"
+
+        self.view.setBackgroundColor(colours["gl_background"])
+        self.grid_overlay.apply_theme()
+
+        for item in self._items:
+            if hasattr(item, "setGLOptions"):
+                item.setGLOptions(gl_options)
 
 
 # adapting this from ConsolePlotManager, will need to generalise to 3D
@@ -816,6 +827,10 @@ class ConsoleView3DManager(QtCore.QObject):
         for view in self._views.values():
             view._status_callback = callback
             view.explore.status_callback = callback
+
+    def apply_theme(self):
+        for view in self._views.values():
+            view.apply_theme()
 
 
 class View3DExplorer(QtCore.QObject):
