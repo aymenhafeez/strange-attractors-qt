@@ -5,15 +5,14 @@ from ..core.models import AttractorConfig, AttractorParam
 
 
 @numba.njit(nogil=True)
-def _double_scroll(x_var, t, params):
+def _double_scroll(x_var, t, params, out):
     x, y, z = x_var
     a = params[0]
     b = params[1]
-    dxdt = y - 2 * x * z
-    dydt = -x + 0.5 * (1 - x**2) * y - 0.5 * y * z
-    dzdt = 0.1 * x * y + a * x**2 - 0.8 * b
 
-    return np.array([dxdt, dydt, dzdt])
+    out[0] = y - 2 * x * z
+    out[1] = -x + 0.5 * (1 - x**2) * y - 0.5 * y * z
+    out[2] = 0.1 * x * y + a * x**2 - 0.8 * b
 
 
 _double_scroll_attractor = AttractorConfig(

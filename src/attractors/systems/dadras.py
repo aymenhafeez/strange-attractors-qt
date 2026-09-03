@@ -5,15 +5,13 @@ from ..core.models import AttractorConfig, AttractorParam
 
 
 @numba.njit(nogil=True)
-def _dadras(x_var, t, params):
+def _dadras(x_var, t, params, out):
     x, y, z = x_var
     a, b, c, d, e = params
 
-    dxdt = y - a * x + b * y * z
-    dydt = c * y - x * z + z
-    dzdt = d * x * y - e * z
-
-    return np.array([dxdt, dydt, dzdt])
+    out[0] = y - a * x + b * y * z
+    out[1] = c * y - x * z + z
+    out[2] = d * x * y - e * z
 
 
 _dadras_attractor = AttractorConfig(

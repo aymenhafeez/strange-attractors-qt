@@ -5,15 +5,13 @@ from ..core.models import AttractorConfig, AttractorParam
 
 
 @numba.njit(nogil=True)
-def _lorenz84(x_var, t, params):
+def _lorenz84(x_var, t, params, out):
     x, y, z = x_var
     a, b, c, d = params
 
-    dxdt = -a * x - y**2 - z**2 + a * c
-    dydt = -y + x * y - b * x * z + d
-    dzdt = -z + b * x * y + x * z
-
-    return np.array([dxdt, dydt, dzdt])
+    out[0] = -a * x - y**2 - z**2 + a * c
+    out[1] = -y + x * y - b * x * z + d
+    out[2] = -z + b * x * y + x * z
 
 
 _lorenz84_attractor = AttractorConfig(

@@ -5,15 +5,13 @@ from ..core.models import AttractorConfig, AttractorParam
 
 
 @numba.njit(nogil=True)
-def _four_wing(x_var, t, params):
+def _four_wing(x_var, t, params, out):
     x, y, z = x_var
     a, b, c = params
 
-    dx_dt = a * x + y * z
-    dy_dt = b * x + c * y - x * z
-    dz_dt = -z - x * y
-
-    return np.array([dx_dt, dy_dt, dz_dt])
+    out[0] = a * x + y * z
+    out[1] = b * x + c * y - x * z
+    out[2] = -z - x * y
 
 
 _four_wing_attractor = AttractorConfig(
@@ -30,7 +28,7 @@ _four_wing_attractor = AttractorConfig(
     camera_elevation=15,
     camera_azimuth=-40,
     pan=0,
-    equation_text=("dx/dt = a·x + y·z\ndy/dt = b·x + c·y - x*z\ndz/dt = -z - x·y"),
+    equation_text="dx/dt = a·x + y·z\ndy/dt = b·x + c·y - x*z\ndz/dt = -z - x·y",
     description=(
         "The four wing attractor is a set of chaotic solutions to a 3D system of "
         "equations that builds on classic Lorenz dynamics. It is famous for its "

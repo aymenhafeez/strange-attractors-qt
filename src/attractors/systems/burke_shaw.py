@@ -5,14 +5,13 @@ from ..core.models import AttractorConfig, AttractorParam
 
 
 @numba.njit(nogil=True)
-def _burke_shaw(x_var, t, params):
+def _burke_shaw(x_var, t, params, out):
     x, y, z = x_var
     a, b = params
-    dxdt = -a * (x + y)
-    dydt = -y - a * x * z
-    dzdt = a * x * y + b
 
-    return np.array([dxdt, dydt, dzdt])
+    out[0] = -a * (x + y)
+    out[1] = -y - a * x * z
+    out[2] = a * x * y + b
 
 
 _burke_shaw_attractor = AttractorConfig(

@@ -5,15 +5,13 @@ from ..core.models import AttractorConfig, AttractorParam
 
 
 @numba.njit(nogil=True)
-def _aizawa(x_var, t, params):
+def _aizawa(x_var, t, params, out):
     x, y, z = x_var
     a, b, c, d, e, f = params
 
-    dxdt = (z - b) * x - d * y
-    dydt = d * x + (z - b) * y
-    dzdt = c + a * z - (z**3 / 3) - (x**2 + y**2) * (1 + e * z) + (f * z * x**3)
-
-    return np.array([dxdt, dydt, dzdt])
+    out[0] = (z - b) * x - d * y
+    out[1] = d * x + (z - b) * y
+    out[2] = c + a * z - (z**3 / 3) - (x**2 + y**2) * (1 + e * z) + (f * z * x**3)
 
 
 _aizawa_attractor = AttractorConfig(

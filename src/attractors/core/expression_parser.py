@@ -120,13 +120,12 @@ def detect_parameters(equations: tuple[str, str, str]) -> list[str]:
 
 
 _FUNC_TEMPLATE = """\
-def _custom(x_var, t, params):
+def _custom(x_var, t, params, out):
     x, y, z = x_var
     {param_unpack}
-    dx_dt = {eq0}
-    dy_dt = {eq1}
-    dz_dt = {eq2}
-    return np.array([dx_dt, dy_dt, dz_dt])
+    out[0] = {eq0}
+    out[1] = {eq1}
+    out[2] = {eq2}
 """
 
 

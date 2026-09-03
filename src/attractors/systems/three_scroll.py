@@ -5,14 +5,13 @@ from ..core.models import AttractorConfig, AttractorParam
 
 
 @numba.njit(nogil=True)
-def _three_scroll(x_var, t, params):
+def _three_scroll(x_var, t, params, out):
     x, y, z = x_var
     a, b, c, d, e, f = params
-    dxdt = a * (y - x) + d * x * z
-    dydt = b * x - x * z + f * y
-    dzdt = c * z + x * y - e * x**2
 
-    return np.array([dxdt, dydt, dzdt])
+    out[0] = a * (y - x) + d * x * z
+    out[1] = b * x - x * z + f * y
+    out[2] = c * z + x * y - e * x**2
 
 
 _three_scroll_attractor = AttractorConfig(
@@ -33,7 +32,7 @@ _three_scroll_attractor = AttractorConfig(
     camera_azimuth=50,
     pan=100,
     equation_text=(
-        "dx/dt = a(y - x) + d·x·z\ndy/dt = b·x - x·z + f·y\ndz/dt = c·z + x·y - e·x²"
+        "dx/dt = a·(y - x) + d·x·z\ndy/dt = b·x - x·z + f·y\ndz/dt = c·z + x·y - e·x²"
     ),
     description=(
         "The three scroll chaotic attractor is a 3D quadratic system that extends the "
