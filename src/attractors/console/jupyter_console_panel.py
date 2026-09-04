@@ -807,7 +807,6 @@ class ConsolePlotCrossHair(QtCore.QObject):
 
         self.apply_theme()
 
-
     def _ensure_items_added(self):
         for item in (self.v_line, self.h_line, self.label):
             if item.scene() is None:
@@ -862,7 +861,7 @@ class ConsolePlotCrossHair(QtCore.QObject):
 
     def apply_theme(self):
         colour = plot_colours()
-        pen = pg.mkPen(colour["crosshair"], width=1, style=QtCore.Qt.PenStyle.DashLine)
+        pen = pg.mkPen(colour["crosshair"], width=1)
         self.v_line.setPen(pen)
         self.h_line.setPen(pen)
         self.label.setColor(colour["label_text"])

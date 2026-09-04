@@ -1033,7 +1033,8 @@ class Window(QtWidgets.QMainWindow):
 
         self.workspace_crosshair_action = toolbar.addAction(
             self._toolbar_icon(
-                "view-grid", QtWidgets.QStyle.StandardPixmap.SP_DialogResetButton
+                "crosshairs",
+                QtWidgets.QStyle.StandardPixmap.SP_CommandLink,
             ),
             "Crosshair",
         )

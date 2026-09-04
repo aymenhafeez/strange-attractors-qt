@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from ..ui.process_metrics import ProcessUsageStatus
+from .process_metrics import ProcessUsageStatus
 from .style import SCENE_TOOLBAR
 
 
