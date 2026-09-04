@@ -53,6 +53,32 @@ class WorkspaceController:
             self.toolbar.set_live_traces("", [])
 
         self.sync_grid_action()
+        self.sync_crosshair_action()
+
+    def current_crosshair_visible(self):
+        kind, _name = self.console_panel.active_view_key()
+        if kind == "view3d":
+            return False
+
+        return self.console_panel.plots.crosshair_visible()
+
+    def sync_crosshair_action(self):
+        action = getattr(self.window, "workspace_crosshair_action", None)
+        if action is None:
+            return
+
+        kind, _name = self.console_panel.active_view_key()
+        with QtCore.QSignalBlocker(action):
+            action.setEnabled(kind == "plot")
+            action.setChecked(kind == "plot" and self.current_crosshair_visible())
+
+    def set_current_crosshair_visible(self, visible):
+        kind, _name = self.console_panel.active_view_key()
+        if kind != "plot":
+            self.sync_crosshair_action()
+            return
+
+        self.console_panel.plots.set_crosshair_visible(visible)
 
     def on_toolbar_view_selected(self):
         combo = self.window.toolbar_workspace_combo

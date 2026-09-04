@@ -61,6 +61,10 @@ def plot_colours():
             "plot_auto_pens": ("w", "r", "g", "b", "c", "m", "y"),
             "trajectory_palette": DARK_TRAJECTORY_PALETTE,
             "cmap": "inferno",
+            "console_theme": "linux",
+            "crosshair": "yellow",
+            "label_text": "yellow",
+
         }
 
     return {
@@ -70,13 +74,18 @@ def plot_colours():
         "gl_grid_face": (1.0, 1.0, 1.0, 1.0),
         "gl_grid_line": (0.65, 0.65, 0.65, 1.0),
         "gl_axis_label": (0.0, 0.0, 0.0, 1.0),
-        "trajectory": (0.05, 0.05, 0.05),
+        # "trajectory": (0.05, 0.05, 0.05),
+        "trajectory": (0.2471, 0.2510, 0.5686),
         "plot_grid_alpha": 0.5,
-        "plot_pen": "k",
-        "scatter_brush": "black",
+        "plot_pen": "#0e275b",
+        "scatter_brush": "#0e275b",
         "plot_auto_pens": ("k", "r", "g", "b", "c", "m", "y"),
         "trajectory_palette": LIGHT_TRAJECTORY_PALETTE,
         "cmap": "CET-L17",
+        "console_theme": "lightbg",
+        "crosshair": "blue",
+        "label_text": "white",
+
     }
 
 

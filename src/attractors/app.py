@@ -130,6 +130,7 @@ class Window(QtWidgets.QMainWindow):
         self.workspace_system_mode_action = None
         self.workspace_explore_mode_action = None
         self.workspace_mode = "system"
+        self.workspace_crosshair_action = None
         self._explore_toolbar_actions = []
         self._connected_explorer = None
 
@@ -1029,6 +1030,21 @@ class Window(QtWidgets.QMainWindow):
         self._jupyter_toolbar_actions.append(self.workspace_grid_action)
         self._keep_toolbar_action_from_taking_focus(toolbar, self.workspace_grid_action)
         self.workspace_controller.sync_grid_action()
+
+        self.workspace_crosshair_action = toolbar.addAction(
+            self._toolbar_icon(
+                "view-grid", QtWidgets.QStyle.StandardPixmap.SP_DialogResetButton
+            ),
+            "Crosshair",
+        )
+        self.workspace_crosshair_action.setCheckable(True)
+        self.workspace_crosshair_action.setToolTip("Show plot crosshair coordinates")
+        self.workspace_crosshair_action.toggled.connect(
+            self.workspace_controller.set_current_crosshair_visible
+        )
+        self._jupyter_toolbar_actions.append(self.workspace_crosshair_action)
+        self._keep_toolbar_action_from_taking_focus(toolbar, self.workspace_crosshair_action)
+        self.workspace_controller.sync_crosshair_action()
 
         self.explore_trace_button = QtWidgets.QToolButton()
         self.explore_trace_button.setText("Traces: 0")
