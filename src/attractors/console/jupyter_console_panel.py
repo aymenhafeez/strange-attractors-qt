@@ -78,6 +78,9 @@ class ConsolePlot:
         self._zoom = None
 
         self.host = QtWidgets.QWidget()
+
+        self._crosshair = ConsolePlotCrossHair(self._plot_widget, parent=self.host)
+
         self.layout = QtWidgets.QVBoxLayout(self.host)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
@@ -186,6 +189,12 @@ class ConsolePlot:
         self._plot_widget.showGrid(
             x=visible, y=visible, alpha=plot_colours()["plot_grid_alpha"]
         )
+
+    def crosshair_visible(self):
+        return self._crosshair.visible()
+
+    def set_crosshair_visible(self, visible):
+        self._crosshair.set_visible(visible)
 
     def has_item(self, item):
         return item in self._plot_widget.listDataItems()
@@ -306,6 +315,8 @@ class ConsolePlot:
 
         if self._zoom is not None:
             self._zoom.apply_theme()
+
+        self._crosshair.apply_theme()
 
 
 class ConsolePlotManager(QtCore.QObject):
@@ -492,6 +503,12 @@ class ConsolePlotManager(QtCore.QObject):
 
     def set_grid_visible(self, visible):
         return self.current.set_grid_visible(visible)
+
+    def crosshair_visible(self):
+        return self.current.crosshair_visible()
+
+    def set_crosshair_visible(self, visible):
+        return self.current.set_crosshair_visible(visible)
 
     def line(self, *args, zoom_region=False, **kwargs):
         return self.current.line(*args, zoom_region=zoom_region, **kwargs)
@@ -767,6 +784,88 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.views3d.apply_theme()
         if self._console is not None:
             self._console.set_default_style(plot_colours()["console_theme"])
+
+
+# https://github.com/pyqtgraph/pyqtgraph/blob/master/pyqtgraph/examples/crosshair.py
+class ConsolePlotCrossHair(QtCore.QObject):
+    def __init__(self, plot_widget, parent=None):
+        super().__init__(parent)
+        self.plot_widget = plot_widget
+        self.plot_item = plot_widget.getPlotItem()
+        self.view_box = self.plot_item.getViewBox()
+        self._mouse_proxy = None
+        self._visible = False
+
+        self.v_line = pg.InfiniteLine(angle=90, movable=False)
+        self.h_line = pg.InfiniteLine(angle=0, movable=False)
+        self.label = pg.TextItem(anchor=(0, 1), fill=pg.mkColor(18, 22, 28, 220))
+
+        for item in (self.v_line, self.h_line, self.label):
+            item.setZValue(10)
+            item.hide()
+            self.plot_item.addItem(item, ignoreBounds=True)
+
+        self.apply_theme()
+
+
+    def _ensure_items_added(self):
+        for item in (self.v_line, self.h_line, self.label):
+            if item.scene() is None:
+                self.plot_item.addItem(item, ignoreBounds=True)
+
+    def visible(self):
+        return self._visible
+
+    def set_visible(self, visible):
+        visible = bool(visible)
+        if self._visible == visible:
+            return
+
+        self._visible = visible
+        if visible:
+            self._ensure_items_added()
+            self._mouse_proxy = pg.SignalProxy(
+                self.plot_widget.scene().sigMouseMoved,
+                rateLimit=60,
+                slot=self._mouse_moved,
+            )
+            return
+
+        if self._mouse_proxy is not None:
+            self._mouse_proxy.disconnect()
+            self._mouse_proxy = None
+        self._hide_items()
+
+    def _mouse_moved(self, ev):
+        self._ensure_items_added()
+        pos = ev[0]
+        if not self.plot_item.sceneBoundingRect().contains(pos):
+            self._hide_items()
+            return
+
+        point = self.view_box.mapSceneToView(pos)
+        x = point.x()
+        y = point.y()
+
+        self.v_line.setPos(x)
+        self.h_line.setPos(y)
+        self.label.setText(f"x={x:.3f}\ny={y:.3f}")
+        self.label.setPos(x, y)
+
+        self.v_line.show()
+        self.h_line.show()
+        self.label.show()
+
+    def _hide_items(self):
+        for item in (self.v_line, self.h_line, self.label):
+            item.hide()
+
+    def apply_theme(self):
+        colour = plot_colours()
+        pen = pg.mkPen(colour["crosshair"], width=1, style=QtCore.Qt.PenStyle.DashLine)
+        self.v_line.setPen(pen)
+        self.h_line.setPen(pen)
+        self.label.setColor(colour["label_text"])
 
 
 class ConsolePlotZoom(QtWidgets.QWidget):
