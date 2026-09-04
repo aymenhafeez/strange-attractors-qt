@@ -76,6 +76,7 @@ class ConsolePlot:
         self._manager = None
         self._legend = None
         self._zoom = None
+        self._table_manager = None
 
         self.host = QtWidgets.QWidget()
 
@@ -302,6 +303,17 @@ class ConsolePlot:
             return False
         raise ValueError("Plot mode must be 'replace' or 'overlay'")
 
+    def set_table_manager(self, table_manager):
+        self._table_manager = table_manager
+
+    def show_trace_data(self, trace):
+        if self._table_manager is None:
+            return None
+
+        return self._table_manager.show(
+            trace.data(), name=f"{trace.name} data", activate=True
+        )
+
     def apply_theme(self):
         colours = plot_colours()
 
@@ -344,6 +356,7 @@ class ConsolePlotManager(QtCore.QObject):
         self._active_callback = active_callback
         default_plot.explore.status_callback = status_callback
         default_plot._manager = self
+        self._table_manager = None
 
     def __repr__(self):
         return f"ConsolePlotManager(current={self._current_name!r})"
@@ -435,6 +448,8 @@ class ConsolePlotManager(QtCore.QObject):
 
         plot_widget = _build_console_plot_widget()
         plot = ConsolePlot(plot_widget, status_callback=self._status_callback)
+        plot.set_table_manager(self._table_manager)
+
         # i can't remember why this is needed
         plot._manager = self
         dock = Dock(key, size=(10, 6), closable=True)
@@ -550,6 +565,11 @@ class ConsolePlotManager(QtCore.QObject):
             raise ValueError("Plot name cannot be empty")
         return key
 
+    def set_table_manager(self, table_manager):
+        self._table_manager = table_manager
+        for plot in self._plots.values():
+            plot.set_table_manager(table_manager)
+
     def apply_theme(self):
         for plot in self._plots.values():
             plot.apply_theme()
@@ -622,6 +642,8 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             self.table_dock,
             status_callback=self._explore_status_callback,
         )
+
+        self.plots.set_table_manager(self.tables)
 
         self.plot_dock.activated.connect(lambda: self.plots.activate("Plot"))
         self.table_dock.activated.connect(lambda: self.tables.activate("Table"))

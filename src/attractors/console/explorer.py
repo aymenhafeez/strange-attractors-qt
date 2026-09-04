@@ -130,11 +130,12 @@ class ConsoleParam(QtCore.QObject):
 class ConsoleTrace:
     """Reactive 2D plot item. Data recomputed on command"""
 
-    def __init__(self, name, item, plot, update_callback):
+    def __init__(self, name, item, plot, update_callback, data_provider=None):
         self.name = name
         self.item = item
         self.plot = plot
         self.update_callback = update_callback
+        self.data_provider = data_provider
 
     def update(self):
         self.update_callback(self.item)
@@ -145,6 +146,12 @@ class ConsoleTrace:
             return
 
         self.plot._plot_widget.removeItem(self.item)
+
+    def data(self):
+        if self.data_provider is None:
+            raise ValueError(f"Trace {self.name!r} has no point data")
+
+        return self.data_provider()
 
 
 class PlotExplorer(QtCore.QObject):
@@ -366,6 +373,40 @@ class PlotExplorer(QtCore.QObject):
 
         item.setData(x=x_array, y=y_array)
 
+    def _trace_data(self, name, item):
+        x_data, y_data = item.getData()
+        x_array = check_array_dim(x_data, "x")
+        y_array = check_array_dim(y_data, "y")
+
+        if len(x_array) != len(y_array):
+            raise ValueError("x and y must be the same length")
+
+        return {
+            "trace": np.full(len(x_array), name),
+            "index": np.arange(len(x_array)),
+            "x": x_array,
+            "y": y_array,
+        }
+
+    def _connect_trace_data(self, trace):
+        set_clickable = getattr(trace.item, "setCurveClickable", None)
+        if set_clickable is not None:
+            try:
+                set_clickable(True, width=8)
+            except TypeError:
+                set_clickable(True)
+
+        trace.item.sigClicked.connect(
+            lambda _item, ev, trace=trace: self._trace_clicked(trace, ev)
+        )
+
+    def _trace_clicked(self, trace, ev):
+        is_double = getattr(ev, "double", None)
+        if is_double is not None and is_double():
+            return
+
+        self.plot.show_trace_data(trace)
+
     # TODO: write a helper around curve() and scatter()
     def curve(
         self,
@@ -399,7 +440,14 @@ class PlotExplorer(QtCore.QObject):
             raise ValueError("x and y must be the same length")
 
         item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
-        trace = ConsoleTrace(name, item, target, self._data_trace_update(x, y))
+        trace = ConsoleTrace(
+            name,
+            item,
+            target,
+            self._data_trace_update(x, y),
+            data_provider=functools.partial(self._trace_data, name, item),
+        )
+        self._connect_trace_data(trace)
 
         return self._replace_trace(name, trace)
 
@@ -441,7 +489,14 @@ class PlotExplorer(QtCore.QObject):
             symbol_size=symbol_size,
             **plot_kwargs,
         )
-        trace = ConsoleTrace(name, item, target, self._data_trace_update(x, y))
+        trace = ConsoleTrace(
+            name,
+            item,
+            target,
+            self._data_trace_update(x, y),
+            data_provider=functools.partial(self._trace_data, name, item),
+        )
+        self._connect_trace_data(trace)
 
         return self._replace_trace(name, trace)
 
@@ -475,8 +530,13 @@ class PlotExplorer(QtCore.QObject):
 
         item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
         trace = ConsoleTrace(
-            name, item, target, self._hist_trace_update(values, bins, density)
+            name,
+            item,
+            target,
+            self._hist_trace_update(values, bins, density),
+            data_provider=functools.partial(self._trace_data, name, item),
         )
+        self._connect_trace_data(trace)
 
         return self._replace_trace(name, trace)
 

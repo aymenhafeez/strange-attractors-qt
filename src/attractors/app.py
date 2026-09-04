@@ -1044,7 +1044,9 @@ class Window(QtWidgets.QMainWindow):
             self.workspace_controller.set_current_crosshair_visible
         )
         self._jupyter_toolbar_actions.append(self.workspace_crosshair_action)
-        self._keep_toolbar_action_from_taking_focus(toolbar, self.workspace_crosshair_action)
+        self._keep_toolbar_action_from_taking_focus(
+            toolbar, self.workspace_crosshair_action
+        )
         self.workspace_controller.sync_crosshair_action()
 
         self.explore_trace_button = QtWidgets.QToolButton()
