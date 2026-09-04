@@ -42,7 +42,7 @@ from .workers.solve_manager import SolveManager
 
 WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 850
-PARTIAL_N = 40000
+PARTIAL_N = 75000
 PROJECTION_UPDATE_INTERVAL = 100  # ms
 
 
@@ -1950,6 +1950,14 @@ class Window(QtWidgets.QMainWindow):
         if config is not None:
             self.scene.viewport_overlay.set_info(config, values)
 
+    def _partial_t_max(self, full_n, partial_n, full_t_max, t_min):
+        if partial_n >= full_n:
+            return full_t_max
+
+        dt = (full_t_max - t_min) / full_n
+
+        return t_min + partial_n * dt
+
     def _dispatch_solve(self, full=False):
         if self._solve_pending:
             return
@@ -1976,25 +1984,44 @@ class Window(QtWidgets.QMainWindow):
         user_n = self.current_n or config.time_defaults.n
         t_max = self.current_t_max
         trajectories = self.controls.trajectory_panel.get_trajectories()
+
         if trajectories:
             trajectory_specs = []
             for trajectory in trajectories:
                 trajectory_n = int(trajectory.get("n", user_n))
+                trajectory_t_max = float(trajectory.get("t_max", t_max))
                 solve_n = trajectory_n if full else min(trajectory_n, PARTIAL_N)
+                solve_t_max = (
+                    trajectory_t_max
+                    if full
+                    else self._partial_t_max(
+                        trajectory_n,
+                        solve_n,
+                        trajectory_t_max,
+                        config.time_defaults.t_min,
+                    )
+                )
                 trajectory_specs.append(
                     {
                         "ic": [float(coord) for coord in trajectory["ic"]],
                         "n": solve_n,
-                        "t_max": float(trajectory.get("t_max", t_max)),
+                        "t_max": solve_t_max,
                     }
                 )
         else:
             solve_n = int(user_n if full else min(user_n, PARTIAL_N))
+            solve_t_max = (
+                t_max
+                if full
+                else self._partial_t_max(
+                    user_n, solve_n, t_max, config.time_defaults.t_min
+                )
+            )
             trajectory_specs = [
                 {
                     "ic": [float(coord) for coord in config.initial_conditions],
                     "n": solve_n,
-                    "t_max": float(t_max),
+                    "t_max": solve_t_max,
                 }
             ]
 
