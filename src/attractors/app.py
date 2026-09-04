@@ -30,9 +30,8 @@ from .ui.control_panel import ControlPanel
 from .ui.docking import AppDock as Dock
 from .ui.docking import AppDockArea as DockArea
 from .ui.lyapunov_panel import LyapunovPanel
-from .ui.main_toolbar import build_toolbar
+from .ui.main_toolbar import build_menu_bar, build_status_bar, build_toolbar
 from .ui.poincare_panel import PoincarePanel
-from .ui.process_metrics import ProcessUsageStatus
 from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
 from .ui.style import SPLITTER_HANDLE_HOVER, plot_colours
@@ -138,6 +137,8 @@ class Window(QtWidgets.QMainWindow):
         self.current_t_max = 50
         self.current_name = next(iter(ATTRACTORS.keys()))
         self._custom_config = None
+
+        self.auto_fit_camera = False
 
         app_data_location = QtCore.QStandardPaths.writableLocation(
             QtCore.QStandardPaths.StandardLocation.AppDataLocation
@@ -294,9 +295,9 @@ class Window(QtWidgets.QMainWindow):
         self.system_toolbar.set_solve_state(self._solve_state)
         self.workspace_controller.sync_views()
 
-        self._build_toolbar()
-        self._build_menu_bar()
-        self._build_status_bar()
+        build_toolbar(self)
+        build_menu_bar(self)
+        build_status_bar(self)
 
         self.workspace_inspector = WorkspaceInspector(self.jupyter_console_panel)
 
@@ -613,168 +614,6 @@ class Window(QtWidgets.QMainWindow):
         for action, source_action in self._menu_actions:
             self._sync_menu_action(action, source_action)
 
-    def _build_menu_bar(self):
-        menu_bar = self.menuBar()
-        menu_bar.clear()
-        self._menu_actions = []
-
-        file_menu = menu_bar.addMenu("&File")
-        file_menu.addAction(
-            "Save view as PNG",
-            self.scene.viewport_overlay.save_view_as_png,
-        )
-        file_menu.addSeparator()
-        file_menu.addAction("Open preset folder", self._open_preset_folder)
-
-        view_menu = menu_bar.addMenu("&View")
-        self._add_menu_action(view_menu, "Left panel", self.toolbar_left_panel_action)
-        self._add_menu_action(view_menu, "Right panel", self.toolbar_right_panel_action)
-        self._add_menu_action(
-            view_menu, "Status bar", self.toolbar_process_status_action
-        )
-        view_menu.addSeparator()
-        view_menu.addAction(
-            "Reset camera",
-            self._reset_camera,
-        )
-        view_menu.addAction(
-            "Fit view",
-            lambda: self.scene.camera_controller.fit_camera_to_solutions(
-                self.scene.trajectory_renderer.solutions
-            ),
-        )
-
-        self._add_menu_action(view_menu, "Grid", self.toolbar_grid_action)
-
-        view_menu.addSeparator()
-
-        plot_theme_menu = view_menu.addMenu("Plot theme")
-        self.view_system_action = plot_theme_menu.addAction("System")
-        self.view_light_action = plot_theme_menu.addAction("Light")
-        self.view_dark_action = plot_theme_menu.addAction("Dark")
-
-        theme_group = QtGui.QActionGroup(self)
-        theme_group.setExclusive(True)
-        for action in (
-            self.view_system_action,
-            self.view_light_action,
-            self.view_dark_action,
-        ):
-            action.setCheckable(True)
-            theme_group.addAction(action)
-
-        self.view_system_action.setChecked(True)
-
-        self.view_system_action.triggered.connect(lambda: self._set_theme(None))
-        self.view_light_action.triggered.connect(lambda: self._set_theme("light"))
-        self.view_dark_action.triggered.connect(lambda: self._set_theme("dark"))
-
-        view_menu.addSeparator()
-        view_menu.addAction("Reset session state", self._reset_session_state)
-
-        system_menu = menu_bar.addMenu("&System")
-        system_menu.addAction("Solve", lambda: self._on_controls_solve_requested(True))
-        system_menu.addAction(
-            "Reset parameters",
-            self.controls.reset_to_defaults,
-        )
-        system_menu.addSeparator()
-        self._add_menu_action(system_menu, "Loop animation", self.toolbar_loop_action)
-        self._add_menu_action(
-            system_menu, "Show leading point", self.toolbar_point_action
-        )
-        self._add_menu_action(system_menu, "Show lines", self.toolbar_line_action)
-        self._add_menu_action(system_menu, "Show trail", self.toolbar_trail_action)
-
-        workspace_menu = menu_bar.addMenu("&Workspace")
-        mode_menu = workspace_menu.addMenu("Mode")
-        mode_group = QtGui.QActionGroup(self)
-        mode_group.setExclusive(True)
-        self.workspace_system_mode_action = mode_menu.addAction("System")
-        self.workspace_system_mode_action.setCheckable(True)
-        self.workspace_system_mode_action.setChecked(True)
-        self.workspace_explore_mode_action = mode_menu.addAction("Explore")
-        self.workspace_explore_mode_action.setCheckable(True)
-        mode_group.addAction(self.workspace_system_mode_action)
-        mode_group.addAction(self.workspace_explore_mode_action)
-        self.workspace_system_mode_action.triggered.connect(
-            lambda: self._set_workspace_mode("system")
-        )
-        self.workspace_explore_mode_action.triggered.connect(
-            lambda: self._set_workspace_mode("explore")
-        )
-        workspace_menu.addSeparator()
-        workspace_menu.addAction("Summary", self.show_workspace_summary)
-        workspace_menu.addAction(
-            "Explore workspace", lambda: self._set_workspace_mode("explore")
-        )
-        workspace_menu.addAction("Restore Explore layout", self._restore_explore_layout)
-        examples_menu = workspace_menu.addMenu("Examples")
-        self._populate_examples_menu(examples_menu)
-        workspace_menu.addSeparator()
-        workspace_menu.addAction("New plot", self.workspace_controller.new_plot)
-        workspace_menu.addAction(
-            "Clear current view",
-            self.workspace_controller.clear_current_view,
-        )
-        workspace_menu.addAction("Export current table", self._export_current_table)
-        workspace_menu.addAction(
-            "Clear all views", self.workspace_controller.clear_all_views
-        )
-        workspace_menu.addSeparator()
-        workspace_menu.addAction("Clear sliders", self._clear_current_explore_sliders)
-        workspace_menu.addAction("Clear traces", self._clear_current_explore_traces)
-        workspace_menu.addAction("Clear explore state", self._clear_current_explore)
-        workspace_menu.addSeparator()
-        self._add_menu_action(workspace_menu, "View all", self.plot_view_all_action)
-        self._add_menu_action(workspace_menu, "Pan", self.plot_pan_action)
-        self._add_menu_action(workspace_menu, "Zoom", self.plot_zoom_action)
-        workspace_menu.addSeparator()
-        self._add_menu_action(workspace_menu, "X grid", self.plot_x_grid_action)
-        self._add_menu_action(workspace_menu, "Y grid", self.plot_y_grid_action)
-
-        if self.plot_options_menu is not None:
-            workspace_menu.addSeparator()
-            self._add_proxy_menu(
-                workspace_menu,
-                "Plot options",
-                self.plot_options_menu,
-            )
-        if self.plot_view_menu is not None:
-            self._add_proxy_menu(
-                workspace_menu,
-                "ViewBox options",
-                self.plot_view_menu,
-            )
-
-        workspace_menu.addSeparator()
-
-        workspace_menu.addAction(
-            "System summary", lambda: self.system.summary(table=True)
-        )
-        workspace_menu.addAction(
-            "Workspace summary", lambda: self.workspace_inspector.summary(table=True)
-        )
-        workspace_menu.addSeparator()
-        workspace_menu.addAction("System help", lambda: self.system.help(table=True))
-        workspace_menu.addAction(
-            "Workspace help", lambda: self.workspace_inspector.help(table=True)
-        )
-
-        analysis_menu = menu_bar.addMenu("&Analysis")
-        analysis_menu.addAction(self.toolbar_lyapunov_action)
-        analysis_menu.addAction(self.toolbar_projection_action)
-        analysis_menu.addAction(self.toolbar_poincare_action)
-        analysis_menu.addAction(self.toolbar_bifurcation_action)
-        analysis_menu.addAction(self.toolbar_jupyter_console_action)
-
-        self._hide_menu_icons(file_menu)
-        self._hide_menu_icons(view_menu)
-        self._hide_menu_icons(system_menu)
-        self._hide_menu_icons(workspace_menu)
-        self._hide_menu_icons(analysis_menu)
-        self._sync_menu_actions()
-
     def _set_theme(self, theme):
         app = QtWidgets.QApplication.instance()
         if app is None:
@@ -808,35 +647,6 @@ class Window(QtWidgets.QMainWindow):
             self.view_system_action.setChecked(theme is None)
             self.view_light_action.setChecked(theme == "light")
             self.view_dark_action.setChecked(theme == "dark")
-
-    def _build_status_bar(self):
-        status_bar = QtWidgets.QStatusBar()
-        status_bar.setSizeGripEnabled(False)
-        status_bar.setFixedHeight(18)
-        status_bar.setStyleSheet(
-            """
-            QStatusBar {
-                border: none;
-                padding: 0px;
-            }
-            QStatusBar::item {
-                border: none;
-            }
-            """
-        )
-
-        self.app_status_label = QtWidgets.QLabel("")
-        self.app_status_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
-        )
-        self.app_status_label.setStyleSheet(
-            "border: none; padding: 0 4px 1px 4px; font-size: 12px; color: #178640;"
-        )
-        self.process_status = ProcessUsageStatus()
-        status_bar.addWidget(self.app_status_label, 1)
-        status_bar.addPermanentWidget(self.process_status)
-        self.setStatusBar(status_bar)
-        self._set_process_status_visible(self._process_status_visible)
 
     def _add_checked_toolbar_action(
         self,
@@ -1097,7 +907,7 @@ class Window(QtWidgets.QMainWindow):
             action.setVisible(False)
 
     def _add_jupyter_plot_controls(self, toolbar):
-        label = QtWidgets.QLabel("View")
+        label = QtWidgets.QLabel(" View: ")
         label.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self._jupyter_toolbar_actions.append(toolbar.addWidget(label))
 
@@ -1991,6 +1801,11 @@ class Window(QtWidgets.QMainWindow):
 
         self._clear_app_status()
         self.scene.trajectory_renderer.display_solutions(solutions, is_partial)
+
+        if self.auto_fit_camera:
+            self.scene.camera_controller.fit_camera_to_solutions(solutions)
+            self.scene.grid_overlay.auto_adjust_grid(solutions)
+
         self._update_data_view(solutions, is_partial)
         self._set_solve_state(
             solving=False,
@@ -2025,6 +1840,7 @@ class Window(QtWidgets.QMainWindow):
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
             self.scene.grid_overlay.auto_adjust_grid(solutions)
+            # self.scene.camera_controller.fit_camera_to_solutions(solutions)
             for plot_name in list(self.live_plot_controller.live_plots):
                 self.live_plot_controller._refresh_live_plot(plot_name)
 
