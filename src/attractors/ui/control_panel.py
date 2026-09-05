@@ -25,6 +25,8 @@ class ControlPanel(QtWidgets.QWidget):
     animation_speed_changed = QtCore.pyqtSignal(int)
     orbit_speed_changed = QtCore.pyqtSignal(int)
     traj_tail_length_changed = QtCore.pyqtSignal(int)
+    particle_count_changed = QtCore.pyqtSignal(int)
+    particle_trail_length_changed = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -142,6 +144,68 @@ class ControlPanel(QtWidgets.QWidget):
         speed_wrapper.setLayout(speed_row)
         self.controls_layout.addWidget(speed_wrapper)
 
+        self.particle_options_wrapper = QtWidgets.QWidget()
+        particle_options_layout = QtWidgets.QVBoxLayout(self.particle_options_wrapper)
+        particle_options_layout.setContentsMargins(0, 0, 0, 0)
+        particle_options_layout.setSpacing(7)
+
+        particle_count_row = QtWidgets.QHBoxLayout()
+        particle_count_row.setSpacing(10)
+        particle_count_row.addWidget(QtWidgets.QLabel("Particles"))
+
+        self.particle_count_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.particle_count_slider.setRange(50, 10000)
+        self.particle_count_slider.setSingleStep(10)
+        self.particle_count_slider.setValue(600)
+
+        self.particle_count_spin = QtWidgets.QSpinBox()
+        self.particle_count_spin.setKeyboardTracking(False)
+        self.particle_count_spin.setRange(50, 10000)
+        self.particle_count_spin.setSingleStep(10)
+        self.particle_count_spin.setValue(600)
+
+        self.particle_count_slider.valueChanged.connect(
+            self.particle_count_spin.setValue
+        )
+        self.particle_count_spin.valueChanged.connect(
+            self.particle_count_slider.setValue
+        )
+        self.particle_count_spin.valueChanged.connect(self.particle_count_changed.emit)
+
+        particle_count_row.addWidget(self.particle_count_slider)
+        particle_count_row.addWidget(self.particle_count_spin)
+        particle_options_layout.addLayout(particle_count_row)
+
+        particle_trail_row = QtWidgets.QHBoxLayout()
+        particle_trail_row.setSpacing(10)
+        particle_trail_row.addWidget(QtWidgets.QLabel("Trail"))
+
+        self.particle_trail_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.particle_trail_slider.setRange(2, 100)
+        self.particle_trail_slider.setValue(18)
+
+        self.particle_trail_spin = QtWidgets.QSpinBox()
+        self.particle_trail_spin.setKeyboardTracking(False)
+        self.particle_trail_spin.setRange(2, 100)
+        self.particle_trail_spin.setValue(18)
+
+        self.particle_trail_slider.valueChanged.connect(
+            self.particle_trail_spin.setValue
+        )
+        self.particle_trail_spin.valueChanged.connect(
+            self.particle_trail_slider.setValue
+        )
+        self.particle_trail_spin.valueChanged.connect(
+            self.particle_trail_length_changed.emit
+        )
+
+        particle_trail_row.addWidget(self.particle_trail_slider)
+        particle_trail_row.addWidget(self.particle_trail_spin)
+        particle_options_layout.addLayout(particle_trail_row)
+
+        self.particle_options_wrapper.setVisible(False)
+        self.controls_layout.addWidget(self.particle_options_wrapper)
+
         orbit_speed_row = QtWidgets.QHBoxLayout()
         orbit_speed_row.setSpacing(10)
         orbit_speed_label = QtWidgets.QLabel("Orbit speed")
@@ -239,6 +303,9 @@ class ControlPanel(QtWidgets.QWidget):
 
     def set_trail_options_visible(self, visible):
         self.traj_tail_wrapper.setVisible(bool(visible))
+
+    def set_particle_options_visible(self, visible):
+        self.particle_options_wrapper.setVisible(visible)
 
     def set_linewidth_option_visible(self, visible):
         self.line_width_wrapper.setVisible(bool(visible))
