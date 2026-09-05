@@ -98,6 +98,30 @@ def build_menu_bar(self):
         self.controls.reset_to_defaults,
     )
     system_menu.addSeparator()
+
+    animation_mode_menu = system_menu.addMenu("Animation mode")
+
+    self.animation_mode_group = QtGui.QActionGroup(self)
+    self.animation_mode_group.setExclusive(True)
+
+    self.animation_traj_action = animation_mode_menu.addAction("Trajectory")
+    self.animation_particle_flow_action = animation_mode_menu.addAction("Particle flow")
+
+    for action in (self.animation_traj_action, self.animation_particle_flow_action):
+        action.setCheckable(True)
+        self.animation_mode_group.addAction(action)
+
+    self.animation_traj_action.setChecked(True)
+
+    self.animation_traj_action.triggered.connect(
+        lambda checked: self._set_animation_mode("trajectory") if checked else None
+    )
+    self.animation_particle_flow_action.triggered.connect(
+        lambda checked: self._set_animation_mode("particle") if checked else None
+    )
+
+    system_menu.addSeparator()
+
     self._add_menu_action(system_menu, "Loop animation", self.toolbar_loop_action)
     self._add_menu_action(system_menu, "Show leading point", self.toolbar_point_action)
     self._add_menu_action(system_menu, "Show lines", self.toolbar_line_action)

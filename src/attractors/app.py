@@ -190,6 +190,10 @@ class Window(QtWidgets.QMainWindow):
         self.controls.animation_speed_changed.connect(
             self.scene.animation_controller.set_step
         )
+        self.controls.particle_count_changed.connect(self.scene.set_particle_count)
+        self.controls.particle_trail_length_changed.connect(
+            self.scene.set_particle_trail_length
+        )
         self.controls.orbit_speed_changed.connect(
             self.scene.camera_controller.set_orbit_speed
         )
@@ -630,6 +634,7 @@ class Window(QtWidgets.QMainWindow):
         self.scene.view.setBackgroundColor(colours["gl_background"])
         self.scene.grid_overlay.apply_theme()
         self.scene.trajectory_renderer.apply_theme()
+        self.scene.particle_renderer.apply_theme()
 
         self.scene.viewport_overlay.apply_theme()
 
@@ -705,6 +710,28 @@ class Window(QtWidgets.QMainWindow):
     def _set_trail_mode(self, checked):
         self.scene.trajectory_renderer.set_trail_mode(checked)
         self.controls.set_trail_options_visible(checked)
+
+    def _set_animation_mode(self, mode):
+        if mode == self.scene.animation_mode:
+            return
+
+        self.scene.set_animation_mode(mode)
+        self._sync_toolbar_animation_action(False)
+
+        particle_flow = mode == "particle"
+
+        self.controls.set_particle_options_visible(particle_flow)
+        self.toolbar_loop_action.setEnabled(not particle_flow)
+        self.toolbar_point_action.setEnabled(not particle_flow)
+
+        with (
+            QtCore.QSignalBlocker(self.animation_traj_action),
+            QtCore.QSignalBlocker(self.animation_particle_flow_action),
+        ):
+            self.animation_traj_action.setChecked(not particle_flow)
+            self.animation_particle_flow_action.setChecked(particle_flow)
+
+        self._sync_menu_actions()
 
     def _set_line_mode(self, checked):
         mode = "line" if checked else "points"
