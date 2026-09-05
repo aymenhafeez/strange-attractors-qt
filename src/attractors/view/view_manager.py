@@ -5,6 +5,7 @@ from ..ui.style import plot_colours
 from .animation_controller import AnimationController
 from .camera_controller import CameraController
 from .grid_overlay import GridOverlay
+from .particle_renderer import ParticleFlowRenderer
 from .projection_emitter import ProjectionEmitter
 from .trajectory_renderer import TrajectoryRenderer
 from .viewport_overlay import ViewportOverlay
@@ -19,6 +20,8 @@ class ViewManager(QtCore.QObject):
         super().__init__(parent)
 
         self._repositioning = False
+
+        self._animation_mode = "trajectory"
 
         self.container = QtWidgets.QWidget()
         self.container.setObjectName("viewportContainer")
@@ -51,8 +54,16 @@ class ViewManager(QtCore.QObject):
 
         self.trajectory_renderer = TrajectoryRenderer(
             self.view,
-            lambda: self.animation_controller.is_active(),
+            lambda: (
+                self.animation_controller.is_active()
+                and self._animation_mode == "trajectory"
+            ),
         )
+
+        self.particle_renderer = ParticleFlowRenderer(
+            self.view, self.trajectory_renderer.get_traj_colour_alpha
+        )
+
         self.animation_controller = AnimationController(
             self._render_animation_frame,
             self.trajectory_renderer.sync_head_visibility,
@@ -68,6 +79,46 @@ class ViewManager(QtCore.QObject):
     def grid_items(self):
         return self.grid_overlay.grid_items
 
+    @property
+    def animation_mode(self):
+        return self._animation_mode
+
+    def set_animation_mode(self, mode):
+        if mode not in {"trajectory", "particle"}:
+            raise ValueError(f"Unknown animation mode {mode}")
+
+        if mode == self._animation_mode:
+            return
+
+        self.animation_controller.stop()
+        self.animation_controller.reset_frame()
+
+        self._animation_mode = mode
+
+        self.particle_renderer.set_visible(False)
+        self.trajectory_renderer.update_display()
+        self._sync_animation_visibility()
+
+    def set_particle_count(self, value):
+        self.particle_renderer.set_particle_count(value)
+
+    def set_particle_trail_length(self, value):
+        self.particle_renderer.set_trail_length(value)
+
+    def _sync_animation_visibility(self):
+        active = self.animation_controller.is_active()
+        particle_flow_active = active and self._animation_mode == "particle_flow"
+
+        self.trajectory_renderer.sync_head_visibility()
+
+        if particle_flow_active:
+            solutions = self.trajectory_renderer.solutions or []
+            self.particle_renderer.render_frame(
+                solutions, self.animation_controller.frame
+            )
+
+        self.particle_renderer.set_visible(particle_flow_active)
+
     def reposition_overlays(self):
         if self._repositioning:
             return
@@ -77,12 +128,19 @@ class ViewManager(QtCore.QObject):
 
     def clear_solutions(self):
         self.animation_controller.reset_frame()
+        self.particle_renderer.clear()
         self.trajectory_renderer.clear_solutions()
 
     def _render_animation_frame(self, current_frame, step):
         solutions = self.trajectory_renderer.solutions
         if not solutions:
             return None
+
+        if self._animation_mode == "particle_flow":
+            frame = current_frame + step
+            self.particle_renderer.render_frame(solutions, frame)
+
+            return {"frame": frame, "done": False}
 
         sol0 = solutions[0]
         frame = min(current_frame + step, len(sol0))
