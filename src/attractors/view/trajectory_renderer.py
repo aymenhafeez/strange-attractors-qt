@@ -34,7 +34,7 @@ class TrajectoryRenderer:
         self._trajectories = []
         self._base_colour = plot_colours()["trajectory"]
         self._current_alpha = 1.0
-        self._current_line_width = plot_colours()["is_dark"] and 1.0 or 2.0
+        self._current_line_width = 1.0
         self._line_mode = False
         self._trail_mode = False
         self._heads_visible = True
@@ -127,6 +127,19 @@ class TrajectoryRenderer:
                 alpha = self._current_alpha
         return base_colour, alpha
 
+    def get_particle_colour_alpha(self, i):
+        traj = self._trajectories[i] if i < len(self._trajectories) else None
+        qc = traj.get("colour") if traj is not None else None
+
+        if isinstance(qc, QtGui.QColor):
+            base_colour = (qc.redF(), qc.greenF(), qc.blueF())
+        else:
+            base_colour = self._base_colour
+
+        alpha = traj.get("alpha", 1.0) if traj else 1.0
+
+        return base_colour, alpha
+
     def plot_trail(self, n, alpha=1.0, base_colour=None):
         if base_colour is None:
             base_colour = self._base_colour
@@ -207,7 +220,7 @@ class TrajectoryRenderer:
     def _trajectory_size(self, i):
         traj = self._trajectories[i] if i < len(self._trajectories) else None
 
-        size = plot_colours()["is_dark"] and 1.0 or 2.0
+        size = 1.0
         if traj is None:
             return size
 

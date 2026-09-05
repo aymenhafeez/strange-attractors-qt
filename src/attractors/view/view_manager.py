@@ -61,7 +61,7 @@ class ViewManager(QtCore.QObject):
         )
 
         self.particle_renderer = ParticleFlowRenderer(
-            self.view, self.trajectory_renderer.get_traj_colour_alpha
+            self.view, self.trajectory_renderer.get_particle_colour_alpha
         )
 
         self.animation_controller = AnimationController(
