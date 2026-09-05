@@ -66,7 +66,7 @@ class ViewManager(QtCore.QObject):
 
         self.animation_controller = AnimationController(
             self._render_animation_frame,
-            self.trajectory_renderer.sync_head_visibility,
+            self._sync_animation_visibility,
             self.animation_finished.emit,
             parent=self,
         )
@@ -107,7 +107,7 @@ class ViewManager(QtCore.QObject):
 
     def _sync_animation_visibility(self):
         active = self.animation_controller.is_active()
-        particle_flow_active = active and self._animation_mode == "particle_flow"
+        particle_flow_active = active and self._animation_mode == "particle"
 
         self.trajectory_renderer.sync_head_visibility()
 
@@ -136,7 +136,7 @@ class ViewManager(QtCore.QObject):
         if not solutions:
             return None
 
-        if self._animation_mode == "particle_flow":
+        if self._animation_mode == "particle":
             frame = current_frame + step
             self.particle_renderer.render_frame(solutions, frame)
 

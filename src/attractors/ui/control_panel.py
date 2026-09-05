@@ -181,12 +181,12 @@ class ControlPanel(QtWidgets.QWidget):
         particle_trail_row.addWidget(QtWidgets.QLabel("Trail"))
 
         self.particle_trail_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.particle_trail_slider.setRange(2, 100)
+        self.particle_trail_slider.setRange(2, 500)
         self.particle_trail_slider.setValue(18)
 
         self.particle_trail_spin = QtWidgets.QSpinBox()
         self.particle_trail_spin.setKeyboardTracking(False)
-        self.particle_trail_spin.setRange(2, 100)
+        self.particle_trail_spin.setRange(2, 500)
         self.particle_trail_spin.setValue(18)
 
         self.particle_trail_slider.valueChanged.connect(

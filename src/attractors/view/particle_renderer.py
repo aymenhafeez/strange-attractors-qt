@@ -5,9 +5,9 @@ import pyqtgraph.opengl as gl
 
 from ..ui.style import plot_colours
 
-DEFAULT_PARTICAL_COUNT = 600
+DEFAULT_PARTICLE_COUNT = 600
 DEFAULT_TRAIL_LENGTH = 18
-PARTICLE_HEAD_SIZE = 4.0
+PARTICLE_HEAD_SIZE = 5.0
 TRAIL_ALPHA_SCALE = 0.7
 
 
@@ -29,7 +29,7 @@ def _empty_particle_geometry() -> ParticleGeometry:
 
 
 def allocate_particle_count(solutions, total_count):
-    lengths = np.asarray([len(solutions) for solution in solutions])
+    lengths = np.asarray([len(solution) for solution in solutions])
     counts = np.zeros(len(lengths))
 
     total_counts = max(0, int(total_count))
@@ -66,6 +66,10 @@ def build_particle_geometry(
     points, particle_count, trail_length, phase, base_colour, alpha
 ):
     points = np.asarray(points)
+
+    if len(points) < 2 or particle_count <= 0:
+        return _empty_particle_geometry()
+
     particle_count = min(int(particle_count), len(points))
     trail_length = min(max(2, int(trail_length)), len(points))
 
@@ -76,7 +80,7 @@ def build_particle_geometry(
     offsets = np.arange(trail_length - 1, -1, -1)
     indices = (head_indices[:, None] - offsets[None, :]) % len(points)
 
-    starts = indices[:, -1]
+    starts = indices[:, :-1]
     ends = indices[:, 1:]
     valid_segments = ends == starts + 1
 
@@ -99,7 +103,7 @@ def build_particle_geometry(
 
     rgb = np.asarray(base_colour)
 
-    trail_colours = np.empt((len(trail_positions), 4))
+    trail_colours = np.empty((len(trail_positions), 4))
     trail_colours[:, :3] = rgb
     trail_colours[:, 3] = np.clip(trail_alphas, 0.0, 1.0)
 
@@ -117,7 +121,7 @@ class ParticleFlowRenderer:
     def __init__(self, view, colour_provider):
         self.view = view
         self._colour_provider = colour_provider
-        self._particle_count = DEFAULT_PARTICAL_COUNT
+        self._particle_count = DEFAULT_PARTICLE_COUNT
         self._trail_length = DEFAULT_TRAIL_LENGTH
         self._visible = False
         self._trails = []
