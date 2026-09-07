@@ -1,3 +1,4 @@
+import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..systems.registry import ATTRACTORS
@@ -27,6 +28,8 @@ class ControlPanel(QtWidgets.QWidget):
     traj_tail_length_changed = QtCore.pyqtSignal(int)
     particle_count_changed = QtCore.pyqtSignal(int)
     particle_trail_length_changed = QtCore.pyqtSignal(int)
+    colour_mode_changed = QtCore.pyqtSignal(str)
+    colourmap_changed = QtCore.pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -124,6 +127,39 @@ class ControlPanel(QtWidgets.QWidget):
         alpha_wrapper.setLayout(alpha_row)
         self.controls_layout.addWidget(alpha_wrapper)
 
+        colour_mode_row = QtWidgets.QHBoxLayout()
+        colour_mode_row.setSpacing(10)
+        colour_mode_row.addWidget(QtWidgets.QLabel("Colour mode"))
+
+        self.colour_mode_combo = QtWidgets.QComboBox()
+        self.colour_mode_combo.addItem("Solid", "solid")
+        self.colour_mode_combo.addItem("Speed", "speed")
+        colour_mode_row.addWidget(self.colour_mode_combo)
+
+        self.colour_mode_wrapper = QtWidgets.QWidget()
+        self.colour_mode_wrapper.setLayout(colour_mode_row)
+        self.controls_layout.addWidget(self.colour_mode_wrapper)
+
+        colourmap_row = QtWidgets.QHBoxLayout()
+        colourmap_row.setSpacing(10)
+        colourmap_row.addWidget(QtWidgets.QLabel("Colourmap"))
+
+        self.colourmap_combo = QtWidgets.QComboBox()
+        colourmaps = pg.colormap.listMaps()
+        self.colourmap_combo.addItems(colourmaps)
+        self.colourmap_combo.setMaxVisibleItems(12)
+        # needed for setMaxVisibleItems to apply
+        self.colourmap_combo.setStyleSheet("QComboBox { combobox-popup: 0; }")
+        colourmap_row.addWidget(self.colourmap_combo)
+
+        self.colourmap_wrapper = QtWidgets.QWidget()
+        self.colourmap_wrapper.setLayout(colourmap_row)
+        self.colourmap_wrapper.setVisible(False)
+        self.controls_layout.addWidget(self.colourmap_wrapper)
+
+        self.colour_mode_combo.currentIndexChanged.connect(self._on_colour_mode_changed)
+        self.colourmap_combo.currentTextChanged.connect(self._on_colourmap_changed)
+
         speed_row = QtWidgets.QHBoxLayout()
         speed_row.setSpacing(10)
         speed_label = QtWidgets.QLabel("Speed")
@@ -147,21 +183,21 @@ class ControlPanel(QtWidgets.QWidget):
         self.particle_options_wrapper = QtWidgets.QWidget()
         particle_options_layout = QtWidgets.QVBoxLayout(self.particle_options_wrapper)
         particle_options_layout.setContentsMargins(0, 0, 0, 0)
-        particle_options_layout.setSpacing(7)
+        particle_options_layout.setSpacing(15)
 
         particle_count_row = QtWidgets.QHBoxLayout()
-        particle_count_row.setSpacing(10)
+        particle_count_row.setSpacing(15)
         particle_count_row.addWidget(QtWidgets.QLabel("Particles"))
 
         self.particle_count_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.particle_count_slider.setRange(50, 10000)
-        self.particle_count_slider.setSingleStep(10)
+        self.particle_count_slider.setSingleStep(1)
         self.particle_count_slider.setValue(600)
 
         self.particle_count_spin = QtWidgets.QSpinBox()
         self.particle_count_spin.setKeyboardTracking(False)
         self.particle_count_spin.setRange(50, 10000)
-        self.particle_count_spin.setSingleStep(10)
+        self.particle_count_spin.setSingleStep(1)
         self.particle_count_spin.setValue(600)
 
         self.particle_count_slider.valueChanged.connect(
@@ -177,7 +213,7 @@ class ControlPanel(QtWidgets.QWidget):
         particle_options_layout.addLayout(particle_count_row)
 
         particle_trail_row = QtWidgets.QHBoxLayout()
-        particle_trail_row.setSpacing(10)
+        particle_trail_row.setSpacing(15)
         particle_trail_row.addWidget(QtWidgets.QLabel("Trail"))
 
         self.particle_trail_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
@@ -293,6 +329,16 @@ class ControlPanel(QtWidgets.QWidget):
                 self.dropdown.setCurrentIndex(index)
         if self.right_panel is not None:
             self.right_panel.set_current_attractor(name)
+
+    def _on_colour_mode_changed(self):
+        mode = self.colour_mode_combo.currentData()
+        mapped = mode != "solid"
+
+        self.colourmap_wrapper.setVisible(mapped)
+        self.colour_mode_changed.emit(mode)
+
+    def _on_colourmap_changed(self):
+        self.colourmap_changed.emit(self.colourmap_combo.currentData())
 
     def set_right_panel(self, right_panel):
         self.right_panel = right_panel
