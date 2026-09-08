@@ -51,6 +51,7 @@ def build_menu_bar(self):
     self._add_menu_action(view_menu, "Left panel", self.toolbar_left_panel_action)
     self._add_menu_action(view_menu, "Right panel", self.toolbar_right_panel_action)
     self._add_menu_action(view_menu, "Status bar", self.toolbar_process_status_action)
+    view_menu.addAction("Restore default layout", self._restore_default_layout)
     view_menu.addSeparator()
     view_menu.addAction(
         "Reset camera",

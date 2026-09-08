@@ -573,6 +573,10 @@ class Window(QtWidgets.QMainWindow):
     def _current_explorer(self):
         return self.jupyter_console_panel.plots.current.explore
 
+    def _restore_default_layout(self):
+        self.viewport_dock.raiseDock()
+        self._set_side_panel_actions(left=True, right=True)
+
     def _set_side_panel_actions(self, *, left, right):
         with (
             QtCore.QSignalBlocker(self.toolbar_left_panel_action),
