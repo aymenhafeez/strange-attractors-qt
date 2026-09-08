@@ -62,10 +62,12 @@ def allocate_particle_count(solutions, total_count):
     return counts
 
 
-def build_particle_geometry(
-    points, particle_count, trail_length, phase, base_colour, alpha
-):
+def build_particle_geometry(points, point_colours, particle_count, trail_length, phase):
     points = np.asarray(points)
+    point_colours = np.asarray(point_colours)
+
+    if point_colours.shape != (len(points), 4):
+        raise ValueError("Point colours must have shape (N, 4)")
 
     if len(points) < 2 or particle_count <= 0:
         return _empty_particle_geometry()
@@ -87,30 +89,28 @@ def build_particle_geometry(
     pairs = np.stack((starts[valid_segments], ends[valid_segments]), axis=1).reshape(-1)
 
     trail_positions = points[pairs]
+    trail_colours = point_colours[pairs].copy()
 
-    alpha_ramp = np.linspace(0.0, float(alpha) * TRAIL_ALPHA_SCALE, trail_length)
+    fade = np.linspace(0.0, TRAIL_ALPHA_SCALE, trail_length)
 
-    start_alphas = np.broadcast_to(
-        alpha_ramp[:-1],
+    start_fade = np.broadcast_to(
+        fade[:-1],
         starts.shape,
     )[valid_segments]
-    end_alphas = np.broadcast_to(
-        alpha_ramp[1:],
+    end_fade = np.broadcast_to(
+        fade[1:],
         ends.shape,
     )[valid_segments]
 
-    trail_alphas = np.stack((start_alphas, end_alphas), axis=1).reshape(-1)
+    trail_fade = np.stack(
+        (start_fade, end_fade),
+        axis=1,
+    ).reshape(-1)
 
-    rgb = np.asarray(base_colour)
-
-    trail_colours = np.empty((len(trail_positions), 4))
-    trail_colours[:, :3] = rgb
-    trail_colours[:, 3] = np.clip(trail_alphas, 0.0, 1.0)
+    trail_colours[:, 3] *= trail_fade
 
     head_positions = points[head_indices]
-    head_colours = np.empty((len(head_positions), 4))
-    head_colours[:, :3] = rgb
-    head_colours[:, 3] = np.clip(float(alpha), 0.0, 1.0)
+    head_colours = point_colours[head_indices].copy()
 
     return ParticleGeometry(
         trail_positions, trail_colours, head_positions, head_colours
@@ -160,10 +160,10 @@ class ParticleFlowRenderer:
         particle_counts = allocate_particle_count(solutions, self._particle_count)
 
         for i, (solution, count) in enumerate(zip(solutions, particle_counts)):
-            base_colour, alpha = self._colour_provider(i)
+            point_colours = self._colour_provider(i)
 
             geometry = build_particle_geometry(
-                solution, count, self._trail_length, phase, base_colour, alpha
+                solution, point_colours, count, self._trail_length, phase
             )
 
             trail = self._trails[i]

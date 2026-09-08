@@ -64,7 +64,6 @@ def plot_colours():
             "console_theme": "linux",
             "crosshair": "yellow",
             "label_text": "yellow",
-
         }
 
     return {
@@ -74,8 +73,7 @@ def plot_colours():
         "gl_grid_face": (1.0, 1.0, 1.0, 1.0),
         "gl_grid_line": (0.65, 0.65, 0.65, 1.0),
         "gl_axis_label": (0.0, 0.0, 0.0, 1.0),
-        # "trajectory": (0.05, 0.05, 0.05),
-        "trajectory": (0.2471, 0.2510, 0.5686),
+        "trajectory": (0.24, 0.25, 0.57),
         "plot_grid_alpha": 0.5,
         "plot_pen": "#0e275b",
         "scatter_brush": "#0e275b",
@@ -85,7 +83,6 @@ def plot_colours():
         "console_theme": "lightbg",
         "crosshair": "blue",
         "label_text": "white",
-
     }
 
 

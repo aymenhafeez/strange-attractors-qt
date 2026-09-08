@@ -145,8 +145,9 @@ class ControlPanel(QtWidgets.QWidget):
         colourmap_row.addWidget(QtWidgets.QLabel("Colourmap"))
 
         self.colourmap_combo = QtWidgets.QComboBox()
-        colourmaps = pg.colormap.listMaps()
+        colourmaps = pg.colormap.listMaps(source="matplotlib")
         self.colourmap_combo.addItems(colourmaps)
+        self.colourmap_combo.setCurrentText("viridis")
         self.colourmap_combo.setMaxVisibleItems(12)
         # needed for setMaxVisibleItems to apply
         self.colourmap_combo.setStyleSheet("QComboBox { combobox-popup: 0; }")
@@ -337,8 +338,8 @@ class ControlPanel(QtWidgets.QWidget):
         self.colourmap_wrapper.setVisible(mapped)
         self.colour_mode_changed.emit(mode)
 
-    def _on_colourmap_changed(self):
-        self.colourmap_changed.emit(self.colourmap_combo.currentData())
+    def _on_colourmap_changed(self, name):
+        self.colourmap_changed.emit(name)
 
     def set_right_panel(self, right_panel):
         self.right_panel = right_panel

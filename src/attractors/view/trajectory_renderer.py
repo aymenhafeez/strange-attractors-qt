@@ -2,6 +2,7 @@ import numpy as np
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtGui
 
+from ..colour import colourmap
 from ..ui.style import plot_colours
 
 STATIC_RENDER_MAX_POINTS = 80000
@@ -37,6 +38,11 @@ class TrajectoryRenderer:
         self._current_line_width = 1.0
         self._line_mode = False
         self._trail_mode = False
+        self._colour_mode = "solid"
+        self._colourmap = "viridis"
+        self._time_steps = []
+        self._solution_colours = []
+        self._particle_colours = []
         self._heads_visible = True
         self._traj_tail_length = 5000
         self._traj_tail_enabled = False
@@ -101,8 +107,97 @@ class TrajectoryRenderer:
         self._current_alpha = val / 100.0 if val > 1 else val
         self.refresh_colours()
 
+    def set_colour_mode(self, mode):
+        if mode not in {"solid", "speed"}:
+            raise ValueError(f"Unknown colour mode: {mode}")
+        if mode == self._colour_mode:
+            return
+
+        self._colour_mode = mode
+        self.refresh_colours()
+
+    def set_colourmap(self, name):
+        if name == self._colourmap:
+            return
+
+        self._colourmap = name
+        self.refresh_colours()
+
+    def set_time_steps(self, time_steps):
+        self._time_steps = [value for value in time_steps]
+
     def set_trajectories(self, trajectories):
         self._trajectories = trajectories
+        self._rebuild_solution_colours()
+
+    def _time_step(self, index):
+        if index >= len(self._time_steps):
+            return 1.0
+
+        time_step = self._time_steps[index]
+        if not np.isfinite(time_step) or time_step <= 0.0:
+            return 1.0
+
+        return time_step
+
+    def _speed_values(self, index, solution):
+        if len(solution) < 2:
+            return np.zeros(len(solution))
+
+        velocity = np.gradient(solution, self._time_step(index), axis=0)
+
+        return np.linalg.norm(velocity, axis=1)
+
+    def _build_solution_colours(self, solutions):
+        if self._colour_mode == "solid":
+            return [
+                self._solid_colour_array(index, len(solution))
+                for index, solution in enumerate(solutions)
+            ]
+
+        values = [
+            self._speed_values(index, solution)
+            for index, solution in enumerate(solutions)
+        ]
+
+        non_empty = [value for value in values if len(value)]
+        if not non_empty:
+            return [np.empty((0, 4)) for _ in solutions]
+
+        vmin = min(value.min() for value in non_empty)
+        vmax = max(value.max() for value in non_empty)
+
+        colours = []
+        for index, value in enumerate(values):
+            # not using base_colour in mapped mode, per trajectory alpha still applies
+            _base_colour, alpha = self.get_traj_colour_alpha(index)
+            colours.append(
+                colourmap(value, self._colourmap, alpha=alpha, vmin=vmin, vmax=vmax)
+            )
+
+        return colours
+
+    def _rebuild_solution_colours(self):
+        if not self._solutions:
+            self._solution_colours = []
+            self._particle_colours = []
+            return
+
+        self._solution_colours = self._build_solution_colours(self._solutions)
+        self._particle_colours = self._build_particle_colours(self._solution_colours)
+
+    def _build_particle_colours(self, solution_colours):
+        particle_colours = []
+
+        for (
+            i,
+            colours,
+        ) in enumerate(solution_colours):
+            colours = colours.copy()
+            colours[:, 3] = self.get_particle_alpha(i)
+            particle_colours.append(colours)
+
+        return particle_colours
 
     def _trajectory_line_mode(self, i):
         traj = self._trajectories[i] if i < len(self._trajectories) else None
@@ -127,79 +222,86 @@ class TrajectoryRenderer:
                 alpha = self._current_alpha
         return base_colour, alpha
 
-    def get_particle_colour_alpha(self, i):
+    def get_particle_alpha(self, i):
         traj = self._trajectories[i] if i < len(self._trajectories) else None
-        qc = traj.get("colour") if traj is not None else None
 
-        if isinstance(qc, QtGui.QColor):
-            base_colour = (qc.redF(), qc.greenF(), qc.blueF())
-        else:
-            base_colour = self._base_colour
+        if traj is None:
+            return 1.0
 
-        alpha = traj.get("alpha", 1.0) if traj else 1.0
+        return traj.get("alpha", 1.0)
 
-        return base_colour, alpha
+    def get_particle_colours(self, index):
+        if index >= len(self._particle_colours):
+            return np.empty((0, 4))
 
-    def plot_trail(self, n, alpha=1.0, base_colour=None):
-        if base_colour is None:
-            base_colour = self._base_colour
-        colour = np.zeros((n, 4))
-        colour[:, 0] = np.linspace(0.2, base_colour[0], n)
-        colour[:, 1] = np.linspace(0.2, base_colour[1], n)
-        colour[:, 2] = np.linspace(0.5, base_colour[2], n)
-        colour[:, 3] = np.linspace(0.0, alpha, n)
-        return colour
+        return self._particle_colours[index]
 
     def get_colour_array(self, n, alpha, base_colour):
-        mode = "trail" if self._trail_mode else "flat"
-        colour_key = tuple(round(float(c), 6) for c in base_colour)
-        key = (mode, n, round(float(alpha), 6), colour_key)
+        colour_key = tuple(round(c, 6) for c in base_colour)
+        key = (n, round(alpha, 6), colour_key)
+
         cached = self._colour_cache.get(key)
         if cached is not None:
             return cached
 
-        if self._trail_mode:
-            colour = self.plot_trail(n, alpha, base_colour)
-        else:
-            colour = np.full((n, 4), (*base_colour, alpha))
-
+        colour = np.full((n, 4), (*base_colour, alpha))
         self._colour_cache[key] = colour
 
         return colour
 
+    def _solid_colour_array(self, index, length):
+        base_colour, alpha = self.get_traj_colour_alpha(index)
+        return self.get_colour_array(length, alpha, base_colour)
+
+    def _apply_trail_fade(self, colours):
+        if not self._trail_mode or len(colours) == 0:
+            return colours
+
+        faded = colours.copy()
+        faded[:, 3] *= np.linspace(0.0, 1.0, len(faded))
+
+        return faded
+
     def refresh_colours(self):
-        if not self._solutions:
-            return
-        for i, sol in enumerate(self._solutions):
-            _, colour = self.get_traj_tail_data(i, sol)
-            self._set_trajectory_data(i, colour=colour)
+        self._rebuild_solution_colours()
+        self.update_display()
 
     def display_solutions(self, solutions, is_partial):
+        solution_colours = self._build_solution_colours(solutions)
+
         if not is_partial:
             self._solutions = solutions
+            self._solution_colours = solution_colours
+            self._particle_colours = self._build_particle_colours(solution_colours)
 
         self.sync_gl_items(len(solutions))
 
-        for i, sol in enumerate(solutions):
-            segment, colour = self.get_traj_tail_data(i, sol)
-            self._set_trajectory_data(i, pos=segment, colour=colour)
+        for index, (solution, colours) in enumerate(zip(solutions, solution_colours)):
+            segment, segment_colours = self.get_traj_tail_data(solution, colours)
+            self._set_trajectory_data(index, pos=segment, colour=segment_colours)
 
     def clear_solutions(self):
         self._solutions = None
+        self._solution_colours = []
+        self._particle_colours = []
         self.sync_gl_items(0)
 
-    def get_traj_tail_data(self, i, sol):
+    def get_traj_tail_data(self, solution, colours):
         if self._traj_tail_enabled:
-            segment = sol[-self._traj_tail_length :]
+            segment = solution[-self._traj_tail_length :]
+            segment_colours = colours[-self._traj_tail_length :]
         else:
-            segment = sol
+            segment = solution
+            segment_colours = colours
 
-        segment = _decimate_for_display(segment, STATIC_RENDER_MAX_POINTS)
+        indices = _decimate_indices(len(segment), STATIC_RENDER_MAX_POINTS)
+        if indices is not None:
+            segment = segment[indices]
+            segment_colours = segment_colours[indices]
 
-        base_colour, alpha = self.get_traj_colour_alpha(i)
-        colour = self.get_colour_array(len(segment), alpha, base_colour)
+        segment_colours = self._apply_trail_fade(segment_colours)
 
-        return segment, colour
+        return segment, segment_colours
 
     def set_trail_mode(self, checked):
         self._trail_mode = checked
@@ -213,9 +315,15 @@ class TrajectoryRenderer:
     def update_display(self):
         if not self._solutions:
             return
-        for i, sol in enumerate(self._solutions):
-            segment, colour = self.get_traj_tail_data(i, sol)
-            self._set_trajectory_data(i, pos=segment, colour=colour)
+
+        if len(self._solution_colours) != len(self._solutions):
+            self._rebuild_solution_colours()
+
+        for index, (solution, colours) in enumerate(
+            zip(self._solutions, self._solution_colours)
+        ):
+            segment, segment_colours = self.get_traj_tail_data(solution, colours)
+            self._set_trajectory_data(index, pos=segment, colour=segment_colours)
 
     def _trajectory_size(self, i):
         traj = self._trajectories[i] if i < len(self._trajectories) else None
@@ -261,24 +369,48 @@ class TrajectoryRenderer:
             return []
 
         all_segments = []
-        for i, sol in enumerate(self._solutions):
+
+        for index, (solution, colours) in enumerate(
+            zip(self._solutions, self._solution_colours)
+        ):
             if self._traj_tail_enabled:
                 start = max(0, frame - self._traj_tail_length)
-                segment = sol[start:frame]
             else:
-                segment = sol[:frame]
-            render_segment = _decimate_for_display(segment, ANIM_RENDER_MAX_POINTS)
-            base_colour, alpha = self.get_traj_colour_alpha(i)
-            colour = self.get_colour_array(len(render_segment), alpha, base_colour)
-            if i < len(self._scatters):
-                self._scatters[i].setData(
-                    pos=render_segment, color=colour, size=self._trajectory_size(i)
+                start = 0
+
+            segment = solution[start:frame]
+            render_colours = colours[start:frame]
+
+            indices = _decimate_indices(
+                len(segment),
+                ANIM_RENDER_MAX_POINTS,
+            )
+            if indices is not None:
+                render_segment = segment[indices]
+                render_colours = render_colours[indices]
+            else:
+                render_segment = segment
+
+            render_colours = self._apply_trail_fade(render_colours)
+
+            if index < len(self._scatters):
+                self._scatters[index].setData(
+                    pos=render_segment,
+                    color=render_colours,
+                    size=self._trajectory_size(index),
                 )
-                self._lines[i].setData(
-                    pos=render_segment, color=colour, width=self._trajectory_size(i)
+                self._lines[index].setData(
+                    pos=render_segment,
+                    color=render_colours,
+                    width=self._trajectory_size(index),
                 )
-            if i < len(self._heads):
-                self._heads[i].setData(pos=render_segment[-1:], color=colour[-1:])
+
+            if index < len(self._heads):
+                self._heads[index].setData(
+                    pos=render_segment[-1:],
+                    color=render_colours[-1:],
+                )
+
             all_segments.append(segment)
 
         return all_segments

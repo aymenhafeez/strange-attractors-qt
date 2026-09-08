@@ -7,8 +7,8 @@ import pandas as pd
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
+from .colour import colourmap
 from .console import analysis
-from .console.colour import colourmap
 from .console.jupyter_console_panel import JupyterConsolePanel
 from .console.live_plot_controller import LivePlotController
 from .console.system import SystemInspector
@@ -202,6 +202,12 @@ class Window(QtWidgets.QMainWindow):
         )
         self.controls.alpha_spin.valueChanged.connect(
             self.scene.trajectory_renderer.set_alpha
+        )
+        self.controls.colour_mode_changed.connect(
+            self.scene.trajectory_renderer.set_colour_mode
+        )
+        self.controls.colourmap_changed.connect(
+            self.scene.trajectory_renderer.set_colourmap
         )
         self.controls.line_width_slider.valueChanged.connect(
             self.scene.trajectory_renderer.set_line_width
@@ -1850,6 +1856,7 @@ class Window(QtWidgets.QMainWindow):
         ui_start = time.perf_counter()
 
         self._clear_app_status()
+        self.scene.trajectory_renderer.set_time_steps(self._trajectory_time_steps())
         self.scene.trajectory_renderer.display_solutions(solutions, is_partial)
 
         if self.auto_fit_camera:
@@ -1909,6 +1916,22 @@ class Window(QtWidgets.QMainWindow):
             full = self._full_needed
             self._full_needed = False
             self._dispatch_solve(full=full)
+
+    def _trajectory_time_steps(self):
+        config, _values = self._get_current_config_and_values()
+        if config is None:
+            return []
+
+        t_min = config.time_defaults["t_min"]
+        trajectories = self.controls.trajectory_panel.get_trajectories()
+
+        if trajectories:
+            return [
+                (trajectory["t_max"] - t_min) / trajectory["n"]
+                for trajectory in trajectories
+            ]
+
+        return [(self.current_t_max - t_min) / self.current_n]
 
     def _reapply_projections(self):
         solutions = (
@@ -2309,6 +2332,7 @@ class Window(QtWidgets.QMainWindow):
     def _toggle_jupyter_console(self):
         if _workspace_visible(self):
             self._close_jupyter_console()
+            self._restore_default_layout()
         else:
             self.jupyter_console_panel.ensure_console()
             self._open_workspace_dock()

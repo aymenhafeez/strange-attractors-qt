@@ -98,7 +98,7 @@ def build_menu_bar(self):
         "Reset parameters",
         self.controls.reset_to_defaults,
     )
-    system_menu.addSeparator()
+    # system_menu.addSeparator()
 
     animation_mode_menu = system_menu.addMenu("Animation mode")
 
@@ -391,13 +391,14 @@ def build_toolbar(self):
         self._toggle_bifurcation,
     )
     self.toolbar_jupyter_console_action = self._add_panel_menu_action(
-        "System workspace",
+        "Workspace",
         self._toggle_jupyter_console,
     )
     self.toolbar_process_status_action = self._add_panel_menu_action(
         "Status bar",
         lambda: self._toggle_process_status(),
     )
+    toolbar.addAction(self.toolbar_jupyter_console_action)
 
     toolbar.addSeparator()
     spacer = QtWidgets.QWidget()
