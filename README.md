@@ -18,7 +18,9 @@ Python tool for mathematical visualisation and exploration.
 The app currently consists of two areas: a three dimensional ODE system exploration area and a general scripting and visualisation area.
 
 ### Three dimensional ODE systems
+
 While strange attractors are the main focus point here you can also input any 3D ODE system. The following analysis modes are available:
+
 * 2D heatmap projections
 * Multi trajectory view with varying initial conditions
 * Lyapunov exponent spectrum, convergence plots and Kaplan-Yorke dimension
@@ -36,7 +38,7 @@ Requires [uv](https://docs.astral.sh/uv/getting-started/installation/)
 
 ```bash
 git clone https://github.com/aymenhafeez/strange-attractors-qt
-cd stange-attractors-qt
+cd strange-attractors-qt
 uv tool install .
 analysis  # --fullscreen
 ```
@@ -45,7 +47,7 @@ analysis  # --fullscreen
 
 ```bash
 git clone https://github.com/aymenhafeez/strange-attractors-qt
-cd stange-attractors-qt
+cd strange-attractors-qt
 uv sync
 uv run analysis
 ```
@@ -56,7 +58,7 @@ Testing:
 uv run pytest -q
 ```
 
-Enable performance logging (currently only outputs attractor and lyapunov solve times):
+Enable performance logging:
 
 ```bash
 ANALYSIS_PROFILE=1 uv run analysis
