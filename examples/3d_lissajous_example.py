@@ -24,9 +24,9 @@ def points(a=a, b=b, t=t):
     )
 
 
-def colours(a=a, b=b, t=t, cmap=cmap):
+def colours(a=a, b=b, t=t, cmap="viridis"):
     values = np.sin(a.value * t) + np.cos(b.value * t)
-    return colourmap(values, cmap="viridis")
+    return colourmap(values, cmap=cmap)
 
 
 def sample_points(points=points):
