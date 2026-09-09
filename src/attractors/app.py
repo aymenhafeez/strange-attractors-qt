@@ -524,6 +524,11 @@ class Window(QtWidgets.QMainWindow):
         self._open_workspace_dock()
         self.jupyter_console_panel.apply_explore_layout()
 
+    def _enter_system_workspace(self):
+        self.jupyter_console_panel.ensure_console()
+        # self._open_workspace_dock()
+        self.jupyter_console_panel.apply_system_layout()
+
     def _restore_explore_layout(self):
         self._set_workspace_mode("explore")
         self.jupyter_console_panel.apply_explore_layout()
@@ -536,6 +541,8 @@ class Window(QtWidgets.QMainWindow):
 
         if key == "explore":
             self._enter_explore_workspace()
+        elif key == "system":
+            self._enter_system_workspace()
 
         self.workspace_panel.set_mode(key)
         self._sync_jupyter_workspace_state()
@@ -571,10 +578,10 @@ class Window(QtWidgets.QMainWindow):
             self._set_side_panel_actions(left=False, right=False)
             return
 
-        if mode == "system" and self._pre_explore_side_panel_state is not None:
-            state = self._pre_explore_side_panel_state
+        if mode == "system":
+            # state = self._pre_explore_side_panel_state
             self._pre_explore_side_panel_state = None
-            self._set_side_panel_actions(left=state["left"], right=state["right"])
+            self._set_side_panel_actions(left=True, right=True)
 
     def _current_explorer(self):
         return self.jupyter_console_panel.plots.current.explore

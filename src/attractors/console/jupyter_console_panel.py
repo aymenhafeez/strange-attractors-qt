@@ -612,6 +612,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.view3d_dock.activated.connect(lambda: self.views3d.activate("3D View"))
 
         self.plot_widget = _build_console_plot_widget()
+        self.plot_widget.showGrid(x=True, y=True, alpha=plot_colours()["plot_grid_alpha"])
         self.plot = ConsolePlot(
             self.plot_widget, status_callback=self._explore_status_callback
         )
@@ -686,6 +687,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             position="above",
             relativeTo=self.script_dock,
         )
+        self._system_layout = self.dock_area.saveState()
 
         if CONSOLE_IMPORT_ERROR is not None:
             message = QtWidgets.QLabel(
@@ -789,11 +791,17 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.set_explore_visible(True)
         self.dock_area.moveDock(self.script_dock, "left", self.plot_dock)
         self.dock_area.moveDock(self.console_dock, "bottom", self.script_dock)
+        self.plot_dock.raiseDock()
         # self.dock_area.moveDock(
         #     self.explorer_params_dock,
         #     "bottom",
         #     self.console_dock,
         # )
+
+    def apply_system_layout(self):
+        self.set_explore_visible(False)
+        self.dock_area.restoreState(self._system_layout, missing="ignore", extra="bottom")
+        self.plot_dock.raiseDock()
 
     def set_explore_status_callback(self, callback):
         self._explore_status_callback = callback
