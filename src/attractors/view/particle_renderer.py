@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pyqtgraph.opengl as gl
+from pyqtgraph.Qt import OpenGLConstants as GLC
 
 from ..ui.style import plot_colours
 
@@ -9,6 +10,18 @@ DEFAULT_PARTICLE_COUNT = 600
 DEFAULT_TRAIL_LENGTH = 18
 PARTICLE_HEAD_SIZE = 5.0
 TRAIL_ALPHA_SCALE = 0.7
+
+TRAIL_GL_OPTIONS_LIGHT = {
+    GLC.GL_DEPTH_TEST: False,
+    GLC.GL_BLEND: True,
+    GLC.GL_CULL_FACE: False,
+    "glBlendFuncSeparate": (
+        GLC.GL_SRC_ALPHA,
+        GLC.GL_ONE_MINUS_SRC_ALPHA,
+        GLC.GL_ONE,
+        GLC.GL_ONE_MINUS_SRC_ALPHA,
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -128,7 +141,9 @@ class ParticleFlowRenderer:
         self._heads = []
 
     def _gl_options(self):
-        return "additive" if plot_colours()["is_dark"] else "translucent"
+        if plot_colours()["is_dark"]:
+            return "additive"
+        return TRAIL_GL_OPTIONS_LIGHT
 
     def set_particle_count(self, value):
         self._particle_count = max(1, int(value))
