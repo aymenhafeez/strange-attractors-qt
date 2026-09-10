@@ -1,7 +1,6 @@
 import sys
 
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore
 
 from .app import WINDOW_HEIGHT, WINDOW_WIDTH, Window
 from .perf import configure_perf_logging
@@ -9,9 +8,6 @@ from .perf import configure_perf_logging
 
 def main():
     configure_perf_logging()
-    QtCore.QCoreApplication.setAttribute(
-        QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True
-    )
     app = pg.mkQApp()
     # set the app name strange-attractors for now so the standard path writable location
     # doesn't need to be changed

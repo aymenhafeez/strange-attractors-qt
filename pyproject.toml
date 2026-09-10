@@ -24,6 +24,7 @@ dependencies = [
     "pyqtgraph>=0.14.0",
     "qtconsole>=5.7.0",
     "scipy>=1.18.0",
+    "scipy-stubs~=1.18.0",
 ]
 
 [project.scripts]
@@ -37,8 +38,11 @@ dev = [
     "ty>=0.0.73",
 ]
 
+[tool.ty.environment]
+python = ".venv"
+
 [tool.uv]
 package = true
 
 [tool.uv.sources]
-pyqtgraph = { git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "d946dfe9dbddcc1d3068379fce36fd4257631404" }
+pyqtgraph = { git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "3f142f84c42031b9cff5b2b603c198f78971f47d" }
