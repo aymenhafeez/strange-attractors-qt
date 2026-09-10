@@ -7,6 +7,7 @@ from ..ui.style import plot_colours
 
 STATIC_RENDER_MAX_POINTS = 80000
 ANIM_RENDER_MAX_POINTS = 30000
+COLOUR_MODES = {"solid", "speed", "x", "y", "z"}
 
 
 def _decimate_indices(n_points, max_points):
@@ -108,7 +109,7 @@ class TrajectoryRenderer:
         self.refresh_colours()
 
     def set_colour_mode(self, mode):
-        if mode not in {"solid", "speed"}:
+        if mode not in COLOUR_MODES:
             raise ValueError(f"Unknown colour mode: {mode}")
         if mode == self._colour_mode:
             return
@@ -148,6 +149,14 @@ class TrajectoryRenderer:
 
         return np.linalg.norm(velocity, axis=1)
 
+    def _colour_values(self, index, solution):
+        if self._colour_mode == "speed":
+            return self._speed_values(index, solution)
+
+        coordinate_axes  = {"x": 0, "y": 1, "z": 2}
+        axis = coordinate_axes.get(self._colour_mode)
+        return solution[:, axis]
+
     def _build_solution_colours(self, solutions):
         if self._colour_mode == "solid":
             return [
@@ -156,7 +165,7 @@ class TrajectoryRenderer:
             ]
 
         values = [
-            self._speed_values(index, solution)
+            self._colour_values(index, solution)
             for index, solution in enumerate(solutions)
         ]
 

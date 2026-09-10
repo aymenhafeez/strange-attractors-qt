@@ -134,6 +134,9 @@ class ControlPanel(QtWidgets.QWidget):
         self.colour_mode_combo = QtWidgets.QComboBox()
         self.colour_mode_combo.addItem("Solid", "solid")
         self.colour_mode_combo.addItem("Speed", "speed")
+        self.colour_mode_combo.addItem("X", "x")
+        self.colour_mode_combo.addItem("Y", "y")
+        self.colour_mode_combo.addItem("Z", "z")
         colour_mode_row.addWidget(self.colour_mode_combo)
 
         self.colour_mode_wrapper = QtWidgets.QWidget()
