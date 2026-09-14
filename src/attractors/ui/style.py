@@ -64,6 +64,7 @@ def plot_colours():
             "console_theme": "linux",
             "crosshair": "yellow",
             "label_text": "yellow",
+            "colourbar_text": "white",
         }
 
     return {
@@ -83,6 +84,7 @@ def plot_colours():
         "console_theme": "lightbg",
         "crosshair": "blue",
         "label_text": "white",
+        "colourbar_text": "black",
     }
 
 

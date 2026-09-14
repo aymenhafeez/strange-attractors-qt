@@ -119,6 +119,24 @@ class ViewManager(QtCore.QObject):
 
         self.particle_renderer.set_visible(particle_flow_active)
 
+    def _sync_colourbar(self):
+        renderer = self.trajectory_renderer
+        self.viewport_overlay.colourbar.set_scale(
+            renderer.colour_mode, renderer.colourmap, renderer.colour_limits
+        )
+
+    def set_colour_mode(self, mode):
+        self.trajectory_renderer.set_colour_mode(mode)
+        self._sync_colourbar()
+
+    def set_colourmap(self, cmap):
+        self.trajectory_renderer.set_colourmap(cmap)
+        self._sync_colourbar()
+
+    def display_solutions(self, solutions, is_partial):
+        self.trajectory_renderer.display_solutions(solutions, is_partial)
+        self._sync_colourbar()
+
     def reposition_overlays(self):
         if self._repositioning:
             return
@@ -130,6 +148,7 @@ class ViewManager(QtCore.QObject):
         self.animation_controller.reset_frame()
         self.particle_renderer.clear()
         self.trajectory_renderer.clear_solutions()
+        self._sync_colourbar()
 
     def _render_animation_frame(self, current_frame, step):
         solutions = self.trajectory_renderer.solutions

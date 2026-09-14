@@ -48,10 +48,23 @@ class TrajectoryRenderer:
         self._traj_tail_length = 5000
         self._traj_tail_enabled = False
         self._colour_cache = {}
+        self._colour_limits = None
 
     @property
     def solutions(self):
         return self._solutions
+
+    @property
+    def colour_mode(self):
+        return self._colour_mode
+
+    @property
+    def colourmap(self):
+        return self._colourmap
+
+    @property
+    def colour_limits(self):
+        return self._colour_limits
 
     def sync_gl_items(self, n):
         while len(self._scatters) < n:
@@ -153,12 +166,13 @@ class TrajectoryRenderer:
         if self._colour_mode == "speed":
             return self._speed_values(index, solution)
 
-        coordinate_axes  = {"x": 0, "y": 1, "z": 2}
+        coordinate_axes = {"x": 0, "y": 1, "z": 2}
         axis = coordinate_axes.get(self._colour_mode)
         return solution[:, axis]
 
     def _build_solution_colours(self, solutions):
         if self._colour_mode == "solid":
+            self._colour_limits = None
             return [
                 self._solid_colour_array(index, len(solution))
                 for index, solution in enumerate(solutions)
@@ -171,10 +185,12 @@ class TrajectoryRenderer:
 
         non_empty = [value for value in values if len(value)]
         if not non_empty:
+            self._colour_limits = None
             return [np.empty((0, 4)) for _ in solutions]
 
         vmin = min(value.min() for value in non_empty)
         vmax = max(value.max() for value in non_empty)
+        self._colour_limits = (vmin, vmax)
 
         colours = []
         for index, value in enumerate(values):
@@ -293,6 +309,7 @@ class TrajectoryRenderer:
         self._solutions = None
         self._solution_colours = []
         self._particle_colours = []
+        self._colour_limits = None
         self.sync_gl_items(0)
 
     def get_traj_tail_data(self, solution, colours):

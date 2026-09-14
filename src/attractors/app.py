@@ -203,12 +203,8 @@ class Window(QtWidgets.QMainWindow):
         self.controls.alpha_spin.valueChanged.connect(
             self.scene.trajectory_renderer.set_alpha
         )
-        self.controls.colour_mode_changed.connect(
-            self.scene.trajectory_renderer.set_colour_mode
-        )
-        self.controls.colourmap_changed.connect(
-            self.scene.trajectory_renderer.set_colourmap
-        )
+        self.controls.colour_mode_changed.connect(self.scene.set_colour_mode)
+        self.controls.colourmap_changed.connect(self.scene.set_colourmap)
         self.controls.line_width_slider.valueChanged.connect(
             self.scene.trajectory_renderer.set_line_width
         )
@@ -1864,7 +1860,7 @@ class Window(QtWidgets.QMainWindow):
 
         self._clear_app_status()
         self.scene.trajectory_renderer.set_time_steps(self._trajectory_time_steps())
-        self.scene.trajectory_renderer.display_solutions(solutions, is_partial)
+        self.scene.display_solutions(solutions, is_partial)
 
         if self.auto_fit_camera:
             self.scene.camera_controller.fit_camera_to_solutions(solutions)
