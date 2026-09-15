@@ -4,21 +4,27 @@ from .process_metrics import ProcessUsageStatus
 from .style import SCENE_TOOLBAR
 
 
+def _side_panel_icon(self, side):
+    icon = QtGui.QIcon.fromTheme(f"sidebar-show-{side}")
+    if icon.isNull():
+        icon = self.style().standardIcon(
+            QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
+        )
+    return icon
+
+
 def build_status_bar(self):
     status_bar = QtWidgets.QStatusBar()
     status_bar.setSizeGripEnabled(False)
-    status_bar.setFixedHeight(18)
-    status_bar.setStyleSheet(
-        """
-        QStatusBar {
-            border: none;
-            padding: 0px;
-        }
-        QStatusBar::item {
-            border: none;
-        }
-        """
-    )
+    status_bar.setFixedHeight(24)
+
+    output_panel_button = QtWidgets.QToolButton()
+    output_panel_button.setDefaultAction(self.output_panel_action)
+    output_panel_button.setAutoRaise(True)
+    output_panel_button.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly)
+    output_panel_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+    output_panel_button.setToolTip("Toggle Output Panel")
+    status_bar.addWidget(output_panel_button)
 
     self.app_status_label = QtWidgets.QLabel("")
     self.app_status_label.setAlignment(
@@ -50,6 +56,7 @@ def build_menu_bar(self):
     view_menu = menu_bar.addMenu("&View")
     self._add_menu_action(view_menu, "Left panel", self.toolbar_left_panel_action)
     self._add_menu_action(view_menu, "Right panel", self.toolbar_right_panel_action)
+    self._add_menu_action(view_menu, "Output panel", self.output_panel_action)
     self._add_menu_action(view_menu, "Status bar", self.toolbar_process_status_action)
     view_menu.addAction("Restore default layout", self._restore_default_layout)
     view_menu.addSeparator()
@@ -219,7 +226,6 @@ def build_menu_bar(self):
 def build_toolbar(self):
     toolbar = QtWidgets.QToolBar("Scene")
     toolbar.setObjectName("sceneToolbar")
-    toolbar.setMovable(False)
     toolbar.setFloatable(False)
     toolbar.setIconSize(QtCore.QSize(18, 18))
     toolbar.setStyleSheet(SCENE_TOOLBAR)
@@ -228,18 +234,17 @@ def build_toolbar(self):
 
     style_icon = QtWidgets.QStyle.StandardPixmap
 
-    start_pad = QtWidgets.QWidget()
-    start_pad.setFixedWidth(3)
-    toolbar.addWidget(start_pad)
+    # start_pad = QtWidgets.QWidget()
+    # start_pad.setFixedWidth(3)
+    # toolbar.addWidget(start_pad)
 
     self.toolbar_left_panel_action = self._add_checked_icon_toolbar_action(
         toolbar,
-        self._side_panel_icon("left"),
+        _side_panel_icon(self, "left"),
         True,
         lambda checked: self._set_left_panel_visible(checked),
         "Show left panel",
     )
-    toolbar.addSeparator()
 
     self.toolbar_anim_action = toolbar.addAction(
         self.style().standardIcon(style_icon.SP_MediaPlay),
@@ -261,8 +266,6 @@ def build_toolbar(self):
             QtWidgets.QStyle.StandardPixmap.SP_BrowserReload,
         ),
     )
-
-    toolbar.addSeparator()
 
     self.toolbar_reset_action = toolbar.addAction(
         self.style().standardIcon(style_icon.SP_BrowserReload), "Reset"
@@ -301,8 +304,6 @@ def build_toolbar(self):
         self.scene.viewport_overlay.save_view_as_png,
     )
     self.toolbar_save_view_action.setToolTip("Save view as PNG")
-
-    toolbar.addSeparator()
 
     self.toolbar_point_action = self._add_checked_toolbar_action(
         toolbar,
@@ -360,8 +361,6 @@ def build_toolbar(self):
         ),
     )
 
-    toolbar.addSeparator()
-
     self.toolbar_solve_action = toolbar.addAction(
         self._toolbar_icon(
             "system-run",
@@ -390,17 +389,29 @@ def build_toolbar(self):
         "Bifurcation diagram",
         self._toggle_bifurcation,
     )
-    self.toolbar_jupyter_console_action = self._add_panel_menu_action(
-        "Workspace",
-        self._toggle_jupyter_console,
-    )
     self.toolbar_process_status_action = self._add_panel_menu_action(
         "Status bar",
         lambda: self._toggle_process_status(),
     )
-    toolbar.addAction(self.toolbar_jupyter_console_action)
+    # self.output_panel_action = self._add_panel_menu_action(
+    #     "Output panel",
+    #     self._toggle_output_panel,
+    # )
+    self.output_panel_action = QtGui.QAction(
+        _side_panel_icon(self, "bottom"), "Output panel", self
+    )
+    self.output_panel_action.setCheckable(True)
+    self.output_panel_action.setChecked(True)
+    self.output_panel_action.toggled.connect(self._set_output_panel_visible)
+    # toolbar.addAction(self.output_panel_action)
+    self.toolbar_jupyter_console_action = toolbar.addAction(
+        self.style().standardIcon(style_icon.SP_CommandLink),
+        "Workspace",
+        self._toggle_jupyter_console,
+    )
 
     toolbar.addSeparator()
+
     spacer = QtWidgets.QWidget()
     spacer.setSizePolicy(
         QtWidgets.QSizePolicy.Policy.Expanding,
@@ -418,11 +429,10 @@ def build_toolbar(self):
     # )
     # toolbar.addWidget(spacer)
 
-    toolbar.addSeparator()
     self._build_jupyter_toolbar_actions(toolbar)
     self.toolbar_right_panel_action = self._add_checked_icon_toolbar_action(
         toolbar,
-        self._side_panel_icon("right"),
+        _side_panel_icon(self, "right"),
         True,
         lambda checked: self._set_right_panel_visible(checked),
         "Show right panel",

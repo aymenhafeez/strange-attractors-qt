@@ -15,7 +15,7 @@ from .console.system import SystemInspector
 from .console.workspace_controller import WorkspaceController
 from .console.workspace_inspector import WorkspaceInspector
 from .core.solution_validation import validate_solutions
-from .perf import PerfProfiler, perf_finish, perf_start
+from .perf import PerfProfiler, perf_finish, perf_start, profiling_enabled
 from .presets import (
     PresetError,
     delete_named_preset,
@@ -31,6 +31,7 @@ from .ui.docking import AppDock as Dock
 from .ui.docking import AppDockArea as DockArea
 from .ui.lyapunov_panel import LyapunovPanel
 from .ui.main_toolbar import build_menu_bar, build_status_bar, build_toolbar
+from .ui.output_panel import OutputPanel
 from .ui.poincare_panel import PoincarePanel
 from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
@@ -112,6 +113,8 @@ class Window(QtWidgets.QMainWindow):
         self._process_status_visible = True
         self._app_status_message = ""
         self._app_status_clear_timer = None
+        self._output_panel_visible = False
+        self._output_panel_height = 180
         self._panel_docks = {}
         self._panel_dock_titles = {}
         self._panel_dock_defaults = {}
@@ -249,6 +252,9 @@ class Window(QtWidgets.QMainWindow):
         self.bifurcation_panel.close_requested.connect(self._close_bifurcation)
         self.bifurcation_panel.hide()
 
+        self.output_panel = OutputPanel()
+        self.output_panel.hide()
+
         self.jupyter_console_panel = JupyterConsolePanel(
             self._jupyter_console_namespace, script_dir=self._scripts_directory
         )
@@ -365,10 +371,23 @@ class Window(QtWidgets.QMainWindow):
             ]
         )
         self.main_splitter.setStyleSheet(SPLITTER_HANDLE_HOVER)
+
+        self.output_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+        self.output_splitter.addWidget(self.main_splitter)
+        self.output_splitter.addWidget(self.output_panel)
+        self.output_splitter.setCollapsible(0, False)
+        self.output_splitter.setCollapsible(1, True)
+        self.output_splitter.setStretchFactor(0, 1)
+        self.output_splitter.setStretchFactor(1, 0)
+        self.output_splitter.setSizes(
+            [WINDOW_HEIGHT - self._output_panel_height, self._output_panel_height]
+        )
+        self.output_splitter.setStyleSheet(SPLITTER_HANDLE_HOVER)
+
         visualiser_page = QtWidgets.QWidget()
-        visualiser_layout = QtWidgets.QHBoxLayout(visualiser_page)
+        visualiser_layout = QtWidgets.QVBoxLayout(visualiser_page)
         visualiser_layout.setContentsMargins(0, 0, 0, 0)
-        visualiser_layout.addWidget(self.main_splitter)
+        visualiser_layout.addWidget(self.output_splitter)
         self.setCentralWidget(visualiser_page)
 
         self.scene.container.installEventFilter(self)
@@ -382,6 +401,8 @@ class Window(QtWidgets.QMainWindow):
         self._rebuild_view(self.current_name)
 
         self._restore_app_layout()
+        if profiling_enabled():
+            self._set_output_panel_visible(True)
 
     def eventFilter(self, obj, event):
         if event.type() == QtCore.QEvent.Type.Resize and obj is self.scene.container:
@@ -698,14 +719,6 @@ class Window(QtWidgets.QMainWindow):
         self._keep_toolbar_action_from_taking_focus(toolbar, action)
         return action
 
-    def _side_panel_icon(self, side):
-        icon = QtGui.QIcon.fromTheme(f"sidebar-show-{side}")
-        if icon.isNull():
-            icon = self.style().standardIcon(
-                QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
-            )
-        return icon
-
     def _set_left_panel_visible(self, checked):
         if checked:
             self.controls.show()
@@ -719,6 +732,42 @@ class Window(QtWidgets.QMainWindow):
         if len(sizes) >= 3 and sizes[0] > 0:
             self._left_panel_splitter_size = sizes[0]
         self.controls.hide()
+
+    def _set_output_panel_visible(self, visible):
+        visible = bool(visible)
+
+        if visible:
+            self.output_panel.show()
+
+            sizes = self.output_splitter.sizes()
+            if len(sizes) >= 2 and sizes[1] == 0:
+                total = max(sum(sizes), 1)
+                output_height = min(self._output_panel_height, max(total // 2, 1))
+                self.output_splitter.setSizes(
+                    [max(total - output_height, 1), output_height]
+                )
+
+        else:
+            sizes = self.output_splitter.sizes()
+            if len(sizes) >= 2 and sizes[1] > 0:
+                self._output_panel_height = sizes[1]
+
+            self.output_panel.hide()
+
+        self._output_panel_visible = visible
+        self._sync_output_panel_action()
+
+    def _toggle_output_panel(self):
+        self._set_output_panel_visible(not self._output_panel_visible)
+
+    def _sync_output_panel_action(self):
+        if not hasattr(self, "output_panel_action"):
+            return
+
+        with QtCore.QSignalBlocker(self.output_panel_action):
+            self.output_panel_action.setChecked(self._output_panel_visible)
+
+        self._sync_menu_actions()
 
     def _set_trail_mode(self, checked):
         self.scene.trajectory_renderer.set_trail_mode(checked)
@@ -797,6 +846,7 @@ class Window(QtWidgets.QMainWindow):
             QtCore.QSignalBlocker(self.toolbar_bifurcation_action),
             QtCore.QSignalBlocker(self.toolbar_jupyter_console_action),
             QtCore.QSignalBlocker(self.toolbar_process_status_action),
+            QtCore.QSignalBlocker(self.output_panel_action),
         ):
             self.toolbar_lyapunov_action.setChecked(
                 _panel_visible(self, "lyapunov_panel")
@@ -812,6 +862,7 @@ class Window(QtWidgets.QMainWindow):
             )
             self.toolbar_jupyter_console_action.setChecked(_workspace_visible(self))
             self.toolbar_process_status_action.setChecked(self._process_status_visible)
+            self.output_panel_action.setChecked(self._output_panel_visible)
         self._sync_menu_actions()
         self._sync_jupyter_workspace_state()
 
