@@ -82,7 +82,7 @@ def plot_colours():
         "trajectory_palette": LIGHT_TRAJECTORY_PALETTE,
         "cmap": "CET-L17",
         "console_theme": "lightbg",
-        "crosshair": "blue",
+        "crosshair": "#c87b00",
         "label_text": "white",
         "colourbar_text": "black",
     }

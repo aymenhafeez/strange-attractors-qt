@@ -126,10 +126,8 @@ class Window(QtWidgets.QMainWindow):
         self._menu_actions = []
         self._left_panel_splitter_size = int(WINDOW_WIDTH * 0.22)
         self._right_panel_splitter_size = int(WINDOW_WIDTH * 0.23)
-        self._pre_explore_side_panel_state = None
 
         self.workspace_dock = None
-        self.workspace_mode_combo = None
         self.workspace_system_mode_action = None
         self.workspace_explore_mode_action = None
         self.workspace_mode = "system"
@@ -391,9 +389,6 @@ class Window(QtWidgets.QMainWindow):
         self.setCentralWidget(visualiser_page)
 
         self.scene.container.installEventFilter(self)
-        app = QtWidgets.QApplication.instance()
-        if app is not None:
-            app.focusChanged.connect(self._on_focus_changed)
 
         self.scene.grid_overlay.build_grid()
         self._refresh_presets()
@@ -409,9 +404,6 @@ class Window(QtWidgets.QMainWindow):
             self.scene.reposition_overlays()
 
         return super().eventFilter(obj, event)
-
-    def _on_focus_changed(self, _old, _now):
-        self._sync_jupyter_workspace_state()
 
     def on_attractor_change(self, name):
         self.current_name = name
@@ -519,32 +511,17 @@ class Window(QtWidgets.QMainWindow):
         preset_panel.set_saved_presets(list_presets(self._preset_directory), selected)
         self._update_preset_summary(selected or preset_panel.current_preset_name())
 
-    def _workspace_mode_toolbar_control(self, toolbar):
-        self.workspace_mode_combo = QtWidgets.QComboBox()
-        self.workspace_mode_combo.setToolTip("Workspace mode")
-        self.workspace_mode_combo.addItem("System", "system")
-        self.workspace_mode_combo.addItem("Explore", "explore")
-        self.workspace_mode_combo.currentIndexChanged.connect(
-            lambda _index: self._on_workspace_mode_selected()
-        )
-        self._jupyter_toolbar_actions.append(
-            toolbar.addWidget(self.workspace_mode_combo)
-        )
-
-    def _on_workspace_mode_selected(self):
-        mode = self.workspace_mode_combo.currentData()
-        if mode is not None:
-            self._set_workspace_mode(mode)
-
     def _enter_explore_workspace(self):
         self.jupyter_console_panel.ensure_console()
         self._open_workspace_dock()
         self.jupyter_console_panel.apply_explore_layout()
+        self._set_side_panel_actions(left=False, right=False)
 
     def _enter_system_workspace(self):
         self.jupyter_console_panel.ensure_console()
-        # self._open_workspace_dock()
+        self._open_workspace_dock()
         self.jupyter_console_panel.apply_system_layout()
+        self._set_side_panel_actions(left=True, right=True)
 
     def _restore_explore_layout(self):
         self._set_workspace_mode("explore")
@@ -552,25 +529,18 @@ class Window(QtWidgets.QMainWindow):
         self._set_temporary_app_status("Restored Explore layout")
 
     def _set_workspace_mode(self, mode):
-        key = str(mode).strip().lower()
-        self.workspace_mode = key
-        self._workspace_focus(key)
+        mode_changed = mode != self.workspace_mode
+        self.workspace_mode = mode
 
-        if key == "explore":
-            self._enter_explore_workspace()
-        elif key == "system":
-            self._enter_system_workspace()
+        if mode_changed or not _workspace_visible(self):
+            if mode == "explore":
+                self._enter_explore_workspace()
+            elif mode == "system":
+                self._enter_system_workspace()
 
-        self.workspace_panel.set_mode(key)
+        self.workspace_panel.set_mode(mode)
         self._sync_jupyter_workspace_state()
         self._sync_explore_actions()
-
-        # sync workspace mode controls
-        if self.workspace_mode_combo is not None:
-            index = self.workspace_mode_combo.findData(key)
-            if index >= 0 and self.workspace_mode_combo.currentIndex() != index:
-                with QtCore.QSignalBlocker(self.workspace_mode_combo):
-                    self.workspace_mode_combo.setCurrentIndex(index)
 
         if (
             self.workspace_system_mode_action is not None
@@ -580,28 +550,8 @@ class Window(QtWidgets.QMainWindow):
                 QtCore.QSignalBlocker(self.workspace_system_mode_action),
                 QtCore.QSignalBlocker(self.workspace_explore_mode_action),
             ):
-                self.workspace_system_mode_action.setChecked(key == "system")
-                self.workspace_explore_mode_action.setChecked(key == "explore")
-
-        self._sync_menu_actions()
-
-    def _workspace_focus(self, mode):
-        if mode == "explore":
-            if self._pre_explore_side_panel_state is None:
-                self._pre_explore_side_panel_state = {
-                    "left": self.controls.isVisible(),
-                    "right": self.right_panel.isVisible(),
-                }
-            self._set_side_panel_actions(left=False, right=False)
-            return
-
-        if mode == "system":
-            # state = self._pre_explore_side_panel_state
-            self._pre_explore_side_panel_state = None
-            self._set_side_panel_actions(left=True, right=True)
-
-    def _current_explorer(self):
-        return self.jupyter_console_panel.plots.current.explore
+                self.workspace_system_mode_action.setChecked(mode == "system")
+                self.workspace_explore_mode_action.setChecked(mode == "explore")
 
     def _restore_default_layout(self):
         self.viewport_dock.raiseDock()
@@ -616,7 +566,6 @@ class Window(QtWidgets.QMainWindow):
             self.toolbar_right_panel_action.setChecked(bool(right))
         self._set_left_panel_visible(left)
         self._set_right_panel_visible(right)
-        self._sync_menu_actions()
 
     def _hide_menu_icons(self, menu):
         for action in menu.actions():
@@ -631,11 +580,6 @@ class Window(QtWidgets.QMainWindow):
         action.setToolTip(source_action.toolTip())
         action.triggered.connect(
             lambda checked=False, source_action=source_action: source_action.trigger()
-        )
-        source_action.changed.connect(
-            lambda action=action, source_action=source_action: self._sync_menu_action(
-                action, source_action
-            )
         )
         menu.addAction(action)
         self._menu_actions.append((action, source_action))
@@ -767,8 +711,6 @@ class Window(QtWidgets.QMainWindow):
         with QtCore.QSignalBlocker(self.output_panel_action):
             self.output_panel_action.setChecked(self._output_panel_visible)
 
-        self._sync_menu_actions()
-
     def _set_trail_mode(self, checked):
         self.scene.trajectory_renderer.set_trail_mode(checked)
         self.controls.set_trail_options_visible(checked)
@@ -792,8 +734,6 @@ class Window(QtWidgets.QMainWindow):
         ):
             self.animation_traj_action.setChecked(not particle_flow)
             self.animation_particle_flow_action.setChecked(particle_flow)
-
-        self._sync_menu_actions()
 
     def _set_line_mode(self, checked):
         mode = "line" if checked else "points"
@@ -844,7 +784,8 @@ class Window(QtWidgets.QMainWindow):
             QtCore.QSignalBlocker(self.toolbar_projection_action),
             QtCore.QSignalBlocker(self.toolbar_poincare_action),
             QtCore.QSignalBlocker(self.toolbar_bifurcation_action),
-            QtCore.QSignalBlocker(self.toolbar_jupyter_console_action),
+            QtCore.QSignalBlocker(self.toolbar_explore_action),
+            QtCore.QSignalBlocker(self.toolbar_system_action),
             QtCore.QSignalBlocker(self.toolbar_process_status_action),
             QtCore.QSignalBlocker(self.output_panel_action),
         ):
@@ -860,10 +801,10 @@ class Window(QtWidgets.QMainWindow):
             self.toolbar_bifurcation_action.setChecked(
                 _panel_visible(self, "bifurcation_panel")
             )
-            self.toolbar_jupyter_console_action.setChecked(_workspace_visible(self))
+            self.toolbar_explore_action.setChecked(_workspace_visible(self))
+            self.toolbar_system_action.setChecked(_workspace_visible(self))
             self.toolbar_process_status_action.setChecked(self._process_status_visible)
             self.output_panel_action.setChecked(self._output_panel_visible)
-        self._sync_menu_actions()
         self._sync_jupyter_workspace_state()
 
     def _set_process_status_visible(self, visible):
@@ -883,7 +824,6 @@ class Window(QtWidgets.QMainWindow):
                 )
 
         self._sync_status_bar_visibility()
-        self._sync_menu_actions()
 
     def _toggle_process_status(self):
         self._set_process_status_visible(not self._process_status_visible)
@@ -990,7 +930,6 @@ class Window(QtWidgets.QMainWindow):
             plot_item.ctrl.yGridCheck,
         )
 
-        self._workspace_mode_toolbar_control(toolbar)
         self._add_jupyter_plot_controls(toolbar)
         self.plot_options_menu = plot_item.getMenu()
         self.plot_view_menu = view_box.menu
@@ -1249,15 +1188,6 @@ class Window(QtWidgets.QMainWindow):
         if widget is not None:
             widget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
-    def _add_plot_option_action(self, toolbar, text, widget):
-        action = toolbar.addAction(text)
-        action.setCheckable(True)
-        action.setChecked(widget.isChecked())
-        action.toggled.connect(widget.setChecked)
-        widget.toggled.connect(action.setChecked)
-        self._keep_toolbar_action_from_taking_focus(toolbar, action)
-        return action
-
     def _plot_option_action(self, text, widget):
         action = QtGui.QAction(text, self)
         action.setCheckable(True)
@@ -1272,22 +1202,7 @@ class Window(QtWidgets.QMainWindow):
 
     def _add_proxy_menu(self, parent_menu, title, source_menu):
         menu = parent_menu.addMenu(title)
-        for source_action in source_menu.actions():
-            if source_action.isSeparator():
-                menu.addSeparator()
-                continue
-
-            source_submenu = source_action.menu()
-            if source_submenu is not None:
-                submenu = menu.addMenu(source_action.text())
-                self._populate_proxy_menu(submenu, source_submenu)
-                continue
-
-            action = menu.addAction(source_action.text())
-            action.setCheckable(source_action.isCheckable())
-            action.setChecked(source_action.isChecked())
-            action.setEnabled(source_action.isEnabled())
-            action.triggered.connect(source_action.trigger)
+        self._populate_proxy_menu(menu, source_menu)
 
         return menu
 
@@ -1363,31 +1278,7 @@ class Window(QtWidgets.QMainWindow):
         return toolbar.addWidget(button)
 
     def _sync_jupyter_toolbar_visibility(self):
-        if self.workspace_dock is not None:
-            visible = self.workspace_dock.container() is not None
-            if visible:
-                item = self.workspace_dock
-                container = item.container()
-                while container is not None:
-                    try:
-                        container_type = container.type()
-                    except AttributeError:
-                        container_type = None
-                    if container_type == "tab":
-                        try:
-                            stack = container.stack
-                        except AttributeError:
-                            stack = None
-                        if stack is not None and stack.currentWidget() is not item:
-                            visible = False
-                            break
-                    item = container
-                    try:
-                        container = container.container()
-                    except AttributeError:
-                        container = None
-        else:
-            visible = _workspace_visible(self)
+        visible = _workspace_visible(self)
 
         for action in self._jupyter_toolbar_actions:
             action.setVisible(visible)
@@ -2171,7 +2062,7 @@ class Window(QtWidgets.QMainWindow):
     def _close_panel_dock(self, panel):
         dock = self._find_dock(panel)
         if dock is None:
-            return 0
+            return
 
         if dock.container() is not None and self._closing_panel_dock is not dock:
             self._closing_panel_dock = dock
@@ -2179,7 +2070,6 @@ class Window(QtWidgets.QMainWindow):
                 dock.close()
             finally:
                 self._closing_panel_dock = None
-        return 0
 
     def _on_panel_dock_closed(self, panel):
         panel_name = None
@@ -2219,9 +2109,7 @@ class Window(QtWidgets.QMainWindow):
     def _close_lyapunov_panel(self):
         self._cancel_lyapunov_analysis()
         self.lyapunov_panel.hide()
-        size = self._close_panel_dock(self.lyapunov_panel)
-        if size > 0:
-            self._lyapunov_splitter_size = size
+        self._close_panel_dock(self.lyapunov_panel)
         self._sync_toolbar_panel_actions()
 
     def _toggle_lyapunov_panel(self):
@@ -2235,9 +2123,7 @@ class Window(QtWidgets.QMainWindow):
 
     def _close_projections(self):
         self.projection_panel.hide()
-        size = self._close_panel_dock(self.projection_panel)
-        if size > 0:
-            self._projection_splitter_size = size
+        self._close_panel_dock(self.projection_panel)
         self._sync_toolbar_panel_actions()
 
     def _toggle_projections(self):
@@ -2246,16 +2132,13 @@ class Window(QtWidgets.QMainWindow):
         else:
             self._open_panel_dock(self.projection_panel, "projection_panel")
             QtCore.QTimer.singleShot(0, self._reapply_projections)
-            QtCore.QTimer.singleShot(50, self._reapply_projections)
             self._sync_toolbar_panel_actions()
 
     def _close_poincare(self):
         self.poincare_panel.cancel_solve()
         self.scene.grid_overlay.remove_poincare_plane()
         self.poincare_panel.hide()
-        size = self._close_panel_dock(self.poincare_panel)
-        if size > 0:
-            self._poincare_splitter_size = size
+        self._close_panel_dock(self.poincare_panel)
         self._sync_toolbar_panel_actions()
 
     def _toggle_poincare(self):
@@ -2276,9 +2159,7 @@ class Window(QtWidgets.QMainWindow):
     def _close_bifurcation(self):
         self.bifurcation_panel.cancel_sweep()
         self.bifurcation_panel.hide()
-        size = self._close_panel_dock(self.bifurcation_panel)
-        if size > 0:
-            self._bifurcation_splitter_size = size
+        self._close_panel_dock(self.bifurcation_panel)
         self._sync_toolbar_panel_actions()
 
     def _toggle_bifurcation(self):
@@ -2457,16 +2338,6 @@ class Window(QtWidgets.QMainWindow):
         settings.setValue("layout/window_geometry", self.saveGeometry())
         settings.setValue("layout/main_splitter", self.main_splitter.saveState())
         settings.setValue("layout/workspace_mode", self.workspace_mode)
-
-        side_state = self._pre_explore_side_panel_state
-        if side_state is None:
-            side_state = {
-                "left": self.controls.isVisible(),
-                "right": self.right_panel.isVisible(),
-            }
-
-        settings.setValue("layout/left_panel_visible", side_state["left"])
-        settings.setValue("layout/right_panel_visible", side_state["right"])
         settings.setValue("layout/workspace_visible", _workspace_visible(self))
 
         for panel_name in self._panel_docks:
@@ -2501,7 +2372,6 @@ class Window(QtWidgets.QMainWindow):
 
         left_visible = settings.value("layout/left_panel_visible", True, type=bool)
         right_visible = settings.value("layout/right_panel_visible", True, type=bool)
-        self._pre_explore_side_panel_state = None
         self._set_side_panel_actions(left=left_visible, right=right_visible)
 
         self._restore_workspace_shell(settings)
@@ -2514,15 +2384,15 @@ class Window(QtWidgets.QMainWindow):
             else:
                 self._close_panel_dock(panel)
 
+        mode = settings.value("layout/workspace_mode", "system")
+        if mode in {"system", "explore"}:
+            self._set_workspace_mode(mode)
+
         workspace_visible = settings.value("layout/workspace_visible", False, type=bool)
         if workspace_visible:
             self._open_workspace_dock()
         else:
             self._close_jupyter_console()
-
-        mode = settings.value("layout/workspace_mode", "system")
-        if mode in {"system", "explore"}:
-            self._set_workspace_mode(mode)
 
         self._sync_toolbar_panel_actions()
         self.workspace_controller.sync_views()

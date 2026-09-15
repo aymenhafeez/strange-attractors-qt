@@ -1,3 +1,5 @@
+# TODO: whole file and how it interacts with app.py needs to be cleaned up
+
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .process_metrics import ProcessUsageStatus
@@ -213,14 +215,18 @@ def build_menu_bar(self):
     analysis_menu.addAction(self.toolbar_projection_action)
     analysis_menu.addAction(self.toolbar_poincare_action)
     analysis_menu.addAction(self.toolbar_bifurcation_action)
-    analysis_menu.addAction(self.toolbar_jupyter_console_action)
+    analysis_menu.addAction(self.toolbar_system_action)
 
     self._hide_menu_icons(file_menu)
     self._hide_menu_icons(view_menu)
     self._hide_menu_icons(system_menu)
     self._hide_menu_icons(workspace_menu)
     self._hide_menu_icons(analysis_menu)
-    self._sync_menu_actions()
+
+    for action in menu_bar.actions():
+        menu = action.menu()
+        if menu is not None:
+            menu.aboutToShow.connect(self._sync_menu_actions)
 
 
 def build_toolbar(self):
@@ -404,10 +410,13 @@ def build_toolbar(self):
     self.output_panel_action.setChecked(True)
     self.output_panel_action.toggled.connect(self._set_output_panel_visible)
     # toolbar.addAction(self.output_panel_action)
-    self.toolbar_jupyter_console_action = toolbar.addAction(
-        self.style().standardIcon(style_icon.SP_CommandLink),
-        "Workspace",
-        self._toggle_jupyter_console,
+    self.toolbar_system_action = toolbar.addAction(
+        "System",
+        lambda: self._set_workspace_mode("system"),
+    )
+    self.toolbar_explore_action = toolbar.addAction(
+        "Explore",
+        lambda: self._set_workspace_mode("explore"),
     )
 
     toolbar.addSeparator()
