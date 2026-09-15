@@ -3,7 +3,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.docking import AppDock as Dock
 from ..ui.docking import AppDockArea as DockArea
-from ..ui.style import CONSOLE_PLOT_PARAMS, plot_colours
+from ..ui.style import CONSOLE_PLOT_PARAMS, PANEL_SURFACE, plot_colours
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
 from .table import ConsoleTable, ConsoleTableManager
@@ -79,11 +79,14 @@ class ConsolePlot:
         self._table_manager = None
 
         self.host = QtWidgets.QWidget()
+        self.host.setObjectName("panelSurface")
+        self.host.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.host.setStyleSheet(PANEL_SURFACE)
 
         self._crosshair = ConsolePlotCrossHair(self._plot_widget, parent=self.host)
 
         self.layout = QtWidgets.QVBoxLayout(self.host)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setContentsMargins(6, 6, 6, 6)
         self.layout.setSpacing(0)
         self.layout.addWidget(self._plot_widget)
 
@@ -612,7 +615,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.view3d_dock.activated.connect(lambda: self.views3d.activate("3D View"))
 
         self.plot_widget = _build_console_plot_widget()
-        self.plot_widget.showGrid(x=True, y=True, alpha=plot_colours()["plot_grid_alpha"])
+        self.plot_widget.showGrid(
+            x=True, y=True, alpha=plot_colours()["plot_grid_alpha"]
+        )
         self.plot = ConsolePlot(
             self.plot_widget, status_callback=self._explore_status_callback
         )
@@ -665,6 +670,8 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.set_explore_visible(False)
 
         self._console_host = QtWidgets.QWidget()
+        self._console_host.setObjectName("panelSurface")
+        self._console_host.setStyleSheet(PANEL_SURFACE)
         self._console_layout = QtWidgets.QVBoxLayout(self._console_host)
         self._console_layout.setContentsMargins(0, 0, 0, 0)
         self._console_layout.setSpacing(0)
@@ -800,7 +807,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
 
     def apply_system_layout(self):
         self.set_explore_visible(False)
-        self.dock_area.restoreState(self._system_layout, missing="ignore", extra="bottom")
+        self.dock_area.restoreState(
+            self._system_layout, missing="ignore", extra="bottom"
+        )
         self.plot_dock.raiseDock()
 
     def set_explore_status_callback(self, callback):

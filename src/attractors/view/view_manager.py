@@ -1,7 +1,7 @@
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from ..ui.style import plot_colours
+from ..ui.style import PANEL_SURFACE, plot_colours
 from .animation_controller import AnimationController
 from .camera_controller import CameraController
 from .grid_overlay import GridOverlay
@@ -24,12 +24,9 @@ class ViewManager(QtCore.QObject):
         self._animation_mode = "trajectory"
 
         self.container = QtWidgets.QWidget()
-        self.container.setObjectName("viewportContainer")
-        self.container.setStyleSheet("""
-            QWidget#viewportContainer {
-                border: 1px solid palette(mid);
-            }
-        """)
+        self.container.setObjectName("panelSurface")
+        self.container.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.container.setStyleSheet(PANEL_SURFACE)
         container_layout = QtWidgets.QGridLayout(self.container)
         container_layout.setContentsMargins(1, 1, 1, 1)
         container_layout.setSpacing(0)

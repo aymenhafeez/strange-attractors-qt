@@ -3,7 +3,7 @@ from pathlib import Path
 from PyQt6.Qsci import QsciLexerPython, QsciScintilla
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from ..ui.style import SPLITTER_HANDLE_HOVER, is_dark_mode
+from ..ui.style import PANEL_SURFACE, SPLITTER_HANDLE_HOVER, is_dark_mode
 from .script_browser import ScriptBrowser, default_scripts_dir
 
 # dark mode palette derived from KDE Breeze Dark
@@ -100,6 +100,9 @@ class ScriptPanel(QtWidgets.QWidget):
 
     def __init__(self, scripts_dir, parent=None):
         super().__init__(parent)
+        self.setObjectName("panelSurface")
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(PANEL_SURFACE)
         self.store = ScriptStore(scripts_dir)
         self.scripts_dir = self.store.root
         self.script_path = self.scripts_dir / "scratch.py"

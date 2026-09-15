@@ -3,7 +3,7 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from ..ui.docking import AppDock as Dock
-from ..ui.style import CONSOLE_PLOT_PARAMS, plot_colours
+from ..ui.style import CONSOLE_PLOT_PARAMS, PANEL_SURFACE, plot_colours
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
 from .animation import ConsoleAnimation, ConsoleAnimationWidget
@@ -308,9 +308,12 @@ class ConsoleView3D:
         self._point_sets = []
 
         self.host = QtWidgets.QWidget()
+        self.host.setObjectName("panelSurface")
+        self.host.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.host.setStyleSheet(PANEL_SURFACE)
         # layout reserved name in Qt so using v_layout instead
         self.v_layout = QtWidgets.QVBoxLayout(self.host)
-        self.v_layout.setContentsMargins(0, 0, 0, 0)
+        self.v_layout.setContentsMargins(6, 6, 6, 6)
         self.v_layout.setSpacing(0)
 
         self.view = gl.GLViewWidget()

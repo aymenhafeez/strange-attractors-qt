@@ -10,6 +10,24 @@ class AppDock(Dock):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.hStyle = """
+            Dock > QWidget {
+                border: none;
+            }
+        """
+        self.vStyle = """
+            Dock > QWidget {
+                border: none;
+            }
+        """
+        self.nStyle = """
+            Dock > QWidget {
+                border: none;
+            }
+        """
+        self.updateStyle()
+
         self.label.sigClicked.connect(lambda _label, _event: self.activated.emit())
 
     def containerChanged(self, c):
@@ -26,4 +44,20 @@ class AppDock(Dock):
 
 
 class AppDockArea(DockArea):
-    pass
+    def addDock(self, dock=None, position="bottom", relativeTo=None, **kwargs):
+        sizes = []
+        if position in {"above", "below"}:
+            containers, _ = self.findAll()
+            sizes = [
+                (container, container.sizes())
+                for container in containers
+                if container.type() in {"horizontal", "vertical"}
+                and any(container.sizes())
+            ]
+
+        result = super().addDock(dock, position, relativeTo, **kwargs)
+
+        for container, previous_sizes in sizes:
+            container.setSizes(previous_sizes)
+
+        return result

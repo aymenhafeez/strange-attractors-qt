@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
+from attractors.ui.style import PANEL_SURFACE
+
 from ..ui.docking import AppDock as Dock
 
 
@@ -124,6 +126,9 @@ class ConsoleTableModel(QtCore.QAbstractTableModel):
 class ConsoleTable:
     def __init__(self):
         self.host = QtWidgets.QWidget()
+        self.host.setObjectName("panelSurface")
+        self.host.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.host.setStyleSheet(PANEL_SURFACE)
         self.layout = QtWidgets.QVBoxLayout(self.host)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)

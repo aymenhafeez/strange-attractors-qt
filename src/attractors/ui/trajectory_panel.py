@@ -1,7 +1,7 @@
 from pyqtgraph.parametertree import Parameter, ParameterTree
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from .style import plot_colours
+from .style import PANEL_SURFACE, plot_colours
 
 MAX_TRAJECTORIES = 8
 
@@ -156,7 +156,8 @@ class TrajectoryPanel(QtWidgets.QWidget):
             layout.addWidget(self.toggle_btn)
 
         self._content = QtWidgets.QWidget()
-        self._content.setObjectName("customPanelContent")
+        self._content.setObjectName("panelSurface")
+        self._content.setStyleSheet(PANEL_SURFACE)
         self._content.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
