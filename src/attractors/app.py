@@ -195,6 +195,12 @@ class Window(QtWidgets.QMainWindow):
         self.controls.particle_trail_length_changed.connect(
             self.scene.set_particle_trail_length
         )
+        self.controls.particle_size_changed.connect(
+            self.scene.particle_renderer.set_particle_size
+        )
+        self.controls.particle_trail_width_changed.connect(
+            self.scene.particle_renderer.set_trail_width
+        )
         self.controls.orbit_speed_changed.connect(
             self.scene.camera_controller.set_orbit_speed
         )
@@ -206,12 +212,6 @@ class Window(QtWidgets.QMainWindow):
         )
         self.controls.colour_mode_changed.connect(self.scene.set_colour_mode)
         self.controls.colourmap_changed.connect(self.scene.set_colourmap)
-        self.controls.line_width_slider.valueChanged.connect(
-            self.scene.trajectory_renderer.set_line_width
-        )
-        self.controls.line_width_spin.valueChanged.connect(
-            self.scene.trajectory_renderer.set_line_width
-        )
         self.right_panel.preset_panel.preset_save_requested.connect(self._save_preset)
         self.right_panel.preset_panel.preset_load_requested.connect(self._load_preset)
         self.right_panel.preset_panel.preset_delete_requested.connect(
@@ -739,7 +739,7 @@ class Window(QtWidgets.QMainWindow):
         mode = "line" if checked else "points"
         self.controls.trajectory_panel.set_render_mode_all(mode)
         self.scene.trajectory_renderer.set_line_mode(checked)
-        self.controls.set_linewidth_option_visible(checked)
+        # self.controls.set_linewidth_option_visible(checked)
 
     def _set_orbit_mode(self, enabled):
         self.scene.camera_controller.set_orbit_mode(enabled)

@@ -28,6 +28,8 @@ class ControlPanel(QtWidgets.QWidget):
     traj_tail_length_changed = QtCore.pyqtSignal(int)
     particle_count_changed = QtCore.pyqtSignal(int)
     particle_trail_length_changed = QtCore.pyqtSignal(int)
+    particle_size_changed = QtCore.pyqtSignal(int)
+    particle_trail_width_changed = QtCore.pyqtSignal(int)
     colour_mode_changed = QtCore.pyqtSignal(str)
     colourmap_changed = QtCore.pyqtSignal(str)
 
@@ -212,13 +214,9 @@ class ControlPanel(QtWidgets.QWidget):
         )
         self.particle_count_spin.valueChanged.connect(self.particle_count_changed.emit)
 
-        particle_count_row.addWidget(self.particle_count_slider)
-        particle_count_row.addWidget(self.particle_count_spin)
-        particle_options_layout.addLayout(particle_count_row)
-
         particle_trail_row = QtWidgets.QHBoxLayout()
         particle_trail_row.setSpacing(15)
-        particle_trail_row.addWidget(QtWidgets.QLabel("Trail"))
+        particle_trail_row.addWidget(QtWidgets.QLabel("Trail length"))
 
         self.particle_trail_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.particle_trail_slider.setRange(2, 500)
@@ -242,6 +240,56 @@ class ControlPanel(QtWidgets.QWidget):
         particle_trail_row.addWidget(self.particle_trail_slider)
         particle_trail_row.addWidget(self.particle_trail_spin)
         particle_options_layout.addLayout(particle_trail_row)
+
+        self.particle_size_row = QtWidgets.QHBoxLayout()
+        self.particle_size_row.addWidget(QtWidgets.QLabel("Particle size"))
+        self.particle_size_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.particle_size_slider.setRange(1, 10)
+        self.particle_size_slider.setValue(5)
+
+        self.particle_size_spin = QtWidgets.QSpinBox()
+        self.particle_size_spin.setKeyboardTracking(False)
+        self.particle_size_spin.setRange(1, 10)
+        self.particle_size_spin.setValue(5)
+
+        self.particle_size_slider.valueChanged.connect(self.particle_size_spin.setValue)
+        self.particle_size_spin.valueChanged.connect(self.particle_size_slider.setValue)
+
+        self.particle_trail_width_row = QtWidgets.QHBoxLayout()
+        self.particle_trail_width_row.addWidget(QtWidgets.QLabel("Trail width"))
+        self.particle_trail_width_slider = QtWidgets.QSlider(
+            QtCore.Qt.Orientation.Horizontal
+        )
+        self.particle_trail_width_slider.setRange(1, 10)
+        self.particle_trail_width_slider.setValue(1)
+
+        self.particle_trail_width_spin = QtWidgets.QSpinBox()
+        self.particle_trail_width_spin.setKeyboardTracking(False)
+        self.particle_trail_width_spin.setRange(1, 10)
+        self.particle_trail_width_spin.setValue(1)
+
+        self.particle_trail_width_slider.valueChanged.connect(
+            self.particle_trail_width_spin.setValue
+        )
+        self.particle_trail_width_spin.valueChanged.connect(
+            self.particle_trail_width_slider.setValue
+        )
+        self.particle_size_row.addWidget(self.particle_size_slider)
+        self.particle_size_row.addWidget(self.particle_size_spin)
+
+        self.particle_trail_width_row.addWidget(self.particle_trail_width_slider)
+        self.particle_trail_width_row.addWidget(self.particle_trail_width_spin)
+
+        self.particle_size_spin.valueChanged.connect(self.particle_size_changed.emit)
+        self.particle_trail_width_spin.valueChanged.connect(
+            self.particle_trail_width_changed.emit
+        )
+
+        particle_options_layout.addLayout(self.particle_trail_width_row)
+        particle_count_row.addWidget(self.particle_count_slider)
+        particle_count_row.addWidget(self.particle_count_spin)
+        particle_options_layout.addLayout(particle_count_row)
+        particle_options_layout.addLayout(self.particle_size_row)
 
         self.particle_options_wrapper.setVisible(False)
         self.controls_layout.addWidget(self.particle_options_wrapper)
@@ -301,26 +349,6 @@ class ControlPanel(QtWidgets.QWidget):
         self.traj_tail_wrapper.setVisible(False)
         self.controls_layout.addWidget(self.traj_tail_wrapper)
 
-        self.line_width_wrapper = QtWidgets.QWidget()
-        self.line_width_row = QtWidgets.QHBoxLayout()
-        self.line_width_row.setSpacing(10)
-        self.line_width_label = QtWidgets.QLabel("Linewidth")
-        self.line_width_row.addWidget(self.line_width_label)
-        self.line_width_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.line_width_slider.setRange(1, 10)
-        self.line_width_slider.setValue(plot_colours()["is_dark"] and 1 or 2)
-        self.line_width_spin = QtWidgets.QSpinBox()
-        self.line_width_spin.setRange(1, 10)
-        self.line_width_spin.setKeyboardTracking(False)
-        self.line_width_spin.setValue(plot_colours()["is_dark"] and 1 or 2)
-        self.line_width_slider.valueChanged.connect(self.line_width_spin.setValue)
-        self.line_width_spin.valueChanged.connect(self.line_width_slider.setValue)
-        self.line_width_row.addWidget(self.line_width_slider)
-        self.line_width_row.addWidget(self.line_width_spin)
-        self.line_width_wrapper.setLayout(self.line_width_row)
-        self.line_width_wrapper.setVisible(False)
-        self.controls_layout.addWidget(self.line_width_wrapper)
-
     def _on_attractor_selected(self, name):
         self.set_current_attractor(name)
         self.attractor_changed.emit(name)
@@ -356,9 +384,6 @@ class ControlPanel(QtWidgets.QWidget):
 
     def set_particle_options_visible(self, visible):
         self.particle_options_wrapper.setVisible(visible)
-
-    def set_linewidth_option_visible(self, visible):
-        self.line_width_wrapper.setVisible(bool(visible))
 
     def configure(self, config):
         self._clear_sliders()

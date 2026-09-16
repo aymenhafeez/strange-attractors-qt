@@ -136,6 +136,8 @@ class ParticleFlowRenderer:
         self._colour_provider = colour_provider
         self._particle_count = DEFAULT_PARTICLE_COUNT
         self._trail_length = DEFAULT_TRAIL_LENGTH
+        self._head_size = PARTICLE_HEAD_SIZE
+        self._trail_width = 1.0
         self._visible = False
         self._trails = []
         self._heads = []
@@ -145,6 +147,16 @@ class ParticleFlowRenderer:
             return "additive"
         return TRAIL_GL_OPTIONS_LIGHT
 
+    def set_particle_size(self, value):
+        self._head_size = value
+        for head in self._heads:
+            head.setData(size=self._head_size)
+
+    def set_trail_width(self, value):
+        self._trail_width = value
+        for trail in self._trails:
+            trail.setData(width=self._trail_width)
+
     def set_particle_count(self, value):
         self._particle_count = max(1, int(value))
 
@@ -153,13 +165,13 @@ class ParticleFlowRenderer:
 
     def sync_gl_items(self, count):
         while len(self._trails) < count:
-            trail = gl.GLLinePlotItem(mode="lines", width=1.0)
+            trail = gl.GLLinePlotItem(mode="lines", width=self._trail_width)
             trail.setGLOptions(self._gl_options())
             trail.setVisible(False)
             self.view.addItem(trail)
             self._trails.append(trail)
 
-            head = gl.GLScatterPlotItem(size=PARTICLE_HEAD_SIZE, pxMode=True)
+            head = gl.GLScatterPlotItem(size=self._head_size, pxMode=True)
             head.setGLOptions(self._gl_options())
             head.setVisible(False)
             self.view.addItem(head)
@@ -187,13 +199,13 @@ class ParticleFlowRenderer:
             trail.setData(
                 pos=geometry.trail_positions,
                 color=geometry.trail_colours,
-                width=1.0,
+                width=self._trail_width,
                 mode="lines",
             )
             head.setData(
                 pos=geometry.head_positions,
                 color=geometry.head_colours,
-                size=PARTICLE_HEAD_SIZE,
+                size=self._head_size,
                 pxMode=True,
             )
 
