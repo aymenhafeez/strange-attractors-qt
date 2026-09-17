@@ -36,7 +36,7 @@ class TrajectoryRenderer:
         self._trajectories = []
         self._base_colour = plot_colours()["trajectory"]
         self._current_alpha = 1.0
-        self._current_line_width = 1.0
+        self._current_plot_size = 1.0
         self._line_mode = False
         self._trail_mode = False
         self._colour_mode = "solid"
@@ -112,10 +112,12 @@ class TrajectoryRenderer:
         for head in self._heads:
             head.setVisible(visible)
 
-    def set_line_width(self, val):
-        self._current_line_width = val
-        for line in self._lines:
-            line.setData(width=self._current_line_width)
+    def set_plot_size(self, value):
+        self._current_plot_size = value
+        for index in range(len(self._scatters)):
+            size = self._trajectory_size(index)
+            self._scatters[index].setData(size=size)
+            self._lines[index].setData(width=size)
 
     def set_alpha(self, val):
         self._current_alpha = val / 100.0 if val > 1 else val
@@ -353,20 +355,8 @@ class TrajectoryRenderer:
 
     def _trajectory_size(self, i):
         traj = self._trajectories[i] if i < len(self._trajectories) else None
-
-        size = 1.0
-        if traj is None:
-            return size
-
-        return traj.get("size", size)
-
-    def _trajectory_line_width(self, i):
-        traj = self._trajectories[i] if i < len(self._trajectories) else None
-
-        if traj is None:
-            return self._current_line_width
-
-        return traj.get("size", self._current_line_width)
+        individual_size = traj.get("size", 1.0) if traj is not None else 1.0
+        return self._current_plot_size * individual_size
 
     def _set_trajectory_data(self, i, *, pos=None, colour=None):
         if i >= len(self._scatters):
