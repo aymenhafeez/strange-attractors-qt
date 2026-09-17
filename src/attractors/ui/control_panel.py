@@ -32,6 +32,7 @@ class ControlPanel(QtWidgets.QWidget):
     particle_trail_width_changed = QtCore.pyqtSignal(int)
     colour_mode_changed = QtCore.pyqtSignal(str)
     colourmap_changed = QtCore.pyqtSignal(str)
+    animation_mode_changed = QtCore.pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -88,24 +89,55 @@ class ControlPanel(QtWidgets.QWidget):
         self.controls_layout.setSpacing(7)
         self.controls_scroll.setWidget(self.controls_tab)
 
-        self.controls_dock = Dock("Controls", size=(1, 360), closable=False)
+        self.controls_dock = Dock("Parameters controls", size=(1, 360), closable=False)
         self.controls_dock.addWidget(self.controls_scroll)
         self.dock_area.addDock(self.controls_dock)
+
+        self.animation_scroll = QtWidgets.QScrollArea()
+        self.animation_scroll.setWidgetResizable(True)
+
+        self.animation_tab = QtWidgets.QWidget()
+        self.animation_tab.setObjectName("controlPanelSliders")
+        self.animation_layout = QtWidgets.QVBoxLayout(self.animation_tab)
+        self.animation_layout.setContentsMargins(8, 8, 8, 8)
+        self.animation_layout.setSpacing(7)
+        self.animation_scroll.setWidget(self.animation_tab)
+
+        self.animation_dock = Dock("View options", size=(1, 360), closable=False)
+        self.animation_dock.addWidget(self.animation_scroll)
+        self.dock_area.addDock(
+            self.animation_dock, position="below", relativeTo=self.controls_dock
+        )
 
         self.data_view = DataViewPanel()
         self.data_view.setMinimumHeight(190)
 
-        self.data_dock = Dock("Data", size=(1, 240), closable=False)
+        self.data_dock = Dock("Data", size=(1, 360), closable=False)
         self.data_dock.addWidget(self.data_view)
         self.dock_area.addDock(
             self.data_dock,
             position="bottom",
             relativeTo=self.controls_dock,
         )
+        self.controls_dock.raiseDock()
 
         options = QtWidgets.QHBoxLayout()
         options.addWidget(self.dropdown)
         self.controls_layout.addLayout(options)
+
+        animation_mode_row = QtWidgets.QHBoxLayout()
+        animation_mode_row.addWidget(QtWidgets.QLabel("Animation mode"))
+
+        self.animation_mode_combo = QtWidgets.QComboBox()
+        self.animation_mode_combo.addItem("Trajectory", "trajectory")
+        self.animation_mode_combo.addItem("Particle flow", "particle")
+        self.animation_mode_combo.currentIndexChanged.connect(
+            lambda index: self.animation_mode_changed.emit(
+                self.animation_mode_combo.itemData(index)
+            )
+        )
+        animation_mode_row.addWidget(self.animation_mode_combo)
+        self.animation_layout.addLayout(animation_mode_row)
 
         alpha_row = QtWidgets.QHBoxLayout()
         alpha_row.setSpacing(10)
@@ -127,7 +159,7 @@ class ControlPanel(QtWidgets.QWidget):
         # spaced out nicer
         alpha_wrapper = QtWidgets.QWidget()
         alpha_wrapper.setLayout(alpha_row)
-        self.controls_layout.addWidget(alpha_wrapper)
+        self.animation_layout.addWidget(alpha_wrapper)
 
         colour_mode_row = QtWidgets.QHBoxLayout()
         colour_mode_row.setSpacing(10)
@@ -143,7 +175,7 @@ class ControlPanel(QtWidgets.QWidget):
 
         self.colour_mode_wrapper = QtWidgets.QWidget()
         self.colour_mode_wrapper.setLayout(colour_mode_row)
-        self.controls_layout.addWidget(self.colour_mode_wrapper)
+        self.animation_layout.addWidget(self.colour_mode_wrapper)
 
         colourmap_row = QtWidgets.QHBoxLayout()
         colourmap_row.setSpacing(10)
@@ -161,7 +193,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.colourmap_wrapper = QtWidgets.QWidget()
         self.colourmap_wrapper.setLayout(colourmap_row)
         self.colourmap_wrapper.setVisible(False)
-        self.controls_layout.addWidget(self.colourmap_wrapper)
+        self.animation_layout.addWidget(self.colourmap_wrapper)
 
         self.colour_mode_combo.currentIndexChanged.connect(self._on_colour_mode_changed)
         self.colourmap_combo.currentTextChanged.connect(self._on_colourmap_changed)
@@ -184,7 +216,7 @@ class ControlPanel(QtWidgets.QWidget):
         speed_row.addWidget(self.anim_speed_spin)
         speed_wrapper = QtWidgets.QWidget()
         speed_wrapper.setLayout(speed_row)
-        self.controls_layout.addWidget(speed_wrapper)
+        self.animation_layout.addWidget(speed_wrapper)
 
         self.particle_options_wrapper = QtWidgets.QWidget()
         particle_options_layout = QtWidgets.QVBoxLayout(self.particle_options_wrapper)
@@ -292,7 +324,7 @@ class ControlPanel(QtWidgets.QWidget):
         particle_options_layout.addLayout(self.particle_size_row)
 
         self.particle_options_wrapper.setVisible(False)
-        self.controls_layout.addWidget(self.particle_options_wrapper)
+        self.animation_layout.addWidget(self.particle_options_wrapper)
 
         orbit_speed_row = QtWidgets.QHBoxLayout()
         orbit_speed_row.setSpacing(10)
@@ -313,7 +345,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.orbit_speed_wrapper = QtWidgets.QWidget()
         self.orbit_speed_wrapper.setLayout(orbit_speed_row)
         self.orbit_speed_wrapper.setVisible(False)
-        self.controls_layout.addWidget(self.orbit_speed_wrapper)
+        self.animation_layout.addWidget(self.orbit_speed_wrapper)
 
         traj_tail_row = QtWidgets.QHBoxLayout()
         traj_tail_row.setSpacing(10)
@@ -347,7 +379,8 @@ class ControlPanel(QtWidgets.QWidget):
         self.traj_tail_wrapper = QtWidgets.QWidget()
         self.traj_tail_wrapper.setLayout(traj_tail_row)
         self.traj_tail_wrapper.setVisible(False)
-        self.controls_layout.addWidget(self.traj_tail_wrapper)
+        self.animation_layout.addWidget(self.traj_tail_wrapper)
+        self.animation_layout.addStretch()
 
     def _on_attractor_selected(self, name):
         self.set_current_attractor(name)

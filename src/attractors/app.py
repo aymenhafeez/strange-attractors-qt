@@ -308,6 +308,7 @@ class Window(QtWidgets.QMainWindow):
 
         build_toolbar(self)
         build_menu_bar(self)
+        self.controls.animation_mode_changed.connect(self._set_animation_mode)
         build_status_bar(self)
 
         self.workspace_inspector = WorkspaceInspector(self.jupyter_console_panel)
@@ -720,6 +721,10 @@ class Window(QtWidgets.QMainWindow):
             return
 
         self.scene.set_animation_mode(mode)
+        with QtCore.QSignalBlocker(self.controls.animation_mode_combo):
+            index = self.controls.animation_mode_combo.findData(mode)
+            if index >= 0:
+                self.controls.animation_mode_combo.setCurrentIndex(index)
         self._sync_toolbar_animation_action(False)
 
         particle_flow = mode == "particle"
