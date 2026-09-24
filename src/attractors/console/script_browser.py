@@ -14,6 +14,17 @@ def default_scripts_dir():
     return Path(QtCore.QDir.homePath()) / ".strange-attractors" / "scripts"
 
 
+class ScriptFilterProxyModel(QtCore.QSortFilterProxyModel):
+    def filterAcceptsRow(self, source_row, source_parent):
+        model = self.sourceModel()
+        index = model.index(source_row, 0, source_parent)
+
+        if model.isDir(index):
+            return True
+
+        return super().filterAcceptsRow(source_row, source_parent)
+
+
 class ScriptBrowser(QtWidgets.QWidget):
     script_selected = QtCore.pyqtSignal(object)
     path_renamed = QtCore.pyqtSignal(object, object)
@@ -63,9 +74,25 @@ class ScriptBrowser(QtWidgets.QWidget):
         self.model.setNameFilters(["*.py"])
         self.model.setNameFilterDisables(False)
 
+        self.proxy_model = ScriptFilterProxyModel(self)
+        self.proxy_model.setSourceModel(self.model)
+        self.proxy_model.setFilterKeyColumn(0)
+        self.proxy_model.setFilterCaseSensitivity(
+            QtCore.Qt.CaseSensitivity.CaseInsensitive
+        )
+
+        self.filter_edit = QtWidgets.QLineEdit()
+        self.filter_edit.setPlaceholderText("Search")
+        self.filter_edit.setClearButtonEnabled(True)
+        self.filter_edit.textChanged.connect(self.proxy_model.setFilterFixedString)
+
         self.tree = QtWidgets.QTreeView()
-        self.tree.setModel(self.model)
-        self.tree.setRootIndex(self.model.index(str(self.scripts_dir)))
+        self.tree.setModel(self.proxy_model)
+
+        source_root = self.model.index(str(self.scripts_dir))
+        self.tree.setRootIndex(self.proxy_model.mapFromSource(source_root))
+
+        # self.tree.setRootIndex(self.model.index(str(self.scripts_dir)))
         self.tree.setHeaderHidden(True)
         self.tree.setEditTriggers(
             QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers
@@ -75,6 +102,7 @@ class ScriptBrowser(QtWidgets.QWidget):
             self.tree.hideColumn(column)
 
         layout.addWidget(self.toolbar)
+        layout.addWidget(self.filter_edit)
         layout.addWidget(self.tree)
 
         self.tree.selectionModel().currentChanged.connect(
@@ -86,11 +114,15 @@ class ScriptBrowser(QtWidgets.QWidget):
         self.rename_action.triggered.connect(self._rename_selected)
         self.delete_action.triggered.connect(self._delete_selected)
 
+    def _source_index(self, proxy_index):
+        return self.proxy_model.mapToSource(proxy_index)
+
     def select_path(self, path):
         if path is None:
             return
 
-        index = self.model.index(str(path))
+        source_index = self.model.index(str(path))
+        index = self.proxy_model.mapFromSource(source_index)
         if not index.isValid():
             return
 
@@ -105,7 +137,8 @@ class ScriptBrowser(QtWidgets.QWidget):
         if self._selecting:
             return
 
-        path = Path(self.model.filePath(current))
+        source_index = self._source_index(current)
+        path = Path(self.model.filePath(source_index))
         if path.is_file() and path.suffix == ".py":
             self.script_selected.emit(path)
 
@@ -154,7 +187,8 @@ class ScriptBrowser(QtWidgets.QWidget):
             return
 
         path.mkdir()
-        index = self.model.index(str(path))
+        source_index = self.model.index(str(path))
+        index = self.proxy_model.mapFromSource(source_index)
         if index.isValid():
             self.tree.setCurrentIndex(index)
             self.tree.expand(index)
@@ -164,14 +198,16 @@ class ScriptBrowser(QtWidgets.QWidget):
         if not index.isValid():
             return None
 
-        return Path(self.model.filePath(index))
+        source_index = self._source_index(index)
+        return Path(self.model.filePath(source_index))
 
     def _rename_selected(self):
         index = self.tree.currentIndex()
         if not index.isValid():
             return
 
-        path = Path(self.model.filePath(index))
+        source_index = self._source_index(index)
+        path = Path(self.model.filePath(source_index))
         if path == self.scripts_dir:
             return
 
@@ -202,7 +238,7 @@ class ScriptBrowser(QtWidgets.QWidget):
 
         try:
             renamed = self.model.setData(
-                index,
+                source_index,
                 name,
                 QtCore.Qt.ItemDataRole.EditRole,
             )
@@ -221,6 +257,8 @@ class ScriptBrowser(QtWidgets.QWidget):
         index = self.tree.currentIndex()
         if not index.isValid():
             return
+
+        source_index = self._source_index(index)
 
         path = self._selected_path()
         if path is None or path == self.scripts_dir:
@@ -247,7 +285,7 @@ class ScriptBrowser(QtWidgets.QWidget):
             if path.is_dir():
                 shutil.rmtree(path)
             elif path.exists():
-                deleted = self.model.remove(index)
+                deleted = self.model.remove(source_index)
                 if not deleted:
                     self._show_error(f"Could not delete {path}")
                     return
@@ -265,7 +303,8 @@ class ScriptBrowser(QtWidgets.QWidget):
         if not index.isValid():
             return self.scripts_dir
 
-        path = Path(self.model.filePath(index))
+        source_index = self._source_index(index)
+        path = Path(self.model.filePath(source_index))
         if path.is_dir():
             return path
 
