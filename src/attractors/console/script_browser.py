@@ -15,14 +15,34 @@ def default_scripts_dir():
 
 
 class ScriptFilterProxyModel(QtCore.QSortFilterProxyModel):
-    def filterAcceptsRow(self, source_row, source_parent):
-        model = self.sourceModel()
-        index = model.index(source_row, 0, source_parent)
+    def __init__(self, root_path, parent=None):
+        super().__init__(parent)
+        self._root_path = Path(root_path).absolute()
+        self._file_text = ""
+        self._visible_paths = set(self._root_path.parents) | {self._root_path}
 
-        if model.isDir(index):
+    def set_filter_text(self, text):
+        self._file_text = text.strip().casefold()
+        self._visible_paths = set(self._root_path.parents) | {self._root_path}
+
+        if self._file_text:
+            for script in self._root_path.rglob("*.py"):
+                if self._file_text in script.name.casefold():
+                    self._visible_paths.add(script)
+                    for parent in script.parents:
+                        self._visible_paths.add(parent)
+                        if parent == self._root_path:
+                            break
+
+        self.invalidateRowsFilter()
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        if not self._file_text:
             return True
 
-        return super().filterAcceptsRow(source_row, source_parent)
+        model = self.sourceModel()
+        index = model.index(source_row, 0, source_parent)
+        return Path(model.filePath(index)) in self._visible_paths
 
 
 class ScriptBrowser(QtWidgets.QWidget):
@@ -74,7 +94,7 @@ class ScriptBrowser(QtWidgets.QWidget):
         self.model.setNameFilters(["*.py"])
         self.model.setNameFilterDisables(False)
 
-        self.proxy_model = ScriptFilterProxyModel(self)
+        self.proxy_model = ScriptFilterProxyModel(self.scripts_dir, self)
         self.proxy_model.setSourceModel(self.model)
         self.proxy_model.setFilterKeyColumn(0)
         self.proxy_model.setFilterCaseSensitivity(
@@ -84,7 +104,7 @@ class ScriptBrowser(QtWidgets.QWidget):
         self.filter_edit = QtWidgets.QLineEdit()
         self.filter_edit.setPlaceholderText("Search")
         self.filter_edit.setClearButtonEnabled(True)
-        self.filter_edit.textChanged.connect(self.proxy_model.setFilterFixedString)
+        self.filter_edit.textChanged.connect(self.proxy_model.set_filter_text)
 
         self.tree = QtWidgets.QTreeView()
         self.tree.setModel(self.proxy_model)
