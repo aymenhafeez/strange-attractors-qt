@@ -42,6 +42,15 @@ class AppDock(Dock):
 
         self.activated.emit()
 
+    def close(self):
+        area = self.area
+        sizes = area.get_splitter_sizes() if isinstance(area, AppDockArea) else None
+
+        super().close()
+
+        if sizes is not None:
+            area.restore_splitter_sizes(sizes)
+
 
 class AppDockArea(DockArea):
     def addDock(self, dock=None, position="bottom", relativeTo=None, **kwargs):
@@ -61,3 +70,26 @@ class AppDockArea(DockArea):
             container.setSizes(previous_sizes)
 
         return result
+
+    def get_splitter_sizes(self):
+        containers, _ = self.findAll()
+        return [
+            (
+                container,
+                tuple(container.widget(i) for i in range(container.count())),
+                container.sizes(),
+            )
+            for container in containers
+            if container.type() in {"horizontal", "vertical"}
+        ]
+
+    def restore_splitter_sizes(self, saved):
+        containers, _ = self.findAll()
+        surviving = set(containers)
+
+        for container, children, sizes in saved:
+            if container not in surviving:
+                continue
+            if tuple(container.widget(i) for i in range(container.count())) != children:
+                continue
+            container.setSizes(sizes)

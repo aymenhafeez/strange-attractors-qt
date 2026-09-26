@@ -185,7 +185,7 @@ class ScriptPanel(QtWidgets.QWidget):
         self.splitter.addWidget(editor_host)
         self.splitter.setCollapsible(0, True)
         self.splitter.setCollapsible(1, False)
-        self.splitter.setSizes([170, 620])
+        self.splitter.setSizes([200, 620])
         # self.splitter.setContentsMargins(0, 0, 0, 0)
         self.splitter.setStyleSheet(SPLITTER_HANDLE_HOVER)
         layout.addWidget(self.splitter)

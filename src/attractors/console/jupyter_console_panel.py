@@ -621,7 +621,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.plot = ConsolePlot(
             self.plot_widget, status_callback=self._explore_status_callback
         )
-        self.plot_dock = Dock("Plot", size=(10, 6))
+        self.plot_dock = Dock("Plot", size=(10, 8))
         self.plot_dock.addWidget(self.plot.host)
         self.dock_area.addDock(
             self.plot_dock, position="above", relativeTo=self.view3d_dock
@@ -679,8 +679,8 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.script_panel = ScriptPanel(self._script_dir)
         self.script_panel.run_requested.connect(self.run_script_text)
 
-        self.script_dock = Dock("Script", size=(10, 8), closable=False)
-        self.console_dock = Dock("Console", size=(10, 8))
+        self.script_dock = Dock("Script", size=(15, 8), closable=False)
+        self.console_dock = Dock("Console", size=(10, 4))
         self.script_dock.addWidget(self.script_panel)
         self.console_dock.addWidget(self._console_host)
 
@@ -797,7 +797,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
     def apply_explore_layout(self):
         self.set_explore_visible(True)
         self.dock_area.moveDock(self.script_dock, "left", self.plot_dock)
-        self.dock_area.moveDock(self.console_dock, "bottom", self.script_dock)
+        self.dock_area.moveDock(self.console_dock, "bottom", self.plot_dock)
         self.plot_dock.raiseDock()
         # self.dock_area.moveDock(
         #     self.explorer_params_dock,
