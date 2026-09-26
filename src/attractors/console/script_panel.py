@@ -106,9 +106,10 @@ class ScriptPanel(QtWidgets.QWidget):
         self.store = ScriptStore(scripts_dir)
         self.scripts_dir = self.store.root
         self.script_path = self.scripts_dir / "scratch.py"
-        self.current_path = None
-        self._loading = False
-        self._dirty = False
+        # self.current_path = None
+        # self._loading = False
+        # self._dirty = False
+        self._paths = {}
         self._script_browser_width = 220
 
         layout = QtWidgets.QHBoxLayout(self)
@@ -116,6 +117,7 @@ class ScriptPanel(QtWidgets.QWidget):
         layout.setSpacing(0)
 
         self.script_browser = ScriptBrowser(self.scripts_dir)
+        self.script_browser.confirm_delete = self._confirm_delete
         self.script_browser.script_selected.connect(self.load_script)
         self.script_browser.path_renamed.connect(self._on_path_renamed)
         self.script_browser.path_deleted.connect(self._on_path_deleted)
@@ -168,10 +170,15 @@ class ScriptPanel(QtWidgets.QWidget):
         )
         self.save_action.setToolTip("Save script")
 
-        self.editor = self._build_editor()
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.setTabsClosable(True)
+        self.tabs.setMovable(True)
+        self.tabs.tabBar().setUsesScrollButtons(True)
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+        self.tabs.tabCloseRequested.connect(self.close_tab)
 
         editor_layout.addWidget(self.toolbar)
-        editor_layout.addWidget(self.editor, 1)
+        editor_layout.addWidget(self.tabs, 1)
 
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         self.splitter.addWidget(self.script_browser)
@@ -183,13 +190,47 @@ class ScriptPanel(QtWidgets.QWidget):
         self.splitter.setStyleSheet(SPLITTER_HANDLE_HOVER)
         layout.addWidget(self.splitter)
 
-        self.editor.textChanged.connect(self._on_editor_text_changed)
-
         self.run_action.triggered.connect(self.run)
         self.run_selection_action.triggered.connect(self.run_selection)
         self.save_action.triggered.connect(self.save)
 
         self.load()
+
+    @property
+    def editor(self):
+        return self.tabs.currentWidget()
+
+    def _path_for(self, editor):
+        return self._paths.get(editor)
+
+    def _editor_for(self, path):
+        return next(
+            (
+                editor
+                for editor, editor_path in self._paths.items()
+                if editor_path == path
+            ),
+            None,
+        )
+
+    def _ensure_scratch(self):
+        if not self.script_path.exists():
+            self.store.write(self.script_path, "")
+
+    def _remove_editor(self, editor):
+        self._paths.pop(editor)
+        self.tabs.removeTab(self.tabs.indexOf(editor))
+        editor.deleteLater()
+
+    def _update_tab_title(self, editor):
+        index = self.tabs.indexOf(editor)
+        if index < 0:
+            return
+
+        path = self._path_for(editor)
+        prefix = "*" if editor.isModified() else ""
+        self.tabs.setTabText(index, f"{prefix}{path.name}")
+        self.tabs.setTabToolTip(index, str(path))
 
     def example_scripts(self):
         examples_dir = self.scripts_dir / "examples"
@@ -198,52 +239,40 @@ class ScriptPanel(QtWidgets.QWidget):
 
         return sorted(examples_dir.glob("*.py"), key=lambda p: p.name.lower())
 
-    def _renamed_current_path(self, old_path, new_path):
-        if self.current_path is None:
-            return None
-
+    def _on_path_renamed(self, old_path, new_path):
         old_path = Path(old_path).resolve()
         new_path = Path(new_path).resolve()
-        current_path = self.current_path.resolve()
+        active_editor = self.editor
+        active_path_changed = False
 
-        if current_path == old_path:
-            return new_path
+        for editor, path in list(self._paths.items()):
+            if path == old_path:
+                renamed_path = new_path
+            elif old_path in path.parents:
+                renamed_path = new_path / path.relative_to(old_path)
+            else:
+                continue
 
-        if old_path in current_path.parents:
-            return new_path / current_path.relative_to(old_path)
+            self._paths[editor] = renamed_path
+            self._update_tab_title(editor)
 
-        return None
+            if editor is active_editor:
+                active_path_changed = True
 
-    def _on_path_renamed(self, old_path, new_path):
-        renamed_path = self._renamed_current_path(old_path, new_path)
-        if renamed_path is None:
-            return
-        self.current_path = renamed_path
-        self._update_status("Renamed")
-        self.script_changed.emit(renamed_path)
-        self.script_browser.select_path(renamed_path)
+        if active_path_changed:
+            current_path = self.current_script_path()
+            self._update_status("Renamed")
+            self.script_changed.emit(current_path)
+            self.script_browser.select_path(current_path)
 
     def _on_path_deleted(self, path):
-        if self.current_path is None:
-            return
+        for editor, editor_path in list(self._paths.items()):
+            if self._check_match(path, editor_path):
+                self._remove_editor(editor)
 
-        if not self._check_match(path, self.current_path):
-            return
-
-        self.current_path = None
-        self._dirty = False
-        self._loading = True
-        try:
-            self._set_editor_text("")
-            self._set_editor_modified(False)
-        finally:
-            self._loading = False
-        self._update_status("")
-
-        if not self.script_path.exists():
-            self.store.write(self.script_path, "")
-
-        self.load_script(self.script_path)
+        if self.tabs.count() == 0:
+            self._ensure_scratch()
+            self.load_script(self.script_path)
 
     def _check_match(self, parent, child):
         parent = Path(parent).resolve()
@@ -251,7 +280,7 @@ class ScriptPanel(QtWidgets.QWidget):
 
         return child == parent or parent in child.parents
 
-    def _apply_dark_editor_colours(self, editor):
+    def _apply_dark_editor_colours(self, editor, lexer):
         editor.setCaretForegroundColor(QtGui.QColor(EDITOR_TEXT))
         editor.setCaretLineBackgroundColor(QtGui.QColor(EDITOR_CARET_LINE))
         editor.setColor(QtGui.QColor(EDITOR_TEXT))
@@ -260,12 +289,12 @@ class ScriptPanel(QtWidgets.QWidget):
         editor.setSelectionForegroundColor(QtGui.QColor(EDITOR_TEXT))
         editor.setMarginsBackgroundColor(QtGui.QColor(EDITOR_MARGIN))
         editor.setMarginsForegroundColor(QtGui.QColor(EDITOR_MARGIN_TEXT))
-        self.lexer.setDefaultColor(QtGui.QColor(EDITOR_TEXT))
-        self.lexer.setDefaultPaper(QtGui.QColor(EDITOR_BACKGROUND))
+        lexer.setDefaultColor(QtGui.QColor(EDITOR_TEXT))
+        lexer.setDefaultPaper(QtGui.QColor(EDITOR_BACKGROUND))
 
         for style, colour in PYTHON_STYLE_COLOURS.items():
-            self.lexer.setColor(QtGui.QColor(colour), style)
-            self.lexer.setPaper(QtGui.QColor(EDITOR_BACKGROUND), style)
+            lexer.setColor(QtGui.QColor(colour), style)
+            lexer.setPaper(QtGui.QColor(EDITOR_BACKGROUND), style)
 
     def _build_editor(self):
         editor = QsciScintilla()
@@ -282,50 +311,60 @@ class ScriptPanel(QtWidgets.QWidget):
         editor.setMarginType(0, QsciScintilla.MarginType.NumberMargin)
         editor.setMarginWidth(0, "0000")
 
-        self.lexer = QsciLexerPython(editor)
-        self.lexer.setDefaultFont(font)
+        lexer = QsciLexerPython(editor)
+        lexer.setDefaultFont(font)
 
         if is_dark_mode():
-            self._apply_dark_editor_colours(editor)
+            self._apply_dark_editor_colours(editor, lexer)
 
-        editor.setLexer(self.lexer)
+        editor.setLexer(lexer)
         return editor
 
     def load(self):
         self.store.ensure_root()
-
-        if not self.script_path.exists():
-            self.store.write(self.script_path, "")
-
+        self._ensure_scratch()
         self.load_script(self.script_path)
 
     def load_script(self, path):
         path = self.store.resolve_script(path)
 
-        if path == self.current_path:
+        existing = self._editor_for(path)
+        if existing is not None:
+            self.tabs.setCurrentWidget(existing)
             return True
 
-        if not self._confirm_discard_changes():
-            return False
+        text = self.store.read(path)
+        editor = self._build_editor()
+        editor.setText(text)
+        editor.setModified(False)
 
-        self._loading = True
-        try:
-            self._set_editor_text(self.store.read(path))
-            self._set_editor_modified(False)
+        self._paths[editor] = path
+        editor.textChanged.connect(
+            lambda editor=editor: self._on_editor_text_changed(editor)
+        )
 
-            self.current_path = path
-            self._dirty = False
-
-            self._update_status("Loaded")
-            self.script_changed.emit(path)
-            self.script_browser.select_path(path)
-        finally:
-            self._loading = False
-
+        index = self.tabs.addTab(editor, path.name)
+        self.tabs.setTabToolTip(index, str(path))
+        self.tabs.setCurrentIndex(index)
+        self._update_status("Loaded")
         return True
 
+    def _on_tab_changed(self, _index):
+        path = self.current_script_path()
+        self._update_status("")
+
+        if path is not None:
+            self.script_changed.emit(path)
+            self.script_browser.select_path(path)
+
     def current_script_path(self):
-        return self.current_path
+        return self._path_for(self.editor)
+
+    def open_script_paths(self):
+        return [
+            self._path_for(self.tabs.widget(index))
+            for index in range(self.tabs.count())
+        ]
 
     def restore_script(self, path):
         if path is None:
@@ -341,27 +380,54 @@ class ScriptPanel(QtWidgets.QWidget):
 
         return self.load_script(path)
 
-    def save(self):
-        if self.current_path is None:
-            self.load()
+    def restore_scripts(self, paths, active_path):
+        for editor in list(self._paths):
+            self._remove_editor(editor)
 
-        self.store.write(
-            self.current_path,
-            self._editor_text(),
-        )
+        for raw_path in paths:
+            try:
+                path = self.store.resolve_script(raw_path)
+            except (TypeError, ValueError):
+                continue
 
-        self._set_editor_modified(False)
-        self._dirty = False
-        self._update_status("Saved")
+            if path.exists():
+                self.load_script(path)
+
+        if active_path is not None:
+            self.restore_script(active_path)
+
+        if self.tabs.count() == 0:
+            self._ensure_scratch()
+            self.load_script(self.script_path)
+
+    def _save_editor(self, editor):
+        path = self._path_for(editor)
+        self.store.write(path, editor.text())
+        editor.setModified(False)
+        self._update_tab_title(editor)
+
+        if editor is self.editor:
+            self._update_status("Saved")
 
         return True
 
+    def save(self):
+        if self.editor is None:
+            return False
+
+        return self._save_editor(self.editor)
+
     def run(self):
-        self.save()
-        self.run_requested.emit(self._editor_text())
+        if not self.save():
+            return
+
+        self.run_requested.emit(self.editor.text())
         self._update_status("Ran")
 
     def run_selection(self):
+        if self.editor is None:
+            return
+
         text = self.editor.selectedText()
         if not text:
             self._update_status("No selection")
@@ -378,42 +444,85 @@ class ScriptPanel(QtWidgets.QWidget):
 
     def _set_editor_modified(self, modified):
         self.editor.setModified(bool(modified))
+        self._update_tab_title(self.editor)
 
-    def _on_editor_text_changed(self):
-        if self._loading:
-            return
+    def _on_editor_text_changed(self, editor):
+        self._update_tab_title(editor)
+        if editor is self.editor:
+            self._update_status("Modified")
 
-        self._dirty = True
-        self._update_status("Modified")
-
-    def _confirm_discard_changes(self):
-        if not self._dirty:
+    def _confirm_dirty_editors(self, editors, message):
+        dirty = [editor for editor in editors if editor.isModified()]
+        if not dirty:
             return True
 
         result = QtWidgets.QMessageBox.question(
             self,
-            "Unsaved script",
-            "Discard unsaved script changes?",
-            QtWidgets.QMessageBox.StandardButton.Discard
+            "Unsaved scripts",
+            message,
+            QtWidgets.QMessageBox.StandardButton.Save
+            | QtWidgets.QMessageBox.StandardButton.Discard
             | QtWidgets.QMessageBox.StandardButton.Cancel,
             QtWidgets.QMessageBox.StandardButton.Cancel,
         )
 
+        if result == QtWidgets.QMessageBox.StandardButton.Cancel:
+            return False
+
+        if result == QtWidgets.QMessageBox.StandardButton.Save:
+            for editor in dirty:
+                self._save_editor(editor)
+
+            return True
+
         return result == QtWidgets.QMessageBox.StandardButton.Discard
 
+    def close_tab(self, index):
+        editor = self.tabs.widget(index)
+        if editor is None:
+            return
+
+        path = self._path_for(editor)
+        if not self._confirm_dirty_editors(
+            [editor],
+            f"Save changes to '{path.name}' before closing it?",
+        ):
+            return
+
+        self._remove_editor(editor)
+
+        if self.tabs.count() == 0:
+            self._ensure_scratch()
+            self.load_script(self.script_path)
+
+    def _confirm_delete(self, path):
+        affected = [
+            editor
+            for editor, editor_path in self._paths.items()
+            if self._check_match(path, editor_path)
+        ]
+        return self._confirm_dirty_editors(
+            affected,
+            "Save changes to open scripts before deleting?",
+        )
+
+    def confirm_close(self):
+        return self._confirm_dirty_editors(
+            list(self._paths),
+            "Save changes to open scripts before exiting?",
+        )
+
     def _update_status(self, action):
-        if self.current_path is None:
+        path = self.current_script_path()
+        if path is None:
             self.status_label.clear()
             self.status_changed.emit("")
             return
 
-        if self._dirty:
-            self.status_label.setText(f"*{self.current_path.name}")
-        else:
-            self.status_label.clear()
+        self.status_label.setText(f"*{path.name}" if self.editor.isModified() else "")
 
-        if action != "Modified":
-            self.status_changed.emit(f"{action} {self.current_path.name}")
+        if action and action != "Modified":
+            self.status_changed.emit(f"{action} {path.name}")
 
     def _set_script_browser_visible(self, visible):
         sizes = self.splitter.sizes()

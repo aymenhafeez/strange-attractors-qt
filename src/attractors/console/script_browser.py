@@ -55,6 +55,7 @@ class ScriptBrowser(QtWidgets.QWidget):
         self.scripts_dir = (
             Path(scripts_dir) if scripts_dir is not None else default_scripts_dir()
         )
+        self.confirm_delete = None
         self.scripts_dir.mkdir(parents=True, exist_ok=True)
         self._selecting = False
 
@@ -299,6 +300,9 @@ class ScriptBrowser(QtWidgets.QWidget):
         )
 
         if result != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+
+        if self.confirm_delete is not None and not self.confirm_delete(path):
             return
 
         try:
