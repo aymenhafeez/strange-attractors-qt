@@ -1,3 +1,4 @@
+from attractors.ui.style import SCRIPT_PANEL
 import shutil
 from pathlib import Path
 
@@ -60,8 +61,8 @@ class ScriptBrowser(QtWidgets.QWidget):
         self._selecting = False
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setContentsMargins(5, 0, 0, 0)
+        layout.setSpacing(4)
 
         self.toolbar = QtWidgets.QToolBar()
         self.toolbar.setIconSize(QtCore.QSize(16, 16))
@@ -104,10 +105,13 @@ class ScriptBrowser(QtWidgets.QWidget):
 
         self.filter_edit = QtWidgets.QLineEdit()
         self.filter_edit.setPlaceholderText("Search")
+        self.filter_edit.setStyleSheet("background: palette(base);")
         self.filter_edit.setClearButtonEnabled(True)
         self.filter_edit.textChanged.connect(self.proxy_model.set_filter_text)
 
         self.tree = QtWidgets.QTreeView()
+        self.tree.setObjectName("scriptPanel")
+        self.tree.setStyleSheet(SCRIPT_PANEL)
         self.tree.setModel(self.proxy_model)
 
         source_root = self.model.index(str(self.scripts_dir))

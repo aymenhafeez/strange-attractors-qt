@@ -76,7 +76,7 @@ def plot_colours():
         "gl_grid_line": (0.65, 0.65, 0.65, 1.0),
         "gl_axis_label": (0.0, 0.0, 0.0, 1.0),
         "trajectory": (0.24, 0.25, 0.57),
-        "plot_grid_alpha": 0.25,
+        "plot_grid_alpha": 0.35,
         "plot_pen": "#0e275b",
         "scatter_brush": "#0e275b",
         "scatter_size": 2,
@@ -142,6 +142,20 @@ PANEL_SURFACE = """
     QWidget#panelSurface QLineEdit,
     QWidget#panelSurface QTextEdit,
     QWidget#panelSurface QAbstractSpinBox {
+        background: palette(window);
+        border: 1px solid palette(mid);
+        padding: 2px 4px;
+    }
+"""
+
+SCRIPT_PANEL = """
+    QWidget#scriptPanel {
+        border: 1px solid palette(mid);
+    }
+
+    QWidget#scriptPanel QLineEdit,
+    QWidget#scriptPanel QTextEdit,
+    QWidget#scriptPanel QAbstractSpinBox {
         background: palette(window);
         border: 1px solid palette(mid);
         padding: 2px 4px;
