@@ -76,7 +76,7 @@ def plot_colours():
         "gl_grid_line": (0.65, 0.65, 0.65, 1.0),
         "gl_axis_label": (0.0, 0.0, 0.0, 1.0),
         "trajectory": (0.24, 0.25, 0.57),
-        "plot_grid_alpha": 0.5,
+        "plot_grid_alpha": 0.25,
         "plot_pen": "#0e275b",
         "scatter_brush": "#0e275b",
         "scatter_size": 2,

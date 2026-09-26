@@ -149,6 +149,9 @@ class PoincarePanel(QtWidgets.QWidget):
         layout.addWidget(self._error_label)
 
         self.plot_widget = pg.PlotWidget()
+        self.plot_widget.showGrid(
+            x=True, y=True, alpha=plot_colours()["plot_grid_alpha"]
+        )
         self.plot_widget.setBackground(plot_colours()["plot_background"])
         self.plot_widget.setAspectLocked(True)
         self.plot_widget.getPlotItem().setContentsMargins(0, 10, 0, 0)
@@ -424,5 +427,8 @@ class PoincarePanel(QtWidgets.QWidget):
 
     def apply_theme(self):
         self.plot_widget.setBackground(plot_colours()["plot_background"])
+        self.plot_widget.showGrid(
+            x=True, y=True, alpha=plot_colours()["plot_grid_alpha"]
+        )
         self._scatter.setData(symbolBrush=plot_colours()["scatter_brush"])
         self.dropdown.setCurrentText(plot_colours()["cmap"])
