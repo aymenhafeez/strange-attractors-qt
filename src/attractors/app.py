@@ -2303,6 +2303,13 @@ class Window(QtWidgets.QMainWindow):
         settings.setValue("workspace/tables", self.jupyter_console_panel.tables.names())
         settings.setValue("workspace/active_kind", kind)
         settings.setValue("workspace/active_name", name)
+        settings.setValue(
+            "workspace/open_scripts",
+            [
+                str(path)
+                for path in self.jupyter_console_panel.script_panel.open_script_paths()
+            ],
+        )
 
         if script_path is not None:
             settings.setValue("workspace/current_script", str(script_path))
@@ -2335,7 +2342,14 @@ class Window(QtWidgets.QMainWindow):
             pass
 
         script_path = settings.value("workspace/current_script")
-        self.jupyter_console_panel.script_panel.restore_script(script_path)
+        open_scripts = settings.value("workspace/open_scripts", [], type=list)
+
+        if not open_scripts and script_path:
+            open_scripts = [script_path]
+
+        self.jupyter_console_panel.script_panel.restore_scripts(
+            open_scripts, script_path
+        )
 
     def _save_app_layout(self):
         settings = app_settings()
@@ -2415,6 +2429,10 @@ class Window(QtWidgets.QMainWindow):
         self._set_temporary_app_status("Reset session state for next launch")
 
     def closeEvent(self, a0):
+        if not self.jupyter_console_panel.script_panel.confirm_close():
+            a0.ignore()
+            return
+
         self.jupyter_console_panel.shutdown_kernel()
         self._set_orbit_mode(False)
         self.scene.animation_controller.stop()
