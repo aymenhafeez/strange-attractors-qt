@@ -8,7 +8,7 @@ import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .style import plot_colours
+from .style import PANEL_SURFACE, plot_colours
 
 PROJECTIONS = {
     "XY": (0, 1, ("X", "Y")),
@@ -29,6 +29,9 @@ class ProjectionPanel(QtWidgets.QWidget):
         self._image_data = None
         self._roi_placed = False
         self.setMinimumHeight(220)
+        self.setObjectName("panelSurface")
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(PANEL_SURFACE)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 4)

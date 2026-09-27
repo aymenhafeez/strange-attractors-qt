@@ -111,7 +111,7 @@ class RightPanel(QtWidgets.QWidget):
         self.trajectory_dock.addWidget(self.trajectory_panel)
         self.dock_area.addDock(self.trajectory_dock)
 
-        self.preset_dock = Dock("Presets", size=(1, 260), closable=False)
+        self.preset_dock = Dock("Presets", size=(1, 300), closable=False)
         self.preset_dock.addWidget(_scrollable(self.preset_panel))
         self.dock_area.addDock(
             self.preset_dock, position="bottom", relativeTo=self.trajectory_dock

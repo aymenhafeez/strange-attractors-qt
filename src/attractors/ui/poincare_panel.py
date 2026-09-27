@@ -6,7 +6,7 @@ from pyqtgraph.Qt.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 from ..core.sections import axis_index, plane_crossings
 from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
-from .style import plot_colours
+from .style import PANEL_SURFACE, plot_colours
 
 _AXIS_LABELS = {"x": ("Y", "Z"), "y": ("X", "Z"), "z": ("X", "Y")}
 DIR_MAP = {"both": "both", "rising": "positive", "falling": "negative"}
@@ -58,6 +58,9 @@ class PoincarePanel(QtWidgets.QWidget):
         self._value_bounds = None
 
         self.setMinimumHeight(120)
+        self.setObjectName("panelSurface")
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(PANEL_SURFACE)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)

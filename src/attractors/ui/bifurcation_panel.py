@@ -5,7 +5,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 from pyqtgraph.Qt.QtCore import QThreadPool
 
 from ..workers.bifurcation_worker import BifurcationWorker
-from .style import plot_colours
+from .style import PANEL_SURFACE, plot_colours
 
 
 class BifurcationZoom(QtWidgets.QWidget):
@@ -130,6 +130,9 @@ class BifurcationPanel(QtWidgets.QWidget):
         self._plot_y = np.array([], dtype=np.float64)
 
         self.setMinimumHeight(200)
+        self.setObjectName("panelSurface")
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(PANEL_SURFACE)
 
         layout = QtWidgets.QVBoxLayout(self)
 

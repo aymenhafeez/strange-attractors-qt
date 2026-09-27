@@ -1,7 +1,7 @@
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from ..ui.style import plot_colours
+from ..ui.style import PANEL_SURFACE, plot_colours
 
 
 class LyapunovPanel(QtWidgets.QWidget):
@@ -11,6 +11,9 @@ class LyapunovPanel(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(50)
+        self.setObjectName("panelSurface")
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(PANEL_SURFACE)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
