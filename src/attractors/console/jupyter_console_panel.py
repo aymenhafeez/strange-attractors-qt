@@ -3,7 +3,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.docking import AppDock as Dock
 from ..ui.docking import AppDockArea as DockArea
-from ..ui.style import CONSOLE_PLOT_PARAMS, PANEL_SURFACE, plot_colours
+from ..ui.style import PANEL_SURFACE, plot_colours
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
 from .table import ConsoleTable, ConsoleTableManager
@@ -96,7 +96,6 @@ class ConsolePlot:
         self.param_layout.setContentsMargins(6, 5, 6, 6)
         self.param_layout.setSpacing(4)
         self.param_widget.setVisible(False)
-        self.param_widget.setStyleSheet(CONSOLE_PLOT_PARAMS)
 
         # header = QtWidgets.QWidget()
         # header_layout = QtWidgets.QHBoxLayout(header)
@@ -326,7 +325,6 @@ class ConsolePlot:
 
         self._plot_widget.setBackground(colours["plot_background"])
         self._plot_widget.showGrid(x=x_grid, y=y_grid, alpha=colours["plot_grid_alpha"])
-        self.param_widget.setStyleSheet(CONSOLE_PLOT_PARAMS)
 
         if self._zoom is not None:
             self._zoom.apply_theme()

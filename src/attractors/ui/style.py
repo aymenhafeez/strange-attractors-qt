@@ -219,9 +219,3 @@ TABLE_VIEW = """
 #         background: #2b2b2b;
 #     }
 # """
-
-CONSOLE_PLOT_PARAMS = """
-    QFrame#ConsolePlotParams {
-        border-top: 2px solid palette(mid);
-    }
-"""

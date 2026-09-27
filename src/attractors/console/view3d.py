@@ -3,7 +3,7 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from ..ui.docking import AppDock as Dock
-from ..ui.style import CONSOLE_PLOT_PARAMS, PANEL_SURFACE, plot_colours
+from ..ui.style import PANEL_SURFACE, plot_colours
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
 from .animation import ConsoleAnimation, ConsoleAnimationWidget
@@ -327,7 +327,6 @@ class ConsoleView3D:
         self.param_widget = QtWidgets.QFrame()
         self.param_widget.setObjectName("ConsolePlotParams")
         self.param_widget.setVisible(False)
-        self.param_widget.setStyleSheet(CONSOLE_PLOT_PARAMS)
 
         self.param_layout = QtWidgets.QVBoxLayout(self.param_widget)
         self.param_layout.setContentsMargins(6, 5, 6, 6)

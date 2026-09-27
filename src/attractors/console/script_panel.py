@@ -38,6 +38,21 @@ PYTHON_STYLE_COLOURS = {
     QsciLexerPython.UnclosedString: "#da4453",
 }
 
+def dark_mode():
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return False
+
+    scheme = app.styleHints().colorScheme()
+    if scheme != QtCore.Qt.ColorScheme.Unknown:
+        return scheme == QtCore.Qt.ColorScheme.Dark
+
+    palette = app.palette()
+    window = palette.color(QtGui.QPalette.ColorRole.Window)
+    text = palette.color(QtGui.QPalette.ColorRole.WindowText)
+
+    return window.lightness() < text.lightness()
+
 
 class ScriptStore:
     def __init__(self, root):
@@ -314,10 +329,11 @@ class ScriptPanel(QtWidgets.QWidget):
         lexer = QsciLexerPython(editor)
         lexer.setDefaultFont(font)
 
-        if is_dark_mode():
+        if dark_mode():
             self._apply_dark_editor_colours(editor, lexer)
 
         editor.setLexer(lexer)
+
         return editor
 
     def load(self):
