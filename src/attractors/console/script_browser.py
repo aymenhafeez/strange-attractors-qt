@@ -1,8 +1,9 @@
-from attractors.ui.style import SCRIPT_PANEL
 import shutil
 from pathlib import Path
 
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+
+from attractors.ui.style import SCRIPT_PANEL
 
 
 def default_scripts_dir():

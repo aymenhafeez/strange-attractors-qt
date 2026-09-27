@@ -1,5 +1,4 @@
 import numba
-import numpy as np
 
 from ..core.models import AttractorConfig, AttractorParam
 
