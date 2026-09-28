@@ -311,10 +311,10 @@ class ConsoleView3D:
         self.host.setObjectName("panelSurface")
         self.host.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
         self.host.setStyleSheet(PANEL_SURFACE)
-        # layout reserved name in Qt so using v_layout instead
-        self.v_layout = QtWidgets.QVBoxLayout(self.host)
-        self.v_layout.setContentsMargins(6, 6, 6, 6)
-        self.v_layout.setSpacing(0)
+
+        self.layout = QtWidgets.QVBoxLayout(self.host)
+        self.layout.setContentsMargins(6, 6, 6, 6)
+        self.layout.setSpacing(0)
 
         self.view = gl.GLViewWidget()
         self.view.setBackgroundColor(plot_colours()["gl_background"])
@@ -322,7 +322,7 @@ class ConsoleView3D:
         self.grid_overlay = GridOverlay(self.view)
         self.grid_overlay.build_grid()
 
-        self.v_layout.addWidget(self.view, 1)
+        self.layout.addWidget(self.view, 1)
 
         self.param_widget = QtWidgets.QFrame()
         self.param_widget.setObjectName("ConsolePlotParams")
@@ -359,7 +359,7 @@ class ConsoleView3D:
             parent=self.host,
         )
 
-        self.v_layout.addWidget(self.param_widget)
+        self.layout.addWidget(self.param_widget)
 
     def __repr__(self):
         return "ConsoleView3D()"
