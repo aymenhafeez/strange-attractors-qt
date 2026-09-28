@@ -18,6 +18,10 @@ class PointHover(QtCore.QObject):
         view.addItem(self.marker)
         view.installEventFilter(self)
 
+        self.timer = QtCore.QTimer()
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.update_hover)
+
     def set_enabled(self, enabled):
         self.enabled = enabled
         self.view.setMouseTracking(self.enabled)
