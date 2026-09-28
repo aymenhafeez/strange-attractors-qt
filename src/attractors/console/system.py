@@ -1393,12 +1393,14 @@ class SystemInspector:
             [self.values[param.name] for param in config.params],
             dtype=np.float64,
         )
-        vectors = np.asarray(
-            [config.equation(state, self.t_min, params) for state in states],
-            dtype=np.float64,
-        )
+
+        vectors = np.empty_like(states)
+        for index, state in enumerate(states):
+            config.equation(state, self.t_min, params, vectors[index])
+
         u = vectors[:, AXES[x_name]]
         v = vectors[:, AXES[y_name]]
+
         return pd.DataFrame(
             {
                 x_name: states[:, AXES[x_name]],
