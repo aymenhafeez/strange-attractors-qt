@@ -34,6 +34,22 @@ class PointHover(QtCore.QObject):
         self.marker.hide()
         QtWidgets.QToolTip.hideText()
 
+    def eventFilter(self, obj, ev):
+        if obj is not self.view or not self.enabled:
+            return False
+
+        if ev.type() == QtCore.QEvent.Type.Leave:
+            self.clear()
+        elif ev.type() == QtCore.QEvent.Type.MouseMove:
+            if ev.buttons() != QtCore.Qt.MouseButton.NoButton:
+                self.clear()
+            else:
+                self.position = ev.position()
+                if not self.timer.isActive():
+                    self.timer.start(30)
+
+        return False
+
     def update_hover(self):
         if self.position is None:
             return
