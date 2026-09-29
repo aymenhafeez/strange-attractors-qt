@@ -366,6 +366,16 @@ def build_toolbar(self):
             QtWidgets.QStyle.StandardPixmap.SP_BrowserReload,
         ),
     )
+    self.toolbar_hover_action = self._add_checked_toolbar_action(
+        toolbar,
+        "Show coords",
+        False,
+        self.scene.point_hover.set_enabled,
+        "Show trajectory coordinates on hover",
+        icon=self._toolbar_icon(
+            "crosshairs", QtWidgets.QStyle.StandardPixmap.SP_CommandLink
+        ),
+    )
 
     self.toolbar_solve_action = toolbar.addAction(
         self._toolbar_icon(

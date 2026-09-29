@@ -6,6 +6,7 @@ from .animation_controller import AnimationController
 from .camera_controller import CameraController
 from .grid_overlay import GridOverlay
 from .particle_renderer import ParticleFlowRenderer
+from .point_hover import PointHover
 from .projection_emitter import ProjectionEmitter
 from .trajectory_renderer import TrajectoryRenderer
 from .viewport_overlay import ViewportOverlay
@@ -68,6 +69,16 @@ class ViewManager(QtCore.QObject):
             parent=self,
         )
 
+        self.point_hover = PointHover(
+            self.view,
+            lambda: (
+                self.trajectory_renderer.displayed_points()
+                if not self.animation_controller.is_active()
+                else []
+            ),
+            parent=self,
+        )
+
     @property
     def grid_half_size(self):
         return self.grid_overlay.grid_half_size
@@ -81,6 +92,7 @@ class ViewManager(QtCore.QObject):
         return self._animation_mode
 
     def set_animation_mode(self, mode):
+        self.point_hover.clear()
         if mode not in {"trajectory", "particle"}:
             raise ValueError(f"Unknown animation mode {mode}")
 
@@ -131,6 +143,7 @@ class ViewManager(QtCore.QObject):
         self._sync_colourbar()
 
     def display_solutions(self, solutions, is_partial):
+        self.point_hover.clear()
         self.trajectory_renderer.display_solutions(solutions, is_partial)
         self._sync_colourbar()
 
@@ -142,12 +155,14 @@ class ViewManager(QtCore.QObject):
         self._repositioning = False
 
     def clear_solutions(self):
+        self.point_hover.clear()
         self.animation_controller.reset_frame()
         self.particle_renderer.clear()
         self.trajectory_renderer.clear_solutions()
         self._sync_colourbar()
 
     def _render_animation_frame(self, current_frame, step):
+        self.point_hover.clear()
         solutions = self.trajectory_renderer.solutions
         if not solutions:
             return None
