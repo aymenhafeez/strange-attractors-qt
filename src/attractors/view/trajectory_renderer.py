@@ -385,7 +385,6 @@ class TrajectoryRenderer:
             head_kwargs = {"color": colour[-1:]}
             if pos is not None:
                 head_kwargs["pos"] = pos[-1:]
-                self._displayed_points[i] = pos
             self._heads[i].setData(**head_kwargs)
 
     def render_animation_frame(self, frame):
