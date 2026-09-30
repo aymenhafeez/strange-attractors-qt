@@ -8,25 +8,33 @@ from attractors.core.solver import solve_attractor, solve_rk4
 
 
 @numba.njit(nogil=True)
-def _constant_system(state, t, params):
-    return np.array([1.0, -2.0, 0.5])
+def _constant_system(state, t, params, out):
+    out[0] = 1.0
+    out[1] = -2.0
+    out[2] = 0.5
 
 
 @numba.njit(nogil=True)
-def _exponential_x_system(state, t, params):
+def _exponential_x_system(state, t, params, out):
     x, y, z = state
-    return np.array([x, 0.0, 0.0])
+    out[0] = x
+    out[1] = 0.0
+    out[2] = 0.0
 
 
 @numba.njit(nogil=True)
-def _param_order_system(state, t, params):
+def _param_order_system(state, t, params, out):
     a, b, c = params
-    return np.array([a, b, c])
+    out[0] = a
+    out[1] = b
+    out[2] = c
 
 
 @numba.njit(nogil=True)
-def _time_system(state, t, params):
-    return np.array([t, 0.0, 0.0])
+def _time_system(state, t, params, out):
+    out[0] = t
+    out[1] = 0.0
+    out[2] = 0.0
 
 
 def test_solve_rk4_returns_expected_shape():

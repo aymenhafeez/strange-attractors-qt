@@ -16,8 +16,8 @@ from attractors.console.table import (
 from attractors.console.workspace_inspector import (
     WorkspaceInspector,
 )
-from attractors.ui.docking import AreaBoundDock as Dock
-from attractors.ui.docking import AreaBoundDockArea
+from attractors.ui.docking import AppDock as Dock
+from attractors.ui.docking import AppDockArea
 
 
 class SettingsDouble:
@@ -44,7 +44,7 @@ def qapp():
 
 
 def table_manager():
-    dock_area = AreaBoundDockArea()
+    dock_area = AppDockArea()
     table = ConsoleTable()
     dock = Dock("Table", size=(10, 6), closable=False)
     dock.addWidget(table.host)
@@ -266,8 +266,18 @@ def test_workspace_inspector_shows_views_table(qapp):
 
     inspector = WorkspaceInspector(panel)
 
+    panel.plots.get("Plot test", activate=False).explore.animation(
+        "2danim", lambda: None
+    )
+    panel.views3d.get("3D test", activate=False).explore.animation(
+        "3danim", lambda: None
+    )
+
     data = inspector.views(table=True)
 
+    assert "animations" in data.columns
+    assert data.set_index("name").loc["Plot test", "animations"] == 1
+    assert data.set_index("name").loc["3D test", "animations"] == 1
     assert "Workspace views" in panel.tables.names()
     assert panel.tables.current.dataframe().equals(data)
 

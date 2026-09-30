@@ -70,7 +70,7 @@ def test_all_equations_return_finite_three_vector_at_default_values():
 
     for config in ATTRACTORS.values():
         params = _default_param_values(config)
-        result = config.equation(state, 0.0, params)
+        result = np.full(3, np.nan)
+        config.equation(state, 0.0, params, result)
 
-        assert result.shape == (3,)
         assert np.all(np.isfinite(result))

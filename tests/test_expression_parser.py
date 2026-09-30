@@ -10,8 +10,10 @@ def evaluate(equations, state=None, params=None):
     func, param_names = compile_system(equations)
     state = np.array(state or [0.0, 0.0, 0.0])
     params = np.array(params or [])
+    out = np.empty(3)
+    func(state, 0.0, params, out)
 
-    return func(state, 0.0, params), param_names
+    return out, param_names
 
 
 def test_compile_op_order():
@@ -47,10 +49,12 @@ def test_param_evaluation():
         )
     )
 
-    result = func(
+    result = np.empty(3, dtype=np.float64)
+    func(
         np.array([1.0, 1.0, 1.0]),
         0.0,
         np.array([8 / 3, 28.0, 10.0]),
+        result,
     )
 
     assert params == ["b", "r", "s"]

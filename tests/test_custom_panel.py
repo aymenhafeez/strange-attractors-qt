@@ -70,10 +70,12 @@ def test_compile_without_parameters_emits_config_immediately(qapp):
     assert config.time_defaults == {"t_min": 0, "t_max": 50, "n": 100000}
     assert config.equation_text == "dx/dt = y\ndy/dt = -x\ndz/dt = -z"
 
-    result = config.equation(
+    result = np.empty(3)
+    config.equation(
         np.array([1.0, 2.0, 3.0], dtype=np.float64),
         0.0,
         np.array([], dtype=np.float64),
+        result
     )
 
     assert result == pytest.approx([2.0, -1.0, -3.0])

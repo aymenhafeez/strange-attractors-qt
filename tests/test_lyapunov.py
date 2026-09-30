@@ -10,29 +10,35 @@ from attractors.core.lyapunov import (
 
 
 @numba.njit(nogil=True)
-def _linear_diagonal_system(state, t, params):
+def _linear_diagonal_system(state, t, params, out):
     a, b, c = params
     x, y, z = state
-    return np.array([a * x, b * y, c * z])
+    out[0] = a * x
+    out[1] = b * y
+    out[2] = c * z
 
 
 @numba.njit(nogil=True)
-def _time_dependent_diagonal_system(state, t, params):
+def _time_dependent_diagonal_system(state, t, params, out):
     a, b, c = params
     x, y, z = state
 
-    return np.array([(a + t) * x, b * y, c * z])
+    out[0] = (a + t) * x
+    out[1] = b * y
+    out[2] = c * z
 
 
 def test_numerical_jacobian_matches_known_linear_system():
     params = np.array([0.1, -0.2, 0.3], dtype=np.float64)
 
-    jac = _numerical_jacobian(
+    J = np.full((3, 3), np.nan)
+    _numerical_jacobian(
         1.0,
         2.0,
         3.0,
         _linear_diagonal_system,
         params,
+        J
     )
 
     expected = np.array(
@@ -44,7 +50,7 @@ def test_numerical_jacobian_matches_known_linear_system():
         dtype=np.float64,
     )
 
-    assert jac == pytest.approx(expected)
+    assert J == pytest.approx(expected)
 
 
 def test_gram_schmidt_returns_orthonormal_basis():

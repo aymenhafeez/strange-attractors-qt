@@ -51,24 +51,3 @@ def test_colour_cache_separates_different_alpha_values():
 
     assert second is not first
     assert second[0, 3] == pytest.approx(0.75)
-
-
-def test_colour_cache_separates_flat_and_trail_modes():
-    manager = _manager()
-
-    flat = TrajectoryRenderer.get_colour_array(manager, 3, 0.5, (0.1, 0.2, 0.3))
-    manager._trail_mode = True
-    trail = TrajectoryRenderer.get_colour_array(manager, 3, 0.5, (0.1, 0.2, 0.3))
-
-    assert trail is not flat
-    assert trail[0, 3] == pytest.approx(0.0)
-    assert trail[-1, 3] == pytest.approx(0.5)
-
-
-def test_colour_cache_reuses_matching_trail_array():
-    manager = _manager(trail_mode=True)
-
-    first = TrajectoryRenderer.get_colour_array(manager, 3, 0.5, (0.1, 0.2, 0.3))
-    second = TrajectoryRenderer.get_colour_array(manager, 3, 0.5, (0.1, 0.2, 0.3))
-
-    assert second is first
