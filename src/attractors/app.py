@@ -403,12 +403,6 @@ class Window(QtWidgets.QMainWindow):
         if profiling_enabled():
             self._set_output_panel_visible(True)
 
-    def eventFilter(self, obj, event):
-        if event.type() == QtCore.QEvent.Type.Resize and obj is self.scene.container:
-            self.scene.reposition_overlays()
-
-        return super().eventFilter(obj, event)
-
     def on_attractor_change(self, name):
         self.current_name = name
         self._rebuild_view(name)

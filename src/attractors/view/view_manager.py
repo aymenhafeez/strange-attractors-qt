@@ -20,8 +20,6 @@ class ViewManager(QtCore.QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self._repositioning = False
-
         self._animation_mode = "trajectory"
 
         self.container = QtWidgets.QWidget()
@@ -146,13 +144,6 @@ class ViewManager(QtCore.QObject):
         self.point_hover.clear()
         self.trajectory_renderer.display_solutions(solutions, is_partial)
         self._sync_colourbar()
-
-    def reposition_overlays(self):
-        if self._repositioning:
-            return
-        self._repositioning = True
-        self.view.lower()
-        self._repositioning = False
 
     def clear_solutions(self):
         self.point_hover.clear()
