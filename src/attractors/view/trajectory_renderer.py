@@ -49,10 +49,14 @@ class TrajectoryRenderer:
         self._traj_tail_enabled = False
         self._colour_cache = {}
         self._colour_limits = None
+        self._displayed_points = []
 
     @property
     def solutions(self):
         return self._solutions
+
+    def displayed_points(self):
+        return self._displayed_points
 
     @property
     def colour_mode(self):
@@ -302,6 +306,7 @@ class TrajectoryRenderer:
             self._particle_colours = self._build_particle_colours(solution_colours)
 
         self.sync_gl_items(len(solutions))
+        self._displayed_points = [None] * len(solutions)
 
         for index, (solution, colours) in enumerate(zip(solutions, solution_colours)):
             segment, segment_colours = self.get_traj_tail_data(solution, colours)
@@ -311,6 +316,7 @@ class TrajectoryRenderer:
         self._solutions = None
         self._solution_colours = []
         self._particle_colours = []
+        self._displayed_points = []
         self._colour_limits = None
         self.sync_gl_items(0)
 
@@ -366,6 +372,7 @@ class TrajectoryRenderer:
         kwargs = {}
         if pos is not None:
             kwargs["pos"] = pos
+            self._displayed_points[i] = pos
         if colour is not None:
             kwargs["color"] = colour
 
@@ -407,6 +414,7 @@ class TrajectoryRenderer:
             else:
                 render_segment = segment
 
+            self._displayed_points[index] = render_segment
             render_colours = self._apply_trail_fade(render_colours)
 
             if index < len(self._scatters):
