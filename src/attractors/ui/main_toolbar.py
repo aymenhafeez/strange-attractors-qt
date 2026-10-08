@@ -17,7 +17,6 @@ def _side_panel_icon(self, side):
 
 def build_status_bar(self):
     status_bar = QtWidgets.QStatusBar()
-    status_bar.setSizeGripEnabled(False)
     status_bar.setFixedHeight(24)
 
     output_panel_button = QtWidgets.QToolButton()
