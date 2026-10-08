@@ -124,7 +124,7 @@ class TrajectoryRenderer:
             self._lines[index].setData(width=size)
 
     def set_alpha(self, val):
-        self._current_alpha = val / 100.0 if val > 1 else val
+        self._current_alpha = val / 100.0
         self.refresh_colours()
 
     def set_colour_mode(self, mode):
