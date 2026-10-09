@@ -16,7 +16,7 @@ def _constant_system(state, t, params, out):
 
 @numba.njit(nogil=True)
 def _exponential_x_system(state, t, params, out):
-    x, y, z = state
+    x, _y, _z = state
     out[0] = x
     out[1] = 0.0
     out[2] = 0.0

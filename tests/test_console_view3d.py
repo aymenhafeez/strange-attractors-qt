@@ -11,7 +11,7 @@ from attractors.console.view3d import (
     normalise_size,
     rectilinear_surface_axes,
 )
-from attractors.ui.docking import AreaBoundDock, AreaBoundDockArea
+from attractors.ui.docking import AppDock, AppDockArea
 
 
 @pytest.fixture(scope="session")
@@ -78,9 +78,9 @@ def test_normalise_size_invalid_inputs(size, match):
 
 
 def test_view3d_manager_create_rename_close(qapp):
-    dock_area = AreaBoundDockArea()
+    dock_area = AppDockArea()
     default_view = ConsoleView3D()
-    default_dock = AreaBoundDock("3D View", closable=False)
+    default_dock = AppDock("3D View", closable=False)
     default_dock.addWidget(default_view.host)
     dock_area.addDock(default_dock)
 
