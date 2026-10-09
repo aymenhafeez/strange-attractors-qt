@@ -173,6 +173,11 @@ class WorkspaceController:
         else:
             self.console_panel.plots.set_grid_visible(visible)
 
+    def set_current_view_orbit(self, enabled):
+        kind, _name = self.console_panel.active_view_key()
+        if kind == "view3d":
+            self.console_panel.views3d.orbit(enabled)
+
     def _view_tooltip(self, item):
         if item["kind"] == "view3d":
             return f"{item['label']}: 3D view"

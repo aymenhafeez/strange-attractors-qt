@@ -1060,6 +1060,21 @@ class Window(QtWidgets.QMainWindow):
             self.workspace_controller.set_current_grid_visible
         )
         self._jupyter_toolbar_actions.append(self.workspace_grid_action)
+
+        self.workspace_orbit_action = toolbar.addAction(
+            self._toolbar_icon(
+                "object-rotate-right", QtWidgets.QStyle.StandardPixmap.SP_BrowserReload
+            ),
+            "Orbit",
+        )
+        self.workspace_orbit_action.setCheckable(True)
+        self.workspace_orbit_action.setChecked(False)
+        self.workspace_orbit_action.setToolTip("Toggle current view orbit mode")
+        self.workspace_orbit_action.toggled.connect(
+            self.workspace_controller.set_current_view_orbit
+        )
+        self._jupyter_toolbar_actions.append(self.workspace_orbit_action)
+
         self._keep_toolbar_action_from_taking_focus(toolbar, self.workspace_grid_action)
         self.workspace_controller.sync_grid_action()
 
