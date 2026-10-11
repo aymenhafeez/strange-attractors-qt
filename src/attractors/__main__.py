@@ -11,7 +11,10 @@ from .ui.output_panel import CaptureOutput
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--reset", action="store_true", help="Run with fresh session state"
+        "--reset", action="store_true", help="Run with fresh session state",
+    )
+    parser.add_argument(
+        "--explore", action="store_true", help="Run explore",
     )
     args = parser.parse_args()
     if args.reset:
@@ -26,6 +29,9 @@ def main():
     app.setApplicationName("strange-attractors")
     app.setStyle("Fusion")
     w = Window()
+
+    if args.explore:
+        w._set_workspace_mode("explore")
 
     capture_output = CaptureOutput(w.output_panel)
     capture_output.install()
