@@ -11,7 +11,7 @@ Requires Python >=3.12 and
 git clone https://github.com/aymenhafeez/strange-attractors-qt
 cd strange-attractors-qt
 uv tool install .
-analysis  # --fullscreen
+analysis
 ```
 
 ## Features
@@ -36,7 +36,30 @@ widget. For help with the plotting API run `system.help()` and `workspace.help()
 console, optionally with `table=True` to view the help in the workspace data viewer.
 The file browser also has some example scripts to get started with.
 
-### Screenshots
+### Usage
+
+The app can be run with various flags:
+
+```
+usage: analysis [-h] [--reset] [--explore] [--system] [--default] [--fullscreen]
+                [--attractor {Lorenz,Three-scroll,Double-scroll,Lorenz84,Aizawa,Loop chaotic,Burke-Shaw,Dadras,Four wing}] [--preset PRESET]
+                [--mode {Lyapunov,Projection,Poincare,Bifurcation}] [--theme {system,light,dark}]
+
+options:
+  -h, --help            show this help message and exit
+  --reset               Run with fresh session state
+  --explore             Run explore workspace
+  --system              Run system workspace
+  --default             Run with the default layout without resetting session state
+  --fullscreen          Run in fullscreen
+  --attractor {Lorenz,Three-scroll,Double-scroll,Lorenz84,Aizawa,Loop chaotic,Burke-Shaw,Dadras,Four wing}
+                        Load with a builtin attractor
+  --preset PRESET       Load a saved preset system
+  --mode {Lyapunov,Projection,Poincare,Bifurcation}
+                        Run analysis mode
+  --theme {system,light,dark}
+                        Set the theme for plot/view widgets
+```
 
 Every analysis panel is contained within a dock and so the layout of the panels can be
 moved around to suit any given workflow.
@@ -86,7 +109,7 @@ view menu option) and please file a bug report.
 
 ## Development
 
-Open to PR's and feature requests. To work on the project:
+Feel free to submit PR's and feature requests. To work on the project:
 
 ```bash
 git clone https://github.com/aymenhafeez/strange-attractors-qt
@@ -101,7 +124,7 @@ Testing and linting:
 uv add --dev ruff pytest
 
 uv run ruff check .
-uv run pytest -q
+uv run pytest
 ```
 
 Enable performance logging:
