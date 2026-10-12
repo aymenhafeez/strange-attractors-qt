@@ -41,6 +41,9 @@ dev = [
 [tool.ty.environment]
 python = ".venv"
 
+[tool.ruff]
+extend-exclude = ["examples/"]
+
 [tool.uv]
 package = true
 
