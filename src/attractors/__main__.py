@@ -14,7 +14,10 @@ def main():
         "--reset", action="store_true", help="Run with fresh session state",
     )
     parser.add_argument(
-        "--explore", action="store_true", help="Run explore",
+        "--explore", action="store_true", help="Run explore workspace",
+    )
+    parser.add_argument(
+        "--fullscreen", action="store_true", help="Run in fullscreen",
     )
     args = parser.parse_args()
     if args.reset:
@@ -39,7 +42,7 @@ def main():
     configure_perf_logging()
 
     w.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
-    w.showFullScreen() if "--fullscreen" in sys.argv else w.show()
+    w.showFullScreen() if args.fullscreen else w.show()
     pg.exec()
 
 
