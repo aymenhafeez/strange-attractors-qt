@@ -23,13 +23,13 @@ def main():
     parser.add_argument("--explore", action="store_true", help="Run explore workspace")
     parser.add_argument("--system", action="store_true", help="Run system workspace")
     parser.add_argument(
-        "--default", action="store_true", help="Run with the default layout"
+        "--default", action="store_true", help="Run with the default layout without resetting session state"
     )
     parser.add_argument("--fullscreen", action="store_true", help="Run in fullscreen")
     parser.add_argument(
-        "--attractor", choices=ATTRACTORS, help="Load a specific attractor"
+        "--attractor", choices=ATTRACTORS, help="Load with a builtin attractor"
     )
-    parser.add_argument("--preset", help="Load a preset system")
+    parser.add_argument("--preset", help="Load a saved preset system")
     parser.add_argument("--mode", choices=ANALYSIS_MODES, help="Run analysis mode")
     parser.add_argument(
         "--theme",
