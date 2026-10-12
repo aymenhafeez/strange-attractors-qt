@@ -31,7 +31,11 @@ def main():
     )
     parser.add_argument("--preset", help="Load a preset system")
     parser.add_argument("--mode", choices=ANALYSIS_MODES, help="Run analysis mode")
-    parser.add_argument("--theme", choices=("system", "light", "dark"), help="Set the theme for plot/view widgets")
+    parser.add_argument(
+        "--theme",
+        choices=("system", "light", "dark"),
+        help="Set the theme for plot/view widgets",
+    )
     args = parser.parse_args()
 
     # needs to go before constructing the window
@@ -57,7 +61,7 @@ def main():
         "mode": lambda: w._open_panel_dock(
             getattr(w, ANALYSIS_MODES[args.mode]), ANALYSIS_MODES[args.mode]
         ),
-        "theme": lambda: w._set_theme(args.theme)
+        "theme": lambda: w._set_theme(None if args.theme == "system" else args.theme),
     }
 
     for name, func in actions.items():
