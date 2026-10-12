@@ -1,5 +1,4 @@
 import argparse
-import sys
 
 import pyqtgraph as pg
 
@@ -11,15 +10,15 @@ from .ui.output_panel import CaptureOutput
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--reset", action="store_true", help="Run with fresh session state",
+        "--reset", action="store_true", help="Run with fresh session state"
     )
-    parser.add_argument(
-        "--explore", action="store_true", help="Run explore workspace",
-    )
-    parser.add_argument(
-        "--fullscreen", action="store_true", help="Run in fullscreen",
-    )
+    parser.add_argument("--explore", action="store_true", help="Run explore workspace")
+    parser.add_argument("--system", action="store_true", help="Run system workspace")
+    parser.add_argument("--default", action="store_true", help="Run with the default layout")
+    parser.add_argument("--fullscreen", action="store_true", help="Run in fullscreen")
     args = parser.parse_args()
+
+    # needs to go before constructing the window
     if args.reset:
         settings = app_settings()
         settings.remove("layout")
@@ -33,8 +32,15 @@ def main():
     app.setStyle("Fusion")
     w = Window()
 
-    if args.explore:
-        w._set_workspace_mode("explore")
+    actions = {
+        "explore": lambda: w._set_workspace_mode("explore"),
+        "system": lambda: w._set_workspace_mode("system"),
+        "default": w._restore_default_layout,
+    }
+
+    for name, func in actions.items():
+        if getattr(args, name):
+            func()
 
     capture_output = CaptureOutput(w.output_panel)
     capture_output.install()
