@@ -7,6 +7,13 @@ from .perf import configure_perf_logging
 from .systems.registry import ATTRACTORS
 from .ui.output_panel import CaptureOutput
 
+ANALYSIS_MODES = {
+    "Lyapunov": "lyapunov_panel",
+    "Projection": "projection_panel",
+    "Poincare": "poincare_panel",
+    "Bifurcation": "bifurcation_panel",
+}
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -15,10 +22,15 @@ def main():
     )
     parser.add_argument("--explore", action="store_true", help="Run explore workspace")
     parser.add_argument("--system", action="store_true", help="Run system workspace")
-    parser.add_argument("--default", action="store_true", help="Run with the default layout")
+    parser.add_argument(
+        "--default", action="store_true", help="Run with the default layout"
+    )
     parser.add_argument("--fullscreen", action="store_true", help="Run in fullscreen")
-    parser.add_argument("--attractor", type=str, choices=ATTRACTORS, help="Load a specific attractor")
-    parser.add_argument("--preset", type=str, help="Load a preset system")
+    parser.add_argument(
+        "--attractor", choices=ATTRACTORS, help="Load a specific attractor"
+    )
+    parser.add_argument("--preset", help="Load a preset system")
+    parser.add_argument("--mode", choices=ANALYSIS_MODES, help="Run analysis mode")
     args = parser.parse_args()
 
     # needs to go before constructing the window
@@ -40,7 +52,10 @@ def main():
         "system": lambda: w._set_workspace_mode("system"),
         "default": w._restore_default_layout,
         "attractor": lambda: w.controls._on_attractor_selected(args.attractor),
-        "preset": lambda: w._load_preset(args.preset)
+        "preset": lambda: w._load_preset(args.preset),
+        "mode": lambda: w._open_panel_dock(
+            getattr(w, ANALYSIS_MODES[args.mode]), ANALYSIS_MODES[args.mode]
+        ),
     }
 
     for name, func in actions.items():
