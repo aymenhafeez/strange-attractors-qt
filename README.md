@@ -36,7 +36,7 @@ widget. For help with the plotting API run `system.help()` and `workspace.help()
 console, optionally with `table=True` to view the help in the workspace data viewer.
 The file browser also has some example scripts to get started with.
 
-### Usage
+## Usage
 
 The app can be run with various flags:
 
