@@ -9,7 +9,6 @@ from attractors.console.view3d import (
     check_surface_grid,
     normalise_colour,
     normalise_size,
-    rectilinear_surface_axes,
 )
 from attractors.ui.docking import AppDock, AppDockArea
 
