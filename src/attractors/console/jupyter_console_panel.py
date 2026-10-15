@@ -1,9 +1,12 @@
+from uuid import uuid4
+
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.docking import AppDock as Dock
 from ..ui.docking import AppDockArea as DockArea
 from ..ui.style import PANEL_SURFACE, plot_colours
+from ..ui.view_host import LegacyViewHost
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
 from .table import ConsoleTable, ConsoleTableManager
@@ -340,15 +343,15 @@ class ConsolePlotManager(QtCore.QObject):
 
     def __init__(
         self,
-        dock_area,
+        view_host,
         default_name,
         default_plot,
         default_dock,
         status_callback=None,
         active_callback=None,
     ):
-        super().__init__(dock_area)
-        self._dock_area = dock_area
+        super().__init__(view_host)
+        self._host = view_host
         self._plots = {default_name: default_plot}
         self._docks = {default_name: default_dock}
         self._current_name = default_name
@@ -358,6 +361,11 @@ class ConsolePlotManager(QtCore.QObject):
         default_plot.explore.status_callback = status_callback
         default_plot._manager = self
         self._table_manager = None
+
+        self._ids = {default_name: "plot.default"}
+        self._host.activated.connect(self._activate_dock)
+        self._host.closed.connect(self._forget_dock)
+        self._host.register(default_dock)
 
     def __repr__(self):
         return f"ConsolePlotManager(current={self._current_name!r})"
@@ -413,11 +421,12 @@ class ConsolePlotManager(QtCore.QObject):
         dock = self._docks.pop(old_key)
         self._plots[new_key] = plot
         self._docks[new_key] = dock
+        self._ids[new_key] = self._ids.pop(old_key)
         if old_key == self._default_name:
             self._default_name = new_key
         if old_key == self._current_name:
             self._current_name = new_key
-        dock.setTitle(new_key)
+        self._host.rename(dock, new_key)
         self.plots_changed.emit()
         self.current_changed.emit(self._current_name)
 
@@ -442,7 +451,7 @@ class ConsolePlotManager(QtCore.QObject):
         if self._active_callback is not None:
             self._active_callback("plot")
 
-    def new(self, name=None, *, activate=True):
+    def new(self, name=None, *, activate=True, _dock_id=None):
         key = self._next_name() if name is None else self._plot_name(name)
         if key in self._plots:
             return self.get(key, activate=activate)
@@ -453,24 +462,18 @@ class ConsolePlotManager(QtCore.QObject):
 
         # i can't remember why this is needed
         plot._manager = self
-        dock = Dock(key, size=(10, 6), closable=True)
-        dock.addWidget(plot.host)
-
-        dock.activated.connect(lambda plot_name=key: self.activate(plot_name))
-        dock.sigClosed.connect(self._forget_dock)
-
-        self._dock_area.addDock(
-            dock,
-            position="above",
-            relativeTo=self._docks[self._default_name],
+        view_id = _dock_id or f"plot.{uuid4().hex}"
+        dock = self._host.create(
+            view_id, key, plot.host, relative_to=self._docks[self._default_name]
         )
         self._plots[key] = plot
         self._docks[key] = dock
 
+        self._ids[key] = view_id
         if activate:
             self._mark_active()
             self._set_current_name(key)
-            dock.raiseDock()
+            self._host.show(dock)
         self.plots_changed.emit()
 
         return plot
@@ -492,11 +495,8 @@ class ConsolePlotManager(QtCore.QObject):
             return
 
         dock = self._docks.get(key)
-        if dock is not None and dock.container() is not None:
-            # closing the dock triggers sigClosed, which calls _forget itself
-            dock.close()
-        else:
-            self._forget(key)
+        if dock is not None:
+            self._host.close(dock)
 
     def clear_all(self):
         for name, plot in self._plots.items():
@@ -533,24 +533,22 @@ class ConsolePlotManager(QtCore.QObject):
         return self.current.scatter(*args, zoom_region=zoom_region, **kwargs)
 
     def _raise_dock(self, dock):
-        container = dock.container()
-        raise_dock = getattr(container, "raiseDock", None)
-        if raise_dock is not None:
-            raise_dock(dock)
+        self._host.show(dock)
 
     def _forget(self, name):
-        if name == self._default_name:
-            return
-        if name not in self._plots:
+        if name == self._default_name or name not in self._plots:
             return
 
         plot = self._plots.pop(name)
-        self._docks.pop(name, None)
+        dock = self._docks.pop(name)
+        self._ids.pop(name)
+        plot.explore.clear_animations()
         if self._current_name == name:
             self._set_current_name(self._default_name)
 
         self.plot_removed.emit(name, plot)
         self.plots_changed.emit()
+        self._host.remove(dock)
 
     def _next_name(self):
         index = 2
@@ -575,6 +573,12 @@ class ConsolePlotManager(QtCore.QObject):
         for plot in self._plots.values():
             plot.apply_theme()
 
+    def _activate_dock(self, dock):
+        for name, candidate in self._docks.items():
+            if candidate is dock:
+                self.activate(name)
+                return
+
 
 class JupyterConsolePanel(QtWidgets.QWidget):
     close_requested = QtCore.pyqtSignal()
@@ -594,6 +598,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self._layout.setSpacing(0)
 
         self.dock_area = DockArea()
+        self.view_host = LegacyViewHost(self.dock_area)
         self._layout.addWidget(self.dock_area)
 
         self.view3d = ConsoleView3D(status_callback=self._explore_status_callback)
@@ -602,15 +607,13 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.dock_area.addDock(self.view3d_dock)
 
         self.views3d = ConsoleView3DManager(
-            self.dock_area,
+            self.view_host,
             "3D View",
             self.view3d,
             self.view3d_dock,
             status_callback=self._explore_status_callback,
             active_callback=self.set_active_view,
         )
-
-        self.view3d_dock.activated.connect(lambda: self.views3d.activate("3D View"))
 
         self.plot_widget = _build_console_plot_widget()
         self.plot_widget.showGrid(
@@ -625,7 +628,7 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             self.plot_dock, position="above", relativeTo=self.view3d_dock
         )
         self.plots = ConsolePlotManager(
-            self.dock_area,
+            self.view_host,
             "Plot",
             self.plot,
             self.plot_dock,
@@ -648,9 +651,6 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         )
 
         self.plots.set_table_manager(self.tables)
-
-        self.plot_dock.activated.connect(lambda: self.plots.activate("Plot"))
-        self.table_dock.activated.connect(lambda: self.tables.activate("Table"))
 
         # self.explorer_params = QtWidgets.QWidget()
         # self.explorer_params_layout = QtWidgets.QVBoxLayout(self.explorer_params)

@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import numpy as np
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
@@ -604,15 +606,15 @@ class ConsoleView3DManager(QtCore.QObject):
 
     def __init__(
         self,
-        dock_area,
+        view_host,
         default_name,
         default_view,
         default_dock,
         status_callback=None,
         active_callback=None,
     ):
-        super().__init__(dock_area)
-        self._dock_area = dock_area
+        super().__init__(view_host)
+        self._host = view_host
         self._views = {default_name: default_view}
         self._docks = {default_name: default_dock}
         self._default_name = default_name
@@ -620,6 +622,11 @@ class ConsoleView3DManager(QtCore.QObject):
         self._status_callback = status_callback
         self._active_callback = active_callback
         default_view._manager = self
+
+        self._ids = {default_name: "view3d.default"}
+        self._host.activated.connect(self._activate_dock)
+        self._host.closed.connect(self._forget_dock)
+        self._host.register(default_dock)
 
     @property
     def current(self):
@@ -665,19 +672,20 @@ class ConsoleView3DManager(QtCore.QObject):
         dock = self._docks.pop(old_key)
         self._views[new_key] = view
         self._docks[new_key] = dock
+        self._ids[new_key] = self._ids.pop(old_key)
 
         if old_key == self._default_name:
             self._default_name = new_key
         if old_key == self._current_name:
             self._current_name = new_key
 
-        dock.setTitle(new_key)
+        self._host.rename(dock, new_key)
         self.views_changed.emit()
         self.current_changed.emit(self._current_name)
 
         return view
 
-    def new(self, name=None, *, activate=True):
+    def new(self, name=None, *, activate=True, _dock_id=None):
         key = self._next_name() if name is None else self._view_name(name)
         if key in self._views:
             return self.get(key, activate=activate)
@@ -685,23 +693,18 @@ class ConsoleView3DManager(QtCore.QObject):
         view = ConsoleView3D(status_callback=self._status_callback)
         # i can't remember why this is needed
         view._manager = self
-        dock = Dock(key, size=(10, 6), closable=True)
-        dock.addWidget(view.host)
 
-        dock.activated.connect(lambda view_name=key: self.activate(view_name))
-        dock.sigClosed.connect(self._forget_dock)
-
-        self._dock_area.addDock(
-            dock,
-            position="above",
-            relativeTo=self._docks[self._default_name],
+        view_id = _dock_id or f"view3d.{uuid4().hex}"
+        dock = self._host.create(
+            view_id, key, view.host, relative_to=self._docks[self._default_name]
         )
         self._views[key] = view
         self._docks[key] = dock
+        self._ids[key] = view_id
         if activate:
             self._mark_active()
             self._set_current_name(key)
-            dock.raiseDock()
+            self._host.show(dock)
         self.views_changed.emit()
 
         return view
@@ -723,11 +726,8 @@ class ConsoleView3DManager(QtCore.QObject):
             return
 
         dock = self._docks.get(key)
-        if dock is not None and dock.container() is not None:
-            # closing the dock triggers sigClosed, which calls _forget itself
-            dock.close()
-        else:
-            self._forget(key)
+        if dock is not None:
+            self._host.close(dock)
 
     def clear_all(self):
         for name, view in self._views.items():
@@ -771,10 +771,7 @@ class ConsoleView3DManager(QtCore.QObject):
         return self.current.grid_visible()
 
     def _raise_dock(self, dock):
-        container = dock.container()
-        raise_dock = getattr(container, "raiseDock", None)
-        if raise_dock is not None:
-            raise_dock(dock)
+        self._host.show(dock)
 
     def _set_current_name(self, key):
         if self._current_name == key:
@@ -796,18 +793,20 @@ class ConsoleView3DManager(QtCore.QObject):
             self._active_callback("view3d")
 
     def _forget(self, name):
-        if name == self._default_name:
-            return
-        if name not in self._views:
+        if name == self._default_name or name not in self._views:
             return
 
         view = self._views.pop(name)
-        self._docks.pop(name, None)
+        dock = self._docks.pop(name)
+        self._ids.pop(name)
+        view.explore.clear_animations()
+        view.camera_controller.set_orbit_mode(False)
         if self._current_name == name:
             self._set_current_name(self._default_name)
 
         self.view_removed.emit(name, view)
         self.views_changed.emit()
+        self._host.remove(dock)
 
     def _next_name(self):
         index = 2
@@ -833,6 +832,12 @@ class ConsoleView3DManager(QtCore.QObject):
     def apply_theme(self):
         for view in self._views.values():
             view.apply_theme()
+
+    def _activate_dock(self, dock):
+        for name, candidate in self._docks.items():
+            if candidate is dock:
+                self.activate(name)
+                return
 
 
 class View3DExplorer(QtCore.QObject):

@@ -1,13 +1,11 @@
 from pathlib import Path
-from typing import Any, cast
+from uuid import uuid4
 
 import numpy as np
 import pandas as pd
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from attractors.ui.style import PANEL_SURFACE
-
-from ..ui.docking import AppDock as Dock
 
 
 def normalise_table_data(data):
@@ -227,21 +225,26 @@ class ConsoleTableManager(QtCore.QObject):
 
     def __init__(
         self,
-        dock_area,
+        view_host,
         default_name,
         default_table,
         default_dock,
         status_callback=None,
         active_callback=None,
     ):
-        super().__init__(dock_area)
-        self._dock_area = dock_area
+        super().__init__(view_host)
+        self._host = view_host
         self._tables = {default_name: default_table}
         self._docks = {default_name: default_dock}
         self._default_name = default_name
         self._current_name = default_name
         self._status_callback = status_callback
         self._active_callback = active_callback
+
+        self._ids = {default_name: "table.default"}
+        self._host.activated.connect(self._activate_dock)
+        self._host.closed.connect(self._forget_dock)
+        self._host.register(default_dock)
 
     def __repr__(self):
         return f"ConsoleTableManager(current={self._current_name!r})"
@@ -274,28 +277,24 @@ class ConsoleTableManager(QtCore.QObject):
 
         return table
 
-    def new(self, name=None, *, activate=True):
+    def new(self, name=None, *, activate=True, _dock_id=None):
         key = self._next_name() if name is None else self._table_name(name)
         if key in self._tables:
             return self.get(key, activate=activate)
 
         table = ConsoleTable()
-        dock = Dock(key, size=(10, 6), closable=True)
-        dock.addWidget(table.host)
-
-        dock.activated.connect(lambda table_name=key: self.activate(table_name))
-        cast(Any, dock).sigClosed.connect(self._forget_dock)
-
-        self._dock_area.addDock(
-            dock, position="above", relativeTo=self._docks[self._default_name]
+        view_id = _dock_id or f"table.{uuid4().hex}"
+        dock = self._host.create(
+            view_id, key, table.host, relative_to=self._docks[self._default_name]
         )
         self._tables[key] = table
         self._docks[key] = dock
 
+        self._ids[key] = view_id
         if activate:
             self._mark_active()
             self._set_current_name(key)
-            dock.raiseDock()
+            self._host.show(dock)
 
         self.tables_changed.emit()
 
@@ -342,13 +341,14 @@ class ConsoleTableManager(QtCore.QObject):
         dock = self._docks.pop(old_key)
         self._tables[new_key] = table
         self._docks[new_key] = dock
+        self._ids[new_key] = self._ids.pop(old_key)
 
         if old_key == self._default_name:
             self._default_name = new_key
         if old_key == self._current_name:
             self._current_name = new_key
 
-        dock.setTitle(new_key)
+        self._host.rename(dock, new_key)
         self.tables_changed.emit()
         self.current_changed.emit(self._current_name)
 
@@ -372,10 +372,8 @@ class ConsoleTableManager(QtCore.QObject):
             return
 
         dock = self._docks.get(key)
-        if dock is not None and dock.container() is not None:
-            dock.close()
-        else:
-            self._forget(key)
+        if dock is not None:
+            self._host.close(dock)
 
     def clear(self):
         table = self.current
@@ -397,25 +395,22 @@ class ConsoleTableManager(QtCore.QObject):
                 return
 
     def _forget(self, name):
-        if name == self._default_name:
-            return
-        if name not in self._tables:
+        if name == self._default_name or name not in self._tables:
             return
 
         table = self._tables.pop(name)
-        self._docks.pop(name, None)
 
+        dock = self._docks.pop(name)
+        self._ids.pop(name)
         if self._current_name == name:
             self._set_current_name(self._default_name)
 
         self.table_removed.emit(name, table)
         self.tables_changed.emit()
+        self._host.remove(dock)
 
     def _raise_dock(self, dock):
-        container = dock.container()
-        raise_dock = getattr(container, "raiseDock", None)
-        if raise_dock is not None:
-            raise_dock(dock)
+        self._host.show(dock)
 
     def _set_current_name(self, key):
         if self._current_name == key:
@@ -441,3 +436,9 @@ class ConsoleTableManager(QtCore.QObject):
         if not key:
             raise ValueError("Table name can't be empty")
         return key
+
+    def _activate_dock(self, dock):
+        for name, candidate in self._docks.items():
+            if candidate is dock:
+                self.activate(name)
+                return
