@@ -2,7 +2,7 @@ import argparse
 
 import pyqtgraph as pg
 
-from .app import WINDOW_HEIGHT, WINDOW_WIDTH, Window, app_settings
+from .app import Window, app_settings
 from .perf import configure_perf_logging
 from .systems.registry import ATTRACTORS
 from .ui.output_panel import CaptureOutput
@@ -73,7 +73,6 @@ def main():
 
     configure_perf_logging()
 
-    w.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
     w.showFullScreen() if args.fullscreen else w.show()
     pg.exec()
 
