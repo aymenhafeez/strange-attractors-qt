@@ -288,7 +288,7 @@ class Window(QtWidgets.QMainWindow):
 
         self.workspace_inspector = WorkspaceInspector(self.jupyter_console_panel)
 
-        self._build_native_shell()
+        self._build_layout()
         build_toolbar(self)
         build_menu_bar(self)
         build_status_bar(self)
@@ -2142,6 +2142,7 @@ class Window(QtWidgets.QMainWindow):
             self._sync_toolbar_panel_actions()
             self.workspace_controller.sync_views()
 
+        self._reconcile_analysis_presentation()
         self._sync_toolbar_panel_actions()
 
     def _reset_session_state(self):
@@ -2158,6 +2159,7 @@ class Window(QtWidgets.QMainWindow):
             a0.ignore()
             return
 
+        self.docks.dispose()
         self.jupyter_console_panel.shutdown_kernel()
         self._set_orbit_mode(False)
         self.scene.animation_controller.stop()
@@ -2167,3 +2169,63 @@ class Window(QtWidgets.QMainWindow):
             self._save_app_layout()
 
         super().closeEvent(a0)
+
+    def _build_layout(self):
+        area = QtCore.Qt.DockWidgetArea
+        orientation = QtCore.Qt.Orientation
+        docks = self.docks
+
+        with docks.presentation_change():
+            self.viewport_dock = docks.create(
+                "viewport", "Viewport", self.scene.container, area.RightDockWidgetArea
+            )
+            docks.create(
+                "controls", "System tools", self.controls, area.LeftDockWidgetArea
+            )
+            right = docks.create(
+                "right_panel",
+                "System tools",
+                self.right_panel,
+                area.RightDockWidgetArea,
+            )
+            self.splitDockWidget(self.viewport_dock, right, orientation.Horizontal)
+            self.workspace_dock = docks.create(
+                "workspace", "Workspace", self.workspace_panel, area.RightDockWidgetArea
+            )
+            self.splitDockWidget(
+                self.viewport_dock, self.workspace_dock, orientation.Horizontal
+            )
+
+            panels = (
+                ("projection_panel", "Projection heatmaps", self.projection_panel),
+                ("poincare_panel", "Poincare", self.poincare_panel),
+                ("lyapunov_panel", "Lyapunov", self.lyapunov_panel),
+                ("bifurcation_panel", "Bifurcation", self.bifurcation_panel),
+            )
+            self._panel_docks = {
+                key: docks.create(key, title, panel, area.RightDockWidgetArea)
+                for key, title, panel in panels
+            }
+            self.projection_dock = self._panel_docks["projection_panel"]
+            self.poincare_dock = self._panel_docks["poincare_panel"]
+            self.lyapunov_dock = self._panel_docks["lyapunov_panel"]
+            self.bifurcation_dock = self._panel_docks["bifurcation_panel"]
+            self.splitDockWidget(
+                self.viewport_dock, self.projection_dock, orientation.Vertical
+            )
+            # tab other analysis panels tabbed to projections
+            for key in ("poincare_panel", "lyapunov_panel", "bifurcation_panel"):
+                self.tabifyDockWidget(self.projection_dock, self._panel_docks[key])
+
+            docks.create(
+                "output", "Output", self.output_panel, area.BottomDockWidgetArea
+            )
+            for key in ("viewport", "controls", "right_panel"):
+                docks.show(key, activate=False)
+
+            self.layout().activate()
+            self.resizeDocks(
+                [docks["controls"], self.viewport_dock, right],
+                [240, 600, 260],
+                orientation.Horizontal,
+            )
