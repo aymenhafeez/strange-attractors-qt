@@ -2142,7 +2142,7 @@ class Window(QtWidgets.QMainWindow):
             self._sync_toolbar_panel_actions()
             self.workspace_controller.sync_views()
 
-        self._reconcile_analysis_presentation()
+        self._analysis_presentation_compat()
         self._sync_toolbar_panel_actions()
 
     def _reset_session_state(self):
@@ -2229,3 +2229,43 @@ class Window(QtWidgets.QMainWindow):
                 [240, 600, 260],
                 orientation.Horizontal,
             )
+
+    def _on_dock_open_changed(self, key, opened):
+        if key in self._panel_docks:
+            if opened:
+                self._on_analysis_opened(key)
+            elif key == "lyapunov_panel":
+                self._cancel_lyapunov_analysis()
+            elif key == "poincare_panel":
+                self.poincare_panel.cancel_solve()
+                self.scene.grid_overlay.remove_poincare_plane()
+            elif key == "bifurcation_panel":
+                self.bifurcation_panel.cancel_sweep()
+
+        QtCore.QTimer.singleShot(0, self._sync_toolbar_panel_actions)
+
+    def _on_analysis_opened(self, key):
+        if key == "lyapunov_panel":
+            if self.lyapunov_panel.auto_enabled():
+                self._request_lyapunov()
+        elif key == "projection_panel":
+            QtCore.QTimer.singleShot(0, self._reapply_projections)
+        elif key == "poincare_panel":
+            config, values = self._get_current_config_and_values()
+            if config is not None:
+                self.poincare_panel.set_attractor(config, values)
+            self._analysis_presentation_compat()
+            self.poincare_panel.recompute()
+        elif key == "bifurcation_panel":
+            config, values = self._get_current_config_and_values()
+            if config is not None:
+                self.bifurcation_panel.set_config(config, values)
+
+    def _analysis_presentation_compat(self):
+        if self.docks.is_open("poincare_panel"):
+            self.scene.grid_overlay.set_poincare_plane(
+                self.poincare_panel.plane_combo.currentText(),
+                self.poincare_panel.value_spin.value(),
+            )
+        else:
+            self.scene.grid_overlay.remove_poincare_plane()
