@@ -3,10 +3,8 @@ from uuid import uuid4
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from ..ui.docking import AppDock as Dock
-from ..ui.docking import AppDockArea as DockArea
 from ..ui.style import PANEL_SURFACE, plot_colours
-from ..ui.view_host import LegacyViewHost
+from ..ui.view_host import NativeViewHost
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
 from .table import ConsoleTable, ConsoleTableManager
@@ -580,32 +578,30 @@ class ConsolePlotManager(QtCore.QObject):
                 return
 
 
-class JupyterConsolePanel(QtWidgets.QWidget):
+class JupyterConsolePanel(QtCore.QObject):
     close_requested = QtCore.pyqtSignal()
     active_view_changed = QtCore.pyqtSignal()
 
-    def __init__(self, namespace_factory, script_dir=None, parent=None):
+    def __init__(self, namespace_factory, dock_registry, script_dir=None, parent=None):
         super().__init__(parent)
         self._namespace_factory = namespace_factory
         self._console = None
         self._script_dir = script_dir
         self._explore_status_callback = None
         self._active_view = "plot"
-        self.setMinimumHeight(180)
 
-        self._layout = QtWidgets.QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(0)
-
-        self.dock_area = DockArea()
-        self.view_host = LegacyViewHost(self.dock_area)
-        self._layout.addWidget(self.dock_area)
+        self.view_host = NativeViewHost(dock_registry)
+        area = QtCore.Qt.DockWidgetArea
 
         self.view3d = ConsoleView3D(status_callback=self._explore_status_callback)
-        self.view3d_dock = Dock("3D View", size=(10, 6), closable=False)
-        self.view3d_dock.addWidget(self.view3d.host)
-        self.dock_area.addDock(self.view3d_dock)
 
+        self.view3d_dock = dock_registry.create(
+            "view3d.default",
+            "3D View",
+            self.view3d.host,
+            area.RightDockWidgetArea,
+            closable=False,
+        )
         self.views3d = ConsoleView3DManager(
             self.view_host,
             "3D View",
@@ -622,11 +618,14 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.plot = ConsolePlot(
             self.plot_widget, status_callback=self._explore_status_callback
         )
-        self.plot_dock = Dock("Plot", size=(10, 8))
-        self.plot_dock.addWidget(self.plot.host)
-        self.dock_area.addDock(
-            self.plot_dock, position="above", relativeTo=self.view3d_dock
+        self.plot_dock = dock_registry.create(
+            "plot.default",
+            "Plot",
+            self.plot.host,
+            area.RightDockWidgetArea,
+            closable=False,
         )
+        dock_registry.window.tabifyDockWidget(self.view3d_dock, self.plot_dock)
         self.plots = ConsolePlotManager(
             self.view_host,
             "Plot",
@@ -637,13 +636,16 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         )
 
         self.table = ConsoleTable()
-        self.table_dock = Dock("Table", size=(10, 6), closable=False)
-        self.table_dock.addWidget(self.table.host)
-        self.dock_area.addDock(
-            self.table_dock, position="above", relativeTo=self.plot_dock
+        self.table_dock = dock_registry.create(
+            "table.default",
+            "Table",
+            self.table.host,
+            area.RightDockWidgetArea,
+            closable=False,
         )
+        dock_registry.window.tabifyDockWidget(self.plot_dock, self.table_dock)
         self.tables = ConsoleTableManager(
-            self.dock_area,
+            self.view_host,
             "Table",
             self.table,
             self.table_dock,
@@ -677,22 +679,12 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.script_panel = ScriptPanel(self._script_dir)
         self.script_panel.run_requested.connect(self.run_script_text)
 
-        self.script_dock = Dock("Script", size=(15, 8), closable=False)
-        self.console_dock = Dock("Console", size=(10, 4))
-        self.script_dock.addWidget(self.script_panel)
-        self.console_dock.addWidget(self._console_host)
-
-        self.dock_area.addDock(
-            self.script_dock,
-            position="bottom",
-            relativeTo=self.plot_dock,
+        self.script_dock = dock_registry.create(
+            "script", "Script", self.script_panel, area.LeftDockWidgetArea
         )
-        self.dock_area.addDock(
-            self.console_dock,
-            position="above",
-            relativeTo=self.script_dock,
+        self.console_dock = dock_registry.create(
+            "console", "Console", self._console_host, area.BottomDockWidgetArea
         )
-        self._system_layout = self.dock_area.saveState()
 
         if CONSOLE_IMPORT_ERROR is not None:
             message = QtWidgets.QLabel(
@@ -763,7 +755,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             return
 
         self._console = _RichJupyterConsole(
-            self._namespace_factory(), script_dir=self._script_dir, parent=self
+            self._namespace_factory(),
+            script_dir=self._script_dir,
+            parent=self._console_host,
         )
         self._console_layout.addWidget(self._console)
 
@@ -791,24 +785,6 @@ class JupyterConsolePanel(QtWidgets.QWidget):
 
         for view in self.views3d._views.values():
             view.param_widget.setVisible(bool(visible) and view.explore.has_controls())
-
-    def apply_explore_layout(self):
-        self.set_explore_visible(True)
-        self.dock_area.moveDock(self.script_dock, "left", self.plot_dock)
-        self.dock_area.moveDock(self.console_dock, "bottom", self.plot_dock)
-        self.plot_dock.raiseDock()
-        # self.dock_area.moveDock(
-        #     self.explorer_params_dock,
-        #     "bottom",
-        #     self.console_dock,
-        # )
-
-    def apply_system_layout(self):
-        self.set_explore_visible(False)
-        self.dock_area.restoreState(
-            self._system_layout, missing="ignore", extra="bottom"
-        )
-        self.plot_dock.raiseDock()
 
     def set_explore_status_callback(self, callback):
         self._explore_status_callback = callback

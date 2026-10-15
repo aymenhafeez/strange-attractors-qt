@@ -35,7 +35,6 @@ from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
 from .ui.style import plot_colours
 from .ui.system_toolbar import SystemToolbar
-from .ui.workspace_panel import WorkspacePanel
 from .view.view_manager import ViewManager
 from .workers.solve_manager import SolveManager
 
@@ -50,7 +49,12 @@ def _panel_visible(window, panel_name):
 
 
 def _workspace_visible(window):
-    return "workspace" in window.docks and window.docks.is_open("workspace")
+    return any(
+        window.docks.is_open(key)
+        for key, _dock in window.docks.items()
+        if key in {"script", "console"}
+        or key.startswith(("plot.", "view3d.", "table."))
+    )
 
 
 def app_settings():
@@ -104,7 +108,6 @@ class Window(QtWidgets.QMainWindow):
         self.system_toolbar_action = None
         self._menu_actions = []
 
-        self.workspace_dock = None
         self.workspace_system_mode_action = None
         self.workspace_explore_mode_action = None
         self.workspace_mode = "system"
@@ -234,15 +237,15 @@ class Window(QtWidgets.QMainWindow):
         self.output_panel.hide()
 
         self.jupyter_console_panel = JupyterConsolePanel(
-            self._jupyter_console_namespace, script_dir=self._scripts_directory
+            self._jupyter_console_namespace,
+            self.docks,
+            script_dir=self._scripts_directory,
+            parent=self,
         )
         self.system_toolbar = SystemToolbar()
         self.jupyter_console_panel.script_panel.status_changed.connect(
             lambda message: self._set_temporary_app_status(message)
         )
-        self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
-
-        self.workspace_panel = WorkspacePanel(self.jupyter_console_panel)
 
         self.jupyter_console_panel.set_explore_status_callback(
             self.system_toolbar.set_status
@@ -417,20 +420,28 @@ class Window(QtWidgets.QMainWindow):
         self._update_preset_summary(selected or preset_panel.current_preset_name())
 
     def _enter_explore_workspace(self):
-        self.jupyter_console_panel.ensure_console()
-        self._open_workspace_dock()
-        self.jupyter_console_panel.apply_explore_layout()
+        self._show_workspace_tools()
         self._set_side_panel_actions(left=False, right=False)
+        self.docks.hide("viewport")
+        self.splitDockWidget(
+            self.docks["script"],
+            self.jupyter_console_panel.plot_dock,
+            QtCore.Qt.Orientation.Horizontal,
+        )
 
     def _enter_system_workspace(self):
-        self.jupyter_console_panel.ensure_console()
-        self._open_workspace_dock()
-        self.jupyter_console_panel.apply_system_layout()
+        self._show_workspace_tools()
         self._set_side_panel_actions(left=True, right=True)
+        self.docks.show("viewport")
+        self.splitDockWidget(
+            self.viewport_dock,
+            self.jupyter_console_panel.plot_dock,
+            QtCore.Qt.Orientation.Horizontal,
+        )
 
     def _restore_explore_layout(self):
         self._set_workspace_mode("explore")
-        self.jupyter_console_panel.apply_explore_layout()
+        self._enter_explore_workspace()
         self._set_temporary_app_status("Restored Explore layout")
 
     def _set_workspace_mode(self, mode):
@@ -443,7 +454,7 @@ class Window(QtWidgets.QMainWindow):
             elif mode == "system":
                 self._enter_system_workspace()
 
-        self.workspace_panel.set_mode(mode)
+        self.jupyter_console_panel.set_explore_visible(mode == "explore")
         self._sync_jupyter_workspace_state()
         self._sync_explore_actions()
 
@@ -665,8 +676,8 @@ class Window(QtWidgets.QMainWindow):
             self.toolbar_bifurcation_action.setChecked(
                 _panel_visible(self, "bifurcation_panel")
             )
-            self.toolbar_explore_action.setChecked(_workspace_visible(self))
-            self.toolbar_system_action.setChecked(_workspace_visible(self))
+            self.toolbar_explore_action.setChecked(self.workspace_mode == "explore")
+            self.toolbar_system_action.setChecked(self.workspace_mode == "system")
             self.toolbar_process_status_action.setChecked(self._process_status_visible)
             self.output_panel_action.setChecked(self._output_panel_visible)
         self._sync_jupyter_workspace_state()
@@ -1856,10 +1867,12 @@ class Window(QtWidgets.QMainWindow):
             None,
         )
 
-    def _open_workspace_dock(self):
+    def _show_workspace_tools(self):
         self.jupyter_console_panel.ensure_console()
-
-        self.docks.show("workspace")
+        self.docks.show("script", activate=False)
+        self.docks.show("console", activate=False)
+        kind, name = self.jupyter_console_panel.active_view_key()
+        self.jupyter_console_panel.set_active_workspace_view(kind, name)
         self._sync_jupyter_workspace_state()
 
     def _open_panel_dock(self, panel, panel_name):
@@ -1995,19 +2008,15 @@ class Window(QtWidgets.QMainWindow):
         self._set_app_status(f"Exported table to {target}")
 
     def _close_jupyter_console(self):
-        self.docks.hide("workspace")
+        self.docks.hide("console")
         self._sync_toolbar_panel_actions()
 
     def _toggle_jupyter_console(self):
-        if _workspace_visible(self):
+        if self.docks.is_open("console"):
             self._close_jupyter_console()
-            self._restore_default_layout()
         else:
-            self.jupyter_console_panel.ensure_console()
-            self._open_workspace_dock()
+            self._show_workspace_tools()
             self.jupyter_console_panel.focus_console()
-            self._sync_jupyter_workspace_state()
-            self._sync_toolbar_panel_actions()
 
     def _panel_widget(self, panel_name):
         panels = {
@@ -2140,9 +2149,9 @@ class Window(QtWidgets.QMainWindow):
                 "layout/workspace_visible", False, type=bool
             )
             if workspace_visible:
-                self._open_workspace_dock()
+                self._show_workspace_tools()
             else:
-                self._close_jupyter_console()
+                self._hide_workspace_tools()
 
             self._sync_toolbar_panel_actions()
             self.workspace_controller.sync_views()
@@ -2222,11 +2231,10 @@ class Window(QtWidgets.QMainWindow):
                 area.RightDockWidgetArea,
             )
             self.tabifyDockWidget(presets, custom)
-            self.workspace_dock = d.create(
-                "workspace", "Workspace", self.workspace_panel, area.RightDockWidgetArea
-            )
             self.splitDockWidget(
-                self.viewport_dock, self.workspace_dock, axis.Horizontal
+                self.viewport_dock,
+                self.jupyter_console_panel.plot_dock,
+                axis.Horizontal,
             )
             panels = (
                 ("projection_panel", "Projection heatmaps", self.projection_panel),
@@ -2306,3 +2314,11 @@ class Window(QtWidgets.QMainWindow):
     def _show_preferred_system_panel(self, key):
         if self.docks.is_open(key):
             self.docks.show(key)
+
+    def _hide_workspace_tools(self):
+        for key in self.docks:
+            if key in {"script", "console"} or key.startswith(
+                ("plot.", "view3d.", "table.")
+            ):
+                self.docks.hide(key)
+        self._sync_jupyter_workspace_state()
