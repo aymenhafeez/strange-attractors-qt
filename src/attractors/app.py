@@ -156,8 +156,8 @@ class Window(QtWidgets.QMainWindow):
         )
         self.scene.projections_data.connect(self._on_projections_data)
 
-        self.controls = ControlPanel()
-        self.right_panel = RightPanel()
+        self.controls = ControlPanel(self)
+        self.right_panel = RightPanel(self)
         self.controls.set_right_panel(self.right_panel)
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._on_controls_solve_requested)
@@ -295,6 +295,9 @@ class Window(QtWidgets.QMainWindow):
         self.controls.animation_mode_changed.connect(self._set_animation_mode)
 
         self.docks.open_changed.connect(self._on_dock_open_changed)
+        self.right_panel.preferred_panel_requested.connect(
+            self._show_preferred_system_panel
+        )
 
         self.scene.container.installEventFilter(self)
 
@@ -566,7 +569,8 @@ class Window(QtWidgets.QMainWindow):
         return action
 
     def _set_left_panel_visible(self, checked):
-        self.docks["controls"].setVisible(checked)
+        for key in self._left_dock_ids:
+            self.docks[key].setVisible(checked)
 
     def _set_output_panel_visible(self, visible):
         self.docks["output"].setVisible(visible)
@@ -622,7 +626,8 @@ class Window(QtWidgets.QMainWindow):
         self.controls.orbit_speed_wrapper.setVisible(enabled)
 
     def _set_right_panel_visible(self, checked):
-        self.docks["right_panel"].setVisible(checked)
+        for key in self._right_dock_ids:
+            self.docks[key].setVisible(checked)
 
     def _add_panel_menu_action(self, text, callback):
         action = QtGui.QAction(text, self)
@@ -632,12 +637,12 @@ class Window(QtWidgets.QMainWindow):
 
     def _sync_toolbar_panel_actions(self):
         self._output_panel_visible = self.docks.is_open("output")
-        for key, action in (
-            ("controls", self.toolbar_left_panel_action),
-            ("right_panel", self.toolbar_right_panel_action),
+        for keys, action in (
+            (self._left_dock_ids, self.toolbar_left_panel_action),
+            (self._right_dock_ids, self.toolbar_right_panel_action),
         ):
             with QtCore.QSignalBlocker(action):
-                action.setChecked(self.docks.is_open(key))
+                action.setChecked(any(self.docks.is_open(key) for key in keys))
         with (
             QtCore.QSignalBlocker(self.toolbar_lyapunov_action),
             QtCore.QSignalBlocker(self.toolbar_projection_action),
@@ -2171,31 +2176,58 @@ class Window(QtWidgets.QMainWindow):
         super().closeEvent(a0)
 
     def _build_layout(self):
-        area = QtCore.Qt.DockWidgetArea
-        orientation = QtCore.Qt.Orientation
-        docks = self.docks
-
-        with docks.presentation_change():
-            self.viewport_dock = docks.create(
+        area, axis = QtCore.Qt.DockWidgetArea, QtCore.Qt.Orientation
+        d = self.docks
+        self._left_dock_ids = ("parameters", "view_options", "data")
+        self._right_dock_ids = ("trajectories", "presets", "custom")
+        with d.presentation_change():
+            self.viewport_dock = d.create(
                 "viewport", "Viewport", self.scene.container, area.RightDockWidgetArea
             )
-            docks.create(
-                "controls", "System tools", self.controls, area.LeftDockWidgetArea
+            parameters = d.create(
+                "parameters",
+                "Parameters",
+                self.controls.controls_scroll,
+                area.LeftDockWidgetArea,
             )
-            right = docks.create(
-                "right_panel",
-                "System tools",
-                self.right_panel,
+            options = d.create(
+                "view_options",
+                "View options",
+                self.controls.animation_scroll,
+                area.LeftDockWidgetArea,
+            )
+            data = d.create(
+                "data", "Data", self.controls.data_view, area.LeftDockWidgetArea
+            )
+            self.splitDockWidget(parameters, data, axis.Vertical)
+            self.tabifyDockWidget(parameters, options)
+            trajectories = d.create(
+                "trajectories",
+                "Trajectories",
+                self.right_panel.trajectory_panel,
                 area.RightDockWidgetArea,
             )
-            self.splitDockWidget(self.viewport_dock, right, orientation.Horizontal)
-            self.workspace_dock = docks.create(
+            self.splitDockWidget(self.viewport_dock, trajectories, axis.Horizontal)
+            presets = d.create(
+                "presets",
+                "Presets",
+                self.right_panel.preset_scroll,
+                area.RightDockWidgetArea,
+            )
+            self.splitDockWidget(trajectories, presets, axis.Vertical)
+            custom = d.create(
+                "custom",
+                "Custom",
+                self.right_panel.custom_scroll,
+                area.RightDockWidgetArea,
+            )
+            self.tabifyDockWidget(presets, custom)
+            self.workspace_dock = d.create(
                 "workspace", "Workspace", self.workspace_panel, area.RightDockWidgetArea
             )
             self.splitDockWidget(
-                self.viewport_dock, self.workspace_dock, orientation.Horizontal
+                self.viewport_dock, self.workspace_dock, axis.Horizontal
             )
-
             panels = (
                 ("projection_panel", "Projection heatmaps", self.projection_panel),
                 ("poincare_panel", "Poincare", self.poincare_panel),
@@ -2203,32 +2235,33 @@ class Window(QtWidgets.QMainWindow):
                 ("bifurcation_panel", "Bifurcation", self.bifurcation_panel),
             )
             self._panel_docks = {
-                key: docks.create(key, title, panel, area.RightDockWidgetArea)
-                for key, title, panel in panels
+                key: d.create(key, title, widget, area.RightDockWidgetArea)
+                for key, title, widget in panels
             }
             self.projection_dock = self._panel_docks["projection_panel"]
             self.poincare_dock = self._panel_docks["poincare_panel"]
             self.lyapunov_dock = self._panel_docks["lyapunov_panel"]
             self.bifurcation_dock = self._panel_docks["bifurcation_panel"]
             self.splitDockWidget(
-                self.viewport_dock, self.projection_dock, orientation.Vertical
+                self.viewport_dock, self.projection_dock, axis.Vertical
             )
             # tab other analysis panels tabbed to projections
             for key in ("poincare_panel", "lyapunov_panel", "bifurcation_panel"):
-                self.tabifyDockWidget(self.projection_dock, self._panel_docks[key])
+                self.tabifyDockWidget(self.projection_dock, d[key])
+            d.create("output", "Output", self.output_panel, area.BottomDockWidgetArea)
 
-            docks.create(
-                "output", "Output", self.output_panel, area.BottomDockWidgetArea
-            )
-            for key in ("viewport", "controls", "right_panel"):
-                docks.show(key, activate=False)
+            for key in ("viewport", *self._left_dock_ids, *self._right_dock_ids):
+                d.show(key, activate=False)
 
-            self.layout().activate()
-            self.resizeDocks(
-                [docks["controls"], self.viewport_dock, right],
-                [240, 600, 260],
-                orientation.Horizontal,
-            )
+            parameters.raise_()
+            presets.raise_()
+
+        self.layout().activate()
+        self.resizeDocks(
+            [parameters, self.viewport_dock, trajectories],
+            [240, 600, 260],
+            axis.Horizontal,
+        )
 
     def _on_dock_open_changed(self, key, opened):
         if key in self._panel_docks:
@@ -2269,3 +2302,7 @@ class Window(QtWidgets.QMainWindow):
             )
         else:
             self.scene.grid_overlay.remove_poincare_plane()
+
+    def _show_preferred_system_panel(self, key):
+        if self.docks.is_open(key):
+            self.docks.show(key)

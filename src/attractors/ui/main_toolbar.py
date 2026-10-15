@@ -55,6 +55,11 @@ def build_menu_bar(self):
     file_menu.addAction("Open preset folder", self._open_preset_folder)
 
     view_menu = menu_bar.addMenu("&View")
+
+    panels_menu = view_menu.addMenu("Panels")
+    for dock in self.docks.values():
+        panels_menu.addAction(dock.toggleViewAction())
+
     self._add_menu_action(view_menu, "Left panel", self.toolbar_left_panel_action)
     self._add_menu_action(view_menu, "Right panel", self.toolbar_right_panel_action)
     self._add_menu_action(view_menu, "Output panel", self.output_panel_action)

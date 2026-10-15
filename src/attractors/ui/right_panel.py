@@ -1,8 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .custom_panel import CustomPanel
-from .docking import AppDock as Dock
-from .docking import AppDockArea as DockArea
 from .preset_panel import PresetPanel
 from .trajectory_panel import TrajectoryPanel
 
@@ -90,43 +88,18 @@ class _PanelTree(QtWidgets.QTreeWidget):
         self.schedule_embedded_size_sync()
 
 
-class RightPanel(QtWidgets.QWidget):
+class RightPanel(QtCore.QObject):
+    preferred_panel_requested = QtCore.pyqtSignal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setObjectName("rightPanel")
-        self.setMinimumWidth(260)
-
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(2, 4, 4, 4)
-        layout.setSpacing(0)
-
-        self.dock_area = DockArea()
-        layout.addWidget(self.dock_area)
 
         self.trajectory_panel = TrajectoryPanel(collapsible=False)
         self.preset_panel = PresetPanel()
         self.custom_panel = CustomPanel(collapsible=False)
 
-        self.trajectory_dock = Dock("Trajectories", size=(1, 450), closable=False)
-        self.trajectory_dock.addWidget(self.trajectory_panel)
-        self.dock_area.addDock(self.trajectory_dock)
-
-        self.preset_dock = Dock("Presets", size=(1, 300), closable=False)
-        self.preset_dock.addWidget(_scrollable(self.preset_panel))
-        self.dock_area.addDock(
-            self.preset_dock, position="bottom", relativeTo=self.trajectory_dock
-        )
-
-        self.custom_dock = Dock("Custom", size=(1, 300), closable=False)
-        self.custom_dock.addWidget(_scrollable(self.custom_panel))
-        self.dock_area.addDock(
-            self.custom_dock, position="below", relativeTo=self.preset_dock
-        )
-
-        self.set_current_attractor("")
+        self.preset_scroll = _scrollable(self.preset_panel)
+        self.custom_scroll = _scrollable(self.custom_panel)
 
     def set_current_attractor(self, name):
-        if name == "Custom":
-            self.custom_dock.raiseDock()
-        else:
-            self.preset_dock.raiseDock()
+        self.preferred_panel_requested.emit("custom" if name == "Custom" else "presets")
