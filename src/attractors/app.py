@@ -1,3 +1,4 @@
+import json
 import time
 from pathlib import Path
 
@@ -13,6 +14,13 @@ from .console.live_plot_controller import LivePlotController
 from .console.system import SystemInspector
 from .console.workspace_controller import WorkspaceController
 from .console.workspace_inspector import WorkspaceInspector
+from .console.workspace_state import (
+    active_view_id,
+    decode_views,
+    encode_views,
+    restore_active_target,
+    restore_views,
+)
 from .core.solution_validation import validate_solutions
 from .perf import PerfProfiler, perf_finish, perf_start, profiling_enabled
 from .presets import (
@@ -2000,61 +2008,50 @@ class Window(QtWidgets.QMainWindow):
         return panels[panel_name]
 
     def _save_workspace_shell(self, settings):
-        kind, name = self.jupyter_console_panel.active_view_key()
-        script_path = self.jupyter_console_panel.script_panel.current_script_path()
-        settings.setValue("workspace/plots", self.jupyter_console_panel.plots.names())
-        settings.setValue(
-            "workspace/views3d", self.jupyter_console_panel.views3d.names()
-        )
-        settings.setValue("workspace/tables", self.jupyter_console_panel.tables.names())
-        settings.setValue("workspace/active_kind", kind)
-        settings.setValue("workspace/active_name", name)
+        panel = self.jupyter_console_panel
+        settings.setValue("workspace/views_v2", encode_views(panel))
+        settings.setValue("workspace/active_view_id", active_view_id(panel))
         settings.setValue(
             "workspace/open_scripts",
-            [
-                str(path)
-                for path in self.jupyter_console_panel.script_panel.open_script_paths()
-            ],
+            [str(path) for path in panel.script_panel.open_script_paths()],
         )
-
-        if script_path is not None:
-            settings.setValue("workspace/current_script", str(script_path))
-        else:
+        current = panel.script_panel.current_script_path()
+        if current is None:
             settings.remove("workspace/current_script")
+        else:
+            settings.setValue("workspace/current_script", str(current))
 
     def _restore_workspace_shell(self, settings):
-        plot_names = settings.value("workspace/plots", [], type=list)
-        view_names = settings.value("workspace/views3d", [], type=list)
-        table_names = settings.value("workspace/tables", [], type=list)
-
-        for name in plot_names:
-            if name != "Plot":
-                self.jupyter_console_panel.plots.new(name, activate=False)
-
-        for name in view_names:
-            if name != "3D View":
-                self.jupyter_console_panel.views3d.new(name, activate=False)
-
-        for name in table_names:
-            if name != "Table":
-                self.jupyter_console_panel.tables.new(name, activate=False)
-
-        kind = settings.value("workspace/active_kind", "plot")
-        name = settings.value("workspace/active_name", "Plot")
+        panel = self.jupyter_console_panel
 
         try:
-            self.jupyter_console_panel.set_active_workspace_view(kind, name)
-        except (KeyError, ValueError):
-            pass
-
-        script_path = settings.value("workspace/current_script")
-        open_scripts = settings.value("workspace/open_scripts", [], type=list)
-
-        if not open_scripts and script_path:
-            open_scripts = [script_path]
-
-        self.jupyter_console_panel.script_panel.restore_scripts(
-            open_scripts, script_path
+            records = decode_views(settings.value("workspace/views_v2"))
+        except (TypeError, ValueError):
+            self._native_views_valid = False
+            for kind, manager, key in (
+                ("plot", panel.plots, "plots"),
+                ("view3d", panel.views3d, "views3d"),
+                ("table", panel.tables, "tables"),
+            ):
+                for name in settings.value(f"workspace/{key}", [], type=list):
+                    if name not in manager.names():
+                        manager.new(name, activate=False)
+            kind = settings.value("workspace/active_kind", "plot")
+            manager = panel.views3d if kind == "view3d" else panel.plots
+            name = settings.value("workspace/active_name", manager._default_name)
+            self._restored_active_view_id = manager.view_id(
+                name if name in manager.names() else manager._default_name
+            )
+        else:
+            self._native_views_valid = True
+            restore_views(panel, records)
+            self._restored_active_view_id = settings.value(
+                "workspace/active_view_id", "plot.default"
+            )
+        current = settings.value("workspace/current_script")
+        scripts = settings.value("workspace/open_scripts", [], type=list)
+        panel.script_panel.restore_scripts(
+            scripts or ([current] if current else []), current
         )
 
     def _save_app_layout(self):
@@ -2064,16 +2061,16 @@ class Window(QtWidgets.QMainWindow):
             "layout/plot_theme", app.property("appTheme") if app else None
         )
         settings.setValue("layout/window_geometry", self.saveGeometry())
-        settings.setValue("layout/workspace_mode", self.workspace_mode)
-        settings.setValue("layout/workspace_visible", _workspace_visible(self))
-
-        for panel_name in self._panel_docks:
-            settings.setValue(
-                f"layout/panels/{panel_name}",
-                _panel_visible(self, panel_name),
-            )
 
         self._save_workspace_shell(settings)
+        self.layouts.capture_current()
+        settings.setValue("layout/native_v2/current_mode", self.workspace_mode)
+        for mode, state in self.layouts.states.items():
+            settings.setValue(f"layout/native_v2/states/{mode}", state)
+            settings.setValue(
+                f"layout/native_v2/known_ids/{mode}",
+                json.dumps(sorted(self.layouts.known_ids[mode])),
+            )
 
     def _restore_app_layout(self):
         settings = app_settings()
@@ -2091,11 +2088,34 @@ class Window(QtWidgets.QMainWindow):
 
         with self.docks.presentation_change():
             self._restore_workspace_shell(settings)
-            mode = settings.value("layout/workspace_mode", "viewport")
+            if self._native_views_valid:
+                for mode in MODES:
+                    state = settings.value(f"layout/native_v2/states/{mode}")
+                    try:
+                        ids = json.loads(
+                            settings.value(f"layout/native_v2/known_ids/{mode}", "[]")
+                        )
+                    except (TypeError, ValueError):
+                        continue
+                    if (
+                        isinstance(state, QtCore.QByteArray)
+                        and isinstance(ids, list)
+                        and all(isinstance(key, str) for key in ids)
+                    ):
+                        self.layouts.states[mode] = state
+                        self.layouts.known_ids[mode] = set(ids)
+            mode = settings.value(
+                "layout/native_v2/current_mode",
+                settings.value("layout/workspace_mode", "viewport"),
+            )
             self._set_workspace_mode(mode if mode in MODES else "viewport")
-            for name in self._panel_docks:
-                if settings.value(f"layout/panels/{name}", False, type=bool):
-                    self.docks.show(name, activate=False)
+            if not self._native_views_valid:
+                for name in self._panel_docks:
+                    if settings.value(f"layout/panels/{name}", False, type=bool):
+                        self.docks.show(name, activate=False)
+            restore_active_target(
+                self.jupyter_console_panel, self._restored_active_view_id
+            )
 
         self._analysis_presentation_compat()
         self._sync_toolbar_panel_actions()
