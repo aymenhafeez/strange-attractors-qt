@@ -9,7 +9,7 @@ class NativeDock(QtWidgets.QDockWidget):
     def closeEvent(self, event):
         super().closeEvent(event)
         if event.isAccepted():
-            self.closed.emit()
+            self.closed.emit(self)
 
 
 class DockRegistry(QtCore.QObject):

@@ -143,21 +143,13 @@ def build_menu_bar(self):
 
     workspace_menu = menu_bar.addMenu("&Workspace")
     mode_menu = workspace_menu.addMenu("Mode")
-    mode_group = QtGui.QActionGroup(self)
-    mode_group.setExclusive(True)
-    self.workspace_system_mode_action = mode_menu.addAction("System")
-    self.workspace_system_mode_action.setCheckable(True)
-    self.workspace_system_mode_action.setChecked(True)
-    self.workspace_explore_mode_action = mode_menu.addAction("Explore")
-    self.workspace_explore_mode_action.setCheckable(True)
-    mode_group.addAction(self.workspace_system_mode_action)
-    mode_group.addAction(self.workspace_explore_mode_action)
-    self.workspace_system_mode_action.triggered.connect(
-        lambda: self._set_workspace_mode("system")
-    )
-    self.workspace_explore_mode_action.triggered.connect(
-        lambda: self._set_workspace_mode("explore")
-    )
+
+    for action in self.workspace_mode_actions.values():
+        mode_menu.addAction(action)
+
+    self.workspace_system_mode_action = self.workspace_mode_actions["system"]
+    self.workspace_explore_mode_action = self.workspace_mode_actions["explore"]
+
     workspace_menu.addSeparator()
     workspace_menu.addAction("Summary", self.show_workspace_summary)
     workspace_menu.addAction(
@@ -424,14 +416,22 @@ def build_toolbar(self):
     self.output_panel_action.setChecked(True)
     self.output_panel_action.toggled.connect(self._set_output_panel_visible)
     # toolbar.addAction(self.output_panel_action)
-    self.toolbar_system_action = toolbar.addAction(
-        "System",
-        lambda: self._set_workspace_mode("system"),
-    )
-    self.toolbar_explore_action = toolbar.addAction(
-        "Explore",
-        lambda: self._set_workspace_mode("explore"),
-    )
+
+    mode_group = QtGui.QActionGroup(self)
+    mode_group.setExclusive(True)
+
+    self.workspace_mode_actions = {}
+    for mode in ("viewport", "system", "explore"):
+        action = QtGui.QAction(mode.title(), self)
+        action.setCheckable(True)
+        mode_group.addAction(action)
+        action.triggered.connect(lambda _checked=False, mode=mode: self._set_workspace_mode(mode))
+        toolbar.addAction(action)
+        self.workspace_mode_actions[mode] = action
+
+    self.toolbar_viewport_action = self.workspace_mode_actions["viewport"]
+    self.toolbar_system_action = self.workspace_mode_actions["system"]
+    self.toolbar_explore_action = self.workspace_mode_actions["explore"]
 
     toolbar.addSeparator()
 
