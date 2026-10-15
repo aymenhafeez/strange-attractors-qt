@@ -14,7 +14,7 @@ class NativeDock(QtWidgets.QDockWidget):
 
 class DockRegistry(QtCore.QObject):
     activated = QtCore.pyqtSignal(str)
-    open_chaged = QtCore.pyqtSignal(str, bool)
+    open_changed = QtCore.pyqtSignal(str, bool)
     closed = QtCore.pyqtSignal(str)
 
     def __init__(self, window):
@@ -78,4 +78,40 @@ class DockRegistry(QtCore.QObject):
 
     def _open_changed(self, key, opened):
         if not self.changing_presentation:
-            self.open_chaged.emit(key, opened)
+            self.open_changed.emit(key, opened)
+
+    def is_open(self, key):
+        # using this instead of overriding isVIsible() so it can work before the main window is shown
+        return self[key].toggleViewAction.isChecked()
+
+    def show(self, key, *, activate=True):
+        dock = self[key]
+        dock.show()
+        if activate:
+            dock.raise_()
+            if not self.changing_presentation:
+                self.activated.emit(key)
+
+    def hide(self, key):
+        self[key].hide()
+
+    def remove(self, key):
+        dock = self._docks.pop(key)
+        self.window.removeDockWidget(dock)
+        dock.deleteLater()
+
+    def eventFilter(self, watched, event):
+        if not self.changing_presentation and event.type() in {
+            QtCore.QEvent.Type.MouseButtonPress,
+            QtCore.QEvent.Type.FocusIn,
+        }:
+            widget = watched if isinstance(watched, NativeDock) else None
+            while widget is not None:
+                if isinstance(widget, NativeDock):
+                    key = widget.objectName()
+                    if self._docks.get(key) is widget:
+                        self.activated.emit(key)
+                    break
+                widget = widget.parentWidget()
+
+        return super().eventFilter(watched, event)
