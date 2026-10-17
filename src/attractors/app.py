@@ -439,43 +439,50 @@ class Window(QtWidgets.QMainWindow):
         self._update_preset_summary(selected or preset_panel.current_preset_name())
 
     def _set_workspace_mode(self, mode):
-        mode_changed = mode != self.workspace_mode
+        if mode not in {"system", "explore"}:
+            raise ValueError("Workspace mode must be 'system' or 'explore'")
         self.workspace_mode = mode
-
-        if mode_changed or not _workspace_visible(self):
-            if mode == "explore":
-                self._enter_explore_workspace()
-            elif mode == "system":
-                self._enter_system_workspace()
-
-        self.workspace_panel.set_mode(mode)
-        self._sync_jupyter_workspace_state()
-        self._sync_explore_actions()
-
-        if (
-            self.workspace_system_mode_action is not None
-            and self.workspace_explore_mode_action is not None
+        self.dock_layout.switch(mode)
+        self.jupyter_console_panel.set_explore_visible(mode == "explore")
+        self._sync_dock_state()
+        with (
+            QtCore.QSignalBlocker(self.workspace_system_mode_action),
+            QtCore.QSignalBlocker(self.workspace_explore_mode_action),
         ):
-            with (
-                QtCore.QSignalBlocker(self.workspace_system_mode_action),
-                QtCore.QSignalBlocker(self.workspace_explore_mode_action),
-            ):
-                self.workspace_system_mode_action.setChecked(mode == "system")
-                self.workspace_explore_mode_action.setChecked(mode == "explore")
+            self.workspace_system_mode_action.setChecked(mode == "system")
+            self.workspace_explore_mode_action.setChecked(mode == "explore")
+
+    def _toggle_system_workspace(self):
+        if self.workspace_mode != "system":
+            self._set_workspace_mode("system")
+            if _workspace_visible(self):
+                return
+        elif _workspace_visible(self):
+            side_docks = [self.parameters_dock, self.right_panel.trajectory_dock]
+            widths = [dock.width() for dock in side_docks]
+            for dock in self._workspace_docks():
+                dock.hide()
+            self.resizeDocks(
+                [side_docks[0], self.viewport_dock, side_docks[1]],
+                [widths[0], max(self.width() - sum(widths), 1), widths[1]],
+                QtCore.Qt.Orientation.Horizontal,
+            )
+            self._sync_dock_state()
+            return
+
+        panel = self.jupyter_console_panel
+        panel.plot_dock.show()
+        panel.script_dock.show()
+        panel.console_dock.show()
+        panel.plot_dock.raise_()
+        panel.console_dock.raise_()
+        self.dock_layout.resize_defaults()
+        self._sync_dock_state()
 
     def _restore_default_layout(self):
-        self.viewport_dock.raiseDock()
-        self._set_side_panel_actions(left=True, right=True)
-
-    def _set_side_panel_actions(self, *, left, right):
-        with (
-            QtCore.QSignalBlocker(self.toolbar_left_panel_action),
-            QtCore.QSignalBlocker(self.toolbar_right_panel_action),
-        ):
-            self.toolbar_left_panel_action.setChecked(bool(left))
-            self.toolbar_right_panel_action.setChecked(bool(right))
-        self._set_left_panel_visible(left)
-        self._set_right_panel_visible(right)
+        self.dock_layout.reset()
+        self._sync_dock_state()
+        self._set_temporary_app_status(f"Restored {self.workspace_mode.title()} layout")
 
     def _hide_menu_icons(self, menu):
         for action in menu.actions():
@@ -663,8 +670,10 @@ class Window(QtWidgets.QMainWindow):
             self.toolbar_bifurcation_action.setChecked(
                 _panel_visible(self, "bifurcation_panel")
             )
-            self.toolbar_explore_action.setChecked(_workspace_visible(self))
-            self.toolbar_system_action.setChecked(_workspace_visible(self))
+            self.toolbar_explore_action.setChecked(self.workspace_mode == "explore")
+            self.toolbar_system_action.setChecked(
+                self.workspace_mode == "system" and _workspace_visible(self)
+            )
             self.toolbar_process_status_action.setChecked(self._process_status_visible)
             self.output_panel_action.setChecked(self._output_panel_visible)
         self._sync_jupyter_workspace_state()
@@ -1168,7 +1177,6 @@ class Window(QtWidgets.QMainWindow):
         self._sync_explore_actions()
 
     def _sync_jupyter_workspace_state(self):
-        self._watch_workspace_tab_stacks()
         self._sync_jupyter_toolbar_visibility()
 
     def _sync_toolbar_animation_action(self, playing):
@@ -2019,51 +2027,13 @@ class Window(QtWidgets.QMainWindow):
 
         self._set_app_status(f"Exported table to {target}")
 
-    def _on_workspace_dock_closed(self):
-        if not self._closing_workspace_dock:
-            self.workspace_panel.hide()
-        dock = self._build_workspace_dock()
-        dock.container_changed.connect(self._on_workspace_layout_changed)
-        self.workspace_dock = dock
-        self._sync_jupyter_workspace_state()
-        self._sync_toolbar_panel_actions()
-
-    def _close_jupyter_console(self):
-        if (
-            self.workspace_dock is not None
-            and self.workspace_dock.container() is not None
-        ):
-            self._closing_workspace_dock = True
-            try:
-                self.workspace_dock.close()
-            finally:
-                self._closing_workspace_dock = False
-        self.workspace_panel.hide()
-        self._sync_jupyter_workspace_state()
-        self._sync_toolbar_panel_actions()
-
-    def _toggle_jupyter_console(self):
-        if _workspace_visible(self):
-            self._close_jupyter_console()
-            self._restore_default_layout()
-        else:
-            self.jupyter_console_panel.ensure_console()
-            self._open_workspace_dock()
-            self.jupyter_console_panel.focus_console()
-            self._sync_jupyter_workspace_state()
-            self._sync_toolbar_panel_actions()
-
-    def _panel_widget(self, panel_name):
-        panels = {
-            "lyapunov_panel": self.lyapunov_panel,
-            "projection_panel": self.projection_panel,
-            "poincare_panel": self.poincare_panel,
-            "bifurcation_panel": self.bifurcation_panel,
-        }
-
-        return panels[panel_name]
-
     def _save_workspace_shell(self, settings):
+        for kind, manager in (
+            ("plot", self.jupyter_console_panel.plots),
+            ("view3d", self.jupyter_console_panel.views3d),
+            ("table", self.jupyter_console_panel.tables),
+        ):
+            settings.setValue(f"workspace/default_{kind}", manager._default_name)
         kind, name = self.jupyter_console_panel.active_view_key()
         script_path = self.jupyter_console_panel.script_panel.current_script_path()
         settings.setValue("workspace/plots", self.jupyter_console_panel.plots.names())
@@ -2087,27 +2057,42 @@ class Window(QtWidgets.QMainWindow):
             settings.remove("workspace/current_script")
 
     def _restore_workspace_shell(self, settings):
+        for kind, manager in (
+            ("plot", self.jupyter_console_panel.plots),
+            ("view3d", self.jupyter_console_panel.views3d),
+            ("table", self.jupyter_console_panel.tables),
+        ):
+            name = settings.value(f"workspace/default_{kind}", manager._default_name)
+            manager.rename(manager._default_name, name)
         plot_names = settings.value("workspace/plots", [], type=list)
         view_names = settings.value("workspace/views3d", [], type=list)
         table_names = settings.value("workspace/tables", [], type=list)
 
         for name in plot_names:
-            if name != "Plot":
+            if name != self.jupyter_console_panel.plots._default_name:
                 self.jupyter_console_panel.plots.new(name, activate=False)
 
         for name in view_names:
-            if name != "3D View":
+            if name != self.jupyter_console_panel.views3d._default_name:
                 self.jupyter_console_panel.views3d.new(name, activate=False)
 
         for name in table_names:
-            if name != "Table":
+            if name != self.jupyter_console_panel.tables._default_name:
                 self.jupyter_console_panel.tables.new(name, activate=False)
 
         kind = settings.value("workspace/active_kind", "plot")
         name = settings.value("workspace/active_name", "Plot")
 
         try:
-            self.jupyter_console_panel.set_active_workspace_view(kind, name)
+            self.jupyter_console_panel.set_active_workspace_view(
+                kind, name, activate=False
+            )
+            manager = (
+                self.jupyter_console_panel.views3d
+                if kind == "view3d"
+                else self.jupyter_console_panel.plots
+            )
+            manager.activate(name)
         except (KeyError, ValueError):
             pass
 
@@ -2128,16 +2113,8 @@ class Window(QtWidgets.QMainWindow):
             "layout/plot_theme", app.property("appTheme") if app else None
         )
         settings.setValue("layout/window_geometry", self.saveGeometry())
-        settings.setValue("layout/main_splitter", self.main_splitter.saveState())
+        self.dock_layout.save(settings)
         settings.setValue("layout/workspace_mode", self.workspace_mode)
-        settings.setValue("layout/workspace_visible", _workspace_visible(self))
-
-        for panel_name in self._panel_docks:
-            settings.setValue(
-                f"layout/panels/{panel_name}",
-                _panel_visible(self, panel_name),
-            )
-
         self._save_workspace_shell(settings)
 
     def _restore_app_layout(self):
@@ -2158,33 +2135,10 @@ class Window(QtWidgets.QMainWindow):
         if geometry is not None:
             self.restoreGeometry(geometry)
 
-        splitter = settings.value("layout/main_splitter")
-        if splitter is not None:
-            self.main_splitter.restoreState(splitter)
-
-        left_visible = settings.value("layout/left_panel_visible", True, type=bool)
-        right_visible = settings.value("layout/right_panel_visible", True, type=bool)
-        self._set_side_panel_actions(left=left_visible, right=right_visible)
-
         self._restore_workspace_shell(settings)
-
-        for panel_name in self._panel_docks:
-            visible = settings.value(f"layout/panels/{panel_name}", False, type=bool)
-            panel = self._panel_widget(panel_name)
-            if visible:
-                self._open_panel_dock(panel, panel_name)
-            else:
-                self._close_panel_dock(panel)
-
+        self.dock_layout.restore(settings)
         mode = settings.value("layout/workspace_mode", "system")
-        if mode in {"system", "explore"}:
-            self._set_workspace_mode(mode)
-
-        workspace_visible = settings.value("layout/workspace_visible", False, type=bool)
-        if workspace_visible:
-            self._open_workspace_dock()
-        else:
-            self._close_jupyter_console()
+        self._set_workspace_mode(mode if mode in {"system", "explore"} else "system")
 
         self._sync_toolbar_panel_actions()
         self.workspace_controller.sync_views()

@@ -59,7 +59,8 @@ def build_menu_bar(self):
     self._add_menu_action(view_menu, "Right panel", self.toolbar_right_panel_action)
     self._add_menu_action(view_menu, "Output panel", self.output_panel_action)
     self._add_menu_action(view_menu, "Status bar", self.toolbar_process_status_action)
-    view_menu.addAction("Restore default layout", self._restore_default_layout)
+    view_menu.addMenu(self.dock_layout.menu)
+    view_menu.addAction("Reset current layout", self._restore_default_layout)
     view_menu.addSeparator()
     view_menu.addAction(
         "Reset camera",
@@ -158,7 +159,7 @@ def build_menu_bar(self):
     workspace_menu.addAction(
         "Explore workspace", lambda: self._set_workspace_mode("explore")
     )
-    workspace_menu.addAction("Restore Explore layout", self._restore_explore_layout)
+    workspace_menu.addAction("Reset current layout", self._restore_default_layout)
     examples_menu = workspace_menu.addMenu("Examples")
     self._populate_examples_menu(examples_menu)
     workspace_menu.addSeparator()
@@ -421,12 +422,15 @@ def build_toolbar(self):
     # toolbar.addAction(self.output_panel_action)
     self.toolbar_system_action = toolbar.addAction(
         "System",
-        lambda: self._set_workspace_mode("system"),
+        self._toggle_system_workspace,
     )
+    self.toolbar_system_action.setToolTip("Show or hide system scripting panels")
     self.toolbar_explore_action = toolbar.addAction(
         "Explore",
         lambda: self._set_workspace_mode("explore"),
     )
+    self.toolbar_system_action.setCheckable(True)
+    self.toolbar_explore_action.setCheckable(True)
 
     toolbar.addSeparator()
 
