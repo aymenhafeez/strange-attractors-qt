@@ -108,10 +108,38 @@ SPLITTER_HANDLE_HOVER = """
     }
 """
 
+
+def dock_widget_style():
+    if is_dark_mode():
+        colours = ("#363a3f", "#2c3034", "#272a2e", "#24262a", "#44484f")
+    else:
+        colours = ("#eeeeee", "#ebebeb", "#e6e6e6", "#dfdfdf", "#cecece")
+
+    return f"""
+        QDockWidget {{
+            border: 1px solid palette(mid);
+        }}
+
+        QDockWidget::title {{
+            background: qlineargradient(
+                x1: 0, y1: 0, x2: 0, y2: 1,
+                stop: 0    {colours[0]},
+                stop: 0.33 {colours[1]},
+                stop: 0.66 {colours[2]},
+                stop: 1    {colours[3]}
+            );
+            color: palette(window-text);
+            border: 1px solid palette(mid);
+            padding: 2px 4px;
+            text-align: center;
+        }}
+    """
+
+
 SCENE_TOOLBAR = """
     QToolBar#sceneToolbar {
+        padding: 5px 5px;
         border: 0px;
-        border-bottom: 0px;
     }
 """
 
@@ -123,12 +151,16 @@ SIDE_PANEL = """
     QWidget#controlPanelSliders {
         background: palette(base);
     }
+
+    QWidget#sidePanelControlsScroll {
+        border: 0px;
+    }
 """
 
 RIGHT_PANEL = """
     QTextEdit, QDoubleSpinBox {
         background: palette(window);
-        border: 1px solid palette(mid);
+        border: 0px;
         padding: 2px 4px;
     }
 """
@@ -136,28 +168,20 @@ RIGHT_PANEL = """
 PANEL_SURFACE = """
     QWidget#panelSurface {
         background: palette(base);
-        border: 1px solid palette(mid);
-    }
-
-    QWidget#panelSurface QLineEdit,
-    QWidget#panelSurface QTextEdit,
-    QWidget#panelSurface QAbstractSpinBox {
-        background: palette(window);
-        border: 1px solid palette(mid);
-        padding: 2px 4px;
+        border: 0px;
     }
 """
 
 SCRIPT_PANEL = """
     QWidget#scriptPanel {
-        border: 1px solid palette(mid);
+        border: 0px;
     }
 
     QWidget#scriptPanel QLineEdit,
     QWidget#scriptPanel QTextEdit,
     QWidget#scriptPanel QAbstractSpinBox {
         background: palette(window);
-        border: 1px solid palette(mid);
+        border: 0px;
         padding: 2px 4px;
     }
 """
@@ -165,12 +189,12 @@ SCRIPT_PANEL = """
 TABLE_VIEW = """
     QWidget#dataViewPanel {
         background: palette(base);
-        border: 1px solid palette(mid);
+        border: 0px;
     }
 
     QTableView {
         background: palette(base);
-        border: 1px solid palette(mid);
+        border: 0px;
     }
 
     QTabWidget::pane {

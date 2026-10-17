@@ -61,8 +61,9 @@ options:
                         Set the theme for plot/view widgets
 ```
 
-Every analysis panel is contained within a dock and so the layout of the panels can be
-moved around to suit any given workflow.
+Every panel is contained within a dock and so the layout of the panels can be moved
+around to suit any given workflow. Panels can be reopened from the View $\rightarrow$
+Panels menu.
 
 <p>
   <img src="media/image_7.png" />

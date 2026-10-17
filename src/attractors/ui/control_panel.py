@@ -3,8 +3,6 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..systems.registry import ATTRACTORS
 from .data_view_panel import DataViewPanel
-from .docking import AppDock as Dock
-from .docking import AppDockArea as DockArea
 from .style import SIDE_PANEL
 
 STEP = 1000
@@ -18,7 +16,7 @@ def _slider_value(index, min_val, step):
     return min_val + index * step
 
 
-class ControlPanel(QtWidgets.QWidget):
+class ControlPanel(QtCore.QObject):
     attractor_changed = QtCore.pyqtSignal(str)
     solve_requested = QtCore.pyqtSignal(bool)
     n_changed = QtCore.pyqtSignal(int)
@@ -36,21 +34,6 @@ class ControlPanel(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setObjectName("controlPanel")
-        self.setStyleSheet(SIDE_PANEL)
-
-        # plain QWidget to work around objectName selector bug on QWidget subclasses
-        inner = QtWidgets.QWidget()
-        inner.setObjectName("controlPanel")
-
-        outer_layout = QtWidgets.QVBoxLayout(self)
-        outer_layout.setContentsMargins(0, 0, 0, 0)
-        outer_layout.addWidget(inner)
-
-        self.panel_layout = QtWidgets.QVBoxLayout(inner)
-        self.panel_layout.setContentsMargins(4, 2, 0, 4)
-        self.panel_layout.setSpacing(7)
-
         self.current_name = next(iter(ATTRACTORS.keys()))
         self.right_panel = None
         self.trajectory_panel = None
@@ -68,20 +51,10 @@ class ControlPanel(QtWidgets.QWidget):
         self.dropdown.addItems([*ATTRACTORS, "Custom"])
         self.dropdown.currentTextChanged.connect(self._on_attractor_selected)
 
-        self.content_frame = QtWidgets.QFrame()
-        self.content_frame.setObjectName("sidePanelFrame")
-
-        content_layout = QtWidgets.QVBoxLayout(self.content_frame)
-        content_layout.setContentsMargins(2, 2, 2, 2)
-        content_layout.setSpacing(0)
-
-        self.dock_area = DockArea()
-        content_layout.addWidget(self.dock_area)
-        self.panel_layout.addWidget(self.content_frame)
-
         self.controls_scroll = QtWidgets.QScrollArea()
         self.controls_scroll.setObjectName("sidePanelControlsScroll")
         self.controls_scroll.setWidgetResizable(True)
+        self.controls_scroll.setStyleSheet(SIDE_PANEL)
         self.controls_tab = QtWidgets.QWidget()
         self.controls_tab.setObjectName("controlPanelSliders")
         self.controls_layout = QtWidgets.QVBoxLayout(self.controls_tab)
@@ -89,12 +62,9 @@ class ControlPanel(QtWidgets.QWidget):
         self.controls_layout.setSpacing(7)
         self.controls_scroll.setWidget(self.controls_tab)
 
-        self.controls_dock = Dock("Parameters controls", size=(1, 360), closable=False)
-        self.controls_dock.addWidget(self.controls_scroll)
-        self.dock_area.addDock(self.controls_dock)
-
         self.animation_scroll = QtWidgets.QScrollArea()
         self.animation_scroll.setWidgetResizable(True)
+        self.animation_scroll.setStyleSheet(SIDE_PANEL)
 
         self.animation_tab = QtWidgets.QWidget()
         self.animation_tab.setObjectName("controlPanelSliders")
@@ -103,23 +73,8 @@ class ControlPanel(QtWidgets.QWidget):
         self.animation_layout.setSpacing(7)
         self.animation_scroll.setWidget(self.animation_tab)
 
-        self.animation_dock = Dock("View options", size=(1, 360), closable=False)
-        self.animation_dock.addWidget(self.animation_scroll)
-        self.dock_area.addDock(
-            self.animation_dock, position="below", relativeTo=self.controls_dock
-        )
-
         self.data_view = DataViewPanel()
         self.data_view.setMinimumHeight(190)
-
-        self.data_dock = Dock("Data", size=(1, 360), closable=False)
-        self.data_dock.addWidget(self.data_view)
-        self.dock_area.addDock(
-            self.data_dock,
-            position="bottom",
-            relativeTo=self.controls_dock,
-        )
-        self.controls_dock.raiseDock()
 
         options = QtWidgets.QHBoxLayout()
         options.addWidget(self.dropdown)

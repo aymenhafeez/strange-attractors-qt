@@ -2,7 +2,6 @@ import numpy as np
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from ..ui.docking import AppDock as Dock
 from ..ui.style import PANEL_SURFACE, plot_colours
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
@@ -604,15 +603,15 @@ class ConsoleView3DManager(QtCore.QObject):
 
     def __init__(
         self,
-        dock_area,
+        dock_layout,
         default_name,
         default_view,
         default_dock,
         status_callback=None,
         active_callback=None,
     ):
-        super().__init__(dock_area)
-        self._dock_area = dock_area
+        super().__init__(dock_layout)
+        self._dock_layout = dock_layout
         self._views = {default_name: default_view}
         self._docks = {default_name: default_dock}
         self._default_name = default_name
@@ -671,7 +670,7 @@ class ConsoleView3DManager(QtCore.QObject):
         if old_key == self._current_name:
             self._current_name = new_key
 
-        dock.setTitle(new_key)
+        dock.setWindowTitle(new_key)
         self.views_changed.emit()
         self.current_changed.emit(self._current_name)
 
@@ -683,34 +682,24 @@ class ConsoleView3DManager(QtCore.QObject):
             return self.get(key, activate=activate)
 
         view = ConsoleView3D(status_callback=self._status_callback)
-        # i can't remember why this is needed
         view._manager = self
-        dock = Dock(key, size=(10, 6), closable=True)
-        dock.addWidget(view.host)
-
-        dock.activated.connect(lambda view_name=key: self.activate(view_name))
-        dock.sigClosed.connect(self._forget_dock)
-
-        self._dock_area.addDock(
-            dock,
-            position="above",
-            relativeTo=self._docks[self._default_name],
+        dock = self._dock_layout.add(
+            f"view3d/{key}",
+            key,
+            view.host,
+            relative_to=self._docks[self._default_name],
         )
+        dock.activated.connect(lambda: self.activate(dock.windowTitle()))
+
         self._views[key] = view
         self._docks[key] = dock
         if activate:
             self._mark_active()
             self._set_current_name(key)
-            dock.raiseDock()
+            dock.reveal()
         self.views_changed.emit()
 
         return view
-
-    def _forget_dock(self, dock):
-        for name, known_dock in self._docks.items():
-            if known_dock is dock:
-                self._forget(name)
-                return
 
     def close(self, name=None):
         key = self._current_name if name is None else self._view_name(name)
@@ -722,12 +711,9 @@ class ConsoleView3DManager(QtCore.QObject):
 
             return
 
-        dock = self._docks.get(key)
-        if dock is not None and dock.container() is not None:
-            # closing the dock triggers sigClosed, which calls _forget itself
-            dock.close()
-        else:
-            self._forget(key)
+        dock = self._docks[key]
+        self._forget(key)
+        self._dock_layout.remove(dock)
 
     def clear_all(self):
         for name, view in self._views.items():
@@ -771,10 +757,7 @@ class ConsoleView3DManager(QtCore.QObject):
         return self.current.grid_visible()
 
     def _raise_dock(self, dock):
-        container = dock.container()
-        raise_dock = getattr(container, "raiseDock", None)
-        if raise_dock is not None:
-            raise_dock(dock)
+        dock.reveal()
 
     def _set_current_name(self, key):
         if self._current_name == key:

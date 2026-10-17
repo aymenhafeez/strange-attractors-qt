@@ -1,5 +1,4 @@
 import time
-import weakref
 from pathlib import Path
 
 import numpy as np
@@ -27,17 +26,15 @@ from .presets import (
 from .systems.registry import ATTRACTORS
 from .ui.bifurcation_panel import BifurcationPanel
 from .ui.control_panel import ControlPanel
-from .ui.docking import AppDock as Dock
-from .ui.docking import AppDockArea as DockArea
+from .ui.docking import DockLayout
 from .ui.lyapunov_panel import LyapunovPanel
 from .ui.main_toolbar import build_menu_bar, build_status_bar, build_toolbar
 from .ui.output_panel import OutputPanel
 from .ui.poincare_panel import PoincarePanel
 from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
-from .ui.style import SPLITTER_HANDLE_HOVER, plot_colours
+from .ui.style import plot_colours
 from .ui.system_toolbar import SystemToolbar
-from .ui.workspace_panel import WorkspacePanel
 from .view.view_manager import ViewManager
 from .workers.solve_manager import SolveManager
 
@@ -48,26 +45,11 @@ PROJECTION_UPDATE_INTERVAL = 100  # ms
 
 
 def _panel_visible(window, panel_name):
-    dock = window._panel_docks.get(panel_name)
-    if dock is not None:
-        return dock.container() is not None
-
-    panels = {
-        "lyapunov_panel": window.lyapunov_panel,
-        "projection_panel": window.projection_panel,
-        "poincare_panel": window.poincare_panel,
-        "bifurcation_panel": window.bifurcation_panel,
-        "jupyter_console_panel": window.jupyter_console_panel,
-    }
-
-    return panels[panel_name].isVisible()
+    return not window._panel_docks[panel_name].isHidden()
 
 
 def _workspace_visible(window):
-    if window.workspace_dock is not None:
-        return window.workspace_dock.container() is not None
-
-    return _panel_visible(window, "jupyter_console_panel")
+    return any(not dock.isHidden() for dock in window._workspace_docks())
 
 
 def app_settings():
@@ -78,6 +60,9 @@ class Window(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Systems analysis")
+        self.setContentsMargins(5, 0, 5, 0)
+        self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
+        self.dock_layout = DockLayout(self)
 
         self.reset_session_state = False
 
@@ -114,20 +99,11 @@ class Window(QtWidgets.QMainWindow):
         self._app_status_message = ""
         self._app_status_clear_timer = None
         self._output_panel_visible = False
-        self._output_panel_height = 180
         self._panel_docks = {}
-        self._panel_dock_titles = {}
-        self._panel_dock_defaults = {}
-        self._closing_panel_dock = None
-        self._closing_workspace_dock = False
-        self._workspace_tab_stacks = weakref.WeakSet()
+        self._open_analysis_panels = set()
         self._jupyter_toolbar_actions = []
         self.system_toolbar_action = None
         self._menu_actions = []
-        self._left_panel_splitter_size = int(WINDOW_WIDTH * 0.22)
-        self._right_panel_splitter_size = int(WINDOW_WIDTH * 0.23)
-
-        self.workspace_dock = None
         self.workspace_system_mode_action = None
         self.workspace_explore_mode_action = None
         self.workspace_mode = "system"
@@ -179,8 +155,8 @@ class Window(QtWidgets.QMainWindow):
         )
         self.scene.projections_data.connect(self._on_projections_data)
 
-        self.controls = ControlPanel()
-        self.right_panel = RightPanel()
+        self.controls = ControlPanel(self)
+        self.right_panel = RightPanel(self.dock_layout)
         self.controls.set_right_panel(self.right_panel)
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._on_controls_solve_requested)
@@ -238,34 +214,29 @@ class Window(QtWidgets.QMainWindow):
         self.poincare_panel.plane_changed.connect(
             self.scene.grid_overlay.set_poincare_plane
         )
-        self.poincare_panel.hide()
 
         self.lyapunov_panel = LyapunovPanel()
         self.lyapunov_panel.compute_requested.connect(self._request_lyapunov)
         self.lyapunov_panel.close_requested.connect(self._close_lyapunov_panel)
-        self.lyapunov_panel.hide()
 
         self.projection_panel = ProjectionPanel()
         self.projection_panel.close_requested.connect(self._close_projections)
-        self.projection_panel.hide()
 
         self.bifurcation_panel = BifurcationPanel()
         self.bifurcation_panel.close_requested.connect(self._close_bifurcation)
-        self.bifurcation_panel.hide()
 
         self.output_panel = OutputPanel()
         self.output_panel.hide()
 
         self.jupyter_console_panel = JupyterConsolePanel(
-            self._jupyter_console_namespace, script_dir=self._scripts_directory
+            self.dock_layout,
+            self._jupyter_console_namespace,
+            script_dir=self._scripts_directory,
         )
         self.system_toolbar = SystemToolbar()
         self.jupyter_console_panel.script_panel.status_changed.connect(
             lambda message: self._set_temporary_app_status(message)
         )
-        self.jupyter_console_panel.close_requested.connect(self._close_jupyter_console)
-
-        self.workspace_panel = WorkspacePanel(self.jupyter_console_panel)
 
         self.jupyter_console_panel.set_explore_status_callback(
             self.system_toolbar.set_status
@@ -309,6 +280,36 @@ class Window(QtWidgets.QMainWindow):
         self.system_toolbar.set_solve_state(self._solve_state)
         self.workspace_controller.sync_views()
 
+        self.viewport_dock = self.dock_layout.add(
+            "viewport", "Viewport", self.scene.container
+        )
+        self.parameters_dock = self.dock_layout.add(
+            "parameters", "Parameters", self.controls.controls_scroll
+        )
+        self.view_options_dock = self.dock_layout.add(
+            "view_options", "View options", self.controls.animation_scroll
+        )
+        self.data_dock = self.dock_layout.add("data", "Data", self.controls.data_view)
+        self._left_docks = [
+            self.parameters_dock,
+            self.view_options_dock,
+            self.data_dock,
+        ]
+        self._right_docks = [
+            self.right_panel.trajectory_dock,
+            self.right_panel.preset_dock,
+            self.right_panel.custom_dock,
+        ]
+        for name, title, panel in (
+            ("lyapunov_panel", "Lyapunov", self.lyapunov_panel),
+            ("poincare_panel", "Poincare", self.poincare_panel),
+            ("bifurcation_panel", "Bifurcation", self.bifurcation_panel),
+            ("projection_panel", "Projection heatmaps", self.projection_panel),
+        ):
+            self._panel_docks[name] = self.dock_layout.add(
+                f"analysis/{name}", title, panel
+            )
+        self.output_dock = self.dock_layout.add("output", "Output", self.output_panel)
         build_toolbar(self)
         build_menu_bar(self)
         self.controls.animation_mode_changed.connect(self._set_animation_mode)
@@ -316,81 +317,10 @@ class Window(QtWidgets.QMainWindow):
 
         self.workspace_inspector = WorkspaceInspector(self.jupyter_console_panel)
 
-        self.workspace_dock_area = DockArea()
-        self.viewport_dock = Dock("Viewport", size=(10, 12))
-        self.viewport_dock.addWidget(self.scene.container)
-        self.workspace_dock_area.addDock(self.viewport_dock)
-        self.workspace_dock = self._build_workspace_dock()
-        self.lyapunov_dock = self._build_panel_dock("Lyapunov", self.lyapunov_panel)
-        self.poincare_dock = self._build_panel_dock("Poincare", self.poincare_panel)
-        self.bifurcation_dock = self._build_panel_dock(
-            "Bifurcation",
-            self.bifurcation_panel,
-        )
-        self.projection_dock = self._build_panel_dock(
-            "Projection heatmaps",
-            self.projection_panel,
-        )
-        self._panel_docks = {
-            "lyapunov_panel": self.lyapunov_dock,
-            "poincare_panel": self.poincare_dock,
-            "bifurcation_panel": self.bifurcation_dock,
-            "projection_panel": self.projection_dock,
-        }
-        self._panel_dock_titles = {
-            "lyapunov_panel": "Lyapunov",
-            "poincare_panel": "Poincare",
-            "bifurcation_panel": "Bifurcation",
-            "projection_panel": "Projection heatmaps",
-        }
-        self._panel_dock_defaults = {
-            "lyapunov_panel": ("top", self.viewport_dock),
-            "poincare_panel": ("top", self.viewport_dock),
-            "bifurcation_panel": ("top", self.viewport_dock),
-            "projection_panel": ("above", self.viewport_dock),
-        }
-        self._connect_workspace_dock_signals()
-
-        main_area = QtWidgets.QWidget()
-        main_area_layout = QtWidgets.QVBoxLayout(main_area)
-        main_area_layout.setContentsMargins(
-            0,
-            4,
-            0,
-            4,
-        )
-        main_area_layout.addWidget(self.workspace_dock_area)
-
-        self.main_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
-        self.main_splitter.addWidget(self.controls)
-        self.main_splitter.addWidget(main_area)
-        self.main_splitter.addWidget(self.right_panel)
-        self.main_splitter.setSizes(
-            [
-                int(WINDOW_WIDTH * 0.22),
-                int(WINDOW_WIDTH * 0.55),
-                int(WINDOW_WIDTH * 0.23),
-            ]
-        )
-        self.main_splitter.setStyleSheet(SPLITTER_HANDLE_HOVER)
-
-        self.output_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
-        self.output_splitter.addWidget(self.main_splitter)
-        self.output_splitter.addWidget(self.output_panel)
-        self.output_splitter.setCollapsible(0, False)
-        self.output_splitter.setCollapsible(1, True)
-        self.output_splitter.setStretchFactor(0, 1)
-        self.output_splitter.setStretchFactor(1, 0)
-        self.output_splitter.setSizes(
-            [WINDOW_HEIGHT - self._output_panel_height, self._output_panel_height]
-        )
-        self.output_splitter.setStyleSheet(SPLITTER_HANDLE_HOVER)
-
-        visualiser_page = QtWidgets.QWidget()
-        visualiser_layout = QtWidgets.QVBoxLayout(visualiser_page)
-        visualiser_layout.setContentsMargins(0, 0, 0, 0)
-        visualiser_layout.addWidget(self.output_splitter)
-        self.setCentralWidget(visualiser_page)
+        self._dock_state_timer = QtCore.QTimer(self)
+        self._dock_state_timer.setSingleShot(True)
+        self._dock_state_timer.timeout.connect(self._sync_dock_state)
+        self.dock_layout.changed.connect(lambda: self._dock_state_timer.start(0))
 
         self.scene.container.installEventFilter(self)
 
@@ -509,61 +439,51 @@ class Window(QtWidgets.QMainWindow):
         preset_panel.set_saved_presets(list_presets(self._preset_directory), selected)
         self._update_preset_summary(selected or preset_panel.current_preset_name())
 
-    def _enter_explore_workspace(self):
-        self.jupyter_console_panel.ensure_console()
-        self._open_workspace_dock()
-        self.jupyter_console_panel.apply_explore_layout()
-        self._set_side_panel_actions(left=False, right=False)
-
-    def _enter_system_workspace(self):
-        self.jupyter_console_panel.ensure_console()
-        self._open_workspace_dock()
-        self.jupyter_console_panel.apply_system_layout()
-        self._set_side_panel_actions(left=True, right=True)
-
-    def _restore_explore_layout(self):
-        self._set_workspace_mode("explore")
-        self.jupyter_console_panel.apply_explore_layout()
-        self._set_temporary_app_status("Restored Explore layout")
-
     def _set_workspace_mode(self, mode):
-        mode_changed = mode != self.workspace_mode
+        if mode not in {"system", "explore"}:
+            raise ValueError("Workspace mode must be 'system' or 'explore'")
         self.workspace_mode = mode
-
-        if mode_changed or not _workspace_visible(self):
-            if mode == "explore":
-                self._enter_explore_workspace()
-            elif mode == "system":
-                self._enter_system_workspace()
-
-        self.workspace_panel.set_mode(mode)
-        self._sync_jupyter_workspace_state()
-        self._sync_explore_actions()
-
-        if (
-            self.workspace_system_mode_action is not None
-            and self.workspace_explore_mode_action is not None
+        self.dock_layout.switch(mode)
+        self.jupyter_console_panel.set_explore_visible(mode == "explore")
+        self._sync_dock_state()
+        with (
+            QtCore.QSignalBlocker(self.workspace_system_mode_action),
+            QtCore.QSignalBlocker(self.workspace_explore_mode_action),
         ):
-            with (
-                QtCore.QSignalBlocker(self.workspace_system_mode_action),
-                QtCore.QSignalBlocker(self.workspace_explore_mode_action),
-            ):
-                self.workspace_system_mode_action.setChecked(mode == "system")
-                self.workspace_explore_mode_action.setChecked(mode == "explore")
+            self.workspace_system_mode_action.setChecked(mode == "system")
+            self.workspace_explore_mode_action.setChecked(mode == "explore")
+
+    def _toggle_system_workspace(self):
+        if self.workspace_mode != "system":
+            self._set_workspace_mode("system")
+            if _workspace_visible(self):
+                return
+        elif _workspace_visible(self):
+            side_docks = [self.parameters_dock, self.right_panel.trajectory_dock]
+            widths = [dock.width() for dock in side_docks]
+            for dock in self._workspace_docks():
+                dock.hide()
+            self.resizeDocks(
+                [side_docks[0], self.viewport_dock, side_docks[1]],
+                [widths[0], max(self.width() - sum(widths), 1), widths[1]],
+                QtCore.Qt.Orientation.Horizontal,
+            )
+            self._sync_dock_state()
+            return
+
+        panel = self.jupyter_console_panel
+        panel.plot_dock.show()
+        panel.script_dock.show()
+        panel.console_dock.show()
+        panel.plot_dock.raise_()
+        panel.console_dock.raise_()
+        self.dock_layout.resize_defaults()
+        self._sync_dock_state()
 
     def _restore_default_layout(self):
-        self.viewport_dock.raiseDock()
-        self._set_side_panel_actions(left=True, right=True)
-
-    def _set_side_panel_actions(self, *, left, right):
-        with (
-            QtCore.QSignalBlocker(self.toolbar_left_panel_action),
-            QtCore.QSignalBlocker(self.toolbar_right_panel_action),
-        ):
-            self.toolbar_left_panel_action.setChecked(bool(left))
-            self.toolbar_right_panel_action.setChecked(bool(right))
-        self._set_left_panel_visible(left)
-        self._set_right_panel_visible(right)
+        self.dock_layout.reset()
+        self._sync_dock_state()
+        self._set_temporary_app_status(f"Restored {self.workspace_mode.title()} layout")
 
     def _hide_menu_icons(self, menu):
         for action in menu.actions():
@@ -662,41 +582,12 @@ class Window(QtWidgets.QMainWindow):
         return action
 
     def _set_left_panel_visible(self, checked):
-        if checked:
-            self.controls.show()
-            sizes = self.main_splitter.sizes()
-            if len(sizes) >= 3 and sizes[0] == 0:
-                sizes[0] = self._left_panel_splitter_size
-                self.main_splitter.setSizes(sizes)
-            return
-
-        sizes = self.main_splitter.sizes()
-        if len(sizes) >= 3 and sizes[0] > 0:
-            self._left_panel_splitter_size = sizes[0]
-        self.controls.hide()
+        for dock in self._left_docks:
+            dock.setVisible(checked)
 
     def _set_output_panel_visible(self, visible):
-        visible = bool(visible)
-
-        if visible:
-            self.output_panel.show()
-
-            sizes = self.output_splitter.sizes()
-            if len(sizes) >= 2 and sizes[1] == 0:
-                total = max(sum(sizes), 1)
-                output_height = min(self._output_panel_height, max(total // 2, 1))
-                self.output_splitter.setSizes(
-                    [max(total - output_height, 1), output_height]
-                )
-
-        else:
-            sizes = self.output_splitter.sizes()
-            if len(sizes) >= 2 and sizes[1] > 0:
-                self._output_panel_height = sizes[1]
-
-            self.output_panel.hide()
-
-        self._output_panel_visible = visible
+        self.output_dock.setVisible(visible)
+        self._output_panel_visible = bool(visible)
         self._sync_output_panel_action()
 
     def _toggle_output_panel(self):
@@ -748,31 +639,8 @@ class Window(QtWidgets.QMainWindow):
         self.controls.orbit_speed_wrapper.setVisible(enabled)
 
     def _set_right_panel_visible(self, checked):
-        if checked:
-            self.right_panel.show()
-            sizes = self.main_splitter.sizes()
-            if len(sizes) >= 3 and sizes[2] == 0:
-                sizes[2] = self._right_panel_splitter_size
-                self.main_splitter.setSizes(sizes)
-            return
-
-        sizes = self.main_splitter.sizes()
-        if len(sizes) >= 3 and sizes[2] > 0:
-            self._right_panel_splitter_size = sizes[2]
-        self.right_panel.hide()
-
-    def _build_panel_dock(self, title, panel):
-        dock = Dock(title, size=(10, 12), closable=True)
-        dock.addWidget(panel)
-        dock.sigClosed.connect(lambda _dock: self._on_panel_dock_closed(panel))
-        return dock
-
-    def _build_workspace_dock(self):
-        dock = Dock("Workspace", size=(10, 12), closable=True)
-        dock.addWidget(self.workspace_panel)
-        dock.sigClosed.connect(lambda _dock: self._on_workspace_dock_closed())
-
-        return dock
+        for dock in self._right_docks:
+            dock.setVisible(checked)
 
     def _add_panel_menu_action(self, text, callback):
         action = QtGui.QAction(text, self)
@@ -803,8 +671,10 @@ class Window(QtWidgets.QMainWindow):
             self.toolbar_bifurcation_action.setChecked(
                 _panel_visible(self, "bifurcation_panel")
             )
-            self.toolbar_explore_action.setChecked(_workspace_visible(self))
-            self.toolbar_system_action.setChecked(_workspace_visible(self))
+            self.toolbar_explore_action.setChecked(self.workspace_mode == "explore")
+            self.toolbar_system_action.setChecked(
+                self.workspace_mode == "system" and _workspace_visible(self)
+            )
             self.toolbar_process_status_action.setChecked(self._process_status_visible)
             self.output_panel_action.setChecked(self._output_panel_visible)
         self._sync_jupyter_workspace_state()
@@ -1308,7 +1178,6 @@ class Window(QtWidgets.QMainWindow):
         self._sync_explore_actions()
 
     def _sync_jupyter_workspace_state(self):
-        self._watch_workspace_tab_stacks()
         self._sync_jupyter_toolbar_visibility()
 
     def _sync_toolbar_animation_action(self, playing):
@@ -1989,129 +1858,64 @@ class Window(QtWidgets.QMainWindow):
         perf_finish(self, token, status="failed")
         self._set_app_status(f"Lyapunov failed: {message}", error=True)
 
-    def _find_dock(self, panel):
-        for dock in self._panel_docks.values():
-            if panel in dock.widgets:
-                return dock
+    def _workspace_docks(self):
+        panel = self.jupyter_console_panel
+        return [
+            panel.script_dock,
+            panel.console_dock,
+            *panel.plots._docks.values(),
+            *panel.views3d._docks.values(),
+            *panel.tables._docks.values(),
+        ]
 
-        return None
+    def _open_panel_dock(self, panel_name):
+        self._panel_docks[panel_name].reveal()
+        self._sync_dock_state()
 
-    def _connect_workspace_dock_signals(self):
-        docks = [self.viewport_dock, self.workspace_dock]
-        docks.extend(self._panel_docks.values())
-        for dock in docks:
-            if dock is None:
-                continue
-            dock.container_changed.connect(self._on_workspace_layout_changed)
+    def _close_panel_dock(self, panel_name):
+        self._panel_docks[panel_name].hide()
+        self._sync_dock_state()
 
-    def _on_workspace_layout_changed(self):
-        QtCore.QTimer.singleShot(0, self._sync_jupyter_workspace_state)
-
-    def _watch_workspace_tab_stacks(self):
-        try:
-            containers, _docks = self.workspace_dock_area.findAll()
-        except (AttributeError, RuntimeError):
-            return
-
-        for container in containers:
-            try:
-                stack = container.stack
-            except AttributeError:
-                stack = None
-            if stack is None or stack in self._workspace_tab_stacks:
-                continue
-            stack.currentChanged.connect(
-                lambda _index: self._sync_jupyter_workspace_state()
-            )
-            self._workspace_tab_stacks.add(stack)
-
-    def _open_workspace_dock(self):
-        self.jupyter_console_panel.ensure_console()
-
-        if self.workspace_dock is None:
-            self.workspace_panel.show()
-            return
-
-        if self.workspace_dock.container() is None:
-            self.workspace_dock_area.addDock(
-                self.workspace_dock,
-                position="above",
-                relativeTo=self.viewport_dock,
-            )
-        self.workspace_panel.show()
-        if self.workspace_dock.container() is not None:
-            try:
-                self.workspace_dock.raiseDock()
-            except AttributeError:
-                pass
-        self._sync_jupyter_workspace_state()
-
-    def _replace_closed_panel_dock(self, panel_name, panel):
-        title = self._panel_dock_titles.get(panel_name)
-        if title is None:
-            return
-
-        dock = self._build_panel_dock(title, panel)
-        dock.container_changed.connect(self._on_workspace_layout_changed)
-        self._panel_docks[panel_name] = dock
-
-    def _open_panel_dock(self, panel, panel_name):
-        dock = self._panel_docks.get(panel_name)
-        if dock is None:
-            panel.show()
-            return
-
-        if dock.container() is None:
-            position, relative_to = self._panel_dock_defaults[panel_name]
-            self.workspace_dock_area.addDock(
-                dock,
-                position=position,
-                relativeTo=relative_to,
-            )
-        panel.show()
-        if dock.container() is not None:
-            try:
-                dock.raiseDock()
-            except AttributeError:
-                pass
-        self._sync_jupyter_workspace_state()
-
-    def _close_panel_dock(self, panel):
-        dock = self._find_dock(panel)
-        if dock is None:
-            return
-
-        if dock.container() is not None and self._closing_panel_dock is not dock:
-            self._closing_panel_dock = dock
-            try:
-                dock.close()
-            finally:
-                self._closing_panel_dock = None
-
-    def _on_panel_dock_closed(self, panel):
-        panel_name = None
-        dock = None
-        for candidate_name, candidate_dock in self._panel_docks.items():
-            if panel in candidate_dock.widgets:
-                panel_name = candidate_name
-                dock = candidate_dock
-                break
-        if self._closing_panel_dock is dock:
-            if panel_name is not None:
-                self._replace_closed_panel_dock(panel_name, panel)
-            return
-
-        if panel is self.lyapunov_panel:
-            self._close_lyapunov_panel()
-        elif panel is self.projection_panel:
-            self._close_projections()
-        elif panel is self.poincare_panel:
-            self._close_poincare()
-        elif panel is self.bifurcation_panel:
-            self._close_bifurcation()
-
-        if panel_name is not None:
-            self._replace_closed_panel_dock(panel_name, panel)
+    def _sync_dock_state(self):
+        opened = {
+            name for name, dock in self._panel_docks.items() if not dock.isHidden()
+        }
+        previous = self._open_analysis_panels
+        self._open_analysis_panels = opened
+        for name in previous - opened:
+            if name == "lyapunov_panel":
+                self._cancel_lyapunov_analysis()
+            elif name == "poincare_panel":
+                self.poincare_panel.cancel_solve()
+                self.scene.grid_overlay.remove_poincare_plane()
+            elif name == "bifurcation_panel":
+                self.bifurcation_panel.cancel_sweep()
+        for name in opened - previous:
+            if name == "lyapunov_panel" and self.lyapunov_panel.auto_enabled():
+                self._request_lyapunov()
+            elif name == "projection_panel":
+                QtCore.QTimer.singleShot(0, self._reapply_projections)
+            elif name == "poincare_panel":
+                self.scene.grid_overlay.set_poincare_plane(
+                    self.poincare_panel.plane_combo.currentText(),
+                    self.poincare_panel.value_spin.value(),
+                )
+                config, values = self._get_current_config_and_values()
+                if config is not None:
+                    self.poincare_panel.set_attractor(config, values)
+                self.poincare_panel.recompute()
+            elif name == "bifurcation_panel":
+                config, values = self._get_current_config_and_values()
+                if config is not None:
+                    self.bifurcation_panel.set_config(config, values)
+        self._output_panel_visible = not self.output_dock.isHidden()
+        for action, docks in (
+            (self.toolbar_left_panel_action, self._left_docks),
+            (self.toolbar_right_panel_action, self._right_docks),
+        ):
+            with QtCore.QSignalBlocker(action):
+                action.setChecked(any(not dock.isHidden() for dock in docks))
+        self._sync_toolbar_panel_actions()
 
     def _cancel_lyapunov_analysis(self):
         self.solver.cancel_lyapunov()
@@ -2124,74 +1928,40 @@ class Window(QtWidgets.QMainWindow):
         self._clear_app_status()
 
     def _close_lyapunov_panel(self):
-        self._cancel_lyapunov_analysis()
-        self.lyapunov_panel.hide()
-        self._close_panel_dock(self.lyapunov_panel)
-        self._sync_toolbar_panel_actions()
+        self._close_panel_dock("lyapunov_panel")
 
     def _toggle_lyapunov_panel(self):
         if _panel_visible(self, "lyapunov_panel"):
-            self._close_lyapunov_panel()
+            self._close_panel_dock("lyapunov_panel")
         else:
-            self._open_panel_dock(self.lyapunov_panel, "lyapunov_panel")
-            if self.lyapunov_panel.auto_enabled():
-                self._request_lyapunov()
-            self._sync_toolbar_panel_actions()
+            self._open_panel_dock("lyapunov_panel")
 
     def _close_projections(self):
-        self.projection_panel.hide()
-        self._close_panel_dock(self.projection_panel)
-        self._sync_toolbar_panel_actions()
+        self._close_panel_dock("projection_panel")
 
     def _toggle_projections(self):
         if _panel_visible(self, "projection_panel"):
-            self._close_projections()
+            self._close_panel_dock("projection_panel")
         else:
-            self._open_panel_dock(self.projection_panel, "projection_panel")
-            QtCore.QTimer.singleShot(0, self._reapply_projections)
-            self._sync_toolbar_panel_actions()
+            self._open_panel_dock("projection_panel")
 
     def _close_poincare(self):
-        self.poincare_panel.cancel_solve()
-        self.scene.grid_overlay.remove_poincare_plane()
-        self.poincare_panel.hide()
-        self._close_panel_dock(self.poincare_panel)
-        self._sync_toolbar_panel_actions()
+        self._close_panel_dock("poincare_panel")
 
     def _toggle_poincare(self):
         if _panel_visible(self, "poincare_panel"):
-            self._close_poincare()
+            self._close_panel_dock("poincare_panel")
         else:
-            self._open_panel_dock(self.poincare_panel, "poincare_panel")
-            self.scene.grid_overlay.set_poincare_plane(
-                self.poincare_panel.plane_combo.currentText(),
-                self.poincare_panel.value_spin.value(),
-            )
-            self.poincare_panel.recompute()
-            config, values = self._get_current_config_and_values()
-            if config is not None:
-                self.poincare_panel.set_attractor(config, values)
-            self._sync_toolbar_panel_actions()
+            self._open_panel_dock("poincare_panel")
 
     def _close_bifurcation(self):
-        self.bifurcation_panel.cancel_sweep()
-        self.bifurcation_panel.hide()
-        self._close_panel_dock(self.bifurcation_panel)
-        self._sync_toolbar_panel_actions()
+        self._close_panel_dock("bifurcation_panel")
 
     def _toggle_bifurcation(self):
         if _panel_visible(self, "bifurcation_panel"):
-            self._close_bifurcation()
+            self._close_panel_dock("bifurcation_panel")
         else:
-            config, values = self._get_current_config_and_values()
-            if config is None:
-                return
-            self.bifurcation_panel.set_config(config, values)
-            self._open_panel_dock(
-                self.bifurcation_panel,
-                "bifurcation_panel",
-            )
-            self._sync_toolbar_panel_actions()
+            self._open_panel_dock("bifurcation_panel")
 
     def _clear_current_explore_traces(self):
         self.jupyter_console_panel.active_explorer().clear_traces()
@@ -2258,51 +2028,13 @@ class Window(QtWidgets.QMainWindow):
 
         self._set_app_status(f"Exported table to {target}")
 
-    def _on_workspace_dock_closed(self):
-        if not self._closing_workspace_dock:
-            self.workspace_panel.hide()
-        dock = self._build_workspace_dock()
-        dock.container_changed.connect(self._on_workspace_layout_changed)
-        self.workspace_dock = dock
-        self._sync_jupyter_workspace_state()
-        self._sync_toolbar_panel_actions()
-
-    def _close_jupyter_console(self):
-        if (
-            self.workspace_dock is not None
-            and self.workspace_dock.container() is not None
-        ):
-            self._closing_workspace_dock = True
-            try:
-                self.workspace_dock.close()
-            finally:
-                self._closing_workspace_dock = False
-        self.workspace_panel.hide()
-        self._sync_jupyter_workspace_state()
-        self._sync_toolbar_panel_actions()
-
-    def _toggle_jupyter_console(self):
-        if _workspace_visible(self):
-            self._close_jupyter_console()
-            self._restore_default_layout()
-        else:
-            self.jupyter_console_panel.ensure_console()
-            self._open_workspace_dock()
-            self.jupyter_console_panel.focus_console()
-            self._sync_jupyter_workspace_state()
-            self._sync_toolbar_panel_actions()
-
-    def _panel_widget(self, panel_name):
-        panels = {
-            "lyapunov_panel": self.lyapunov_panel,
-            "projection_panel": self.projection_panel,
-            "poincare_panel": self.poincare_panel,
-            "bifurcation_panel": self.bifurcation_panel,
-        }
-
-        return panels[panel_name]
-
     def _save_workspace_shell(self, settings):
+        for kind, manager in (
+            ("plot", self.jupyter_console_panel.plots),
+            ("view3d", self.jupyter_console_panel.views3d),
+            ("table", self.jupyter_console_panel.tables),
+        ):
+            settings.setValue(f"workspace/default_{kind}", manager._default_name)
         kind, name = self.jupyter_console_panel.active_view_key()
         script_path = self.jupyter_console_panel.script_panel.current_script_path()
         settings.setValue("workspace/plots", self.jupyter_console_panel.plots.names())
@@ -2326,27 +2058,42 @@ class Window(QtWidgets.QMainWindow):
             settings.remove("workspace/current_script")
 
     def _restore_workspace_shell(self, settings):
+        for kind, manager in (
+            ("plot", self.jupyter_console_panel.plots),
+            ("view3d", self.jupyter_console_panel.views3d),
+            ("table", self.jupyter_console_panel.tables),
+        ):
+            name = settings.value(f"workspace/default_{kind}", manager._default_name)
+            manager.rename(manager._default_name, name)
         plot_names = settings.value("workspace/plots", [], type=list)
         view_names = settings.value("workspace/views3d", [], type=list)
         table_names = settings.value("workspace/tables", [], type=list)
 
         for name in plot_names:
-            if name != "Plot":
+            if name != self.jupyter_console_panel.plots._default_name:
                 self.jupyter_console_panel.plots.new(name, activate=False)
 
         for name in view_names:
-            if name != "3D View":
+            if name != self.jupyter_console_panel.views3d._default_name:
                 self.jupyter_console_panel.views3d.new(name, activate=False)
 
         for name in table_names:
-            if name != "Table":
+            if name != self.jupyter_console_panel.tables._default_name:
                 self.jupyter_console_panel.tables.new(name, activate=False)
 
         kind = settings.value("workspace/active_kind", "plot")
         name = settings.value("workspace/active_name", "Plot")
 
         try:
-            self.jupyter_console_panel.set_active_workspace_view(kind, name)
+            self.jupyter_console_panel.set_active_workspace_view(
+                kind, name, activate=False
+            )
+            manager = (
+                self.jupyter_console_panel.views3d
+                if kind == "view3d"
+                else self.jupyter_console_panel.plots
+            )
+            manager.activate(name)
         except (KeyError, ValueError):
             pass
 
@@ -2367,16 +2114,8 @@ class Window(QtWidgets.QMainWindow):
             "layout/plot_theme", app.property("appTheme") if app else None
         )
         settings.setValue("layout/window_geometry", self.saveGeometry())
-        settings.setValue("layout/main_splitter", self.main_splitter.saveState())
+        self.dock_layout.save(settings)
         settings.setValue("layout/workspace_mode", self.workspace_mode)
-        settings.setValue("layout/workspace_visible", _workspace_visible(self))
-
-        for panel_name in self._panel_docks:
-            settings.setValue(
-                f"layout/panels/{panel_name}",
-                _panel_visible(self, panel_name),
-            )
-
         self._save_workspace_shell(settings)
 
     def _restore_app_layout(self):
@@ -2397,33 +2136,10 @@ class Window(QtWidgets.QMainWindow):
         if geometry is not None:
             self.restoreGeometry(geometry)
 
-        splitter = settings.value("layout/main_splitter")
-        if splitter is not None:
-            self.main_splitter.restoreState(splitter)
-
-        left_visible = settings.value("layout/left_panel_visible", True, type=bool)
-        right_visible = settings.value("layout/right_panel_visible", True, type=bool)
-        self._set_side_panel_actions(left=left_visible, right=right_visible)
-
         self._restore_workspace_shell(settings)
-
-        for panel_name in self._panel_docks:
-            visible = settings.value(f"layout/panels/{panel_name}", False, type=bool)
-            panel = self._panel_widget(panel_name)
-            if visible:
-                self._open_panel_dock(panel, panel_name)
-            else:
-                self._close_panel_dock(panel)
-
+        self.dock_layout.restore(settings)
         mode = settings.value("layout/workspace_mode", "system")
-        if mode in {"system", "explore"}:
-            self._set_workspace_mode(mode)
-
-        workspace_visible = settings.value("layout/workspace_visible", False, type=bool)
-        if workspace_visible:
-            self._open_workspace_dock()
-        else:
-            self._close_jupyter_console()
+        self._set_workspace_mode(mode if mode in {"system", "explore"} else "system")
 
         self._sync_toolbar_panel_actions()
         self.workspace_controller.sync_views()
