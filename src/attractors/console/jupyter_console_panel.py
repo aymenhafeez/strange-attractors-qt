@@ -340,15 +340,15 @@ class ConsolePlotManager(QtCore.QObject):
 
     def __init__(
         self,
-        dock_area,
+        dock_layout,
         default_name,
         default_plot,
         default_dock,
         status_callback=None,
         active_callback=None,
     ):
-        super().__init__(dock_area)
-        self._dock_area = dock_area
+        super().__init__(dock_layout)
+        self._dock_layout = dock_layout
         self._plots = {default_name: default_plot}
         self._docks = {default_name: default_dock}
         self._current_name = default_name
@@ -417,7 +417,7 @@ class ConsolePlotManager(QtCore.QObject):
             self._default_name = new_key
         if old_key == self._current_name:
             self._current_name = new_key
-        dock.setTitle(new_key)
+        dock.setWindowTitle(new_key)
         self.plots_changed.emit()
         self.current_changed.emit(self._current_name)
 
@@ -451,35 +451,25 @@ class ConsolePlotManager(QtCore.QObject):
         plot = ConsolePlot(plot_widget, status_callback=self._status_callback)
         plot.set_table_manager(self._table_manager)
 
-        # i can't remember why this is needed
         plot._manager = self
-        dock = Dock(key, size=(10, 6), closable=True)
-        dock.addWidget(plot.host)
-
-        dock.activated.connect(lambda plot_name=key: self.activate(plot_name))
-        dock.sigClosed.connect(self._forget_dock)
-
-        self._dock_area.addDock(
-            dock,
-            position="above",
-            relativeTo=self._docks[self._default_name],
+        dock = self._dock_layout.add(
+            f"plot/{key}",
+            key,
+            plot.host,
+            relative_to=self._docks[self._default_name],
         )
+        dock.activated.connect(lambda: self.activate(dock.windowTitle()))
+
         self._plots[key] = plot
         self._docks[key] = dock
 
         if activate:
             self._mark_active()
             self._set_current_name(key)
-            dock.raiseDock()
+            dock.reveal()
         self.plots_changed.emit()
 
         return plot
-
-    def _forget_dock(self, dock):
-        for name, known_dock in self._docks.items():
-            if known_dock is dock:
-                self._forget(name)
-                return
 
     def close(self, name=None):
         key = self._current_name if name is None else self._plot_name(name)
@@ -491,12 +481,9 @@ class ConsolePlotManager(QtCore.QObject):
 
             return
 
-        dock = self._docks.get(key)
-        if dock is not None and dock.container() is not None:
-            # closing the dock triggers sigClosed, which calls _forget itself
-            dock.close()
-        else:
-            self._forget(key)
+        dock = self._docks[key]
+        self._forget(key)
+        self._dock_layout.remove(dock)
 
     def clear_all(self):
         for name, plot in self._plots.items():
@@ -533,10 +520,7 @@ class ConsolePlotManager(QtCore.QObject):
         return self.current.scatter(*args, zoom_region=zoom_region, **kwargs)
 
     def _raise_dock(self, dock):
-        container = dock.container()
-        raise_dock = getattr(container, "raiseDock", None)
-        if raise_dock is not None:
-            raise_dock(dock)
+        dock.reveal()
 
     def _forget(self, name):
         if name == self._default_name:
