@@ -1,8 +1,6 @@
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from ..ui.docking import AppDock as Dock
-from ..ui.docking import AppDockArea as DockArea
 from ..ui.style import PANEL_SURFACE, plot_colours
 from .explorer import PlotExplorer
 from .script_panel import ScriptPanel
@@ -560,33 +558,23 @@ class ConsolePlotManager(QtCore.QObject):
             plot.apply_theme()
 
 
-class JupyterConsolePanel(QtWidgets.QWidget):
-    close_requested = QtCore.pyqtSignal()
+class JupyterConsolePanel(QtCore.QObject):
     active_view_changed = QtCore.pyqtSignal()
 
-    def __init__(self, namespace_factory, script_dir=None, parent=None):
-        super().__init__(parent)
+    def __init__(self, dock_layout, namespace_factory, script_dir=None):
+        super().__init__(dock_layout)
         self._namespace_factory = namespace_factory
         self._console = None
         self._script_dir = script_dir
         self._explore_status_callback = None
         self._active_view = "plot"
-        self.setMinimumHeight(180)
-
-        self._layout = QtWidgets.QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(0)
-
-        self.dock_area = DockArea()
-        self._layout.addWidget(self.dock_area)
+        self.dock_layout = dock_layout
 
         self.view3d = ConsoleView3D(status_callback=self._explore_status_callback)
-        self.view3d_dock = Dock("3D View", size=(10, 6), closable=False)
-        self.view3d_dock.addWidget(self.view3d.host)
-        self.dock_area.addDock(self.view3d_dock)
+        self.view3d_dock = dock_layout.add("view3d", "3D View", self.view3d.host)
 
         self.views3d = ConsoleView3DManager(
-            self.dock_area,
+            self.dock_layout,
             "3D View",
             self.view3d,
             self.view3d_dock,
@@ -594,7 +582,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             active_callback=self.set_active_view,
         )
 
-        self.view3d_dock.activated.connect(lambda: self.views3d.activate("3D View"))
+        self.view3d_dock.activated.connect(
+            lambda: self.views3d.activate(self.view3d_dock.windowTitle())
+        )
 
         self.plot_widget = _build_console_plot_widget()
         self.plot_widget.showGrid(
@@ -603,13 +593,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.plot = ConsolePlot(
             self.plot_widget, status_callback=self._explore_status_callback
         )
-        self.plot_dock = Dock("Plot", size=(10, 8))
-        self.plot_dock.addWidget(self.plot.host)
-        self.dock_area.addDock(
-            self.plot_dock, position="above", relativeTo=self.view3d_dock
-        )
+        self.plot_dock = dock_layout.add("plot", "Plot", self.plot.host)
         self.plots = ConsolePlotManager(
-            self.dock_area,
+            self.dock_layout,
             "Plot",
             self.plot,
             self.plot_dock,
@@ -618,13 +604,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         )
 
         self.table = ConsoleTable()
-        self.table_dock = Dock("Table", size=(10, 6), closable=False)
-        self.table_dock.addWidget(self.table.host)
-        self.dock_area.addDock(
-            self.table_dock, position="above", relativeTo=self.plot_dock
-        )
+        self.table_dock = dock_layout.add("table", "Table", self.table.host)
         self.tables = ConsoleTableManager(
-            self.dock_area,
+            self.dock_layout,
             "Table",
             self.table,
             self.table_dock,
@@ -633,21 +615,12 @@ class JupyterConsolePanel(QtWidgets.QWidget):
 
         self.plots.set_table_manager(self.tables)
 
-        self.plot_dock.activated.connect(lambda: self.plots.activate("Plot"))
-        self.table_dock.activated.connect(lambda: self.tables.activate("Table"))
-
-        # self.explorer_params = QtWidgets.QWidget()
-        # self.explorer_params_layout = QtWidgets.QVBoxLayout(self.explorer_params)
-        # self.explorer_params_layout.setContentsMargins(0, 0, 0, 0)
-        # self.explorer_params_layout.setSpacing(0)
-        # self.explorer_params_layout.addStretch()
-        # self.explorer = ConsoleExplorer(self.plots)
-
-        # self.explorer_params_dock = Dock("Parameters", size=(10, 3), closable=False)
-        # self.explorer_params_dock.addWidget(self.explorer_params)
-        # self.dock_area.addDock(
-        #     self.explorer_params_dock, position="bottom", relativeTo=self.plot_dock
-        # )
+        self.plot_dock.activated.connect(
+            lambda: self.plots.activate(self.plot_dock.windowTitle())
+        )
+        self.table_dock.activated.connect(
+            lambda: self.tables.activate(self.table_dock.windowTitle())
+        )
 
         self.set_explore_visible(False)
 
@@ -661,22 +634,14 @@ class JupyterConsolePanel(QtWidgets.QWidget):
         self.script_panel = ScriptPanel(self._script_dir)
         self.script_panel.run_requested.connect(self.run_script_text)
 
-        self.script_dock = Dock("Script", size=(15, 8), closable=False)
-        self.console_dock = Dock("Console", size=(10, 4))
-        self.script_dock.addWidget(self.script_panel)
-        self.console_dock.addWidget(self._console_host)
-
-        self.dock_area.addDock(
-            self.script_dock,
-            position="bottom",
-            relativeTo=self.plot_dock,
+        self.script_dock = dock_layout.add("script", "Script", self.script_panel)
+        self.console_dock = dock_layout.add("console", "Console", self._console_host)
+        self._console_timer = QtCore.QTimer(self)
+        self._console_timer.setSingleShot(True)
+        self._console_timer.timeout.connect(self.ensure_console)
+        self.console_dock.visibilityChanged.connect(
+            lambda visible: self._console_timer.start(0) if visible else None
         )
-        self.dock_area.addDock(
-            self.console_dock,
-            position="above",
-            relativeTo=self.script_dock,
-        )
-        self._system_layout = self.dock_area.saveState()
 
         if CONSOLE_IMPORT_ERROR is not None:
             message = QtWidgets.QLabel(
@@ -747,7 +712,9 @@ class JupyterConsolePanel(QtWidgets.QWidget):
             return
 
         self._console = _RichJupyterConsole(
-            self._namespace_factory(), script_dir=self._script_dir, parent=self
+            self._namespace_factory(),
+            script_dir=self._script_dir,
+            parent=self._console_host,
         )
         self._console_layout.addWidget(self._console)
 
@@ -775,24 +742,6 @@ class JupyterConsolePanel(QtWidgets.QWidget):
 
         for view in self.views3d._views.values():
             view.param_widget.setVisible(bool(visible) and view.explore.has_controls())
-
-    def apply_explore_layout(self):
-        self.set_explore_visible(True)
-        self.dock_area.moveDock(self.script_dock, "left", self.plot_dock)
-        self.dock_area.moveDock(self.console_dock, "bottom", self.plot_dock)
-        self.plot_dock.raiseDock()
-        # self.dock_area.moveDock(
-        #     self.explorer_params_dock,
-        #     "bottom",
-        #     self.console_dock,
-        # )
-
-    def apply_system_layout(self):
-        self.set_explore_visible(False)
-        self.dock_area.restoreState(
-            self._system_layout, missing="ignore", extra="bottom"
-        )
-        self.plot_dock.raiseDock()
 
     def set_explore_status_callback(self, callback):
         self._explore_status_callback = callback
