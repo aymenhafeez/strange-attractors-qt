@@ -26,6 +26,10 @@ class PresetPanel(QtWidgets.QWidget):
         self.preset_notes_edit.setPlaceholderText("Notes")
         self.preset_notes_edit.setFixedHeight(70)
         self.preset_combo = QtWidgets.QComboBox()
+        self.preset_combo.setSizeAdjustPolicy(
+            QtWidgets.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.preset_combo.setMinimumContentsLength(12)
         self.preset_combo.currentTextChanged.connect(self._on_preset_selected)
         self.preset_summary = QtWidgets.QLabel("No saved presets")
         self.preset_summary.setWordWrap(True)
