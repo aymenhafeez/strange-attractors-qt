@@ -2,6 +2,8 @@ from uuid import uuid4
 
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .style import dock_widget_style
+
 
 class AppDock(QtWidgets.QDockWidget):
     activated = QtCore.pyqtSignal()
@@ -42,6 +44,9 @@ class DockLayout(QtCore.QObject):
         if "/" in name and not name.startswith("analysis/"):
             name = f"{name.split('/', 1)[0]}/{uuid4().hex}"
         dock = AppDock(title, self.window)
+        dock.setStyleSheet(dock_widget_style())
+        dock.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        dock.setContentsMargins(1, 1, 1, 1)
         dock.setObjectName(name)
         dock.setWidget(widget)
         widget.show()

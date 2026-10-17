@@ -84,7 +84,7 @@ class ConsolePlot:
         self._crosshair = ConsolePlotCrossHair(self._plot_widget, parent=self.host)
 
         self.layout = QtWidgets.QVBoxLayout(self.host)
-        self.layout.setContentsMargins(6, 6, 6, 6)
+        self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
         self.layout.addWidget(self._plot_widget)
 

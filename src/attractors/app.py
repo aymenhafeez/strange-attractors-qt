@@ -60,6 +60,7 @@ class Window(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Systems analysis")
+        self.setContentsMargins(5, 0, 5, 0)
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
         self.dock_layout = DockLayout(self)
 
