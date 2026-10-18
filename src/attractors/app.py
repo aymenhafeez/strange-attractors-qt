@@ -475,6 +475,7 @@ class Window(QtWidgets.QMainWindow):
         panel.plot_dock.show()
         panel.script_dock.show()
         panel.files_dock.show()
+        panel.variables_dock.show()
         panel.console_dock.show()
         panel.plot_dock.raise_()
         panel.console_dock.raise_()
