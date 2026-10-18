@@ -1864,6 +1864,7 @@ class Window(QtWidgets.QMainWindow):
         panel = self.jupyter_console_panel
         return [
             panel.script_dock,
+            panel.variables_dock,
             panel.files_dock,
             panel.console_dock,
             *panel.plots._docks.values(),
