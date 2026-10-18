@@ -388,12 +388,17 @@ def build_toolbar(self):
     self.output_panel_action.setChecked(True)
     self.output_panel_action.toggled.connect(self._set_output_panel_visible)
     # toolbar.addAction(self.output_panel_action)
+
+    toolbar.addSeparator()
+
     self.toolbar_system_action = toolbar.addAction(
+        icon("preferences-system-symbolic"),
         "System",
         self._toggle_system_workspace,
     )
     self.toolbar_system_action.setToolTip("Show or hide system scripting panels")
     self.toolbar_explore_action = toolbar.addAction(
+        icon("gnumeric-graphguru"),
         "Explore",
         lambda: self._set_workspace_mode("explore"),
     )
