@@ -3,8 +3,8 @@ from pathlib import Path
 from PyQt6.Qsci import QsciLexerPython, QsciScintilla
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from ..ui.style import SCRIPT_PANEL, SPLITTER_HANDLE_HOVER
-from .script_browser import ScriptBrowser, default_scripts_dir
+from ..ui.style import SCRIPT_PANEL
+from .script_browser import default_scripts_dir
 
 # dark mode palette derived from KDE Breeze Dark
 # https://qscintilla.com/#syntax_highlighting/custom_lexer_example
