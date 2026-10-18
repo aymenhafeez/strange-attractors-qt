@@ -339,7 +339,6 @@ class ScriptPanel(QtWidgets.QWidget):
 
         if path is not None:
             self.script_changed.emit(path)
-            self.script_browser.select_path(path)
 
     def current_script_path(self):
         return self._path_for(self.editor)
