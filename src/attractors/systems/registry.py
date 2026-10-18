@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 from .aizawa import _aizawa_attractor
 from .burke_shaw import _burke_shaw_attractor
 from .dadras import _dadras_attractor

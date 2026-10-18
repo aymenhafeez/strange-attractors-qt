@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 """Interactive plot of the Lissajous curve lifted into 3D
 
 a and b control the oscillation frequencies in the x and y directions.

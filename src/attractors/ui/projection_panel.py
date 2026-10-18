@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 """Render a selected 2D projection as a binned density heatmap. LineSegmentROI samples the displayed
 density field and shows the 1D density profile along the selected intersection
 

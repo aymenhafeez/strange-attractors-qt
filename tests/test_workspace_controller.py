@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 from types import SimpleNamespace
 
 import pytest
@@ -5,6 +8,7 @@ from pyqtgraph.Qt import QtGui, QtWidgets
 
 from attractors.console.jupyter_console_panel import JupyterConsolePanel
 from attractors.console.workspace_controller import WorkspaceController
+from attractors.ui.docking import DockLayout
 
 
 @pytest.fixture(scope="session")
@@ -84,8 +88,9 @@ def _find_combo_data(combo, data):
     return -1
 
 
-def test_workspace_controller_syncs_2d_and_3d_views(qapp):
-    panel = JupyterConsolePanel(dict)
+def test_workspace_controller_syncs_2d_and_3d_views(qapp, tmp_path):
+    dock_window = QtWidgets.QMainWindow()
+    panel = JupyterConsolePanel(DockLayout(dock_window), dict, script_dir=tmp_path)
     panel.plots.new("2D Test", activate=False)
     panel.views3d.new("3D Test", activate=False)
 
@@ -110,8 +115,9 @@ def test_workspace_controller_syncs_2d_and_3d_views(qapp):
     ]
 
 
-def test_workspace_controller_selected_3d_view_from_toolbar(qapp):
-    panel = JupyterConsolePanel(dict)
+def test_workspace_controller_selected_3d_view_from_toolbar(qapp, tmp_path):
+    dock_window = QtWidgets.QMainWindow()
+    panel = JupyterConsolePanel(DockLayout(dock_window), dict, script_dir=tmp_path)
     panel.views3d.new("3D Test", activate=False)
 
     window = _workspace_window(panel)
@@ -132,8 +138,9 @@ def test_workspace_controller_selected_3d_view_from_toolbar(qapp):
     assert window.system_toolbar.live_traces == ("", [])
 
 
-def test_workspace_controller_2d_renames(qapp):
-    panel = JupyterConsolePanel(dict)
+def test_workspace_controller_2d_renames(qapp, tmp_path):
+    dock_window = QtWidgets.QMainWindow()
+    panel = JupyterConsolePanel(DockLayout(dock_window), dict, script_dir=tmp_path)
     panel.plots.new("2D Test")
 
     window = _workspace_window(panel)
@@ -147,8 +154,9 @@ def test_workspace_controller_2d_renames(qapp):
     assert window.live_plot_controller.renames == [("2D Test", "New 2D Test")]
 
 
-def test_workspace_controller_grid_action_3d_sync(qapp):
-    panel = JupyterConsolePanel(dict)
+def test_workspace_controller_grid_action_3d_sync(qapp, tmp_path):
+    dock_window = QtWidgets.QMainWindow()
+    panel = JupyterConsolePanel(DockLayout(dock_window), dict, script_dir=tmp_path)
     panel.views3d.new("A", activate=False)
     panel.views3d.new("B", activate=False)
 

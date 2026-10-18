@@ -133,3 +133,10 @@ Enable performance logging:
 ```bash
 ANALYSIS_PROFILE=1 uv run analysis
 ```
+
+---
+
+Copyright (c) 2026 Aymen Hafeez
+
+This project is licensed under the GNU General Public License, version 3. See LICENSE
+for details.

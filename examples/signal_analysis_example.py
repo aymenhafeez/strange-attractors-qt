@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 """Interactive signal analysis
 
 Frequency, noise, and smoothing controls update the signal plot, spectrum plot,

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 import numpy as np
 import pytest
 from pyqtgraph.Qt import QtWidgets
@@ -10,7 +13,7 @@ from attractors.console.view3d import (
     normalise_colour,
     normalise_size,
 )
-from attractors.ui.docking import AppDock, AppDockArea
+from attractors.ui.docking import DockLayout
 
 
 @pytest.fixture(scope="session")
@@ -77,13 +80,12 @@ def test_normalise_size_invalid_inputs(size, match):
 
 
 def test_view3d_manager_create_rename_close(qapp):
-    dock_area = AppDockArea()
+    dock_window = QtWidgets.QMainWindow()
+    dock_layout = DockLayout(dock_window)
     default_view = ConsoleView3D()
-    default_dock = AppDock("3D View", closable=False)
-    default_dock.addWidget(default_view.host)
-    dock_area.addDock(default_dock)
+    default_dock = dock_layout.add("view3d", "3D View", default_view.host)
 
-    manager = ConsoleView3DManager(dock_area, "3D View", default_view, default_dock)
+    manager = ConsoleView3DManager(dock_layout, "3D View", default_view, default_dock)
 
     created = manager.new("Test View")
     same = manager.new("Test View")
