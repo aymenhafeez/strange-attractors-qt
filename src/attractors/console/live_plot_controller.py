@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 import numpy as np
 import pandas as pd
 from pyqtgraph.Qt import QtCore

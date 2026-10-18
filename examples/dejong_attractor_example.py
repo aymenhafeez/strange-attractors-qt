@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 """
 Interactive de Jong attractor plot. Increasing the number of points will make the plot
 more defined but will slow down render updates on slider ticks.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 import json
 import re
 from datetime import UTC, datetime

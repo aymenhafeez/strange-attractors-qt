@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 """
 Interactive Fourier series approximation of a square wave
 

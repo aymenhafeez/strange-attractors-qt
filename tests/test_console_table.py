@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 from types import SimpleNamespace
 
 import numpy as np
@@ -16,8 +19,7 @@ from attractors.console.table import (
 from attractors.console.workspace_inspector import (
     WorkspaceInspector,
 )
-from attractors.ui.docking import AppDock as Dock
-from attractors.ui.docking import AppDockArea
+from attractors.ui.docking import DockLayout
 
 
 class SettingsDouble:
@@ -44,17 +46,17 @@ def qapp():
 
 
 def table_manager():
-    dock_area = AppDockArea()
+    dock_window = QtWidgets.QMainWindow()
+    dock_layout = DockLayout(dock_window)
     table = ConsoleTable()
-    dock = Dock("Table", size=(10, 6), closable=False)
-    dock.addWidget(table.host)
-    dock_area.addDock(dock)
+    dock = dock_layout.add("table", "Table", table.host)
 
-    return ConsoleTableManager(dock_area, "Table", table, dock)
+    return ConsoleTableManager(dock_layout, "Table", table, dock)
 
 
-def test_workspace_shell_persists_table_names(qapp):
-    panel = JupyterConsolePanel(dict)
+def test_workspace_shell_persists_table_names(qapp, tmp_path):
+    dock_window = QtWidgets.QMainWindow()
+    panel = JupyterConsolePanel(DockLayout(dock_window), dict, script_dir=tmp_path)
     panel.tables.new("Test table", activate=False)
 
     settings = SettingsDouble()
@@ -62,7 +64,10 @@ def test_workspace_shell_persists_table_names(qapp):
 
     Window._save_workspace_shell(window, settings)
 
-    restored_panel = JupyterConsolePanel(dict)
+    restored_dock_window = QtWidgets.QMainWindow()
+    restored_panel = JupyterConsolePanel(
+        DockLayout(restored_dock_window), dict, script_dir=tmp_path
+    )
     restored_window = SimpleNamespace(jupyter_console_panel=restored_panel)
 
     Window._restore_workspace_shell(restored_window, settings)
@@ -235,8 +240,9 @@ def test_console_manager_close_default_clears(qapp):
     assert manager.current.dataframe().empty
 
 
-def test_console_panel_exposes_table_manager(qapp):
-    panel = JupyterConsolePanel(dict)
+def test_console_panel_exposes_table_manager(qapp, tmp_path):
+    dock_window = QtWidgets.QMainWindow()
+    panel = JupyterConsolePanel(DockLayout(dock_window), dict, script_dir=tmp_path)
     result = panel.tables.show({"a": [1, 2]}, name="Test table")
 
     assert panel.tables.names() == ["Table", "Test table"]
@@ -248,8 +254,9 @@ def test_console_panel_exposes_table_manager(qapp):
     assert panel.tables.names() == ["Table"]
 
 
-def test_workspace_inspector_shows_help_table(qapp):
-    panel = JupyterConsolePanel(dict)
+def test_workspace_inspector_shows_help_table(qapp, tmp_path):
+    dock_window = QtWidgets.QMainWindow()
+    panel = JupyterConsolePanel(DockLayout(dock_window), dict, script_dir=tmp_path)
     inspector = WorkspaceInspector(panel)
 
     data = inspector.help(table=True)
@@ -259,8 +266,9 @@ def test_workspace_inspector_shows_help_table(qapp):
     assert panel.tables.current.dataframe().equals(data)
 
 
-def test_workspace_inspector_shows_views_table(qapp):
-    panel = JupyterConsolePanel(dict)
+def test_workspace_inspector_shows_views_table(qapp, tmp_path):
+    dock_window = QtWidgets.QMainWindow()
+    panel = JupyterConsolePanel(DockLayout(dock_window), dict, script_dir=tmp_path)
     panel.plots.new("Plot test", activate=False)
     panel.views3d.new("3D test", activate=False)
 
@@ -282,8 +290,9 @@ def test_workspace_inspector_shows_views_table(qapp):
     assert panel.tables.current.dataframe().equals(data)
 
 
-def test_workspace_inepector_shows_summary_table(qapp):
-    panel = JupyterConsolePanel(dict)
+def test_workspace_inepector_shows_summary_table(qapp, tmp_path):
+    dock_window = QtWidgets.QMainWindow()
+    panel = JupyterConsolePanel(DockLayout(dock_window), dict, script_dir=tmp_path)
     inspector = WorkspaceInspector(panel)
 
     data = inspector.summary(table=True)
@@ -315,7 +324,8 @@ def test_console_table_manager_exports_named_table(tmp_path, qapp):
 
 
 def test_export_current_table_from_menu(tmp_path, qapp, monkeypatch):
-    panel = JupyterConsolePanel(dict)
+    dock_window = QtWidgets.QMainWindow()
+    panel = JupyterConsolePanel(DockLayout(dock_window), dict, script_dir=tmp_path)
     panel.tables.show({"a": [1, 2]}, name="Test")
 
     path = tmp_path / "test.csv"
@@ -337,8 +347,9 @@ def test_export_current_table_from_menu(tmp_path, qapp, monkeypatch):
     assert statuses == [(f"Exported table to {path}", False)]
 
 
-def test_export_current_table_ignores_cancel(qapp, monkeypatch):
-    panel = JupyterConsolePanel(dict)
+def test_export_current_table_ignores_cancel(qapp, tmp_path, monkeypatch):
+    dock_window = QtWidgets.QMainWindow()
+    panel = JupyterConsolePanel(DockLayout(dock_window), dict, script_dir=tmp_path)
     statuses = []
     window = SimpleNamespace(
         jupyter_console_panel=panel,

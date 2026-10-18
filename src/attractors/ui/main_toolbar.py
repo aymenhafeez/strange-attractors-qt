@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 # TODO: whole file and how it interacts with app.py needs to be cleaned up
 
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets

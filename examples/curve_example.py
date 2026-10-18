@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 """Example of a simple reactive curve plot"""
 
 s = plots.new("sin and cos")
