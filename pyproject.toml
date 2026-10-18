@@ -26,6 +26,8 @@ dependencies = [
     "scipy>=1.18.0",
     "scipy-stubs~=1.18.0",
 ]
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 
 [project.scripts]
 analysis = "attractors.__main__:main"
