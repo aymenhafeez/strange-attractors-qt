@@ -5,6 +5,8 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from attractors.ui.style import FILE_SEARCH, FILE_TREE
 
+from ..ui.icons import icon
+
 
 def default_scripts_dir():
     app_data = QtCore.QStandardPaths.writableLocation(
@@ -74,21 +76,15 @@ class ScriptBrowser(QtWidgets.QWidget):
         self.toolbar.setFloatable(False)
         self.toolbar.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
-        self.new_script_action = self.toolbar.addAction(
-            QtGui.QIcon.fromTheme("document-new"), "New"
-        )
+        self.new_script_action = self.toolbar.addAction(icon("document-new"), "New")
         self.new_script_action.setToolTip("Create a new script")
         self.new_folder_action = self.toolbar.addAction(
-            QtGui.QIcon.fromTheme("folder-new"), "New Folder"
+            icon("folder-new"), "New Folder"
         )
         self.new_folder_action.setToolTip("Create a new folder")
-        self.rename_action = self.toolbar.addAction(
-            QtGui.QIcon.fromTheme("edit-rename"), "Rename"
-        )
+        self.rename_action = self.toolbar.addAction(icon("edit-rename"), "Rename")
         self.rename_action.setToolTip("Rename the selected script or folder")
-        self.delete_action = self.toolbar.addAction(
-            QtGui.QIcon.fromTheme("edit-delete"), "Delete"
-        )
+        self.delete_action = self.toolbar.addAction(icon("edit-delete"), "Delete")
         self.delete_action.setToolTip("Delete the selected script or folder")
 
         self.model = QtGui.QFileSystemModel(self)

@@ -27,6 +27,7 @@ from .systems.registry import ATTRACTORS
 from .ui.bifurcation_panel import BifurcationPanel
 from .ui.control_panel import ControlPanel
 from .ui.docking import DockLayout
+from .ui.icons import icon
 from .ui.lyapunov_panel import LyapunovPanel
 from .ui.main_toolbar import build_menu_bar, build_status_bar, build_toolbar
 from .ui.output_panel import OutputPanel
@@ -753,10 +754,7 @@ class Window(QtWidgets.QMainWindow):
         view_box = plot_item.getViewBox()
 
         self.plot_view_all_action = QtGui.QAction(
-            self._toolbar_icon(
-                "zoom-fit-best",
-                QtWidgets.QStyle.StandardPixmap.SP_TitleBarMaxButton,
-            ),
+            icon("zoom-fit-best"),
             "View all",
             self,
         )
@@ -766,10 +764,7 @@ class Window(QtWidgets.QMainWindow):
         mouse_group = QtGui.QActionGroup(self)
         mouse_group.setExclusive(True)
         self.plot_pan_action = QtGui.QAction(
-            self._toolbar_icon(
-                "transform-move",
-                QtWidgets.QStyle.StandardPixmap.SP_ArrowUp,
-            ),
+            icon("transform-move"),
             "Pan",
             self,
         )
@@ -777,10 +772,7 @@ class Window(QtWidgets.QMainWindow):
         self.plot_pan_action.setChecked(True)
         self.plot_pan_action.setToolTip("Pan with left mouse button")
         self.plot_zoom_action = QtGui.QAction(
-            self._toolbar_icon(
-                "zoom-in",
-                QtWidgets.QStyle.StandardPixmap.SP_FileDialogContentsView,
-            ),
+            icon("zoom-in"),
             "Zoom",
             self,
         )
@@ -837,47 +829,33 @@ class Window(QtWidgets.QMainWindow):
         )
 
         icon_specs = [
-            # (
-            #     "New",
-            #     "list-add",
-            #     QtWidgets.QStyle.StandardPixmap.SP_FileIcon,
-            #     lambda: self._new_live_plot(),
-            #     "Create a new workspace view",
-            # ),
             (
                 "Rename",
                 "edit-rename",
-                QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
                 lambda: self.workspace_controller.rename_current_view(),
                 "Rename the current workspace view",
             ),
             (
                 "Clear",
                 "edit-clear-history",
-                QtWidgets.QStyle.StandardPixmap.SP_DialogDiscardButton,
                 lambda: self.workspace_controller.clear_current_view(),
                 "Clear the current view",
             ),
             (
                 "Clear all",
                 "edit-delete",
-                QtWidgets.QStyle.StandardPixmap.SP_TrashIcon,
                 lambda: self.workspace_controller.clear_all_views(),
                 "Clear all views",
             ),
             (
                 "Fit",
                 "view-fullscreen",
-                # QtGui.QIcon.fromTheme("view-fullscreen"),
-                QtWidgets.QStyle.StandardPixmap.SP_TitleBarMaxButton,
                 lambda: self.workspace_controller.fit_current_view(),
                 "Fit current view",
             ),
             (
                 "Reset",
                 "zoom-original",
-                # QtGui.QIcon.fromTheme("zoom-original"),
-                QtWidgets.QStyle.StandardPixmap.SP_BrowserReload,
                 lambda: self.workspace_controller.reset_current_view(),
                 "Reset camera",
             ),
@@ -885,11 +863,7 @@ class Window(QtWidgets.QMainWindow):
 
         new_button = QtWidgets.QToolButton()
         new_button.setText("New")
-        new_button.setIcon(
-            self._toolbar_icon(
-                "list-add", QtWidgets.QStyle.StandardPixmap.SP_FileDialogNewFolder
-            )
-        )
+        new_button.setIcon(icon("list-add"))
         new_button.setToolTip("Create a new workspace view")
         new_button.setPopupMode(
             QtWidgets.QToolButton.ToolButtonPopupMode.MenuButtonPopup
@@ -907,9 +881,9 @@ class Window(QtWidgets.QMainWindow):
         new_action = toolbar.addWidget(new_button)
         self._jupyter_toolbar_actions.append(new_action)
 
-        for text, theme_name, fallback_icon, callback, tooltip in icon_specs:
+        for text, icon_name, callback, tooltip in icon_specs:
             action = toolbar.addAction(
-                self._toolbar_icon(theme_name, fallback_icon),
+                icon(icon_name),
                 text,
             )
             action.setToolTip(tooltip)
@@ -920,9 +894,7 @@ class Window(QtWidgets.QMainWindow):
         self._keep_toolbar_action_from_taking_focus(toolbar, new_action)
 
         self.workspace_grid_action = toolbar.addAction(
-            self._toolbar_icon(
-                "view-grid", QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView
-            ),
+            icon("view-grid"),
             "Grid",
         )
         self.workspace_grid_action.setCheckable(True)
@@ -934,9 +906,7 @@ class Window(QtWidgets.QMainWindow):
         self._jupyter_toolbar_actions.append(self.workspace_grid_action)
 
         self.workspace_orbit_action = toolbar.addAction(
-            self._toolbar_icon(
-                "object-rotate-right", QtWidgets.QStyle.StandardPixmap.SP_BrowserReload
-            ),
+            icon("object-rotate-right"),
             "Orbit",
         )
         self.workspace_orbit_action.setCheckable(True)
@@ -951,10 +921,7 @@ class Window(QtWidgets.QMainWindow):
         self.workspace_controller.sync_grid_action()
 
         self.workspace_crosshair_action = toolbar.addAction(
-            self._toolbar_icon(
-                "crosshairs",
-                QtWidgets.QStyle.StandardPixmap.SP_CommandLink,
-            ),
+            icon("crosshairs"),
             "Crosshair",
         )
         self.workspace_crosshair_action.setCheckable(True)
@@ -981,9 +948,7 @@ class Window(QtWidgets.QMainWindow):
         trace_action = toolbar.addWidget(self.explore_trace_button)
 
         self.explore_clear_sliders_action = toolbar.addAction(
-            self._toolbar_icon(
-                "edit-clear", QtWidgets.QStyle.StandardPixmap.SP_DialogDiscardButton
-            ),
+            icon("edit-clear"),
             "Sliders",
             self._clear_current_explore_sliders,
         )
@@ -992,9 +957,7 @@ class Window(QtWidgets.QMainWindow):
         )
 
         self.explore_clear_state_action = toolbar.addAction(
-            self._toolbar_icon(
-                "edit-delete", QtWidgets.QStyle.StandardPixmap.SP_TrashIcon
-            ),
+            icon("edit-delete"),
             "Explore",
             self._clear_current_explore,
         )
@@ -1065,12 +1028,6 @@ class Window(QtWidgets.QMainWindow):
                     name
                 )
             )
-
-    def _toolbar_icon(self, theme_name, fallback_icon):
-        icon = QtGui.QIcon.fromTheme(theme_name)
-        if icon.isNull():
-            icon = self.style().standardIcon(fallback_icon)
-        return icon
 
     def _keep_toolbar_action_from_taking_focus(self, toolbar, action):
         widget = toolbar.widgetForAction(action)
@@ -1183,17 +1140,12 @@ class Window(QtWidgets.QMainWindow):
         self._sync_jupyter_toolbar_visibility()
 
     def _sync_toolbar_animation_action(self, playing):
-        style_icon = QtWidgets.QStyle.StandardPixmap
         if playing:
-            self.toolbar_anim_action.setIcon(
-                self.style().standardIcon(style_icon.SP_MediaStop)
-            )
+            self.toolbar_anim_action.setIcon(icon("media-playback-stop"))
             self.toolbar_anim_action.setText("Stop")
             self.toolbar_anim_action.setToolTip("Stop animation")
         else:
-            self.toolbar_anim_action.setIcon(
-                self.style().standardIcon(style_icon.SP_MediaPlay)
-            )
+            self.toolbar_anim_action.setIcon(icon("media-playback-start"))
             self.toolbar_anim_action.setText("Play")
             self.toolbar_anim_action.setToolTip("Play animation")
 

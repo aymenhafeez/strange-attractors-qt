@@ -2,17 +2,9 @@
 
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
+from .icons import icon
 from .process_metrics import ProcessUsageStatus
 from .style import SCENE_TOOLBAR
-
-
-def _side_panel_icon(self, side):
-    icon = QtGui.QIcon.fromTheme(f"sidebar-show-{side}")
-    if icon.isNull():
-        icon = self.style().standardIcon(
-            QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
-        )
-    return icon
 
 
 def build_status_bar(self):
@@ -238,22 +230,20 @@ def build_toolbar(self):
     self.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
     self.scene_toolbar = toolbar
 
-    style_icon = QtWidgets.QStyle.StandardPixmap
-
     # start_pad = QtWidgets.QWidget()
     # start_pad.setFixedWidth(3)
     # toolbar.addWidget(start_pad)
 
     self.toolbar_left_panel_action = self._add_checked_icon_toolbar_action(
         toolbar,
-        _side_panel_icon(self, "left"),
+        icon("sidebar-expand-left"),
         True,
         lambda checked: self._set_left_panel_visible(checked),
         "Show left panel",
     )
 
     self.toolbar_anim_action = toolbar.addAction(
-        self.style().standardIcon(style_icon.SP_MediaPlay),
+        icon("media-playback-start"),
         "Play",
         lambda: self._sync_toolbar_animation_action(
             self.scene.animation_controller.toggle()
@@ -267,27 +257,22 @@ def build_toolbar(self):
         False,
         self.scene.animation_controller.set_loop,
         "Loop animation",
-        icon=self._toolbar_icon(
-            "media-playlist-repeat",
-            QtWidgets.QStyle.StandardPixmap.SP_BrowserReload,
-        ),
+        icon=icon("media-playlist-repeat"),
     )
 
-    self.toolbar_reset_action = toolbar.addAction(
-        self.style().standardIcon(style_icon.SP_BrowserReload), "Reset"
-    )
+    self.toolbar_reset_action = toolbar.addAction(icon("view-refresh"), "Reset")
     self.toolbar_reset_action.setToolTip("Reset parameters")
     self.toolbar_reset_action.triggered.connect(self.controls.reset_to_defaults)
 
     self.toolbar_reset_camera_action = toolbar.addAction(
-        QtGui.QIcon.fromTheme("zoom-original"),
+        icon("zoom-original"),
         "Reset camera",
         self._reset_camera,
     )
     self.toolbar_reset_camera_action.setToolTip("Reset camera")
 
     self.toolbar_fit_camera_action = toolbar.addAction(
-        QtGui.QIcon.fromTheme("view-fullscreen"),
+        icon("view-fullscreen"),
         "Fit",
         lambda: self.scene.camera_controller.fit_camera_to_solutions(
             self.scene.trajectory_renderer.solutions
@@ -296,7 +281,7 @@ def build_toolbar(self):
     self.toolbar_fit_camera_action.setToolTip("Fit view to trajectories")
 
     self.toolbar_auto_fit_camera_action = toolbar.addAction(
-        QtGui.QIcon.fromTheme("zoom-fit-best"), "Auto fit view to trajectories"
+        icon("zoom-fit-best"), "Auto fit view to trajectories"
     )
     self.toolbar_auto_fit_camera_action.setCheckable(True)
     self.toolbar_auto_fit_camera_action.setChecked(self.auto_fit_camera)
@@ -305,7 +290,7 @@ def build_toolbar(self):
     )
 
     self.toolbar_save_view_action = toolbar.addAction(
-        self.style().standardIcon(style_icon.SP_DialogSaveButton),
+        icon("document-save"),
         "Save",
         self.scene.viewport_overlay.save_view_as_png,
     )
@@ -317,10 +302,7 @@ def build_toolbar(self):
         True,
         self.scene.trajectory_renderer.set_point_mode,
         "Show animation head points",
-        icon=self._toolbar_icon(
-            "media-record",
-            QtWidgets.QStyle.StandardPixmap.SP_DialogYesButton,
-        ),
+        icon=icon("media-record"),
     )
     self.toolbar_line_action = self._add_checked_toolbar_action(
         toolbar,
@@ -328,10 +310,7 @@ def build_toolbar(self):
         False,
         lambda checked: self._set_line_mode(checked),
         "Show trajectory lines",
-        icon=self._toolbar_icon(
-            "draw-line",
-            QtWidgets.QStyle.StandardPixmap.SP_FileDialogListView,
-        ),
+        icon=icon("draw-line"),
     )
     self.toolbar_trail_action = self._add_checked_toolbar_action(
         toolbar,
@@ -339,10 +318,7 @@ def build_toolbar(self):
         False,
         self._set_trail_mode,
         "Show animated trajectory trails",
-        icon=self._toolbar_icon(
-            "draw-path",
-            QtWidgets.QStyle.StandardPixmap.SP_ArrowRight,
-        ),
+        icon=icon("draw-path"),
     )
     self.toolbar_grid_action = self._add_checked_toolbar_action(
         toolbar,
@@ -350,10 +326,7 @@ def build_toolbar(self):
         True,
         self.scene.grid_overlay.set_grid_visible,
         "Show grid",
-        icon=self._toolbar_icon(
-            "view-grid",
-            QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
-        ),
+        icon=icon("view-grid"),
     )
     self.toolbar_orbit_action = self._add_checked_toolbar_action(
         toolbar,
@@ -361,10 +334,7 @@ def build_toolbar(self):
         False,
         self._set_orbit_mode,
         "Orbit camera automatically",
-        icon=self._toolbar_icon(
-            "object-rotate-right",
-            QtWidgets.QStyle.StandardPixmap.SP_BrowserReload,
-        ),
+        icon=icon("object-rotate-right"),
     )
     self.toolbar_hover_action = self._add_checked_toolbar_action(
         toolbar,
@@ -372,16 +342,11 @@ def build_toolbar(self):
         False,
         self.scene.point_hover.set_enabled,
         "Show trajectory coordinates on hover",
-        icon=self._toolbar_icon(
-            "crosshairs", QtWidgets.QStyle.StandardPixmap.SP_CommandLink
-        ),
+        icon=icon("crosshairs"),
     )
 
     self.toolbar_solve_action = toolbar.addAction(
-        self._toolbar_icon(
-            "system-run",
-            QtWidgets.QStyle.StandardPixmap.SP_MediaPlay,
-        ),
+        icon("system-run"),
         "Solve",
     )
     self.toolbar_solve_action.setToolTip("Run a full solve")
@@ -414,7 +379,7 @@ def build_toolbar(self):
     #     self._toggle_output_panel,
     # )
     self.output_panel_action = QtGui.QAction(
-        _side_panel_icon(self, "bottom"), "Output panel", self
+        icon("view-split-top-bottom"), "Output panel", self
     )
     self.output_panel_action.setCheckable(True)
     self.output_panel_action.setChecked(True)
@@ -454,7 +419,7 @@ def build_toolbar(self):
     self._build_jupyter_toolbar_actions(toolbar)
     self.toolbar_right_panel_action = self._add_checked_icon_toolbar_action(
         toolbar,
-        _side_panel_icon(self, "right"),
+        icon("sidebar-expand-right"),
         True,
         lambda checked: self._set_right_panel_visible(checked),
         "Show right panel",

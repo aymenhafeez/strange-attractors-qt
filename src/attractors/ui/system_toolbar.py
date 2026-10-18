@@ -1,4 +1,6 @@
-from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+from pyqtgraph.Qt import QtCore, QtWidgets
+
+from .icons import icon
 
 CONSOLE_PLOT_KINDS = [
     "Axis",
@@ -450,7 +452,7 @@ class SystemToolbar(QtWidgets.QWidget):
         self.options_button.setMenu(self.options_menu)
         self.run_button = QtWidgets.QToolButton()
         # self.run_button.setText("")
-        self.run_button.setIcon(QtGui.QIcon.fromTheme("system-run"))
+        self.run_button.setIcon(icon("system-run"))
         self.run_button.setToolTip("Run plot")
         self.run_button.clicked.connect(self._emit_plot_request)
 

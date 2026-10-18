@@ -3,6 +3,7 @@ from pathlib import Path
 from PyQt6.Qsci import QsciLexerPython, QsciScintilla
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
+from ..ui.icons import icon
 from ..ui.style import SCRIPT_PANEL
 from .script_browser import default_scripts_dir
 
@@ -37,6 +38,7 @@ PYTHON_STYLE_COLOURS = {
     QsciLexerPython.TripleSingleQuotedString: "#da4453",
     QsciLexerPython.UnclosedString: "#da4453",
 }
+
 
 def dark_mode():
     app = QtWidgets.QApplication.instance()
@@ -149,19 +151,15 @@ class ScriptPanel(QtWidgets.QWidget):
         self.status_label = QtWidgets.QLabel()
         self.toolbar.addWidget(self.status_label)
 
-        self.run_action = self.toolbar.addAction(
-            QtGui.QIcon.fromTheme("system-run"), "Run"
-        )
+        self.run_action = self.toolbar.addAction(icon("system-run"), "Run")
         self.run_action.setToolTip("Run script")
 
         self.run_selection_action = self.toolbar.addAction(
-            QtGui.QIcon.fromTheme("system-run"), "Run selection"
+            icon("system-run"), "Run selection"
         )
         self.run_selection_action.setToolTip("Run selection")
 
-        self.save_action = self.toolbar.addAction(
-            QtGui.QIcon.fromTheme("document-save"), "Save"
-        )
+        self.save_action = self.toolbar.addAction(icon("document-save"), "Save")
         self.save_action.setToolTip("Save script")
 
         self.tabs = QtWidgets.QTabWidget()
