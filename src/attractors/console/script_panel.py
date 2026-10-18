@@ -125,22 +125,10 @@ class ScriptPanel(QtWidgets.QWidget):
         # self._loading = False
         # self._dirty = False
         self._paths = {}
-        self._script_browser_width = 220
 
-        layout = QtWidgets.QHBoxLayout(self)
+        layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-
-        self.script_browser = ScriptBrowser(self.scripts_dir)
-        self.script_browser.confirm_delete = self._confirm_delete
-        self.script_browser.script_selected.connect(self.load_script)
-        self.script_browser.path_renamed.connect(self._on_path_renamed)
-        self.script_browser.path_deleted.connect(self._on_path_deleted)
-
-        editor_host = QtWidgets.QWidget()
-        editor_layout = QtWidgets.QVBoxLayout(editor_host)
-        editor_layout.setContentsMargins(0, 0, 0, 0)
-        editor_layout.setSpacing(0)
 
         self.toolbar = QtWidgets.QToolBar(self)
         self.toolbar.setIconSize(QtCore.QSize(16, 16))
@@ -150,15 +138,6 @@ class ScriptPanel(QtWidgets.QWidget):
         self.toolbar.setMovable(False)
         self.toolbar.setFloatable(False)
         self.toolbar.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-
-        self.toggle_browser_action = self.toolbar.addAction(
-            QtGui.QIcon.fromTheme("view-list-tree"),
-            "Files",
-        )
-        self.toggle_browser_action.setCheckable(True)
-        self.toggle_browser_action.setChecked(True)
-        self.toggle_browser_action.setToolTip("Show file browser")
-        self.toggle_browser_action.toggled.connect(self._set_script_browser_visible)
 
         spacer = QtWidgets.QWidget()
         spacer.setSizePolicy(
@@ -192,18 +171,8 @@ class ScriptPanel(QtWidgets.QWidget):
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self.tabs.tabCloseRequested.connect(self.close_tab)
 
-        editor_layout.addWidget(self.toolbar)
-        editor_layout.addWidget(self.tabs, 1)
-
-        self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
-        self.splitter.addWidget(self.script_browser)
-        self.splitter.addWidget(editor_host)
-        self.splitter.setCollapsible(0, True)
-        self.splitter.setCollapsible(1, False)
-        self.splitter.setSizes([200, 620])
-        # self.splitter.setContentsMargins(0, 0, 0, 0)
-        self.splitter.setStyleSheet(SPLITTER_HANDLE_HOVER)
-        layout.addWidget(self.splitter)
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.tabs, 1)
 
         self.run_action.triggered.connect(self.run)
         self.run_selection_action.triggered.connect(self.run_selection)
@@ -278,7 +247,6 @@ class ScriptPanel(QtWidgets.QWidget):
             current_path = self.current_script_path()
             self._update_status("Renamed")
             self.script_changed.emit(current_path)
-            self.script_browser.select_path(current_path)
 
     def _on_path_deleted(self, path):
         for editor, editor_path in list(self._paths.items()):
@@ -539,18 +507,3 @@ class ScriptPanel(QtWidgets.QWidget):
 
         if action and action != "Modified":
             self.status_changed.emit(f"{action} {path.name}")
-
-    def _set_script_browser_visible(self, visible):
-        sizes = self.splitter.sizes()
-        total = max(sum(sizes), 1)
-
-        if visible:
-            self.splitter.setSizes(
-                [self._script_browser_width, max(total - self._script_browser_width, 1)]
-            )
-            return
-
-        if sizes and sizes[0] > 0:
-            self._script_browser_width = sizes[0]
-
-        self.splitter.setSizes([0, total])
