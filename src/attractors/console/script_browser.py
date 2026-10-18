@@ -3,7 +3,7 @@ from pathlib import Path
 
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-from attractors.ui.style import SCRIPT_PANEL
+from attractors.ui.style import FILE_SEARCH, FILE_TREE
 
 
 def default_scripts_dir():
@@ -62,7 +62,7 @@ class ScriptBrowser(QtWidgets.QWidget):
         self._selecting = False
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(5, 0, 0, 0)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
         self.toolbar = QtWidgets.QToolBar()
@@ -106,13 +106,14 @@ class ScriptBrowser(QtWidgets.QWidget):
 
         self.filter_edit = QtWidgets.QLineEdit()
         self.filter_edit.setPlaceholderText("Search")
-        self.filter_edit.setStyleSheet("background: palette(base);")
+        self.filter_edit.setStyleSheet(FILE_SEARCH)
+        self.filter_edit.setContentsMargins(0, 0, 0, 0)
         self.filter_edit.setClearButtonEnabled(True)
         self.filter_edit.textChanged.connect(self.proxy_model.set_filter_text)
 
         self.tree = QtWidgets.QTreeView()
-        self.tree.setObjectName("scriptPanel")
-        self.tree.setStyleSheet(SCRIPT_PANEL)
+        self.tree.setObjectName("fileTree")
+        self.tree.setStyleSheet(FILE_TREE)
         self.tree.setModel(self.proxy_model)
 
         source_root = self.model.index(str(self.scripts_dir))

@@ -3,8 +3,10 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..ui.style import PANEL_SURFACE, plot_colours
 from .explorer import PlotExplorer
+from .script_browser import ScriptBrowser
 from .script_panel import ScriptPanel
 from .table import ConsoleTable, ConsoleTableManager
+from .variable_panel import VariablePanel
 from .view3d import ConsoleView3D, ConsoleView3DManager
 
 try:
@@ -635,6 +637,26 @@ class JupyterConsolePanel(QtCore.QObject):
         self.script_panel.run_requested.connect(self.run_script_text)
 
         self.script_dock = dock_layout.add("script", "Script", self.script_panel)
+
+        self.script_browser = ScriptBrowser(self.script_panel.scripts_dir)
+        self.script_browser.confirm_delete = self.script_panel._confirm_delete
+        self.script_browser.script_selected.connect(self._open_browser_script)
+        self.script_browser.path_renamed.connect(self.script_panel._on_path_renamed)
+        self.script_browser.path_deleted.connect(self.script_panel._on_path_deleted)
+        self.script_panel.script_changed.connect(self.script_browser.select_path)
+        self.script_browser.select_path(self.script_panel.current_script_path())
+
+        self.variable_panel = VariablePanel()
+        self.variable_panel.refresh_requested.connect(self._refresh_variables)
+        self.variables_dock = dock_layout.add(
+            "variables", "Variables", self.variable_panel
+        )
+
+        self.files_dock = dock_layout.add("files", "Files", self.script_browser)
+        self.script_panel.toolbar.insertAction(
+            self.script_panel.toolbar.actions()[0], self.files_dock.toggleViewAction()
+        )
+
         self.console_dock = dock_layout.add("console", "Console", self._console_host)
         self._console_timer = QtCore.QTimer(self)
         self._console_timer.setSingleShot(True)
@@ -649,6 +671,10 @@ class JupyterConsolePanel(QtCore.QObject):
             )
             message.setWordWrap(True)
             self._console_layout.addWidget(message)
+
+    def _open_browser_script(self, path):
+        if self.script_panel.load_script(path):
+            self.script_dock.reveal()
 
     def active_view(self):
         if self._active_view == "view3d":
@@ -718,6 +744,18 @@ class JupyterConsolePanel(QtCore.QObject):
         )
         self._console_layout.addWidget(self._console)
 
+        shell = self._console.kernel_manager.kernel.shell
+        shell._variable_defaults = dict(shell.user_ns)
+        shell.events.register("post_run_cell", self._refresh_variables)
+        self._refresh_variables()
+
+    def _refresh_variables(self, _result=None):
+        if self._console is None:
+            return
+
+        shell = self._console.kernel_manager.kernel.shell
+        self.variable_panel.set_namespace(shell.user_ns, shell._variable_defaults)
+
     def focus_console(self):
         if self._console is not None:
             self._console.setFocus()
@@ -726,6 +764,8 @@ class JupyterConsolePanel(QtCore.QObject):
 
     def shutdown_kernel(self):
         if self._console is not None:
+            shell = self._console.kernel_manager.kernel.shell
+            shell.events.unregister("post_run_cell", self._refresh_variables)
             self._console.shutdown_kernel()
 
     def run_script_text(self, code):

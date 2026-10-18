@@ -114,6 +114,8 @@ class DockLayout(QtCore.QObject):
         custom = add("custom", left)
         plot = add("plot", left)
         script = add("script", left)
+        files = add("files", left)
+        variables = add("variables", left)
         console = add("console", left)
         table = add("table", left)
         view3d = add("view3d", left)
@@ -126,6 +128,8 @@ class DockLayout(QtCore.QObject):
             window.splitDockWidget(viewport, console, vertical)
             window.splitDockWidget(viewport, plot, horizontal)
             window.tabifyDockWidget(console, script)
+            window.tabifyDockWidget(console, files)
+            window.tabifyDockWidget(console, variables)
             window.splitDockWidget(trajectories, presets, vertical)
             window.tabifyDockWidget(presets, custom)
             visible = [
@@ -138,9 +142,11 @@ class DockLayout(QtCore.QObject):
                 custom,
             ]
         else:
+            window.splitDockWidget(files, script, horizontal)
             window.splitDockWidget(script, plot, horizontal)
             window.splitDockWidget(plot, console, vertical)
-            visible = [script, plot, console]
+            window.splitDockWidget(files, variables, vertical)
+            visible = [files, variables, script, plot, console]
 
         window.tabifyDockWidget(plot, table)
         window.tabifyDockWidget(plot, view3d)
@@ -156,6 +162,8 @@ class DockLayout(QtCore.QObject):
                 custom,
                 plot,
                 script,
+                files,
+                variables,
                 console,
                 table,
                 view3d,
@@ -218,9 +226,14 @@ class DockLayout(QtCore.QObject):
                 )
         else:
             self.window.resizeDocks(
-                [docks["script"], docks["plot"]],
-                [int(width * 0.38), int(width * 0.62)],
+                [docks["files"], docks["script"], docks["plot"]],
+                [int(width * 0.18), int(width * 0.45), int(width * 0.37)],
                 horizontal,
+            )
+            self.window.resizeDocks(
+                [docks["files"], docks["variables"]],
+                [int(height * 0.5), int(height * 0.5)],
+                vertical,
             )
             self.window.resizeDocks(
                 [docks["plot"], docks["console"]],

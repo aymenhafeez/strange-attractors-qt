@@ -186,6 +186,27 @@ SCRIPT_PANEL = """
     }
 """
 
+FILE_TREE = """
+    QWidget#fileTree {
+        border: 0px;
+    }
+
+    QWidget#fileTree QLineEdit,
+    QWidget#fileTree QTextEdit,
+    QWidget#fileTree QAbstractSpinBox {
+        background: palette(window);
+        border: 0px;
+        padding: 2px 4px;
+    }
+"""
+
+FILE_SEARCH = """
+    background: palette(base);
+    border: 1px solid palette(mid);
+    border-right: 0px;
+    border-left: 0px;
+"""
+
 TABLE_VIEW = """
     QWidget#dataViewPanel {
         background: palette(base);
