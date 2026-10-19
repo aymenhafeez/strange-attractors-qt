@@ -120,7 +120,7 @@ class Window(QtWidgets.QMainWindow):
         self.current_name = next(iter(ATTRACTORS.keys()))
         self._custom_config = None
 
-        self.auto_fit_camera = False
+        self.auto_fit_camera = True
 
         app_data_location = QtCore.QStandardPaths.writableLocation(
             QtCore.QStandardPaths.StandardLocation.AppDataLocation

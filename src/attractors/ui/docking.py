@@ -174,9 +174,16 @@ class DockLayout(QtCore.QObject):
             )
         }
 
+        if self.mode == "system":
+            poincare = add("analysis/poincare_panel", left)
+            window.splitDockWidget(viewport, poincare, vertical)
+
         for name in docks:
             if name in placed:
                 continue
+            if self.mode == "system" and name == "analysis/poincare_panel":
+                continue
+
             dock = add(name, bottom if name == "output" else left)
             if name != "output":
                 window.tabifyDockWidget(
