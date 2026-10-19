@@ -39,6 +39,7 @@ def _build_console_plot_widget():
     # plot_widget.setStyleSheet(CONSOLE_PLOT_WIDGET)
     plot_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
     plot_widget.setBackground(plot_colours()["plot_background"])
+    plot_widget.showGrid(x=True, y=True, alpha=plot_colours()["plot_grid_alpha"])
     plot_widget.setLabel("bottom", "x")
     plot_widget.setLabel("left", "y")
 
@@ -592,9 +593,6 @@ class JupyterConsolePanel(QtCore.QObject):
         )
 
         self.plot_widget = _build_console_plot_widget()
-        self.plot_widget.showGrid(
-            x=True, y=True, alpha=plot_colours()["plot_grid_alpha"]
-        )
         self.plot = ConsolePlot(
             self.plot_widget, status_callback=self._explore_status_callback
         )
