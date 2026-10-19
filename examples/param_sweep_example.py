@@ -18,7 +18,6 @@ item = attr.line(
     pen=None,
     symbol="o",
     symbolPen=None,
-    symbolBrush="w",
     symbolSize=1,
 )
 
