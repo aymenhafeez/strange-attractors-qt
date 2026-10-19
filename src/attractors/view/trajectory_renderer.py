@@ -39,7 +39,7 @@ class TrajectoryRenderer:
         self._trajectories = []
         self._base_colour = plot_colours()["trajectory"]
         self._current_alpha = 1.0
-        self._current_plot_size = 1.0
+        self._current_plot_size = plot_colours()["scatter_size"]
         self._line_mode = False
         self._trail_mode = False
         self._colour_mode = "solid"
@@ -75,7 +75,7 @@ class TrajectoryRenderer:
 
     def sync_gl_items(self, n):
         while len(self._scatters) < n:
-            scatter = gl.GLScatterPlotItem(size=1.0)
+            scatter = gl.GLScatterPlotItem(size=plot_colours()["scatter_size"])
             scatter.setGLOptions(
                 "additive" if plot_colours()["is_dark"] else "translucent"
             )
