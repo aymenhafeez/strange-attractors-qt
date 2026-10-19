@@ -113,26 +113,27 @@ SPLITTER_HANDLE_HOVER = """
 
 
 def dock_widget_style():
-    if is_dark_mode():
-        colours = ("#363a3f", "#2c3034", "#272a2e", "#24262a", "#44484f")
-    else:
-        colours = ("#eeeeee", "#ebebeb", "#e6e6e6", "#dfdfdf", "#cecece")
+    colours = (
+        ("#363a3f", "#2c3034", "#272a2e", "#24262a", "#44484f")
+        if is_dark_mode()
+        else ("#eceef0", "#e5e7e9", "#dee0e2", "#d3d5d7", "#c6c8ca")
+    )
 
     return f"""
         QDockWidget {{
-            border: 1px solid palette(mid);
+            border: 1px solid {colours[4]};
         }}
 
         QDockWidget::title {{
             background: qlineargradient(
                 x1: 0, y1: 0, x2: 0, y2: 1,
                 stop: 0    {colours[0]},
-                stop: 0.33 {colours[1]},
-                stop: 0.66 {colours[2]},
+                stop: 0.4 {colours[1]},
+                stop: 0.6 {colours[2]},
                 stop: 1    {colours[3]}
             );
             color: palette(window-text);
-            border: 1px solid palette(mid);
+            border: 1px solid {colours[4]};
             padding: 2px 4px;
             text-align: center;
         }}
