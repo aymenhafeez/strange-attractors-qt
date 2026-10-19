@@ -28,6 +28,14 @@ LIGHT_TRAJECTORY_PALETTE = (
 
 def is_dark_mode():
     app = QtWidgets.QApplication.instance()
+    palette = app.palette()
+    accent = QtGui.QColor("#1a3fb0")
+
+    palette.setColor(QtGui.QPalette.ColorRole.Accent, accent)
+    palette.setColor(QtGui.QPalette.ColorRole.Highlight, accent)
+    palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor("white"))
+    app.setPalette(palette)
+
     if app is None:
         return False
 
@@ -112,30 +120,49 @@ SPLITTER_HANDLE_HOVER = """
 """
 
 
+def gradient(c):
+    return f"""qlineargradient(
+                x1: 1, y1: 0, x2: 0, y2: 0,
+                stop: 0 {c[0]},
+                stop: 0.2 {c[1]},
+                stop: 0.4 {c[2]},
+                stop: 0.6 {c[3]},
+                stop: 1 {c[4]}
+            )"""
+
+
+ACTIVE = {
+    "dark": ("#6f9fe6", "#4d80cf", "#2f5fb0", "#183a85", "#080f4a", "#2a52b8"),
+    "light": ("#cfe1ff", "#8ab8f5", "#5a92e0", "#2a58c0", "#00007f", "#1a3fb0"),
+}
+INACTIVE = {
+    "dark": ("#474c53", "#43484e", "#3a3e44", "#2a2d32", "#141618", "#33373d"),
+    "light": ("#f1f3f4", "#eceeef", "#e5e7e8", "#d6d8da", "#a9abad", "#b4b6b8"),
+}
+
+
 def dock_widget_style():
-    colours = (
-        ("#363a3f", "#2c3034", "#272a2e", "#24262a", "#44484f")
-        if is_dark_mode()
-        else ("#eceef0", "#e5e7e9", "#dee0e2", "#d3d5d7", "#c6c8ca")
-    )
+    active = ACTIVE["dark" if is_dark_mode() else "light"]
+    inactive = INACTIVE["dark" if is_dark_mode() else "light"]
 
     return f"""
         QDockWidget {{
-            border: 1px solid {colours[4]};
+            border: 1px solid {inactive[-1]};
         }}
 
         QDockWidget::title {{
-            background: qlineargradient(
-                x1: 0, y1: 0, x2: 0, y2: 1,
-                stop: 0    {colours[0]},
-                stop: 0.4 {colours[1]},
-                stop: 0.6 {colours[2]},
-                stop: 1    {colours[3]}
-            );
+            background: {gradient(inactive)};
             color: palette(window-text);
-            border: 1px solid {colours[4]};
-            padding: 2px 4px;
+            border: 1px solid {inactive[-1]};
             text-align: center;
+        }}
+        QDockWidget[activeDock="true"] {{
+            color: white;
+            border: 1px solid {inactive[-1]};
+        }}
+        QDockWidget[activeDock="true"]::title {{
+            background: {gradient(active)};
+            border: 1px solid {inactive[-1]};
         }}
     """
 

@@ -55,6 +55,7 @@ class DockLayout(QtCore.QObject):
         widget.show()
 
         self.docks[name] = dock
+        dock.activated.connect(lambda: self._highlight_dock(dock))
         self.window.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, dock)
         if relative_to is not None:
             self.window.tabifyDockWidget(relative_to, dock)
@@ -286,3 +287,17 @@ class DockLayout(QtCore.QObject):
                 widget.activated.emit()
                 break
             widget = widget.parentWidget()
+
+    def _highlight_dock(self, active_dock):
+        if self._changing:
+            return
+
+        for dock in self.docks.values():
+            active = dock is active_dock
+            if dock.property("activeDock") == active:
+                continue
+
+            dock.setProperty("activeDock", active)
+            # Reapply the sheet to refresh the cached title bar button icons too.
+            dock.setStyleSheet(dock.styleSheet())
+            dock.update()
