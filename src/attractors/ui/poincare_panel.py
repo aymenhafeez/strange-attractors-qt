@@ -86,7 +86,7 @@ class PoincarePanel(QtWidgets.QWidget):
         solve_row.addWidget(self.heatmap_check)
 
         self.dropdown = QtWidgets.QComboBox()
-        colourmaps = pg.colormap.listMaps()
+        colourmaps = pg.colormap.listMaps(source="matplotlib")
         self.dropdown.addItems(colourmaps)
         self.dropdown.setCurrentText(plot_colours()["cmap"])
         self.dropdown.currentTextChanged.connect(self._update_colourmap)
@@ -174,7 +174,7 @@ class PoincarePanel(QtWidgets.QWidget):
 
         self._img = pg.ImageItem()
         selected_cmap = self.dropdown.currentText()
-        cmap = pg.colormap.get(selected_cmap)
+        cmap = pg.colormap.get(selected_cmap, source="matplotlib")
         self._colourbar = self.plot_widget.getPlotItem().addColorBar(
             self._img, colorMap=cmap, values=(0, 10), width=20
         )
@@ -427,7 +427,7 @@ class PoincarePanel(QtWidgets.QWidget):
             self._scatter.setData([], [])
 
     def _update_colourmap(self, cmap_name):
-        cmap = pg.colormap.get(cmap_name)
+        cmap = pg.colormap.get(cmap_name, source="matplotlib")
         self._img.setLookupTable(cmap.getLookupTable())
         self._colourbar.setColorMap(cmap)
 

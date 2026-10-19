@@ -60,7 +60,7 @@ class ProjectionPanel(QtWidgets.QWidget):
 
         controls_layout.addWidget(QtWidgets.QLabel("Map:"))
         self.dropdown = QtWidgets.QComboBox()
-        colourmaps = pg.colormap.listMaps()
+        colourmaps = pg.colormap.listMaps(source="matplotlib")
         self.dropdown.addItems(colourmaps)
         self.dropdown.setCurrentText(plot_colours()["cmap"])
         self.dropdown.currentTextChanged.connect(self._update_colourmap)
@@ -117,7 +117,7 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.histogram.setBackground(plot_colours()["plot_background"])
         self.histogram.item.setImageItem(self.img)
         self.histogram.item.gradient.setColorMap(
-            pg.colormap.get(self.dropdown.currentText())
+            pg.colormap.get(self.dropdown.currentText(), source="matplotlib")
         )
         split_layout.addWidget(self.histogram)
 
@@ -252,7 +252,7 @@ class ProjectionPanel(QtWidgets.QWidget):
         )
 
     def _update_colourmap(self, cmap_name):
-        cmap = pg.colormap.get(cmap_name)
+        cmap = pg.colormap.get(cmap_name, source="matplotlib")
         self.img.setLookupTable(cmap.getLookupTable())
         self.histogram.item.gradient.setColorMap(cmap)
         self._render_cached_projection_data()

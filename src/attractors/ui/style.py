@@ -93,7 +93,7 @@ def plot_colours():
         "scatter_size": 2,
         "plot_auto_pens": ("k", "r", "g", "b", "c", "m", "y"),
         "trajectory_palette": LIGHT_TRAJECTORY_PALETTE,
-        "cmap": "CET-L17",
+        "cmap": "CMRmap_r",
         "console_theme": "lightbg",
         "crosshair": "#c87b00",
         "label_text": "white",
