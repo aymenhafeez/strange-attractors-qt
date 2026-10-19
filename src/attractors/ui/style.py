@@ -28,14 +28,6 @@ LIGHT_TRAJECTORY_PALETTE = (
 
 def is_dark_mode():
     app = QtWidgets.QApplication.instance()
-    palette = app.palette()
-    accent = QtGui.QColor("#1a3fb0")
-
-    palette.setColor(QtGui.QPalette.ColorRole.Accent, accent)
-    palette.setColor(QtGui.QPalette.ColorRole.Highlight, accent)
-    palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor("white"))
-    app.setPalette(palette)
-
     if app is None:
         return False
 
@@ -107,65 +99,56 @@ def equation_label():
         color: {colour};
         font-size: 13px;
         padding: 2px 6px;
-        background: rgba(0, 0, 0, 0);
         border: 0px;
         border-radius: 0px;
     """
 
 
-SPLITTER_HANDLE_HOVER = """
-    QSplitter::handle:hover {
-        background-color: palette(highlight);
-    }
-"""
-
-
-def gradient(c):
-    return f"""qlineargradient(
-                x1: 1, y1: 0, x2: 0, y2: 0,
-                stop: 0 {c[0]},
-                stop: 0.2 {c[1]},
-                stop: 0.4 {c[2]},
-                stop: 0.6 {c[3]},
-                stop: 1 {c[4]}
-            )"""
-
-
-ACTIVE = {
-    "dark": ("#6f9fe6", "#4d80cf", "#2f5fb0", "#183a85", "#080f4a", "#2a52b8"),
-    "light": ("#cfe1ff", "#8ab8f5", "#5a92e0", "#2a58c0", "#00007f", "#1a3fb0"),
-}
-INACTIVE = {
-    "dark": ("#474c53", "#43484e", "#3a3e44", "#2a2d32", "#141618", "#33373d"),
-    "light": ("#f1f3f4", "#eceeef", "#e5e7e8", "#d6d8da", "#a9abad", "#b4b6b8"),
-}
-
-
 def dock_widget_style():
-    active = ACTIVE["dark" if is_dark_mode() else "light"]
-    inactive = INACTIVE["dark" if is_dark_mode() else "light"]
+    active = "#3f4349" if is_dark_mode() else "#f0f0f0"
+    inactive = "#30343a" if is_dark_mode() else "#dee0e2"
 
     return f"""
         QDockWidget {{
-            border: 1px solid {inactive[-1]};
+            border: 1px solid palette(mid);
+        }}
+        QDockWidget[activeDock="true"] {{
+            border: 1px solid palette(accent);
         }}
 
         QDockWidget::title {{
-            background: {gradient(inactive)};
+            background: {inactive};
             color: palette(window-text);
-            border: 1px solid {inactive[-1]};
+            border: 1px solid palette(mid);
+            border-bottom: 0px;
+            border-right: 0px;
             text-align: center;
-        }}
-        QDockWidget[activeDock="true"] {{
-            color: white;
-            border: 1px solid {inactive[-1]};
+            padding: 1px 1px;
         }}
         QDockWidget[activeDock="true"]::title {{
-            background: {gradient(active)};
-            border: 1px solid {inactive[-1]};
+            background: {active};
+            border: 1px solid palette(accent);
+            border-bottom: 0px;
+            border-right: 0px;
         }}
     """
 
+
+MAIN_WINDOW = """
+    QMainWindow::separator {
+        width: 5px;
+    }
+
+    QMainWindow::separator:hover {
+        background: palette(accent);
+    }
+"""
+
+TAB_WIDGET = """
+    border-right: 0px;
+    border-left: 0px;
+    border-top: 0px;
+"""
 
 SCENE_TOOLBAR = """
     QToolBar#sceneToolbar {

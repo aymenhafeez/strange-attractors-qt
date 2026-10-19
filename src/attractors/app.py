@@ -37,7 +37,7 @@ from .ui.output_panel import OutputPanel
 from .ui.poincare_panel import PoincarePanel
 from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
-from .ui.style import plot_colours
+from .ui.style import MAIN_WINDOW, plot_colours
 from .ui.system_toolbar import SystemToolbar
 from .view.view_manager import ViewManager
 from .workers.solve_manager import SolveManager
@@ -64,6 +64,7 @@ class Window(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Systems analysis")
+        self.setStyleSheet(MAIN_WINDOW)
         self.setContentsMargins(5, 0, 5, 0)
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
         self.dock_layout = DockLayout(self)

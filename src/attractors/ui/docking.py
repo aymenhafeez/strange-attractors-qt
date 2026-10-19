@@ -221,12 +221,12 @@ class DockLayout(QtCore.QObject):
             self.window.resizeDocks(columns, sizes, horizontal)
             self.window.resizeDocks(
                 [docks["parameters"], docks["data"]],
-                [int(height * 0.65), int(height * 0.35)],
+                [int(height * 0.5), int(height * 0.5)],
                 vertical,
             )
             self.window.resizeDocks(
                 [docks["trajectories"], docks["presets"]],
-                [int(height * 0.55), int(height * 0.45)],
+                [int(height * 0.5), int(height * 0.5)],
                 vertical,
             )
             if workspace_open:
@@ -238,7 +238,7 @@ class DockLayout(QtCore.QObject):
         else:
             self.window.resizeDocks(
                 [docks["files"], docks["script"], docks["plot"]],
-                [int(width * 0.18), int(width * 0.45), int(width * 0.37)],
+                [int(width * 0.2), int(width * 0.45), int(width * 0.35)],
                 horizontal,
             )
             self.window.resizeDocks(
@@ -248,7 +248,7 @@ class DockLayout(QtCore.QObject):
             )
             self.window.resizeDocks(
                 [docks["plot"], docks["console"]],
-                [int(height * 0.7), int(height * 0.3)],
+                [int(height * 0.6), int(height * 0.4)],
                 vertical,
             )
 

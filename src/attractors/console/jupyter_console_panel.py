@@ -24,7 +24,7 @@ else:
 _BaseJupyterConsole = (
     inprocess.QtInProcessRichJupyterWidget if inprocess else QtWidgets.QWidget
 )
-LEGEND_OFFSET = (-12, 12)
+LEGEND_OFFSET = (-30, -30)
 LEGEND_BRUSH = (18, 22, 28, 220)
 LEGEND_PEN = (210, 220, 230, 180)
 LEGEND_TEXT = (245, 248, 252)

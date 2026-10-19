@@ -159,8 +159,8 @@ class TrajectoryPanel(QtWidgets.QWidget):
             layout.addWidget(self.toggle_btn)
 
         self._content = QtWidgets.QWidget()
-        self._content.setObjectName("panelSurface")
-        self._content.setStyleSheet(PANEL_SURFACE)
+        # self._content.setObjectName("panelSurface")
+        # self._content.setStyleSheet(PANEL_SURFACE)
         self._content.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
@@ -169,6 +169,8 @@ class TrajectoryPanel(QtWidgets.QWidget):
         content_layout.setContentsMargins(0, 0, 0, 0)
 
         self._rows_container = ParameterTree(showHeader=True)
+        self._rows_container.setObjectName("panelSurface")
+        self._rows_container.setStyleSheet(PANEL_SURFACE)
         self._rows_container.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
