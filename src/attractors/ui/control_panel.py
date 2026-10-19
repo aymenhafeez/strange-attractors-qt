@@ -6,7 +6,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..systems.registry import ATTRACTORS
 from .data_view_panel import DataViewPanel
-from .style import SIDE_PANEL
+from .style import SIDE_PANEL, plot_colours
 
 STEP = 1000
 
@@ -166,12 +166,12 @@ class ControlPanel(QtCore.QObject):
 
         self.plot_size_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.plot_size_slider.setRange(1, 10)
-        self.plot_size_slider.setValue(1)
+        self.plot_size_slider.setValue(plot_colours()["scatter_size"])
 
         self.plot_size_spin = QtWidgets.QSpinBox()
         self.plot_size_spin.setKeyboardTracking(False)
         self.plot_size_spin.setRange(1, 10)
-        self.plot_size_spin.setValue(1)
+        self.plot_size_spin.setValue(plot_colours()["scatter_size"])
 
         self.plot_size_slider.valueChanged.connect(self.plot_size_spin.setValue)
         self.plot_size_spin.valueChanged.connect(self.plot_size_slider.setValue)
