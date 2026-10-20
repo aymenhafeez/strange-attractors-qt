@@ -64,7 +64,7 @@ def plot_colours():
             "scatter_size": 1,
             "plot_auto_pens": ("w", "r", "g", "b", "c", "m", "y"),
             "trajectory_palette": DARK_TRAJECTORY_PALETTE,
-            "cmap": "inferno",
+            "cmap": "CMRmap",
             "console_theme": "linux",
             "crosshair": "yellow",
             "label_text": "yellow",

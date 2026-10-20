@@ -4,13 +4,16 @@
 import numpy as np
 import pyqtgraph.opengl as gl
 from pyqtgraph.Qt import QtGui
+from scipy.ndimage import gaussian_filter
 
 from ..colour import colourmap
 from ..ui.style import plot_colours
 
 STATIC_RENDER_MAX_POINTS = 80000
 ANIM_RENDER_MAX_POINTS = 30000
-COLOUR_MODES = {"solid", "speed", "x", "y", "z"}
+DENSITY_BINS = 128
+DENSITY_SMOOTHING = 0.02
+COLOUR_MODES = {"solid", "speed", "density", "x", "y", "z"}
 
 
 def _decimate_indices(n_points, max_points):
@@ -43,7 +46,7 @@ class TrajectoryRenderer:
         self._line_mode = False
         self._trail_mode = False
         self._colour_mode = "solid"
-        self._colourmap = "viridis"
+        self._colourmap = plot_colours()["cmap"]
         self._time_steps = []
         self._solution_colours = []
         self._particle_colours = []
@@ -51,6 +54,7 @@ class TrajectoryRenderer:
         self._traj_tail_length = 5000
         self._traj_tail_enabled = False
         self._colour_cache = {}
+        self._density_cache = None
         self._colour_limits = None
         self._displayed_points = []
 
@@ -171,6 +175,21 @@ class TrajectoryRenderer:
 
         return np.linalg.norm(velocity, axis=1)
 
+    def _density_values(self, solutions):
+        lengths = [len(solution) for solution in solutions]
+        points = np.concatenate(solutions)
+
+        counts, edges = np.histogramdd(points, bins=DENSITY_BINS)
+        counts = gaussian_filter(counts, sigma=2.0)
+
+        idx = tuple(
+            np.clip(np.digitize(points[:, a], edges[a]) - 1, 0, DENSITY_BINS - 1)
+            for a in range(3)
+        )
+        values = np.log1p(counts[idx])
+
+        return np.split(values, np.cumsum(lengths)[:-1])
+
     def _colour_values(self, index, solution):
         if self._colour_mode == "speed":
             return self._speed_values(index, solution)
@@ -187,10 +206,13 @@ class TrajectoryRenderer:
                 for index, solution in enumerate(solutions)
             ]
 
-        values = [
-            self._colour_values(index, solution)
-            for index, solution in enumerate(solutions)
-        ]
+        if self._colour_mode == "density":
+            values = self._density_values(solutions)
+        else:
+            values = [
+                self._colour_values(index, solution)
+                for index, solution in enumerate(solutions)
+            ]
 
         non_empty = [value for value in values if len(value)]
         if not non_empty:
@@ -320,6 +342,7 @@ class TrajectoryRenderer:
         self._solution_colours = []
         self._particle_colours = []
         self._displayed_points = []
+        self._density_cache = None
         self._colour_limits = None
         self.sync_gl_items(0)
 

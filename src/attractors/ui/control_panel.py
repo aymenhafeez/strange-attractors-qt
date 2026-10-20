@@ -187,6 +187,7 @@ class ControlPanel(QtCore.QObject):
         self.colour_mode_combo = QtWidgets.QComboBox()
         self.colour_mode_combo.addItem("Solid", "solid")
         self.colour_mode_combo.addItem("Speed", "speed")
+        self.colour_mode_combo.addItem("Density", "density")
         self.colour_mode_combo.addItem("X", "x")
         self.colour_mode_combo.addItem("Y", "y")
         self.colour_mode_combo.addItem("Z", "z")
@@ -203,7 +204,7 @@ class ControlPanel(QtCore.QObject):
         self.colourmap_combo = QtWidgets.QComboBox()
         colourmaps = pg.colormap.listMaps(source="matplotlib")
         self.colourmap_combo.addItems(colourmaps)
-        self.colourmap_combo.setCurrentText("viridis")
+        self.colourmap_combo.setCurrentText(plot_colours()["cmap"])
         self.colourmap_combo.setMaxVisibleItems(12)
         # needed for setMaxVisibleItems to apply
         self.colourmap_combo.setStyleSheet("QComboBox { combobox-popup: 0; }")

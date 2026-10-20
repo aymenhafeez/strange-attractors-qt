@@ -95,9 +95,13 @@ class ColourBarWidget(QtWidgets.QWidget):
         painter.setPen(self.palette().color(QtGui.QPalette.ColorRole.WindowText))
         painter.drawRect(bar)
 
-        title = {"speed": "Speed", "x": "X", "y": "Y", "z": "Z"}.get(
-            self._mode, self._mode
-        )
+        title = {
+            "speed": "Speed",
+            "density": "Density",
+            "x": "X",
+            "y": "Y",
+            "z": "Z",
+        }.get(self._mode, self._mode)
         painter.drawText(4, 16, title)
         painter.drawText(32, 36, f"{vmax:.4g}")
         painter.drawText(32, self.height() - 20, f"{vmin:.4g}")
