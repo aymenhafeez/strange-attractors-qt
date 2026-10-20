@@ -157,6 +157,15 @@ SCENE_TOOLBAR = """
     }
 """
 
+MENUBAR = """
+    QMenuBar {
+        background: palette(accent);
+        color: white;
+        padding: 2px 2px;
+        border: 0px;
+    }
+"""
+
 SIDE_PANEL = """
     QWidget#controlPanel {
         background: palette(window);
@@ -217,8 +226,6 @@ FILE_TREE = """
 FILE_SEARCH = """
     background: palette(base);
     border: 1px solid palette(mid);
-    border-right: 0px;
-    border-left: 0px;
 """
 
 TABLE_VIEW = """

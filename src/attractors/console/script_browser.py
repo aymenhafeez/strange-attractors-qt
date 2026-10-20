@@ -106,7 +106,7 @@ class ScriptBrowser(QtWidgets.QWidget):
         self.filter_edit = QtWidgets.QLineEdit()
         self.filter_edit.setPlaceholderText("Search")
         self.filter_edit.setStyleSheet(FILE_SEARCH)
-        self.filter_edit.setContentsMargins(0, 0, 0, 0)
+        self.filter_edit.setContentsMargins(5, 0, 5, 0)
         self.filter_edit.setClearButtonEnabled(True)
         self.filter_edit.textChanged.connect(self.proxy_model.set_filter_text)
 

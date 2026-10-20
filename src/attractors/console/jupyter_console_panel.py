@@ -4,6 +4,7 @@
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from ..ui.icons import icon
 from ..ui.style import PANEL_SURFACE, plot_colours
 from .explorer import PlotExplorer
 from .script_browser import ScriptBrowser
@@ -654,8 +655,12 @@ class JupyterConsolePanel(QtCore.QObject):
         )
 
         self.files_dock = dock_layout.add("files", "Files", self.script_browser)
+        files_action = self.files_dock.toggleViewAction()
+        files_action.setIcon(icon("sidebar-expand-left"))
+        files_action.setIconText("Files")
+        files_action.setToolTip("Toggle file browser")
         self.script_panel.toolbar.insertAction(
-            self.script_panel.toolbar.actions()[0], self.files_dock.toggleViewAction()
+            self.script_panel.toolbar.actions()[0], files_action
         )
 
         self.console_dock = dock_layout.add("console", "Console", self._console_host)

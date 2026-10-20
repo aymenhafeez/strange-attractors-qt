@@ -7,7 +7,7 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .icons import icon
 from .process_metrics import ProcessUsageStatus
-from .style import SCENE_TOOLBAR
+from .style import MENUBAR, SCENE_TOOLBAR
 
 
 def build_status_bar(self):
@@ -38,6 +38,7 @@ def build_status_bar(self):
 
 def build_menu_bar(self):
     menu_bar = self.menuBar()
+    menu_bar.setStyleSheet(MENUBAR)
     menu_bar.clear()
     self._menu_actions = []
 
