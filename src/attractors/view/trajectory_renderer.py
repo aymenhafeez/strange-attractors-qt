@@ -12,7 +12,6 @@ from ..ui.style import plot_colours
 STATIC_RENDER_MAX_POINTS = 80000
 ANIM_RENDER_MAX_POINTS = 30000
 DENSITY_BINS = 128
-DENSITY_SMOOTHING = 0.02
 COLOUR_MODES = {"solid", "speed", "density", "x", "y", "z"}
 
 
@@ -176,10 +175,16 @@ class TrajectoryRenderer:
         return np.linalg.norm(velocity, axis=1)
 
     def _density_values(self, solutions):
+        cache = self._density_cache
+        if cache is not None and cache[0] is solutions:
+            return cache[1]
+
         lengths = [len(solution) for solution in solutions]
         points = np.concatenate(solutions)
 
         counts, edges = np.histogramdd(points, bins=DENSITY_BINS)
+        # TODO: play with different sigma values and bin counts
+        # should compute it with bins * smoothing so increasing bins keeps the density look the same0
         counts = gaussian_filter(counts, sigma=2.0)
 
         idx = tuple(
@@ -187,6 +192,7 @@ class TrajectoryRenderer:
             for a in range(3)
         )
         values = np.log1p(counts[idx])
+        self._density_cache = (solutions, values)
 
         return np.split(values, np.cumsum(lengths)[:-1])
 
