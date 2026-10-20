@@ -180,6 +180,10 @@ class TrajectoryRenderer:
             return cache[1]
 
         lengths = [len(solution) for solution in solutions]
+        # skips the cache but recalculating for empty should be fine
+        if not any(lengths):
+            return [np.empty(0) for _ in solutions]
+
         points = np.concatenate(solutions)
 
         counts, edges = np.histogramdd(points, bins=DENSITY_BINS)
@@ -191,10 +195,10 @@ class TrajectoryRenderer:
             np.clip(np.digitize(points[:, a], edges[a]) - 1, 0, DENSITY_BINS - 1)
             for a in range(3)
         )
-        values = np.log1p(counts[idx])
+        values = np.split(np.log1p(counts[idx]), np.cumsum(lengths)[:-1])
         self._density_cache = (solutions, values)
 
-        return np.split(values, np.cumsum(lengths)[:-1])
+        return values
 
     def _colour_values(self, index, solution):
         if self._colour_mode == "speed":
