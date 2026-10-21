@@ -93,7 +93,11 @@ class LivePlotController:
         traces = [
             {
                 "index": index,
-                "label": self._live_trace_label(spec),
+                "label": (
+                    f"{self._live_trace_label(spec)} (unavailable: {spec['error']})"
+                    if spec.get("error")
+                    else self._live_trace_label(spec)
+                ),
                 "mode": self._live_trace_mode(spec),
             }
             for index, spec in enumerate(specs)
@@ -449,16 +453,40 @@ class LivePlotController:
             live_items.pop(key, None)
         live_items.update(renamed)
 
+    def _set_trace_error(self, plot_name, index, spec, error=None):
+        previous = spec.get("error")
+
+        if error is None:
+            spec.pop("error", None)
+        else:
+            spec["error"] = error
+
+        item = self.live_items.get(self._live_item_key(plot_name, index))
+        if item is not None:
+            items = item if isinstance(item, tuple) else (item,)
+            for part in items:
+                part.setVisible(error is None)
+
+        if previous != error:
+            self._sync_live_menu()
+
     def _refresh_live_plot(self, plot_name):
         specs = self.live_plots.get(plot_name, [])
-        try:
-            for index, spec in enumerate(specs):
-                self._plot_live_spec(spec, trace_index=index)
-        except (IndexError, KeyError, TypeError, ValueError) as exc:
-            self.window.system_toolbar.set_status(str(exc))
-            return
+        errors = []
 
-        self.window.system_toolbar.set_status(self._live_status_text())
+        for index, spec in enumerate(specs):
+            try:
+                self._plot_live_spec(spec, trace_index=index)
+            except (IndexError, KeyError, TypeError, ValueError) as exc:
+                message = str(exc)
+                self._set_trace_error(plot_name, index, spec, message)
+                errors.append(message)
+            else:
+                self._set_trace_error(plot_name, index, spec)
+
+        self.window.system_toolbar.set_status(
+            "; ".join(errors) if errors else self._live_status_text()
+        )
 
     def _refresh_live_preview(self, solutions=None, *, kinds=None):
         live_plots = self.live_plots
@@ -481,13 +509,19 @@ class LivePlotController:
             for index, spec in enumerate(specs):
                 if spec.get("kind") not in preview_kinds:
                     continue
-                if self._update_live_item(
-                    plot_name,
-                    index,
-                    spec,
-                    solutions=solutions,
-                ):
-                    refreshed = True
+                try:
+                    updated = self._update_live_item(
+                        plot_name,
+                        index,
+                        spec,
+                        solutions=solutions,
+                    )
+                except (IndexError, KeyError, TypeError, ValueError) as exc:
+                    self._set_trace_error(plot_name, index, spec, str(exc))
+                else:
+                    if updated:
+                        self._set_trace_error(plot_name, index, spec)
+                        refreshed = True
 
         if refreshed:
             self.window._last_live_preview_update = now_ms
@@ -718,11 +752,12 @@ class LivePlotController:
         kind = spec["kind"]
         if kind == "axis":
             axis = str(spec["axis"]).lower()
+            column = self.window.system._axis_column(axis)
             trajectory = spec.get("trajectory", 0)
             solution = self._live_solution(trajectory, solutions)
             return (
                 self._live_time(trajectory, solution),
-                solution[:, AXES[axis]],
+                solution[:, column],
                 "t",
                 axis,
             )
@@ -741,11 +776,13 @@ class LivePlotController:
         if kind == "projection":
             x_axis = str(spec.get("x_axis", "x")).lower()
             y_axis = str(spec.get("y_axis", "y")).lower()
+            x_column = self.window.system._axis_column(x_axis)
+            y_column = self.window.system._axis_column(y_axis)
             trajectory = spec.get("trajectory", 0)
             solution = self._live_solution(trajectory, solutions)
             return (
-                solution[:, AXES[x_axis]],
-                solution[:, AXES[y_axis]],
+                solution[:, solution[:, x_column]],
+                solution[:, solution[:, y_column]],
                 str(spec.get("x_axis", "x")),
                 str(spec.get("y_axis", "y")),
             )

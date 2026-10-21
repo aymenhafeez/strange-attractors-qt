@@ -1750,6 +1750,7 @@ class Window(QtWidgets.QMainWindow):
             self._dispatch_solve(full=full)
 
     def _configure_system_capabilities(self, config):
+        self.system_toolbar.set_variables(config.variables)
         is_3d = config.dimension == 3
 
         self.lyapunov_panel.setEnabled(is_3d)
