@@ -36,28 +36,22 @@ def solve_rk4(eq, y0, t_min, t_max, n, params):
         t = t_min + i * dt
         eq(state, t, params, k1)
 
-        tmp[0] = state[0] + (0.5 * dt) * k1[0]
-        tmp[1] = state[1] + (0.5 * dt) * k1[1]
-        tmp[2] = state[2] + (0.5 * dt) * k1[2]
+        for j in range(m):
+            tmp[j] = state[j] + 0.5 * dt * k1[j]
+        eq(tmp, t + 0.5 * dt, params, k2)
 
-        eq(tmp, t + (0.5 * dt), params, k2)
+        for j in range(m):
+            tmp[j] = state[j] + 0.5 * dt * k2[j]
+        eq(tmp, t + 0.5 * dt, params, k3)
 
-        tmp[0] = state[0] + (0.5 * dt) * k2[0]
-        tmp[1] = state[1] + (0.5 * dt) * k2[1]
-        tmp[2] = state[2] + (0.5 * dt) * k2[2]
-        eq(tmp, t + (0.5 * dt), params, k3)
-
-        tmp[0] = state[0] + dt * k3[0]
-        tmp[1] = state[1] + dt * k3[1]
-        tmp[2] = state[2] + dt * k3[2]
+        for j in range(m):
+            tmp[j] = state[j] + dt * k3[j]
         eq(tmp, t + dt, params, k4)
 
-        state[0] += (dt / 6.0) * (k1[0] + 2.0 * k2[0] + 2.0 * k3[0] + k4[0])
-        state[1] += (dt / 6.0) * (k1[1] + 2.0 * k2[1] + 2.0 * k3[1] + k4[1])
-        state[2] += (dt / 6.0) * (k1[2] + 2.0 * k2[2] + 2.0 * k3[2] + k4[2])
-
-        traj[i, 0] = state[0]
-        traj[i, 1] = state[1]
-        traj[i, 2] = state[2]
+        for j in range(m):
+            state[j] += (dt / 6.0) * (
+                k1[j] + 2.0 * k2[j] + 2.0 * k3[j] + k4[j]
+            )
+            traj[i, j] = state[j]
 
     return traj

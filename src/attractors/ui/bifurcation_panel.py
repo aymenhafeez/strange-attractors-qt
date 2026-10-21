@@ -294,6 +294,14 @@ class BifurcationPanel(QtWidgets.QWidget):
             self._zoom.set_data(self._plot_x, self._plot_y)
 
     def set_config(self, config, current_values):
+        self.setEnabled(config.dimension == 3)
+        if config.dimension != 3:
+            self.cancel_sweep()
+            self._sweep_gen += 1
+            self.config = None
+            self._set_plot_data([], [])
+            return
+
         self.cancel_sweep()
         self._sweep_gen += 1
         self._error_label.setVisible(False)

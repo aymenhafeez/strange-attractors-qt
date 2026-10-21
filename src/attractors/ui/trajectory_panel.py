@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Aymen Hafeez
 # SPDX-License-Identifier: GPL-3.0-only
 
+import math
+
 from pyqtgraph.parametertree import Parameter, ParameterTree
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
@@ -26,6 +28,8 @@ class _TrajectoryRow(QtCore.QObject):
         parent=None,
     ):
         super().__init__(parent)
+        self._ic_names = ("x₀", "y₀", "z₀")[: len(ic)]
+
         children = [
             {"name": "Colour", "type": "color", "value": colour},
             {
@@ -41,27 +45,16 @@ class _TrajectoryRow(QtCore.QObject):
                 "value": t_max,
                 "limits": (1, 750),
             },
-            {
-                "name": "x₀",
-                "type": "float",
-                "value": ic[0],
-                "limits": (-1000.0, 1000.0),
-                "step": 0.1,
-            },
-            {
-                "name": "y₀",
-                "type": "float",
-                "value": ic[1],
-                "limits": (-1000.0, 1000.0),
-                "step": 0.1,
-            },
-            {
-                "name": "z₀",
-                "type": "float",
-                "value": ic[2],
-                "limits": (-1000.0, 1000.0),
-                "step": 0.1,
-            },
+            *[
+                {
+                    "name": name,
+                    "type": "float",
+                    "value": value,
+                    "limits": (-1000.0, 1000.0),
+                    "step": 0.1,
+                }
+                for name, value in zip(self._ic_names, ic, strict=True)
+            ],
             {
                 "name": "Alpha",
                 "type": "slider",
@@ -112,11 +105,7 @@ class _TrajectoryRow(QtCore.QObject):
                 self.changed.emit()
 
     def get_ic(self) -> list[float]:
-        return [
-            self.param.child("x₀").value(),
-            self.param.child("y₀").value(),
-            self.param.child("z₀").value(),
-        ]
+        return [self.param.child(name).value() for name in self._ic_names]
 
     def get_n(self) -> int:
         return self.param.child("N").value()
@@ -202,6 +191,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self._suppress_emit = False
         self._default_n = 1000
         self._default_t_max = 10
+        self._dimensions = 3
 
         content_layout.addWidget(self._rows_container)
 
@@ -226,18 +216,29 @@ class TrajectoryPanel(QtWidgets.QWidget):
         return bool(self._enable_param.value())
 
     def reset(self, config):
-        for row in self._rows:
-            row.deleteLater()
-            self._root_param.removeChild(row.param)
-        self._rows.clear()
-        self._default_n = int(config.time_defaults.n)
-        self._default_t_max = int(config.time_defaults.t_max)
-        self._add_row(
-            ic=config.initial_conditions,
-            removeable=False,
-            n=self._default_n,
-            t_max=self._default_t_max,
-        )
+        previous_supression = self._suppress_emit
+        self._suppress_emit = True
+
+        try:
+            for row in self._rows:
+                self._root_param.removeChild(row.param)
+                row.deleteLater()
+
+            self._rows.clear()
+            self._dimension = config.dimension
+            self._default_n = config.time_defaults.n
+            self._default_t_max = config.time_defaults.t_max
+
+            self._add_row(
+                ic=config.initial_conditions,
+                removeable=False,
+                n=self._default_n,
+                t_max=self._default_t_max,
+            )
+        finally:
+            self._suppress_emit = previous_supression
+
+        self._emit()
 
     def _add_row(
         self,
@@ -249,8 +250,16 @@ class TrajectoryPanel(QtWidgets.QWidget):
     ):
         if len(self._rows) >= MAX_TRAJECTORIES:
             return
+
         if ic is None:
-            ic = self._rows[0].get_ic() if self._rows else [0.1, 0.0, 0.0]
+            ic = (
+                self._rows[0].get_ic()
+                if self._rows
+                else [0.1] + [0.0] * (self._dimension - 1)
+            )
+
+        if len(ic) != self._dimension:
+            raise ValueError(f"Expected {self._dimension} initial coordinates")
         if n is None:
             n = self._rows[0].get_n() if self._rows else self._default_n
         if t_max is None:
@@ -276,6 +285,35 @@ class TrajectoryPanel(QtWidgets.QWidget):
         row.set_enabled(self.is_enabled())
         self._sync_row_identities()
         self._emit()
+
+    def add_initial_condition(self, ic):
+        coordinates = [float(value) for value in ic]
+
+        if len(coordinates) != self._dimension:
+            raise ValueError(f"Expected {self._dimension} initial coordinates")
+
+        if any(
+            not math.isfinite(value) or not -1000.0 <= value <= 1000.0
+            for value in coordinates
+        ):
+            raise ValueError(
+                "Initial coordinates must be finite and between -1000 and 1000"
+            )
+
+        if len(self._rows) >= MAX_TRAJECTORIES:
+            return False
+
+        previous_suppression = self._suppress_emit
+        self._suppress_emit = True
+        try:
+            self._enable_param.setValue(True)
+            self._add_row(ic=coordinates)
+        finally:
+            self._suppress_emit = previous_suppression
+
+        self._emit()
+
+        return True
 
     def _remove_row(self, row: _TrajectoryRow):
         self._rows.remove(row)

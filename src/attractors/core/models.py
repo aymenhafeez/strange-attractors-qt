@@ -63,6 +63,22 @@ class AttractorConfig:
     pan: int | float = 0
     description: str = ""
     equation_text: str = ""
+    variables: tuple[str, ...] = ("x", "y", "z")
 
     def __post_init__(self):
         self.time_defaults = TimeDefaults.from_value(self.time_defaults)
+
+        if self.variables not in (
+            ("x", "y"),
+            ("x", "y", "z"),
+        ):
+            raise ValueError("variables must be either ('x', 'y') or ('x', 'y', 'z')")
+
+        if len(self.initial_conditions) != self.dimension:
+            raise ValueError(
+                "initial_conditions must have the same length as variables"
+            )
+
+    @property
+    def dimension(self):
+        return len(self.variables)

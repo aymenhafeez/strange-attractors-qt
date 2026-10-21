@@ -77,6 +77,19 @@ class SystemToolbar(QtWidgets.QWidget):
 
         self._sync_plot_controls()
 
+    def set_variables(self, variables):
+        for combo, fallback in (
+            (self.axis_combo, variables[0]),
+            (self.x_axis_combo, variables[0]),
+            (self.y_axis_combo, variables[1]),
+        ):
+            previous = combo.currentText()
+
+            with QtCore.QSignalBlocker(combo):
+                combo.clear()
+                combo.addItems(list(variables))
+                combo.setCurrentText(previous if previous in variables else fallback)
+
     def set_plots(self, names, current_key):
         keys = {(item["kind"], item["name"]) for item in names}
         if current_key in keys and current_key[0] == "plot":

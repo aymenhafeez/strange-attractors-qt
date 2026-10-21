@@ -11,6 +11,13 @@ from attractors.core.solver import solve_attractor, solve_rk4
 
 
 @numba.njit(nogil=True)
+def _harmonic_oscillator(state, t, params, out):
+    x, y = state
+    out[0] = y
+    out[1] = -x
+
+
+@numba.njit(nogil=True)
 def _constant_system(state, t, params, out):
     out[0] = 1.0
     out[1] = -2.0
@@ -167,3 +174,18 @@ def test_solve_attractor_missing_param_raises_key_error():
         solve_attractor(config, {})
 
         assert exc_info.value.args == ("a",)
+
+
+def test_solve_rk4_integrates_2d_system():
+    y0 = np.array([1.0, 0.0])
+    params = np.array([])
+    n = 1000
+    t_max = 2.0 * np.pi
+
+    sol = solve_rk4(_harmonic_oscillator, y0, 0.0, t_max, n, params)
+
+    times = np.arange(1, n + 1) * (t_max / n)
+    expected = np.column_stack((np.cos(times), -np.sin(times)))
+
+    assert sol.shape == (n, 2)
+    np.testing.assert_allclose(sol, expected, rtol=0.0, atol=1e-8)

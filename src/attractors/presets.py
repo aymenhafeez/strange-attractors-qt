@@ -65,7 +65,7 @@ def _custom_equations_from_config(config):
             return None
         equations.append(rhs.strip())
 
-    if len(equations) != 3 or not all(equations):
+    if len(equations) != config.dimension or not all(equations):
         return None
 
     return equations
@@ -88,8 +88,8 @@ def custom_config_from_preset_data(data):
     except (KeyError, TypeError) as exc:
         raise PresetError("Custom preset is missing equations") from exc
 
-    if len(equations) != 3 or not all(equations):
-        raise PresetError("Custom preset requires three equations")
+    if len(equations) not in (2, 3) or not all(equations):
+        raise PresetError("Custom preset requires two or three equations")
 
     func, detected_params = compile_system(tuple(equations))
     params_by_name = {
@@ -114,8 +114,8 @@ def custom_config_from_preset_data(data):
     except (KeyError, TypeError, ValueError) as exc:
         raise PresetError("Invalid custom preset values") from exc
 
-    if len(initial_conditions) != 3:
-        raise PresetError("Custom preset requires three initial conditions")
+    if len(initial_conditions) != len(equations):
+        raise PresetError("Initial conditions must match number of equations")
 
     return AttractorConfig(
         name="Custom",
@@ -125,6 +125,7 @@ def custom_config_from_preset_data(data):
         time_defaults=defaults,
         equation_text=format_equations(tuple(equations)),
         description="User-defined custom attractor",
+        variables=("x", "y", "z")[: len(equations)],
     )
 
 
