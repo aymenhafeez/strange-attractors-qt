@@ -34,6 +34,7 @@ from .ui.icons import icon
 from .ui.lyapunov_panel import LyapunovPanel
 from .ui.main_toolbar import build_menu_bar, build_status_bar, build_toolbar
 from .ui.output_panel import OutputPanel
+from .ui.phase_panel import PhasePortraitPanel
 from .ui.poincare_panel import PoincarePanel
 from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
@@ -78,6 +79,7 @@ class Window(QtWidgets.QMainWindow):
         self._restoring_view = False
         self._active_solve_request_id = None
         self._active_lyapunov_request_id = None
+        self._system_solutions = []
 
         self._solve_state = {
             "solving": False,
@@ -159,6 +161,13 @@ class Window(QtWidgets.QMainWindow):
             )
         )
         self.scene.projections_data.connect(self._on_projections_data)
+
+        self.phase_portrait = PhasePortraitPanel()
+        self.phase_portrait.seed_requested.connect(self._on_phase_seed)
+        self.system_view = QtWidgets.QStackedWidget()
+        self.system_view.addWidget(self.scene.container)
+        self.system_view.addWidget(self.phase_portrait)
+        self.system_view.setCurrentWidget(self.scene.container)
 
         self.controls = ControlPanel(self)
         self.right_panel = RightPanel(self.dock_layout)
@@ -286,7 +295,7 @@ class Window(QtWidgets.QMainWindow):
         self.workspace_controller.sync_views()
 
         self.viewport_dock = self.dock_layout.add(
-            "viewport", "Viewport", self.scene.container
+            "viewport", "Viewport", self.system_view
         )
         self.parameters_dock = self.dock_layout.add(
             "parameters", "Parameters", self.controls.controls_scroll
@@ -338,6 +347,20 @@ class Window(QtWidgets.QMainWindow):
         if profiling_enabled():
             self._set_output_panel_visible(True)
 
+    def _on_phase_seed(self, x, y):
+        config, _values = self._get_current_config_and_values()
+        if config is None or config.dimension != 2:
+            return
+
+        try:
+            added = self.controls.trajectory_panel.add_initial_condition([x, y])
+        except ValueError as e:
+            self._set_app_status(str(e), error=True)
+            return
+
+        if not added:
+            self._set_app_status("Trajectory limit reached", error=True)
+
     def on_attractor_change(self, name):
         self.current_name = name
         self._rebuild_view(name)
@@ -352,6 +375,7 @@ class Window(QtWidgets.QMainWindow):
         self.scene.animation_controller.stop()
         self._sync_toolbar_animation_action(False)
         self.controls.hide_standard_controls()
+
         if self._custom_config is not None:
             self._apply_config_to_view(self._custom_config)
         else:
@@ -362,6 +386,8 @@ class Window(QtWidgets.QMainWindow):
             self.scene.clear_solutions()
             self._clear_data_view()
             self.lyapunov_panel.clear()
+            self._system_solutions = []
+            self.phase_portrait.clear()
 
     def _rebuild_view_from_config(self, config):
         self.scene.animation_controller.stop()
@@ -372,6 +398,12 @@ class Window(QtWidgets.QMainWindow):
     def _apply_config_to_view(self, config):
         self._restoring_view = True
         try:
+            self.phase_portrait.clear()
+            self._system_solutions = []
+            self._latest_projection_solutions = None
+            self.scene.clear_solutions()
+            self._select_system_view(config)
+            self._configure_system_capabilities(config)
             self.scene.viewport_overlay.set_info(
                 config,
                 self.controls.get_current_values(),
@@ -399,6 +431,12 @@ class Window(QtWidgets.QMainWindow):
     def _apply_loaded_preset(self, config, values, n, t_max):
         self._restoring_view = True
         try:
+            self.phase_portrait.clear()
+            self._system_solutions = []
+            self._latest_projection_solutions = None
+            self.scene.clear_solutions()
+            self._select_system_view(config)
+            self._configure_system_capabilities(config)
             if config.name == "Custom":
                 self._custom_config = config
                 self.current_name = "Custom"
@@ -546,6 +584,7 @@ class Window(QtWidgets.QMainWindow):
         self.bifurcation_panel.apply_theme()
         self.projection_panel.apply_theme()
         self.jupyter_console_panel.apply_theme()
+        self.phase_portrait.apply_theme()
 
     def _sync_theme_actions(self, theme):
         with (
@@ -1511,7 +1550,7 @@ class Window(QtWidgets.QMainWindow):
         self._set_solve_state(
             solving=True,
             valid=False,
-            stale=bool(self.scene.trajectory_renderer.solutions),
+            stale=bool(self._system_solutions),
             partial=not full,
             last_error=None,
             request_id=request_id,
@@ -1603,7 +1642,7 @@ class Window(QtWidgets.QMainWindow):
             self._set_solve_state(
                 solving=False,
                 valid=False,
-                stale=bool(self.scene.trajectory_renderer.solutions),
+                stale=bool(self._system_solutions),
                 partial=False,
                 last_error="Solve failed",
                 solution_points=[],
@@ -1617,15 +1656,21 @@ class Window(QtWidgets.QMainWindow):
                 self._set_app_status("Solve failed", error=True)
             return
 
+        config, _values = self._get_current_config_and_values()
+        if config is None:
+            perf_finish(self, solve_token, status="discard")
+            return
+
         validation_start = time.perf_counter()
-        is_valid, message = validate_solutions(solutions)
+        is_valid, message = validate_solutions(solutions, dimension=config.dimension)
+
         validation_ms = (time.perf_counter() - validation_start) * 1000
         if not is_valid:
             perf_finish(self, solve_token, status="invalid", partial=is_partial)
             self._set_solve_state(
                 solving=False,
                 valid=False,
-                stale=bool(self.scene.trajectory_renderer.solutions),
+                stale=bool(self._system_solutions),
                 partial=False,
                 last_error=message,
                 solution_points=[],
@@ -1645,12 +1690,8 @@ class Window(QtWidgets.QMainWindow):
         ui_start = time.perf_counter()
 
         self._clear_app_status()
-        self.scene.trajectory_renderer.set_time_steps(self._trajectory_time_steps())
-        self.scene.display_solutions(solutions, is_partial)
-
-        if self.auto_fit_camera:
-            self.scene.camera_controller.fit_camera_to_solutions(solutions)
-            self.scene.grid_overlay.auto_adjust_grid(solutions)
+        config, _values = self._get_current_config_and_values()
+        self._display_system_solution(config, solutions, is_partial)
 
         self._update_data_view(solutions, is_partial)
         self._set_solve_state(
@@ -1666,7 +1707,7 @@ class Window(QtWidgets.QMainWindow):
             self.live_plot_controller._refresh_live_preview(solutions)
             self._update_projection_panel_from_solutions(solutions)
 
-        if not is_partial:
+        if not is_partial and config.dimension == 3:
             self._last_live_preview_update = None
             self._latest_projection_solutions = solutions
             config, values = self._get_current_config_and_values()
@@ -1706,6 +1747,66 @@ class Window(QtWidgets.QMainWindow):
             self._full_needed = False
             self._dispatch_solve(full=full)
 
+    def _configure_system_capabilities(self, config):
+        is_3d = config.dimension == 3
+
+        self.lyapunov_panel.setEnabled(is_3d)
+        self.poincare_panel.setEnabled(is_3d)
+        self.controls.animation_scroll.setEnabled(is_3d)
+
+        for panel in (
+            self.lyapunov_panel,
+            self.poincare_panel,
+            self.projection_panel,
+            self.bifurcation_panel,
+        ):
+            panel.setToolTip("" if is_3d else "Currently unavailable for 3D systems")
+
+        for action in (
+            self.toolbar_anim_action,
+            self.toolbar_loop_action,
+            self.toolbar_point_action,
+            self.toolbar_line_action,
+            self.toolbar_trail_action,
+            self.toolbar_grid_action,
+            self.toolbar_orbit_action,
+            self.toolbar_hover_action,
+            self.toolbar_reset_camera_action,
+            self.toolbar_fit_camera_action,
+            self.toolbar_auto_fit_camera_action,
+            self.toolbar_save_view_action,
+            self.animation_traj_action,
+            self.animation_particle_flow_action,
+        ):
+            action.setEnabled(is_3d)
+
+        if not is_3d:
+            self.scene.animation_controller.stop()
+            self.scene.camera_controller.set_orbit_mode(False)
+            self._cancel_lyapunov_analysis()
+            self.lyapunov_panel.clear()
+            self.projection_panel.clear()
+            self.poincare_panel.set_attractor(config, {})
+
+    def _select_system_view(self, config):
+        widget = self.phase_portrait if config.dimension == 2 else self.scene.container
+        self.system_view.setCurrentWidget(widget)
+
+    def _display_system_solution(self, config, solutions, is_partial):
+        self._select_system_view(config)
+        self._system_solutions = solutions
+
+        if config.dimension == 2:
+            self.phase_portrait.display_solutions(solutions)
+            return
+
+        self.scene.trajectory_renderer.set_time_steps(self._trajectory_time_steps())
+        self.scene.display_solutions(solutions, is_partial)
+
+        if self.auto_fit_camera:
+            self.scene.camera_controller.fit_camera_to_solutions(solutions)
+            self.scene.grid_overlay.auto_adjust_grid(solutions)
+
     def _trajectory_time_steps(self):
         config, _values = self._get_current_config_and_values()
         if config is None:
@@ -1723,6 +1824,10 @@ class Window(QtWidgets.QMainWindow):
         return [(self.current_t_max - t_min) / self.current_n]
 
     def _reapply_projections(self):
+        config, _values = self._get_current_config_and_values()
+        if config is None or config.dimension != 3:
+            return
+
         solutions = (
             self._latest_projection_solutions
             or self.scene.trajectory_renderer.solutions
@@ -1730,6 +1835,10 @@ class Window(QtWidgets.QMainWindow):
         self.projection_panel.reapply_projections(solutions)
 
     def _update_projection_panel_from_solutions(self, solutions):
+        config, _values = self._get_current_config_and_values()
+        if config is None or config.dimension != 3:
+            return
+
         if not _panel_visible(self, "projection_panel"):
             return
 
@@ -1781,7 +1890,12 @@ class Window(QtWidgets.QMainWindow):
             return
 
         self._latest_projection_solutions = None
-        self.scene.clear_solutions()
+
+        config, _values = self._get_current_config_and_values()
+        if config is None or config.dimension == 3:
+            self.scene.clear_solutions()
+            self._system_solutions = []
+
         self._clear_data_view()
         self.solver.cancel_solve()
         self._solve_pending = False
@@ -1790,6 +1904,10 @@ class Window(QtWidgets.QMainWindow):
         self._dispatch_solve(full=True)
 
     def _on_trajectory_styles_changed(self, trajectories):
+        config, _values = self._get_current_config_and_values()
+        if config is not None and config.dimension == 2:
+            return
+
         renderer = self.scene.trajectory_renderer
         renderer.set_trajectories(trajectories)
         renderer.update_display()
@@ -1851,6 +1969,10 @@ class Window(QtWidgets.QMainWindow):
             elif name == "bifurcation_panel":
                 self.bifurcation_panel.cancel_sweep()
         for name in opened - previous:
+            config, _values = self._get_current_config_and_values()
+            if config is not None and config.dimension != 3:
+                continue
+
             if name == "lyapunov_panel" and self.lyapunov_panel.auto_enabled():
                 self._request_lyapunov()
             elif name == "projection_panel":

@@ -49,6 +49,18 @@ class CustomPanel(QtWidgets.QWidget):
         content_layout.setSpacing(4)
         content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
+        dimension_row = QtWidgets.QHBoxLayout()
+        dimension_row.addWidget(QtWidgets.QLabel("Dimension"))
+
+        self.dimension_combo = QtWidgets.QComboBox()
+        self.dimension_combo.addItem("2D", 2)
+        self.dimension_combo.addItem("3D", 3)
+        self.dimension_combo.setCurrentIndex(1)
+
+        dimension_row.addWidget(self.dimension_combo)
+        dimension_row.addStretch()
+        content_layout.addLayout(dimension_row)
+
         eq_label = QtWidgets.QLabel("Equations")
         content_layout.addWidget(eq_label)
 
@@ -88,9 +100,11 @@ class CustomPanel(QtWidgets.QWidget):
         content_layout.addWidget(ic_label)
 
         ic_row = QtWidgets.QHBoxLayout()
-        self.ic_spins: list[QtWidgets.QDoubleSpinBox] = []
+        self.ic_spins = []
+        self.ic_labels = []
         for axis, default in [("x₀", 0.1), ("y₀", 0.0), ("z₀", 0.0)]:
             lbl = QtWidgets.QLabel(axis)
+            self.ic_labels.append(lbl)
             spin = QtWidgets.QDoubleSpinBox()
             spin.setRange(-1000.0, 1000.0)
             spin.setDecimals(4)
@@ -132,6 +146,34 @@ class CustomPanel(QtWidgets.QWidget):
         for edit in self.text_edits:
             self._resize_equation_edit(edit)
 
+        self.dimension_combo.currentIndexChanged.connect(self._on_dimension_changed)
+        for edit in self.text_edits:
+            edit.textChanged.connect(self._invalidate_compilation)
+
+    @property
+    def variables(self):
+        dimension = self.dimension_combo.currentData()
+        return ("x", "y", "z")[:dimension]
+
+    # stop a previously compiled function from being usd after changing equations or dimension
+    def _invalidate_compilation(self):
+        self._func = None
+        self._detected_params = []
+        self._equation_text = ""
+        self.range_group.hide()
+        self.solve_btn.hide()
+        self.compile_btn.show()
+        self.status_label.hide()
+
+    def _on_dimension_changed(self, _index):
+        show_z = len(self.variables) == 3
+        self.equation_labels[2].setVisible(show_z)
+        self.text_edits[2].setVisible(show_z)
+        self.ic_labels[2].setVisible(show_z)
+        self.ic_spins[2].setVisible(show_z)
+        self._invalidate_compilation()
+        self.adjustSize()
+
     def _toggle_content(self):
         if self.toggle_btn is None:
             return
@@ -140,8 +182,11 @@ class CustomPanel(QtWidgets.QWidget):
         self.toggle_btn.setText("Custom ▾" if visible else "Custom ▸")
         self.adjustSize()
 
-    def _get_equations(self) -> tuple[str, str, str]:
-        return tuple(te.toPlainText().strip() for te in self.text_edits)
+    def _get_equations(self) -> tuple[str, ...]:
+        return tuple(
+            edit.toPlainText().strip()
+            for edit in self.text_edits[: len(self.variables)]
+        )
 
     def _resize_equation_edit(self, edit):
         """Adapt equation input to size of the text with some padding"""
@@ -157,6 +202,10 @@ class CustomPanel(QtWidgets.QWidget):
             self.adjustSize()
 
     def set_from_config(self, config):
+        self.dimension_combo.setCurrentIndex(
+            self.dimension_combo.findData(config.dimension)
+        )
+
         equations = []
         for line in config.equation_text.splitlines():
             _, sep, rhs = line.partition("=")
@@ -196,7 +245,12 @@ class CustomPanel(QtWidgets.QWidget):
         equations = self._get_equations()
 
         if not all(equations):
-            self._show_status("All three equations are required.", error=True)
+            message = (
+                "Both equations are required"
+                if len(self.variables) == 2
+                else "All three equations are required"
+            )
+            self._show_status(message, error=True)
             return
 
         try:
@@ -300,6 +354,9 @@ class CustomPanel(QtWidgets.QWidget):
         self.adjustSize()
 
     def _emit_config(self):
+        if self._func is None:
+            self._show_status("Compile equations first", error=True)
+
         params = []
         for p in self._detected_params:
             if p in self._range_widgets:
@@ -325,7 +382,10 @@ class CustomPanel(QtWidgets.QWidget):
             name="Custom",
             equation=self._func,
             params=params,
-            initial_conditions=[spin.value() for spin in self.ic_spins],
+            initial_conditions=[
+                spin.value() for spin in self.ic_spins[: len(self.variables)]
+            ],
+            variables=self.variables,
             time_defaults=TimeDefaults(t_min=0, t_max=50, n=100000),
             equation_text=self._equation_text,
             description="User-defined custom attractor",

@@ -75,6 +75,7 @@ class PhasePortraitPanel(QtWidgets.QWidget):
 
         self.seed_check.toggled.connect(self._set_seeding_enabled)
         self.view_box.seed_requested.connect(self.seed_requested.emit)
+        self.seed_check.toggled.connect(self._set_seeding_enabled)
 
         self.apply_theme()
 

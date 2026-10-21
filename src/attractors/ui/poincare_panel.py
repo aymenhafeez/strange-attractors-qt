@@ -191,6 +191,15 @@ class PoincarePanel(QtWidgets.QWidget):
         self._on_plane_changed(self.plane_combo.currentText())
 
     def set_attractor(self, config, values):
+        self.setEnabled(config.dimension == 3)
+        if config.dimension != 3:
+            self.cancel_solve()
+            self._solve_gen += 1
+            self._config = None
+            self._solutions = None
+            self._clear_plot_data()
+            return
+
         self._config = config
         self._values = values
         if self.auto_check.isChecked():

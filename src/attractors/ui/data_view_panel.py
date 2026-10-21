@@ -218,7 +218,12 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
                 step,
             )
         if column in ("x", "y", "z"):
-            return solution[step, SAMPLE_COLUMNS.index(column) - 3]
+            coordinate = SAMPLE_COLUMNS.index(column) - 3
+            if coordinate >= solution.shape[1]:
+                return None
+
+            return solution[step, coordinate]
+
         if column == "radius":
             return np.linalg.norm(solution[step])
         if column == "displacement":

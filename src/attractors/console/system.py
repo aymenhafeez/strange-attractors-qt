@@ -408,7 +408,11 @@ class SystemInspector:
 
     @property
     def solutions(self):
-        solutions = self._window.scene.trajectory_renderer.solutions or []
+        solutions = getattr(self._window, "_system_solutions", None)
+
+        if solutions is None:
+            solutions = self._window.scene.trajectory_renderer.solutions or []
+
         views = []
         for solution in solutions:
             # make the view read only so it can't accidentally get modified
@@ -420,7 +424,7 @@ class SystemInspector:
 
     @property
     def has_solutions(self):
-        return bool(self._window.scene.trajectory_renderer.solutions)
+        return bool(self.solutions)
 
     def _optional_help_table(self, data, table, name):
         if not table:
