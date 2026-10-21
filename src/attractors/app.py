@@ -1905,7 +1905,9 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_trajectory_styles_changed(self, trajectories):
         config, _values = self._get_current_config_and_values()
+
         if config is not None and config.dimension == 2:
+            self.phase_portrait.set_trajectories(trajectories)
             return
 
         renderer = self.scene.trajectory_renderer
