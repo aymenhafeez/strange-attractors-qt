@@ -1,6 +1,6 @@
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from ..core.solution_validation import validate_solutions
 from .style import PANEL_SURFACE, plot_colours
@@ -37,6 +37,7 @@ class PhasePortraitPanel(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._curves = []
+        self._trajectories = []
         self._has_data = None
 
         self.setObjectName("panelSurface")
@@ -75,12 +76,38 @@ class PhasePortraitPanel(QtWidgets.QWidget):
 
         self.seed_check.toggled.connect(self._set_seeding_enabled)
         self.view_box.seed_requested.connect(self.seed_requested.emit)
-        self.seed_check.toggled.connect(self._set_seeding_enabled)
 
         self.apply_theme()
 
     def _set_seeding_enabled(self, enabled):
         self.view_box.seeding_enabled = enabled
+
+    def set_trajectories(self, trajectories):
+        self._trajectories = [dict(entry) for entry in trajectories]
+        self._apply_trajectory_styles()
+
+    def _apply_trajectory_styles(self):
+        palette = plot_colours()["trajectory_palette"]
+
+        for i, curve in enumerate(self._curves):
+            trajectory = self._trajectories[i] if i < len(self._trajectories) else {}
+
+            default_colour = palette[i % len(palette)]
+            colour = QtGui.QColor(pg.mkColor(trajectory.get("colour", default_colour)))
+            alpha = trajectory.get("alpha", 1.0)
+            colour.setAlphaF(colour.alphaF() * np.clip(alpha, 0.0, 1.0))
+            size = trajectory.get("size", 1.0)
+            line_mode = trajectory.get("render_mode", "line") == "line"
+
+            if line_mode:
+                curve.setSymbol(None)
+                curve.setPen(pg.mkPen(colour, width=size))
+            else:
+                curve.setPen(None)
+                curve.setSymbol("o")
+                curve.setSymbolPen(None)
+                curve.setSymbolBrush(colour)
+                curve.setSymbolSize(size)
 
     def display_solutions(self, solutions):
         if not solutions:
@@ -94,17 +121,13 @@ class PhasePortraitPanel(QtWidgets.QWidget):
         while len(self._curves) > len(solutions):
             self.plot_widget.removeItem(self._curves.pop())
 
-        palette = plot_colours()["trajectory_palette"]
-
         while len(self._curves) < len(solutions):
-            index = len(self._curves)
-            curve = self.plot_widget.plot(
-                pen=pg.mkPen(palette[index % len(palette)], width=1.5)
-            )
-            self._curves.append(curve)
+            self._curves.append(self.plot_widget.plot())
 
         for curve, solution in zip(self._curves, solutions, strict=True):
             curve.setData(solution[:, 0], solution[:, 1])
+
+        self._apply_trajectory_styles()
 
         if not self._has_data:
             self.fit()
@@ -131,6 +154,4 @@ class PhasePortraitPanel(QtWidgets.QWidget):
             axis.setPen(pg.mkPen(colours["plot_pen"]))
             axis.setTextPen(pg.mkPen(colours["plot_pen"]))
 
-        palette = colours["trajectory_palette"]
-        for index, curve in enumerate(self._curves):
-            curve.setPen(pg.mkPen(palette[index % len(palette)], width=1.5))
+        self._apply_trajectory_styles()
