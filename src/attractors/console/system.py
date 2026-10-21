@@ -1389,6 +1389,10 @@ class SystemInspector:
         y_range=None,
         density=21,
     ):
+        config = self.config
+        if config is None:
+            raise ValueError("No attractor selected")
+
         x_name, y_name, fixed_name = self._slice_axes(x_axis, y_axis, fixed_axis)
         density = self._positive_int(density, "Density")
         if density < 2:
@@ -1399,14 +1403,12 @@ class SystemInspector:
         x_values = np.linspace(x_range[0], x_range[1], density)
         y_values = np.linspace(y_range[0], y_range[1], density)
         xx, yy = np.meshgrid(x_values, y_values)
-        states = np.zeros((density * density, 3), dtype=np.float64)
+        states = np.zeros((density * density, config.dimension))
         states[:, AXES[x_name]] = xx.ravel()
         states[:, AXES[y_name]] = yy.ravel()
-        states[:, AXES[fixed_name]] = float(fixed_value)
+        if fixed_name is not None:
+            states[:, AXES[fixed_name]] = float(fixed_value)
 
-        config = self.config
-        if config is None:
-            raise ValueError("No attractor selected")
         params = np.ascontiguousarray(
             [self.values[param.name] for param in config.params],
             dtype=np.float64,
@@ -1419,11 +1421,16 @@ class SystemInspector:
         u = vectors[:, AXES[x_name]]
         v = vectors[:, AXES[y_name]]
 
+        coordinates = {
+            x_name: states[:, AXES[x_name]],
+            y_name: states[:, AXES[y_name]],
+        }
+        if fixed_name is not None:
+            coordinates[fixed_name] = states[:, AXES[fixed_name]]
+
         return pd.DataFrame(
             {
-                x_name: states[:, AXES[x_name]],
-                y_name: states[:, AXES[y_name]],
-                fixed_name: states[:, AXES[fixed_name]],
+                **coordinates,
                 "u": u,
                 "v": v,
                 "speed": np.hypot(u, v),
@@ -1562,21 +1569,24 @@ class SystemInspector:
     def _slice_axes(self, x_axis, y_axis, fixed_axis):
         x_name = str(x_axis).lower()
         y_name = str(y_axis).lower()
-        axis_index(x_name)
-        axis_index(y_name)
+        self._axis_column(x_name)
+        self._axis_column(y_name)
 
         if x_name == y_name:
-            raise ValueError("Slice axes must be different")
+            raise ValueError("Field axes must be different")
 
-        if fixed_axis is None:
-            fixed_name = next(
-                axis for axis in COORDINATE_COLUMNS if axis not in {x_name, y_name}
-            )
-        else:
-            fixed_name = str(fixed_axis).lower()
-            axis_index(fixed_name)
+        remaining = [axis for axis in self.variables if axis not in {x_name, y_name}]
+
+        if not remaining:
+            if fixed_axis is not None:
+                raise ValueError("A 2D field has no fixed coordinate")
+            return x_name, y_name, None
+
+        fixed_name = remaining[0] if fixed_axis is None else str(fixed_axis).lower()
+        self._axis_column(fixed_name)
+
         if fixed_name in {x_name, y_name}:
-            raise ValueError("Fixed axis must be different from slice axes")
+            raise ValueError("Fixed axis must be different from field axes")
 
         return x_name, y_name, fixed_name
 

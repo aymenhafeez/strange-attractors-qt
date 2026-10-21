@@ -781,8 +781,8 @@ class LivePlotController:
             trajectory = spec.get("trajectory", 0)
             solution = self._live_solution(trajectory, solutions)
             return (
-                solution[:, solution[:, x_column]],
-                solution[:, solution[:, y_column]],
+                solution[:, x_column],
+                solution[:, y_column],
                 str(spec.get("x_axis", "x")),
                 str(spec.get("y_axis", "y")),
             )
