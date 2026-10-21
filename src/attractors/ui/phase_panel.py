@@ -1,6 +1,9 @@
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore
+from pyqtgraph.Qt import QtCore, QtWidgets
+
+from ..core.solution_validation import validate_solutions
+from .style import PANEL_SURFACE, plot_colours
 
 
 class _PhaseViewBox(pg.ViewBox):
@@ -72,3 +75,61 @@ class PhasePortraitPanel(QtWidgets.QWidget):
 
         self.seed_check.toggled.connect(self._set_seeding_enabled)
         self.view_box.seed_requested.connect(self.seed_requested.emit)
+
+        self.apply_theme()
+
+    def _set_seeding_enabled(self, enabled):
+        self.view_box.seeding_enabled = enabled
+
+    def display_solutions(self, solutions):
+        if not solutions:
+            self.clear()
+            return
+
+        valid, message = validate_solutions(solutions, dimension=2)
+        if not valid:
+            raise ValueError(message)
+
+        while len(self._curves) > len(solutions):
+            self.plot_widget.removeItem(self._curves.pop())
+
+        palette = plot_colours()["trajectory_palette"]
+
+        while len(self._curves) < len(solutions):
+            index = len(self._curves)
+            curve = self.plot_widget.plot(
+                pen=pg.mkPen(palette[index % len(palette)], width=1.5)
+            )
+            self._curves.append(curve)
+
+        for curve, solution in zip(self._curves, solutions, strict=True):
+            curve.setData(solution[:, 0], solution[:, 1])
+
+        if not self._has_data:
+            self.fit()
+
+        self._has_data = True
+
+    def clear(self):
+        for curve in self._curves:
+            self.plot_widget.removeItem(curve)
+
+        self._curves.clear()
+        self._has_data = False
+
+    def fit(self):
+        self.view_box.autoRange(padding=0.08)
+
+    def apply_theme(self):
+        colours = plot_colours()
+        self.plot_widget.setBackground(colours["plot_background"])
+        self.plot_widget.showGrid(x=True, y=True, alpha=colours["plot_grid_alpha"])
+
+        for position in ("bottom", "left"):
+            axis = self.plot_widget.getAxis(position)
+            axis.setPen(pg.mkPen(colours["plot_pen"]))
+            axis.setTextPen(pg.mkPen(colours["plot_pen"]))
+
+        palette = colours["trajectory_palette"]
+        for index, curve in enumerate(self._curves):
+            curve.setPen(pg.mkPen(palette[index % len(palette)], width=1.5))
