@@ -103,17 +103,39 @@ def _emit(node: Node) -> str:
     )
 
 
-def detect_parameters(equations: tuple[str, str, str]) -> list[str]:
+def _variables_for_equations(equations: tuple[str, ...]) -> tuple[str, ...]:
+    if len(equations) == 2:
+        return ("x", "y")
+    if len(equations) == 3:
+        return ("x", "y", "z")
+
+    raise ParseError("Expected two or three equations")
+
+
+def detect_parameters(equations: tuple[str, ...]) -> list[str]:
+    variables = _variables_for_equations(equations)
+    inactive_variables = STATE_VARS - set(variables) - {"t"}
     seen: dict[str, None] = {}
 
     for equation in equations:
-        tree = ast.walk(parse_expression(equation))
-
-        for node in tree:
+        for node in ast.walk(parse_expression(equation)):
             if not isinstance(node, ast.Name):
                 continue
 
             name = node.id
+
+            if name in inactive_variables:
+                raise ParseError(
+                    f"Coordinate '{name}' is unavailable in this system",
+                    error_position(node),
+                )
+
+            if name in {"x_var", "params", "out", "np"}:
+                raise ParseError(
+                    f"Name '{name}' is reserved",
+                    error_position(node),
+                )
+
             if name in STATE_VARS or name in CONSTANTS or name in FUNCTIONS:
                 continue
 
@@ -122,61 +144,35 @@ def detect_parameters(equations: tuple[str, str, str]) -> list[str]:
     return list(seen)
 
 
-_FUNC_TEMPLATE = """\
-def _custom(x_var, t, params, out):
-    x, y, z = x_var
-    {param_unpack}
-    out[0] = {eq0}
-    out[1] = {eq1}
-    out[2] = {eq2}
-"""
+def compile_system(equations: tuple[str, ...]) -> tuple[Callable, list[str]]:
+    variables = _variables_for_equations(equations)
+    params = sorted(detect_parameters(equations))
+    emitted = [_emit(parse_expression(equation)) for equation in equations]
 
-
-def compile_system(equations: tuple[str, str, str]) -> tuple[Callable, list[str]]:
-    nodes = [parse_expression(equation) for equation in equations]
-
-    seen: dict[str, None] = {}
-    for node in nodes:
-        for child in ast.walk(node):
-            if not isinstance(child, ast.Name):
-                continue
-
-            name = child.id
-            if (
-                name not in STATE_VARS
-                and name not in CONSTANTS
-                and name not in FUNCTIONS
-            ):
-                seen[name] = None
-
-    params = sorted(seen)
-    emitted = [_emit(node) for node in nodes]
+    lines = [
+        "def _custom(x_var, t, params, out):",
+        f"    {', '.join(variables)} = x_var",
+    ]
 
     if params:
-        joined = ", ".join(params)
-        if len(params) == 1:
-            joined += ","
-        param_unpack = joined + " = params"
-    else:
-        param_unpack = "# no parameters"
+        # unpack into a single value if there's only one param
+        lines.append(f"    {', '.join(params)}, = params")
 
-    source = _FUNC_TEMPLATE.format(
-        param_unpack=param_unpack,
-        eq0=emitted[0],
-        eq1=emitted[1],
-        eq2=emitted[2],
-    )
+    for index, expression in enumerate(emitted):
+        lines.append(f"    out[{index}] = {expression}")
+
+    source = "\n".join(lines) + "\n"
 
     namespace = {"np": np, "__builtins__": {}}
-    exec(compile(source, "<custom_attractor>", "exec"), namespace)  # noqa: S102
+    exec(compile(source, "<custom_attractor>", "exec"), namespace)
 
-    func = namespace["_custom"]
-
-    func = numba.njit(func, nogil=True)
-
+    func = numba.njit(namespace["_custom"], nogil=True)
     return func, params
 
 
-def format_equations(equations: tuple[str, str, str]) -> str:
-    labels = ["dx/dt", "dy/dt", "dz/dt"]
-    return "\n".join(f"{label} = {eq}" for label, eq in zip(labels, equations))
+def format_equations(equations: tuple[str, ...]) -> str:
+    variables = _variables_for_equations(equations)
+    return "\n".join(
+        f"d{variable}/dt = {equation}"
+        for variable, equation in zip(variables, equations, strict=True)
+    )
