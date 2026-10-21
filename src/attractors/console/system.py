@@ -383,6 +383,14 @@ class SystemInspector:
         return _inspectable_config(config)
 
     @property
+    def variables(self):
+        config = self.config
+        if config is None:
+            return COORDINATE_COLUMNS
+
+        return config.variables
+
+    @property
     def values(self):
         _config, values = self._window._get_current_config_and_values()
         return dict(values)
@@ -453,7 +461,7 @@ class SystemInspector:
             "t_max": self.t_max,
             "camera": self.camera,
         }
-        for axis in COORDINATE_COLUMNS:
+        for axis in self.variables:
             result[f"{axis}_min"] = (
                 None if axis not in bounds.index else bounds.loc[axis, "min"]
             )
@@ -549,43 +557,38 @@ class SystemInspector:
         return self._window._solve_from_console()
 
     def trajectories(self):
-        """Inspect plotted trajectories"""
         rows = []
+        variables = self.variables
         initial_conditions = self._initial_conditions()
         metadata = self._trajectory_metadata()
+
         for i, solution in enumerate(self.solutions):
             finite = solution[np.isfinite(solution).all(axis=1)]
             trajectory_meta = metadata[i] if i < len(metadata) else {}
+            solve_spec = self._trajectory_solve_spec(i)
+
             row = {
                 "trajectory": i,
                 "label": trajectory_meta.get("label", f"T{i}"),
                 "colour": trajectory_meta.get("colour"),
                 "alpha": trajectory_meta.get("alpha"),
                 "render_mode": trajectory_meta.get("render_mode"),
-                "n": trajectory_meta.get("n", self._trajectory_solve_spec(i).get("n")),
-                "t_max": trajectory_meta.get(
-                    "t_max",
-                    self._trajectory_solve_spec(i).get("t_max"),
-                ),
+                "n": trajectory_meta.get("n", solve_spec.get("n")),
+                "t_max": trajectory_meta.get("t_max", solve_spec.get("t_max")),
                 "length": len(solution),
-                "initial_x": self._coordinate(initial_conditions, i, 0),
-                "initial_y": self._coordinate(initial_conditions, i, 1),
-                "initial_z": self._coordinate(initial_conditions, i, 2),
-                "final_x": solution[-1, 0] if len(solution) else None,
-                "final_y": solution[-1, 1] if len(solution) else None,
-                "final_z": solution[-1, 2] if len(solution) else None,
             }
-            for axis, col in AXES.items():
+
+            for col, axis in enumerate(variables):
+                row[f"initial_{axis}"] = self._coordinate(initial_conditions, i, col)
+                row[f"final_{axis}"] = solution[-1, col] if len(solution) else None
                 row[f"{axis}_min"] = finite[:, col].min() if len(finite) else None
                 row[f"{axis}_max"] = finite[:, col].max() if len(finite) else None
+
             rows.append(row)
 
-        if not rows:
-            return pd.DataFrame(columns=self._trajectory_columns()).set_index(
-                "trajectory"
-            )
-
-        return pd.DataFrame(rows).set_index("trajectory")
+        return pd.DataFrame(rows, columns=self._trajectory_columns()).set_index(
+            "trajectory"
+        )
 
     def solution(self, index=0, *, copy=False):
         solutions = self.solutions
@@ -680,17 +683,17 @@ class SystemInspector:
     def bounds(self):
         solutions = self.solutions
         if not solutions:
-            return pd.DataFrame(columns=["min", "max"], index=COORDINATE_COLUMNS)
+            return pd.DataFrame(columns=["min", "max"], index=self.variables)
 
         points = np.concatenate(solutions, axis=0)
         finite = points[np.isfinite(points).all(axis=1)]
 
         if len(finite) == 0:
-            return pd.DataFrame(columns=["min", "max"], index=COORDINATE_COLUMNS)
+            return pd.DataFrame(columns=["min", "max"], index=self.variables)
 
         return pd.DataFrame(
             {"min": finite.min(axis=0), "max": finite.max(axis=0)},
-            index=COORDINATE_COLUMNS,
+            index=self.variables,
         )
 
     def to_dataframe(self, trajectory=None):
@@ -700,16 +703,14 @@ class SystemInspector:
 
         for i in selected:
             solution = self.solution(i)
-            frame = pd.DataFrame(solution, columns=COORDINATE_COLUMNS)
+            frame = pd.DataFrame(solution, columns=self.variables)
             frame.insert(0, "t", self.time(i))
             frame.insert(0, "step", np.arange(len(solution)))
             frame.insert(0, "trajectory", i)
             rows.append(frame)
 
         if not rows:
-            return pd.DataFrame(
-                columns=["trajectory", "step", "t", *COORDINATE_COLUMNS]
-            )
+            return pd.DataFrame(columns=["trajectory", "step", "t", *self.variables])
 
         return pd.concat(rows, ignore_index=True)
 
@@ -727,7 +728,7 @@ class SystemInspector:
         for i in selected:
             solution = self.solution(i)
             indices = self._sample_indices(len(solution), sample_size)
-            frame = pd.DataFrame(solution[indices].copy(), columns=COORDINATE_COLUMNS)
+            frame = pd.DataFrame(solution[indices].copy(), columns=self.variables)
             times = self.time(i)
             frame.insert(0, "t", times[indices])
             frame.insert(0, "step", indices)
@@ -735,9 +736,7 @@ class SystemInspector:
             rows.append(frame)
 
         if not rows:
-            return pd.DataFrame(
-                columns=["trajectory", "step", "t", *COORDINATE_COLUMNS]
-            )
+            return pd.DataFrame(columns=["trajectory", "step", "t", *self.variables])
 
         return pd.concat(rows, ignore_index=True)
 
@@ -2086,6 +2085,8 @@ class SystemInspector:
         return np.linspace(0, length - 1, sample_size, dtype=int)
 
     def _trajectory_columns(self):
+        variables = self.variables
+
         columns = [
             "trajectory",
             "label",
@@ -2095,14 +2096,11 @@ class SystemInspector:
             "n",
             "t_max",
             "length",
-            "initial_x",
-            "initial_y",
-            "initial_z",
-            "final_x",
-            "final_y",
-            "final_z",
+            *[f"initial_{axis}" for axis in variables],
+            *[f"final_{axis}" for axis in variables],
         ]
-        for axis in COORDINATE_COLUMNS:
+
+        for axis in variables:
             columns.extend([f"{axis}_min", f"{axis}_max"])
 
         return columns
