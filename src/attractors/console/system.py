@@ -390,6 +390,18 @@ class SystemInspector:
 
         return config.variables
 
+    def _axis_column(self, axis):
+        name = str(axis).lower()
+        variables = self.variables
+
+        if name not in variables:
+            raise ValueError(
+                f"Coordinate '{name}' is unavailable. "
+                f"Choose from: {', '.join(variables)}"
+            )
+
+        return variables.index(name)
+
     @property
     def values(self):
         _config, values = self._window._get_current_config_and_values()
@@ -1017,8 +1029,8 @@ class SystemInspector:
     ):
         x_name = str(x_axis).lower()
         y_name = str(y_axis).lower()
-        x_col = axis_index(x_name)
-        y_col = axis_index(y_name)
+        x_col = self._axis_column(x_name)
+        y_col = self._axis_column(y_name)
         plot_mode = self._plot_mode(mode)
         if live:
             return self._register_live_plot(
@@ -1070,7 +1082,7 @@ class SystemInspector:
         zoom_region=False,
     ):
         axis_name = str(axis).lower()
-        axis_col = axis_index(axis_name)
+        axis_col = self._axis_column(axis_name)
         plot_mode = self._plot_mode(mode)
         if live:
             return self._register_live_plot(

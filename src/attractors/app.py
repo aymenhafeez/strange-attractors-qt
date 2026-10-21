@@ -1708,7 +1708,6 @@ class Window(QtWidgets.QMainWindow):
             self._update_projection_panel_from_solutions(solutions)
 
         if not is_partial and config.dimension == 3:
-            self._last_live_preview_update = None
             self._latest_projection_solutions = solutions
             config, values = self._get_current_config_and_values()
             if config is not None:
@@ -1728,6 +1727,9 @@ class Window(QtWidgets.QMainWindow):
                 self._initial_full_solves += 1
             self.scene.grid_overlay.auto_adjust_grid(solutions)
             # self.scene.camera_controller.fit_camera_to_solutions(solutions)
+
+        if not is_partial:
+            self._last_live_preview_update = None
             for plot_name in list(self.live_plot_controller.live_plots):
                 self.live_plot_controller._refresh_live_plot(plot_name)
 
