@@ -33,6 +33,7 @@ class _PhaseViewBox(pg.ViewBox):
 
 class PhasePortraitPanel(QtWidgets.QWidget):
     seed_requested = QtCore.pyqtSignal(float, float)
+    field_update_requested = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -55,6 +56,11 @@ class PhasePortraitPanel(QtWidgets.QWidget):
             "Click insider the plot to choose an initial conditions"
         )
         controls.addWidget(self.seed_check)
+
+        self.field_check = QtWidgets.QCheckBox("Vector field")
+        self.field_check.setToolTip("Show vector field at system's start time")
+        controls.addWidget(self.field_check)
+
         controls.addStretch()
 
         self.fit_button = QtWidgets.QPushButton("Fit")
@@ -76,6 +82,19 @@ class PhasePortraitPanel(QtWidgets.QWidget):
 
         self.seed_check.toggled.connect(self._set_seeding_enabled)
         self.view_box.seed_requested.connect(self.seed_requested.emit)
+
+        self.field_item = pg.PlotDataItem(connect="finite")
+        self.field_item.setZValue(-10)
+        self.plot_widget.addItem(self.field_item, ignoreBounds=True)
+        self.field_item.hide()
+
+        self._field_timer = QtCore.QTimer(self)
+        self._field_timer.setSingleShot(True)
+        self._field_timer.setInterval(100)
+        self._field_timer.timeout.connect(self.field_update_requested.emit)
+
+        self.field_check.toggled.connect(self._on_field_toggled)
+        self.view_box.sigRangeChanged.connect(lambda *_: self.request_field_update())
 
         self.apply_theme()
 
@@ -134,12 +153,30 @@ class PhasePortraitPanel(QtWidgets.QWidget):
 
         self._has_data = True
 
+    def _on_field_toggled(self, checked):
+        if checked:
+            self.request_field_update()
+        else:
+            self._field_timer.stop()
+            self.field_item.hide()
+
+    def request_field_update(self):
+        if self.field_check.isChecked():
+            self._field_timer.start()
+
+    def set_vector_field(self, x, y):
+        self.field_item.setData(x, y)
+        self.field_item.setVisible(self.field_check.isChecked())
+
     def clear(self):
         for curve in self._curves:
             self.plot_widget.removeItem(curve)
 
         self._curves.clear()
         self._has_data = False
+        self._field_timer.stop()
+        self.field_item.clear()
+        self.field_item.hide()
 
     def fit(self):
         self.view_box.autoRange(padding=0.08)
@@ -155,3 +192,5 @@ class PhasePortraitPanel(QtWidgets.QWidget):
             axis.setTextPen(pg.mkPen(colours["plot_pen"]))
 
         self._apply_trajectory_styles()
+
+        self.field_item.setPen(pg.mkPen("#555555" if colours["is_dark"] else "#aaaaaa"))

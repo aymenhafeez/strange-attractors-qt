@@ -163,6 +163,7 @@ class Window(QtWidgets.QMainWindow):
         self.scene.projections_data.connect(self._on_projections_data)
 
         self.phase_portrait = PhasePortraitPanel()
+        self.phase_portrait.field_update_requested.connect(self._update_phase_field)
         self.phase_portrait.seed_requested.connect(self._on_phase_seed)
         self.system_view = QtWidgets.QStackedWidget()
         self.system_view.addWidget(self.scene.container)
@@ -360,6 +361,32 @@ class Window(QtWidgets.QMainWindow):
 
         if not added:
             self._set_app_status("Trajectory limit reached", error=True)
+
+    def _update_phase_field(self):
+        panel = self.phase_portrait
+        config, _values = self._get_current_config_and_values()
+
+        if (
+            config is None
+            or config.dimension != 2
+            or not panel.field_check.isChecked()
+            or self.system_view.currentWidget() is not panel
+        ):
+            return
+
+        x_range, y_range = panel.view_box.viewRange()
+
+        try:
+            frame = self.system.vector_field_slice(
+                x_range=x_range, y_range=y_range, density=21
+            )
+            x, y = self.system._vector_field_segments(frame, "x", "y", scale=0.75)
+        except (ValueError, ArithmeticError) as e:
+            panel.field_item.clear()
+            self._set_app_status(str(e), error=True)
+            return
+
+        panel.set_vector_field(x, y)
 
     def on_attractor_change(self, name):
         self.current_name = name
@@ -1801,6 +1828,7 @@ class Window(QtWidgets.QMainWindow):
 
         if config.dimension == 2:
             self.phase_portrait.display_solutions(solutions)
+            self.phase_portrait.request_field_update()
             return
 
         self.scene.trajectory_renderer.set_time_steps(self._trajectory_time_steps())
