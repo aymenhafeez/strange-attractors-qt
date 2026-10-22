@@ -1,7 +1,7 @@
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from ..core.signal_analysis import prepare_signal
+from ..core.signal_analysis import prepare_signal, select_interval
 from .style import PANEL_SURFACE, plot_colours
 
 
@@ -39,12 +39,42 @@ class SignalPanel(QtWidgets.QWidget):
         self.curve.setDownsampling(auto=True, method="peak")
         self.curve.setClipToView(True)
 
+        self.region = pg.LinearRegionItem(swapMode="block")
+        self.region.setZValue(10)
+        self.trace.addItem(self.region, ignoreBounds=True)
+        self.region.hide()
+        self.region.sigRegionChanged.connect(self._region_changed)
+
+        self.start_spin = QtWidgets.QDoubleSpinBox()
+        self.end_spin = QtWidgets.QDoubleSpinBox()
+        for spin in (self.start_spin, self.end_spin):
+            spin.setDecimals(12)
+            spin.setKeyboardTracking(False)
+            spin.setEnabled(False)
+            spin.valueChanged.connect(self._bounds_changed)
+
+        self.full_button = QtWidgets.QPushButton("Full record")
+        self.full_button.setEnabled(False)
+        self.full_button.clicked.connect(self._reset_interval)
+
+        interval_row = QtWidgets.QHBoxLayout()
+        interval_row.addWidget(QtWidgets.QLabel("Start"))
+        interval_row.addWidget(self.start_spin, 1)
+        interval_row.addWidget(QtWidgets.QLabel("End"))
+        interval_row.addWidget(self.end_spin, 1)
+        interval_row.addWidget(self.full_button)
+
+        self.selection_label = QtWidgets.QLabel()
+        self.selection_label.setWordWrap(True)
+
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(4)
         layout.addLayout(source_row)
         layout.addWidget(self.status_label)
         layout.addWidget(self.trace, 1)
+        layout.addLayout(interval_row)
+        layout.addWidget(self.selection_label)
         layout.addWidget(self.info_label)
 
         self.trajectory_combo.currentIndexChanged.connect(self._show_trace)
@@ -116,7 +146,14 @@ class SignalPanel(QtWidgets.QWidget):
 
     def _show_trace(self):
         self.signal = None
+        self.selected_signal = None
+        self.selection_label.clear()
+        self.region.hide()
+        for widget in (self.start_spin, self.end_spin, self.full_button):
+            widget.setEnabled(False)
+
         if self._run is None:
+            self._interval = None
             self.curve.clear()
             self.trace.setLabel("left", "Value")
             self.info_label.clear()
@@ -129,21 +166,98 @@ class SignalPanel(QtWidgets.QWidget):
         spec = self._run["trajectory_specs"][index]
         dt = (spec["t_max"] - self._run["t_min"]) / spec["n"]
 
-        self.signal = prepare_signal(
-            solution[:, column], dt=dt, t0=self._run["t_min"] + dt
-        )
+        try:
+            self.signal = prepare_signal(
+                solution[:, column],
+                dt=dt,
+                t0=self._run["t_min"] + dt,
+            )
+        except ValueError as error:
+            self.curve.clear()
+            self.info_label.setText(str(error))
+            return
 
         self.curve.setData(self.signal.times, self.signal.values)
         self.trace.setLabel("left", coordinate)
         self.trace.enableAutoRange()
         self.info_label.setText(
-            f"{self.signal.values.size:,} samples | dt = {dt:.6g} |"
-            f"Rate = {1.0 / dt:.6g} samples/times unit\n"
-            f"Time: {self.signal.times[0]:.6g} to "
-            f"{self.signal.times[-1]:.6g}"
+            f"Record: {self.signal.values.size:,} samples | dt = {dt:.6g} | "
+            f"Rate = {1.0 / dt:.6g} samples/time unit"
         )
 
+        first = float(self.signal.times[0])
+        last = float(self.signal.times[-1])
+        start, end = self._interval or (first, last)
+        start = min(max(start, first), last)
+        end = min(max(end, first), last)
+
+        if start >= end:
+            start, end = first, last
+
+        with (
+            QtCore.QSignalBlocker(self.region),
+            QtCore.QSignalBlocker(self.start_spin),
+            QtCore.QSignalBlocker(self.end_spin),
+        ):
+            self.region.setBounds((first, last))
+            for spin in (self.start_spin, self.end_spin):
+                spin.setRange(first, last)
+                spin.setSingleStep(self.signal.dt)
+
+        for widget in (self.start_spin, self.end_spin, self.full_button):
+            widget.setEnabled(True)
+
+        self.region.show()
+        self._set_interval(start, end)
         self.apply_theme()
+
+    def _set_interval(self, start, end):
+        if self.signal is None:
+            return
+
+        with (
+            QtCore.QSignalBlocker(self.region),
+            QtCore.QSignalBlocker(self.start_spin),
+            QtCore.QSignalBlocker(self.end_spin),
+        ):
+            self.region.setRegion((start, end))
+            start, end = self.region.getRegion()
+            self.start_spin.setValue(start)
+            self.end_spin.setValue(end)
+
+        self._interval = (start, end)
+        self.selected_signal = None
+
+        try:
+            self.selected_signal = select_interval(self.signal, start, end)
+        except ValueError as e:
+            self.selection_label.setText(str(e))
+            return
+
+        selected = self.selected_signal
+        self.selection_label.setText(
+            f"Selected: {selected.values.size:,} samples | "
+            f"Time: {selected.times[0]:.9g} to {selected.times[0]:.9g} "
+            f"Span: {selected.times[-1] - selected.times[0]:.9g}"
+        )
+
+    def _region_changed(self):
+        self._set_interval(*self.region.getRegion())
+
+    def _bounds_changed(self):
+        start = self.start_spin.value()
+        end = self.end_spin.value()
+
+        if start >= end:
+            self.selected_signal = None
+            self.selection_label.setText("Start must be before end")
+            return
+
+        self._set_interval(start, end)
+
+    def _reset_interval(self):
+        if self.signal is not None:
+            self._set_interval(self.signal.times[0], self.signal.times[-1])
 
     def apply_theme(self):
         colours = plot_colours()
