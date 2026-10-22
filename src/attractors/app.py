@@ -80,6 +80,8 @@ class Window(QtWidgets.QMainWindow):
         self._active_solve_request_id = None
         self._active_lyapunov_request_id = None
         self._system_solutions = []
+        self._active_run = None
+        self._completed_run = None
 
         self._solve_state = {
             "solving": False,
@@ -406,6 +408,7 @@ class Window(QtWidgets.QMainWindow):
         if self._custom_config is not None:
             self._apply_config_to_view(self._custom_config)
         else:
+            self._clear_completed_run()
             self.solver.cancel_solve()
             self.solver.cancel_lyapunov()
             self._solve_pending = False
@@ -423,6 +426,7 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_config_to_view(self, config):
+        self._clear_completed_run()
         self._restoring_view = True
         try:
             self.phase_portrait.clear()
@@ -1427,6 +1431,11 @@ class Window(QtWidgets.QMainWindow):
 
         return self.system.status()
 
+    def _clear_completed_run(self):
+        self._active_solve_request_id = None
+        self._active_run = None
+        self._completed_run = None
+
     def _set_solve_state(self, **updates):
         state = dict(self._solve_state)
         state.update(updates)
@@ -1574,6 +1583,15 @@ class Window(QtWidgets.QMainWindow):
         request_id = self.solver.next_solve_request_id()
         self._active_solve_request_id = request_id
 
+        self._active_run = {
+            **signature,
+            "request_id": request_id,
+            "t_min": config.time_defaults.t_min,
+            "variables": config.variables,
+            "labels": tuple(t["label"] for t in trajectories) or ("T0",),
+            "colours": tuple(t["colour"].name() for t in trajectories) or (None,),
+        }
+
         self._set_solve_state(
             solving=True,
             valid=False,
@@ -1719,6 +1737,15 @@ class Window(QtWidgets.QMainWindow):
         self._clear_app_status()
         config, _values = self._get_current_config_and_values()
         self._display_system_solution(config, solutions, is_partial)
+
+        if not is_partial and not self._solve_needed:
+            arrays = []
+            for solution in solutions:
+                view = solution.view()
+                view.setFlags(write=False)
+                arrays.append(view)
+
+            self._completed_run = {**self._active_run, "solutions": tuple(arrays)}
 
         self._update_data_view(solutions, is_partial)
         self._set_solve_state(
@@ -1920,6 +1947,7 @@ class Window(QtWidgets.QMainWindow):
         if self._restoring_view:
             return
 
+        self._clear_completed_run()
         self._latest_projection_solutions = None
 
         config, _values = self._get_current_config_and_values()
