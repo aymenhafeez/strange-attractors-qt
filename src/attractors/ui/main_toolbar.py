@@ -207,6 +207,11 @@ def build_menu_bar(self):
     )
 
     analysis_menu = menu_bar.addMenu("&Analysis")
+
+    signal_action = self._panel_docks["signal_panel"].toggleViewAction()
+    signal_action.setText("Signal && spectrum")
+
+    analysis_menu.addAction(signal_action)
     analysis_menu.addAction(self.toolbar_lyapunov_action)
     analysis_menu.addAction(self.toolbar_projection_action)
     analysis_menu.addAction(self.toolbar_poincare_action)

@@ -38,6 +38,7 @@ from .ui.phase_panel import PhasePortraitPanel
 from .ui.poincare_panel import PoincarePanel
 from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
+from .ui.signal_panel import SignalPanel
 from .ui.style import MAIN_WINDOW, plot_colours
 from .ui.system_toolbar import SystemToolbar
 from .view.view_manager import ViewManager
@@ -242,6 +243,8 @@ class Window(QtWidgets.QMainWindow):
         self.bifurcation_panel = BifurcationPanel()
         self.bifurcation_panel.close_requested.connect(self._close_bifurcation)
 
+        self.signal_panel = SignalPanel()
+
         self.output_panel = OutputPanel()
         self.output_panel.hide()
 
@@ -322,6 +325,7 @@ class Window(QtWidgets.QMainWindow):
             ("poincare_panel", "Poincare", self.poincare_panel),
             ("bifurcation_panel", "Bifurcation", self.bifurcation_panel),
             ("projection_panel", "Projection heatmaps", self.projection_panel),
+            ("signal_panel", "Signal and spectrum", self.signal_panel),
         ):
             self._panel_docks[name] = self.dock_layout.add(
                 f"analysis/{name}", title, panel
@@ -460,6 +464,7 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_loaded_preset(self, config, values, n, t_max):
+        self._clear_completed_run()
         self._restoring_view = True
         try:
             self.phase_portrait.clear()
@@ -614,6 +619,7 @@ class Window(QtWidgets.QMainWindow):
         self.poincare_panel.apply_theme()
         self.bifurcation_panel.apply_theme()
         self.projection_panel.apply_theme()
+        self.signal_panel.apply_theme()
         self.jupyter_console_panel.apply_theme()
         self.phase_portrait.apply_theme()
 
@@ -1362,6 +1368,8 @@ class Window(QtWidgets.QMainWindow):
         )
         if solve:
             self._on_controls_solve_requested(True)
+        elif self.controls.get_current_values() != current_values:
+            self._mark_settings_unsolved()
 
         return self.system.parameters()
 
@@ -1372,6 +1380,7 @@ class Window(QtWidgets.QMainWindow):
             if t_max is None
             else self._validated_console_t_max(t_max)
         )
+        time_changed = next_n != self.current_n or next_t_max != self.current_t_max
         self.current_n = next_n
         self.current_t_max = next_t_max
         self.controls.set_time_values(self.current_n, self.current_t_max)
@@ -1379,6 +1388,8 @@ class Window(QtWidgets.QMainWindow):
 
         if solve:
             self._on_controls_solve_requested(True)
+        elif time_changed:
+            self._mark_settings_unsolved()
 
         return self.system.status()
 
@@ -1431,16 +1442,33 @@ class Window(QtWidgets.QMainWindow):
 
         return self.system.status()
 
+    def _mark_settings_unsolved(self):
+        self.solver.cancel_solve()
+        self._active_solve_request_id = None
+        self._active_run = None
+        self._solve_pending = False
+        self._solve_needed = False
+        self._full_needed = False
+        self._set_solve_state(
+            solving=False,
+            valid=False,
+            stale=self._completed_run is not None,
+            partial=False,
+            last_error=None,
+        )
+
     def _clear_completed_run(self):
         self._active_solve_request_id = None
         self._active_run = None
         self._completed_run = None
+        self.signal_panel.set_source(None, {})
 
     def _set_solve_state(self, **updates):
         state = dict(self._solve_state)
         state.update(updates)
         self._solve_state = state
         self.system_toolbar.set_solve_state(state)
+        self.signal_panel.set_source(self._completed_run, state)
 
         return state
 
@@ -1742,7 +1770,7 @@ class Window(QtWidgets.QMainWindow):
             arrays = []
             for solution in solutions:
                 view = solution.view()
-                view.setFlags(write=False)
+                view.setflags(write=False)
                 arrays.append(view)
 
             self._completed_run = {**self._active_run, "solutions": tuple(arrays)}
