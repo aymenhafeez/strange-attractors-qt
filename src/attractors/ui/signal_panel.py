@@ -2,6 +2,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..core.signal_analysis import prepare_signal, select_interval
+from ..workers.spectrum_worker import SpectrumWorker
 from .style import PANEL_SURFACE, plot_colours
 
 
@@ -12,6 +13,10 @@ class SignalPanel(QtWidgets.QWidget):
         self.signal = None
         self.selected_signal = None
         self._interval = None
+        self._spectrum = None
+        self._spectrum_worker = None
+        # track current analysis inputs
+        self._spectrum_revision = 0
 
         self.setObjectName("panelSurface")
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -67,15 +72,76 @@ class SignalPanel(QtWidgets.QWidget):
         self.selection_label = QtWidgets.QLabel()
         self.selection_label.setWordWrap(True)
 
+        self.mean_check = QtWidgets.QCheckBox("Remove mean")
+        self.mean_check.setChecked(True)
+        self.mean_check.setToolTip("Remove mean for PSD calculation")
+
+        self.window_combo = QtWidgets.QComboBox()
+        self.window_combo.addItem("Hann", "hann")
+        self.window_combo.addItem("Rectangular", "boxcar")
+
+        self.log_check = QtWidgets.QCheckBox("Log power")
+        self.log_check.setToolTip("Logarithmic power axis")
+
+        spectrum_row = QtWidgets.QHBoxLayout()
+        spectrum_row.addWidget(self.mean_check)
+        spectrum_row.addWidget(QtWidgets.QLabel("Window"))
+        spectrum_row.addWidget(self.window_combo)
+        spectrum_row.addStretch(1)
+        spectrum_row.addWidget(self.log_check)
+
+        self.spectrum_plot = pg.PlotWidget()
+        self.spectrum_plot.setLabel("bottom", "Frequency (cycles per unit time)")
+        self.spectrum_plot.setLabel("left", "Power spectral density")
+        self.spectrum_curve = self.spectrum_plot.plot()
+        self.spectrum_curve.setDownsampling(auto=True, method="peak")
+        self.spectrum_curve.setClipToView(True)
+
+        self.spectrum_info = QtWidgets.QLabel()
+        self.spectrum_info.setWordWrap(True)
+        self.spectrum_info.setToolTip(
+            "Bin spacing is the distance between FFT frequencies\n"
+            "Noise bandwidth describes the analysis window"
+        )
+
+        self._spectrum_timer = QtCore.QTimer(self)
+        self._spectrum_timer.setSingleShot(True)
+        self._spectrum_timer.timeout.connect(self._start_spectrum)
+
+        self.mean_check.toggled.connect(self._queue_spectrum)
+        self.window_combo.currentIndexChanged.connect(self._queue_spectrum)
+        self.log_check.toggled.connect(self._draw_spectrum)
+
+        time_area = QtWidgets.QWidget()
+        time_layout = QtWidgets.QVBoxLayout(time_area)
+        time_layout.setContentsMargins(0, 0, 0, 0)
+        time_layout.setSpacing(4)
+        time_layout.addWidget(self.trace, 1)
+        time_layout.addLayout(interval_row)
+        time_layout.addWidget(self.selection_label)
+        time_layout.addWidget(self.info_label)
+
+        spectrum_area = QtWidgets.QWidget()
+        spectrum_layout = QtWidgets.QVBoxLayout(spectrum_area)
+        spectrum_layout.setContentsMargins(0, 0, 0, 0)
+        spectrum_layout.setSpacing(4)
+        spectrum_layout.addLayout(spectrum_row)
+        spectrum_layout.addWidget(self.spectrum_plot, 1)
+        spectrum_layout.addWidget(self.spectrum_info)
+
+        plots = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+        plots.setChildrenCollapsible(False)
+        plots.addWidget(time_area)
+        plots.addWidget(spectrum_area)
+        plots.setStretchFactor(0, 1)
+        plots.setStretchFactor(1, 1)
+
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
         layout.addLayout(source_row)
         layout.addWidget(self.status_label)
-        layout.addWidget(self.trace, 1)
-        layout.addLayout(interval_row)
-        layout.addWidget(self.selection_label)
-        layout.addWidget(self.info_label)
+        layout.addWidget(plots, 1)
 
         self.trajectory_combo.currentIndexChanged.connect(self._show_trace)
         self.coordinate_combo.currentIndexChanged.connect(self._show_trace)
@@ -147,6 +213,7 @@ class SignalPanel(QtWidgets.QWidget):
     def _show_trace(self):
         self.signal = None
         self.selected_signal = None
+        self._queue_spectrum()
         self.selection_label.clear()
         self.region.hide()
         for widget in (self.start_spin, self.end_spin, self.full_button):
@@ -227,19 +294,20 @@ class SignalPanel(QtWidgets.QWidget):
 
         self._interval = (start, end)
         self.selected_signal = None
-
         try:
             self.selected_signal = select_interval(self.signal, start, end)
-        except ValueError as e:
-            self.selection_label.setText(str(e))
+        except ValueError as error:
+            self.selection_label.setText(str(error))
+            self._queue_spectrum()
             return
 
         selected = self.selected_signal
         self.selection_label.setText(
             f"Selected: {selected.values.size:,} samples | "
-            f"Time: {selected.times[0]:.9g} to {selected.times[0]:.9g} "
+            f"Time: {selected.times[0]:.9g} to {selected.times[-1]:.9g} | "
             f"Span: {selected.times[-1] - selected.times[0]:.9g}"
         )
+        self._queue_spectrum()
 
     def _region_changed(self):
         self._set_interval(*self.region.getRegion())
@@ -251,6 +319,7 @@ class SignalPanel(QtWidgets.QWidget):
         if start >= end:
             self.selected_signal = None
             self.selection_label.setText("Start must be before end")
+            self._queue_spectrum()
             return
 
         self._set_interval(start, end)
@@ -259,10 +328,90 @@ class SignalPanel(QtWidgets.QWidget):
         if self.signal is not None:
             self._set_interval(self.signal.times[0], self.signal.times[-1])
 
+    def _queue_spectrum(self):
+        self._spectrum_revision += 1
+        self._spectrum_timer.stop()
+        self._spectrum = None
+        self.spectrum_curve.clear()
+        self.spectrum_info.clear()
+
+        if self.selected_signal is None:
+            return
+        if self.selected_signal.values.size < 4:
+            self.spectrum_info.setText(
+                "Spectrum analysis requires at least four samples"
+            )
+            return
+
+        self.spectrum_info.setText("Updating spectrum")
+        self._spectrum_timer.start(150)
+
+    def _start_spectrum(self):
+        if self._spectrum_worker is not None:
+            return
+        if self.selected_signal is None or self.selected_signal.values.size < 4:
+            return
+
+        worker = SpectrumWorker(
+            self._spectrum_revision,
+            self.selected_signal,
+            remove_mean=self.mean_check.isChecked(),
+            window=self.window_combo.currentData(),
+        )
+        worker.signals.finished.connect(
+            self._on_spectrum_finished,
+            QtCore.Qt.ConnectionType.QueuedConnection,
+        )
+        self._spectrum_worker = worker
+        QtCore.QThreadPool.globalInstance().start(worker)
+
+    @QtCore.pyqtSlot(int, object, str)
+    def _on_spectrum_finished(self, revision, spectrum, error):
+        self._spectrum_worker = None
+
+        if revision != self._spectrum_revision:
+            if not self._spectrum_timer.isActive():
+                self._start_spectrum()
+            return
+
+        if spectrum is None:
+            self.spectrum_info.setText(error or "Spectrum calculation failed")
+            return
+
+        self._spectrum = spectrum
+        self._draw_spectrum()
+
+    def _draw_spectrum(self):
+        logarithmic = self.log_check.isChecked()
+        self.spectrum_plot.setLogMode(x=False, y=logarithmic)
+
+        if self._spectrum is None:
+            return
+
+        spectrum = self._spectrum
+        coordinate = self.coordinate_combo.currentText()
+        self.spectrum_plot.setLabel(
+            "left", f"PSD ({coordinate}^2) / (cycles/unit time)"
+        )
+
+        self.spectrum_curve.setData(spectrum.frequencies, spectrum.density)
+        self.spectrum_plot.enableAutoRange()
+
+        text = (
+            f"Bin spacing: {spectrum.bin_spacing:.6g} | "
+            f"Noise bandwidth: {spectrum.noise_bandwidth:.6g} | "
+            f"Nyquist: {0.5 / self.selected_signal.dt:.6g} cycles/unit time"
+        )
+        if logarithmic and not (spectrum.density > 0).any():
+            text += "\nAll power is zero. Switch off Log power to view it"
+
+        self.spectrum_info.setText(text)
+
     def apply_theme(self):
         colours = plot_colours()
-        self.trace.setBackground(colours["plot_background"])
-        self.trace.showGrid(x=True, y=True, alpha=colours["plot_grid_alpha"])
+        for plot in (self.trace, self.spectrum_plot):
+            plot.setBackground(colours["plot_background"])
+            plot.showGrid(x=True, y=True, alpha=colours["plot_grid_alpha"])
 
         pen = colours["plot_pen"]
         if self._run is not None:
@@ -270,3 +419,4 @@ class SignalPanel(QtWidgets.QWidget):
             pen = self._run["colours"][index] or pen
 
         self.curve.setPen(pg.mkPen(pen))
+        self.spectrum_curve.setPen(pg.mkPen(colours["alternate_pen"]))
