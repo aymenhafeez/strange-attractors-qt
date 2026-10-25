@@ -470,23 +470,185 @@ class SignalPanel(QtWidgets.QWidget):
         self._spectrum = None
         self.spectrum_curve.clear()
         self.spectrum_info.clear()
+            self._spectrogram_timer.stop()
 
+    def _start_spectrogram(self):
+        if not self._spectrogram_waiting:
+            return
+
+        if self._spectrogram_worker is not None:
+            return
         if self.selected_signal is None:
             return
-        if self.selected_signal.values.size < 4:
-            self.spectrum_info.setText(
-                "Spectrum analysis requires at least four samples"
-            )
+
+        self._spectrogram_waiting = False
+
+        worker = SpectrogramWorker(
+            self._spectrogram_revision,
+            self.selected_signal,
+            window_duration=self.duration_spin.value(),
+            overlap=self.overlap_spin.value() / 100.0,
+            remove_mean=self.mean_check.isChecked(),
+            window=self.window_combo.currentData(),
+        )
+        worker.signals.finished.connect(
+            self._on_spectrogram_finished,
+            QtCore.Qt.ConnectionType.QueuedConnection,
+        )
+        self._spectrogram_worker = worker
+        QtCore.QThreadPool.globalInstance().start(worker)
+
+    @QtCore.pyqtSlot(int, object, str)
+    def _on_spectrogram_finished(self, revision, spectrogram, error):
+        self._spectrogram_worker = None
+
+        if self._spectrogram_dirty:
+            self._spectrogram_timer.start(100)
+
+        if revision != self._spectrogram_revision:
             return
 
-        self.spectrum_info.setText("Updating spectrum")
-        self._spectrum_timer.start(150)
+        if spectrogram is None:
+            if not self._spectrogram_dirty:
+                self._spectrogram = None
+                self.spectrogram_image.clear()
+                self._set_status(
+                    "spectrogram",
+                    error or "Spectrogram calculation failed",
+                    error=True,
+                )
+            return
+
+        self._spectrogram = spectrogram
+        self._apply_spectrogram_frequency()
+        self._draw_spectrogram()
+
+    def _apply_spectrogram_frequency(self):
+        if self._spectrogram is None:
+            return
+
+        mode = self.frequency_view_combo.currentData()
+        if mode == "manual":
+            return
+
+        spectrogram = self._spectrogram
+        nyquist = 0.5 / self.selected_signal.dt
+        upper = nyquist
+
+        if mode == "auto":
+            power_by_frequency = spectrogram.density.max(axis=1)
+            peak = float(power_by_frequency.max())
+
+            if peak > 0.0:
+                # PSD values within 80 dB of the global peak
+                visible = np.flatnonzero(power_by_frequency >= peak * 1e-8)
+                upper = min(
+                    nyquist,
+                    max(
+                        2.0 * spectrogram.bin_spacing,
+                        float(spectrogram.frequencies[visible[-1]])
+                        + spectrogram.bin_spacing,
+                    ),
+                )
+
+        self._setting_spectrogram_frequency = True
+        try:
+            self.spectrogram_plot.setYRange(0.0, upper, padding=0)
+        finally:
+            self._setting_spectrogram_frequency = False
+
+    @QtCore.pyqtSlot(object, object)
+    def _spectrogram_frequency_changed(self, view, bounds):
+        if self._setting_spectrogram_frequency:
+            return
+
+        with QtCore.QSignalBlocker(self.frequency_view_combo):
+            self.frequency_view_combo.setCurrentIndex(
+                self.frequency_view_combo.findData("manual")
+            )
+
+    def _draw_spectrogram(self):
+        if self._spectrogram is None:
+            return
+
+        spectrogram = self._spectrogram
+        density = spectrogram.density
+        dt = self.selected_signal.dt
+        time_step = spectrogram.hop_samples * dt
+        frequency_step = spectrogram.bin_spacing
+        frequency_count, time_count = density.shape
+        coordinate = self.coordinate_combo.currentText()
+        density_unit = f"{coordinate}^2 / (cycles/unit time)"
+        peak = float(density.max())
+
+        if self.colour_scale_combo.currentData() == "db":
+            upper = 10.0 * float(np.log10(peak)) if peak > 0.0 else 0.0
+            lower = upper - 80.0
+            display = np.full_like(density, lower)
+            positive = density > 0.0
+            display[positive] = 10.0 * np.log10(density[positive])
+            label = f"PSD (dB re 1 {density_unit})"
+        else:
+            lower = 0.0
+            upper = peak if peak > 0.0 else 1.0
+            display = density
+            label = f"PSD ({density_unit})"
+
+        self.spectrogram_image.setImage(
+            display,
+            autoLevels=False,
+            levels=(lower, upper),
+        )
+        self.spectrogram_image.setRect(
+            float(spectrogram.times[0]) - time_step / 2.0,
+            float(spectrogram.frequencies[0]) - frequency_step / 2.0,
+            time_count * time_step,
+            frequency_count * frequency_step,
+        )
+
+        self.spectrogram_colour_bar.setLabel("left", label)
+        self.spectrogram_colour_bar.setLevels((lower, upper))
+
+        if self._spectrogram_dirty or self._spectrogram_worker is not None:
+            self._set_status("spectrogram", "Updating")
+        elif peak == 0.0:
+            self._set_status("spectrogram", "All spectrogram power is zero.")
+        else:
+            self._set_status("spectrogram")
+
+    def _queue_spectrum(self):
+        signal = self.selected_signal
+        if signal is None or signal.values.size < 4:
+            self._spectrum_revision += 1
+            self._spectrum_dirty = False
+            self._spectrum_timer.stop()
+            self._spectrum = None
+            self.spectrum_curve.clear()
+            self.spectrum_plot.setToolTip("")
+            self._set_status("spectrum")
+            if signal is not None:
+                self._set_status(
+                    "spectrum",
+                    "Spectrum analysis requires at least four samples",
+                    error=True,
+                )
+            return
+
+        self._spectrum_waiting = True
+        self._set_status("spectrum", "Updating")
+        if self._spectrum_worker is None and not self._spectrum_timer.isActive():
+            self._spectrum_timer.start(100)
 
     def _start_spectrum(self):
+        if not self._spectrum_waiting:
+            return
+
         if self._spectrum_worker is not None:
             return
         if self.selected_signal is None or self.selected_signal.values.size < 4:
             return
+
+        self._spectrum_waiting = False
 
         worker = SpectrumWorker(
             self._spectrum_revision,
@@ -505,13 +667,21 @@ class SignalPanel(QtWidgets.QWidget):
     def _on_spectrum_finished(self, revision, spectrum, error):
         self._spectrum_worker = None
 
+        if self._spectrum_dirty:
+            self._spectrum_timer.start(100)
+
         if revision != self._spectrum_revision:
-            if not self._spectrum_timer.isActive():
-                self._start_spectrum()
             return
 
         if spectrum is None:
-            self.spectrum_info.setText(error or "Spectrum calculation failed")
+            if not self._spectrum_dirty:
+                self._spectrum = None
+                self.spectrum_curve.clear()
+                self._set_status(
+                    "spectrum",
+                    error or "Spectrum calculation failed",
+                    error=True,
+                )
             return
 
         self._spectrum = spectrum
@@ -534,18 +704,23 @@ class SignalPanel(QtWidgets.QWidget):
         self.spectrum_plot.enableAutoRange()
 
         text = (
-            f"Bin spacing: {spectrum.bin_spacing:.6g} | "
-            f"Noise bandwidth: {spectrum.noise_bandwidth:.6g} | "
+            f"Bin spacing: {spectrum.bin_spacing:.6g} cycles/unit time\n"
+            f"Noise bandwidth: {spectrum.noise_bandwidth:.6g} cycles/unit time\n"
             f"Nyquist: {0.5 / self.selected_signal.dt:.6g} cycles/unit time"
         )
-        if logarithmic and not (spectrum.density > 0).any():
-            text += "\nAll power is zero. Switch off Log power to view it"
-
-        self.spectrum_info.setText(text)
+        self.spectrum_plot.setToolTip(text)
+        if self._spectrum_dirty or self._spectrum_worker is not None:
+            self._set_status("spectrum", "Updating")
+        elif logarithmic and not (spectrum.density > 0).any():
+            self._set_status(
+                "spectrum", "All power is zero. Switch off Log power to view it"
+            )
+        else:
+            self._set_status("spectrum")
 
     def apply_theme(self):
         colours = plot_colours()
-        for plot in (self.trace, self.spectrum_plot):
+        for plot in (self.trace, self.spectrum_plot, self.spectrogram_plot):
             plot.setBackground(colours["plot_background"])
             plot.showGrid(x=True, y=True, alpha=colours["plot_grid_alpha"])
 
