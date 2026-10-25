@@ -25,13 +25,14 @@ class RightPanel(QtCore.QObject):
         self.trajectory_panel = TrajectoryPanel(collapsible=False)
         self.trajectory_panel.setMinimumWidth(230)
         self.preset_panel = PresetPanel()
+        self.preset_panel.setMinimumWidth(230)
         self.custom_panel = CustomPanel(collapsible=False)
 
         self.trajectory_dock = dock_layout.add(
             "trajectories", "Trajectories", self.trajectory_panel
         )
         self.preset_dock = dock_layout.add(
-            "presets", "Presets", _scrollable(self.preset_panel)
+            "presets", "Presets", self.preset_panel
         )
         self.custom_dock = dock_layout.add(
             "custom", "Custom", _scrollable(self.custom_panel)

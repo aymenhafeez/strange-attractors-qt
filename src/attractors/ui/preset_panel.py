@@ -27,7 +27,7 @@ class PresetPanel(QtWidgets.QWidget):
         self.preset_name_edit.setPlaceholderText("Preset name")
         self.preset_notes_edit = QtWidgets.QTextEdit()
         self.preset_notes_edit.setPlaceholderText("Notes")
-        self.preset_notes_edit.setFixedHeight(70)
+        self.preset_notes_edit.setMinimumHeight(70)
         self.preset_combo = QtWidgets.QComboBox()
         self.preset_combo.setSizeAdjustPolicy(
             QtWidgets.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
@@ -51,7 +51,7 @@ class PresetPanel(QtWidgets.QWidget):
         layout.addWidget(self.save_preset_button, 5, 0)
         layout.addWidget(self.load_preset_button, 5, 1)
         layout.addWidget(self.delete_preset_button, 6, 0, 1, 2)
-        layout.setRowStretch(7, 1)
+        layout.setRowStretch(3, 1)
 
     def set_saved_presets(self, names, selected=None):
         selected_name = selected or self.current_preset_name()
