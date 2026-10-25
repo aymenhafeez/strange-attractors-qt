@@ -33,7 +33,7 @@ def test_compile_requires_all_three_equations(qapp):
 
     assert emitted == []
     assert not panel.status_label.isHidden()
-    assert panel.status_label.text() == "All three equations are required."
+    assert panel.status_label.text() == "All three equations are required"
 
 
 def test_compile_shows_parse_error(qapp):
