@@ -1,14 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
+import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..core.signal_analysis import prepare_signal, select_interval
+from ..workers.spectrogram_worker import SpectrogramWorker
 from ..workers.spectrum_worker import SpectrumWorker
-from .style import PANEL_SURFACE, plot_colours
+from .style import SIGNAL_PANEL, SIGNAL_PLOTS, plot_colours
 
 
 class SignalPanel(QtWidgets.QWidget):
+    status_changed = QtCore.pyqtSignal(str, bool)
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._status = {"spectrum": ("", False), "spectrogram": ("", False)}
         self._run = None
         self.signal = None
         self.selected_signal = None
@@ -17,26 +25,25 @@ class SignalPanel(QtWidgets.QWidget):
         self._spectrum_worker = None
         # track current analysis inputs
         self._spectrum_revision = 0
+        self._spectrum_waiting = False
+        self._syncing_time_range = False
+        self._spectrogram = None
+        self._spectrogram_worker = None
+        self._spectrogram_revision = 0
+        self._spectrogram_waiting = False
+        self._setting_spectrogram_frequency = False
 
         self.setObjectName("panelSurface")
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(PANEL_SURFACE)
+        self.setStyleSheet(SIGNAL_PANEL)
 
         self.trajectory_combo = QtWidgets.QComboBox()
         self.coordinate_combo = QtWidgets.QComboBox()
         self.trajectory_combo.setEnabled(False)
         self.coordinate_combo.setEnabled(False)
 
-        source_row = QtWidgets.QHBoxLayout()
-        source_row.addWidget(QtWidgets.QLabel("Trajectory"))
-        source_row.addWidget(self.trajectory_combo, 1)
-        source_row.addWidget(QtWidgets.QLabel("Coordonate"))
-        source_row.addWidget(self.coordinate_combo)
-
         self.status_label = QtWidgets.QLabel("No completed run")
         self.status_label.setWordWrap(True)
-        self.info_label = QtWidgets.QLabel("No completed run")
-        self.info_label.setWordWrap(True)
 
         self.trace = pg.PlotWidget()
         self.trace.setLabel("bottom", "Time")
@@ -49,11 +56,12 @@ class SignalPanel(QtWidgets.QWidget):
         self.trace.addItem(self.region, ignoreBounds=True)
         self.region.hide()
         self.region.sigRegionChanged.connect(self._region_changed)
+        self.region.sigRegionChangeFinished.connect(self._refresh_analysis)
 
         self.start_spin = QtWidgets.QDoubleSpinBox()
         self.end_spin = QtWidgets.QDoubleSpinBox()
         for spin in (self.start_spin, self.end_spin):
-            spin.setDecimals(12)
+            spin.setDecimals(5)
             spin.setKeyboardTracking(False)
             spin.setEnabled(False)
             spin.valueChanged.connect(self._bounds_changed)
@@ -62,33 +70,18 @@ class SignalPanel(QtWidgets.QWidget):
         self.full_button.setEnabled(False)
         self.full_button.clicked.connect(self._reset_interval)
 
-        interval_row = QtWidgets.QHBoxLayout()
-        interval_row.addWidget(QtWidgets.QLabel("Start"))
-        interval_row.addWidget(self.start_spin, 1)
-        interval_row.addWidget(QtWidgets.QLabel("End"))
-        interval_row.addWidget(self.end_spin, 1)
-        interval_row.addWidget(self.full_button)
-
         self.selection_label = QtWidgets.QLabel()
         self.selection_label.setWordWrap(True)
 
         self.mean_check = QtWidgets.QCheckBox("Remove mean")
         self.mean_check.setChecked(True)
-        self.mean_check.setToolTip("Remove mean for PSD calculation")
 
         self.window_combo = QtWidgets.QComboBox()
         self.window_combo.addItem("Hann", "hann")
         self.window_combo.addItem("Rectangular", "boxcar")
 
         self.log_check = QtWidgets.QCheckBox("Log power")
-        self.log_check.setToolTip("Logarithmic power axis")
-
-        spectrum_row = QtWidgets.QHBoxLayout()
-        spectrum_row.addWidget(self.mean_check)
-        spectrum_row.addWidget(QtWidgets.QLabel("Window"))
-        spectrum_row.addWidget(self.window_combo)
-        spectrum_row.addStretch(1)
-        spectrum_row.addWidget(self.log_check)
+        self.log_check.setChecked(True)
 
         self.spectrum_plot = pg.PlotWidget()
         self.spectrum_plot.setLabel("bottom", "Frequency (cycles per unit time)")
@@ -97,42 +90,185 @@ class SignalPanel(QtWidgets.QWidget):
         self.spectrum_curve.setDownsampling(auto=True, method="peak")
         self.spectrum_curve.setClipToView(True)
 
-        self.spectrum_info = QtWidgets.QLabel()
-        self.spectrum_info.setWordWrap(True)
-        self.spectrum_info.setToolTip(
-            "Bin spacing is the distance between FFT frequencies\n"
-            "Noise bandwidth describes the analysis window"
+        self.duration_spin = QtWidgets.QDoubleSpinBox()
+        self.duration_spin.setDecimals(5)
+        self.duration_spin.setRange(1e-12, 1e12)
+        self.duration_spin.setValue(1.0)
+        self.duration_spin.setSingleStep(0.1)
+        self.duration_spin.setKeyboardTracking(False)
+
+        self.overlap_spin = QtWidgets.QDoubleSpinBox()
+        self.overlap_spin.setRange(0.0, 95.0)
+        self.overlap_spin.setDecimals(1)
+        self.overlap_spin.setValue(50.0)
+        self.overlap_spin.setSingleStep(5.0)
+        self.overlap_spin.setSuffix(" %")
+        self.overlap_spin.setKeyboardTracking(False)
+
+        self.colour_scale_combo = QtWidgets.QComboBox()
+        self.colour_scale_combo.addItem("Linear PSD", "linear")
+        self.colour_scale_combo.addItem("dB re 1", "db")
+
+        self.frequency_view_combo = QtWidgets.QComboBox()
+        self.frequency_view_combo.addItem("Auto band", "auto")
+        self.frequency_view_combo.addItem("Full band", "full")
+        self.frequency_view_combo.addItem("Manual", "manual")
+        self.frequency_view_combo.currentIndexChanged.connect(
+            self._apply_spectrogram_frequency
+        )
+
+        for control, minimum_width in (
+            (self.duration_spin, 70),
+            (self.overlap_spin, 60),
+            (self.frequency_view_combo, 70),
+            (self.colour_scale_combo, 70),
+        ):
+            policy = control.sizePolicy()
+            policy.setHorizontalPolicy(QtWidgets.QSizePolicy.Policy.Ignored)
+            control.setSizePolicy(policy)
+            control.setMinimumWidth(minimum_width)
+
+        self.spectrogram_plot = pg.PlotWidget()
+        self.spectrogram_plot.setLabel("bottom", "Time")
+        self.spectrogram_plot.setLabel("left", "Frequency (cycles per unit time)")
+
+        trace_view = self.trace.getViewBox()
+        spectrogram_view = self.spectrogram_plot.getViewBox()
+        spectrogram_view.disableAutoRange()
+        trace_view.sigXRangeChanged.connect(self._sync_time_range)
+        spectrogram_view.sigXRangeChanged.connect(self._sync_time_range)
+        spectrogram_view.sigYRangeChanged.connect(self._spectrogram_frequency_changed)
+
+        self.spectrogram_image = pg.ImageItem(axisOrder="row-major")
+        self.spectrogram_plot.addItem(self.spectrogram_image)
+
+        self.spectrogram_colour_bar = pg.ColorBarItem(
+            values=(0.0, 1.0),
+            colorMap=pg.colormap.get("viridis"),
+            label="Power spectral density",
+            interactive=False,
+            colorMapMenu=False,
+        )
+        self.spectrogram_colour_bar.setImageItem(
+            self.spectrogram_image,
+            insert_in=self.spectrogram_plot.getPlotItem(),
         )
 
         self._spectrum_timer = QtCore.QTimer(self)
         self._spectrum_timer.setSingleShot(True)
         self._spectrum_timer.timeout.connect(self._start_spectrum)
+        self._spectrogram_timer = QtCore.QTimer(self)
+        self._spectrogram_timer.setSingleShot(True)
+        self._spectrogram_timer.timeout.connect(self._start_spectrogram)
 
-        self.mean_check.toggled.connect(self._queue_spectrum)
-        self.window_combo.currentIndexChanged.connect(self._queue_spectrum)
+        self.duration_spin.valueChanged.connect(self._queue_spectrogram)
+        self.overlap_spin.valueChanged.connect(self._queue_spectrogram)
+        self.colour_scale_combo.currentIndexChanged.connect(self._draw_spectrogram)
+        self.colour_scale_combo.setCurrentIndex(1)
+
+        self.mean_check.toggled.connect(self._queue_analysis)
+        self.window_combo.currentIndexChanged.connect(self._queue_analysis)
         self.log_check.toggled.connect(self._draw_spectrum)
 
-        time_area = QtWidgets.QWidget()
+        self.trajectory_combo.setMinimumContentsLength(18)
+        self.trajectory_combo.setSizeAdjustPolicy(
+            QtWidgets.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.log_check.setText("Log power")
+
+        self.colour_scale_combo.setAccessibleName("Spectrogram colour scale")
+
+        source_row = QtWidgets.QHBoxLayout()
+        source_row.setContentsMargins(0, 5, 0, 0)
+        source_row.setSpacing(8)
+        source_row.addWidget(QtWidgets.QLabel("Trajectory"))
+        source_row.addWidget(self.trajectory_combo)
+        source_row.addWidget(QtWidgets.QLabel("Coordinate"))
+        source_row.addWidget(self.coordinate_combo)
+        source_row.addSpacing(8)
+        source_row.addWidget(QtWidgets.QLabel("Window"))
+        source_row.addWidget(self.window_combo)
+        source_row.addWidget(self.mean_check)
+        self.status_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        self.status_label.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Preferred,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
+        source_row.addStretch(1)
+
+        interval_row = QtWidgets.QHBoxLayout()
+        interval_row.setSpacing(8)
+        interval_row.addSpacing(8)
+        interval_row.addWidget(QtWidgets.QLabel("Start"))
+        interval_row.addWidget(self.start_spin)
+        interval_row.addWidget(QtWidgets.QLabel("End"))
+        interval_row.addWidget(self.end_spin)
+        interval_row.addWidget(self.full_button)
+        interval_row.addStretch(1)
+
+        time_area = QtWidgets.QFrame()
+        time_area.setObjectName("panelSurface")
+        time_area.setStyleSheet(SIGNAL_PLOTS)
+        time_area.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         time_layout = QtWidgets.QVBoxLayout(time_area)
         time_layout.setContentsMargins(0, 0, 0, 0)
         time_layout.setSpacing(4)
-        time_layout.addWidget(self.trace, 1)
         time_layout.addLayout(interval_row)
-        time_layout.addWidget(self.selection_label)
-        time_layout.addWidget(self.info_label)
+        time_layout.addWidget(self.trace, 1)
+        # time_layout.addWidget(self.selection_label)
 
-        spectrum_area = QtWidgets.QWidget()
+        spectrum_header = QtWidgets.QWidget()
+        spectrum_row = QtWidgets.QHBoxLayout(spectrum_header)
+        spectrum_row.setContentsMargins(3, 0, 0, 0)
+        spectrum_row.addWidget(self.log_check)
+
+        spectrogram_header = QtWidgets.QWidget()
+        spectrogram_row = QtWidgets.QHBoxLayout(spectrogram_header)
+        spectrogram_row.setContentsMargins(3, 0, 3, 0)
+        spectrogram_row.setSpacing(1)
+        spectrogram_row.addWidget(QtWidgets.QLabel("Duration"))
+        spectrogram_row.addWidget(self.duration_spin)
+        spectrogram_row.addWidget(QtWidgets.QLabel("Overlap"))
+        spectrogram_row.addWidget(self.overlap_spin)
+        spectrogram_row.addWidget(self.frequency_view_combo)
+        spectrogram_row.addWidget(self.colour_scale_combo)
+
+        self.spectrum_plot.setTitle(None)
+        self.spectrogram_plot.setTitle(None)
+
+        spectrum_area = QtWidgets.QFrame()
+        spectrum_area.setObjectName("panelSurface")
+        spectrum_area.setStyleSheet(SIGNAL_PLOTS)
+        spectrum_area.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         spectrum_layout = QtWidgets.QVBoxLayout(spectrum_area)
         spectrum_layout.setContentsMargins(0, 0, 0, 0)
         spectrum_layout.setSpacing(4)
-        spectrum_layout.addLayout(spectrum_row)
+        spectrum_layout.addWidget(spectrum_header)
         spectrum_layout.addWidget(self.spectrum_plot, 1)
-        spectrum_layout.addWidget(self.spectrum_info)
+
+        spectrogram_area = QtWidgets.QFrame()
+        spectrogram_area.setObjectName("panelSurface")
+        spectrogram_area.setStyleSheet(SIGNAL_PLOTS)
+        spectrogram_area.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        spectrogram_layout = QtWidgets.QVBoxLayout(spectrogram_area)
+        spectrogram_layout.setContentsMargins(0, 0, 0, 0)
+        spectrogram_layout.setSpacing(4)
+        spectrogram_layout.addWidget(spectrogram_header)
+        spectrogram_layout.addWidget(self.spectrogram_plot, 1)
+
+        spectral_plots = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        spectral_plots.setChildrenCollapsible(False)
+        spectral_plots.addWidget(spectrum_area)
+        spectral_plots.addWidget(spectrogram_area)
+        spectral_plots.setStretchFactor(0, 1)
+        spectral_plots.setStretchFactor(1, 1)
 
         plots = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
         plots.setChildrenCollapsible(False)
         plots.addWidget(time_area)
-        plots.addWidget(spectrum_area)
+        plots.addWidget(spectral_plots)
         plots.setStretchFactor(0, 1)
         plots.setStretchFactor(1, 1)
 
@@ -140,8 +276,8 @@ class SignalPanel(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
         layout.addLayout(source_row)
-        layout.addWidget(self.status_label)
         layout.addWidget(plots, 1)
+        # layout.addWidget(self.status_label)
 
         self.trajectory_combo.currentIndexChanged.connect(self._show_trace)
         self.coordinate_combo.currentIndexChanged.connect(self._show_trace)
