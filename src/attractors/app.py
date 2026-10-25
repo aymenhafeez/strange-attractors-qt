@@ -107,6 +107,9 @@ class Window(QtWidgets.QMainWindow):
         self._perf = PerfProfiler()
         self._process_status_visible = True
         self._app_status_message = ""
+        self._app_status_error = False
+        self._signal_status_message = ""
+        self._signal_status_error = False
         self._app_status_clear_timer = None
         self._output_panel_visible = False
         self._panel_docks = {}
@@ -335,6 +338,8 @@ class Window(QtWidgets.QMainWindow):
         build_menu_bar(self)
         self.controls.animation_mode_changed.connect(self._set_animation_mode)
         build_status_bar(self)
+
+        self.signal_panel.status_changed.connect(self._set_signal_status)
 
         self.workspace_inspector = WorkspaceInspector(self.jupyter_console_panel)
 
@@ -785,13 +790,8 @@ class Window(QtWidgets.QMainWindow):
 
     def _set_app_status(self, message, error=False):
         self._app_status_message = str(message)
-        colour = "#ff6b6b" if error else "#178640"
-        self.app_status_label.setText(self._app_status_message)
-        self.app_status_label.setStyleSheet(
-            f"border: none; padding: 0 4px 3px 4px; font-size: 12px; color: {colour};"
-        )
-
-        self._sync_status_bar_visibility()
+        self._app_status_error = error
+        self._refresh_app_status()
 
     def _set_temporary_app_status(self, message, *, timeout_ms=3000, error=False):
         message = str(message)
@@ -817,13 +817,44 @@ class Window(QtWidgets.QMainWindow):
 
     def _clear_app_status(self):
         self._app_status_message = ""
-        self.app_status_label.clear()
+        self._app_status_error = False
+        self._refresh_app_status()
 
+    def _set_signal_status(self, message, error=False):
+        self._signal_status_message = str(message)
+        self._signal_status_error = error
+        self._refresh_app_status()
+
+    def _refresh_app_status(self):
+        messages = [
+            message
+            for message in (
+                self._app_status_message,
+                self._signal_status_message,
+            )
+            if message
+        ]
+        text = " · ".join(messages)
+
+        has_error = (bool(self._app_status_message) and self._app_status_error) or (
+            bool(self._signal_status_message) and self._signal_status_error
+        )
+        colour = "#ff6b6b" if has_error else "#178640"
+
+        self.app_status_label.setText(text)
+        self.app_status_label.setToolTip(text)
+        self.app_status_label.setStyleSheet(
+            f"border: none; padding: 0 4px 3px 4px; font-size: 12px; color: {colour};"
+        )
         self._sync_status_bar_visibility()
 
     def _sync_status_bar_visibility(self):
         self.statusBar().setVisible(
-            bool(self._process_status_visible or self._app_status_message)
+            bool(
+                self._process_status_visible
+                or self._app_status_message
+                or self._signal_status_message
+            )
         )
 
     def _build_jupyter_toolbar_actions(self, toolbar):

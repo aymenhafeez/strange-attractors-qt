@@ -292,6 +292,34 @@ class SignalPanel(QtWidgets.QWidget):
         self.coordinate_combo.currentIndexChanged.connect(self._show_trace)
         self.apply_theme()
 
+    def _set_status(self, kind, message="", *, error=False):
+        self._status[kind] = (message, error)
+
+        messages = []
+        has_error = False
+
+        for name, (text, is_error) in self._status.items():
+            if text:
+                messages.append(f"{name.title()}: {text}")
+                has_error |= is_error
+
+        self.status_changed.emit(" . ".join(messages), has_error)
+
+    @QtCore.pyqtSlot(object, object)
+    def _sync_time_range(self, source, bounds):
+        if self._syncing_time_range:
+            return
+
+        target = (
+            self.spectrogram_plot if source is self.trace.getViewBox() else self.trace
+        )
+
+        self._syncing_time_range = True
+        try:
+            target.setXRange(*bounds, padding=0)
+        finally:
+            self._syncing_time_range = False
+
     def set_source(self, run, state):
         fresh = (
             run is not None
@@ -358,8 +386,9 @@ class SignalPanel(QtWidgets.QWidget):
     def _show_trace(self):
         self.signal = None
         self.selected_signal = None
-        self._queue_spectrum()
+        self._queue_analysis()
         self.selection_label.clear()
+        self.trace.setToolTip("")
         self.region.hide()
         for widget in (self.start_spin, self.end_spin, self.full_button):
             widget.setEnabled(False)
@@ -368,7 +397,6 @@ class SignalPanel(QtWidgets.QWidget):
             self._interval = None
             self.curve.clear()
             self.trace.setLabel("left", "Value")
-            self.info_label.clear()
             return
 
         index = self.trajectory_combo.currentIndex()
@@ -386,15 +414,17 @@ class SignalPanel(QtWidgets.QWidget):
             )
         except ValueError as error:
             self.curve.clear()
-            self.info_label.setText(str(error))
+            self.selection_label.setText(str(error))
             return
 
         self.curve.setData(self.signal.times, self.signal.values)
         self.trace.setLabel("left", coordinate)
         self.trace.enableAutoRange()
-        self.info_label.setText(
-            f"Record: {self.signal.values.size:,} samples | dt = {dt:.6g} | "
-            f"Rate = {1.0 / dt:.6g} samples/time unit"
+        self.trace.setToolTip(
+            f"Record: {self.signal.values.size:,} samples\n"
+            f"Sampling interval: {dt:.6g}\n"
+            f"Sampling rate: {1.0 / dt:.6g} samples/unit time\n"
+            f"Nyquist: {0.5 / dt:.6g} cycles/unit time"
         )
 
         first = float(self.signal.times[0])
@@ -443,7 +473,7 @@ class SignalPanel(QtWidgets.QWidget):
             self.selected_signal = select_interval(self.signal, start, end)
         except ValueError as error:
             self.selection_label.setText(str(error))
-            self._queue_spectrum()
+            self._queue_analysis()
             return
 
         selected = self.selected_signal
@@ -452,7 +482,7 @@ class SignalPanel(QtWidgets.QWidget):
             f"Time: {selected.times[0]:.9g} to {selected.times[-1]:.9g} | "
             f"Span: {selected.times[-1] - selected.times[0]:.9g}"
         )
-        self._queue_spectrum()
+        self._queue_analysis()
 
     def _region_changed(self):
         self._set_interval(*self.region.getRegion())
@@ -464,22 +494,42 @@ class SignalPanel(QtWidgets.QWidget):
         if start >= end:
             self.selected_signal = None
             self.selection_label.setText("Start must be before end")
-            self._queue_spectrum()
+            self._queue_analysis()
             return
 
         self._set_interval(start, end)
+
+    def _refresh_analysis(self):
+        for kind in ("spectrum", "spectrogram"):
+            if (
+                getattr(self, f"_{kind}_waiting") is None
+                and getattr(self, f"_{kind}_worker") is None
+            ):
+                getattr(self, f"_{kind}_timer").start(0)
 
     def _reset_interval(self):
         if self.signal is not None:
             self._set_interval(self.signal.times[0], self.signal.times[-1])
 
-    def _queue_spectrum(self):
-        self._spectrum_revision += 1
-        self._spectrum_timer.stop()
-        self._spectrum = None
-        self.spectrum_curve.clear()
-        self.spectrum_info.clear()
+    def _queue_analysis(self):
+        self._queue_spectrum()
+        self._queue_spectrogram()
+
+    def _queue_spectrogram(self):
+        if self.selected_signal is None:
+            self._spectrogram_revision += 1
+            self._spectrogram_dirty = False
             self._spectrogram_timer.stop()
+            self._spectrogram = None
+            self.spectrogram_image.clear()
+            self.spectrogram_plot.setToolTip("")
+            self._set_status("spectrogram")
+            return
+
+        self._spectrogram_waiting = True
+        self._set_status("spectrogram", "Updating")
+        if self._spectrogram_worker is None and not self._spectrogram_timer.isActive():
+            self._spectrogram_timer.start()
 
     def _start_spectrogram(self):
         if not self._spectrogram_waiting:
