@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
@@ -188,8 +191,8 @@ class PhasePortraitPanel(QtWidgets.QWidget):
 
         for position in ("bottom", "left"):
             axis = self.plot_widget.getAxis(position)
-            axis.setPen(pg.mkPen(colours["plot_pen"]))
-            axis.setTextPen(pg.mkPen(colours["plot_pen"]))
+            axis.setPen(pg.mkPen(colours["colourbar_text"]))
+            axis.setTextPen(pg.mkPen(colours["colourbar_text"]))
 
         self._apply_trajectory_styles()
 
