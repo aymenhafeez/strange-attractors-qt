@@ -82,7 +82,7 @@ class Window(QtWidgets.QMainWindow):
         self._active_lyapunov_request_id = None
         self._system_solutions = []
         self._active_run = None
-        self._completed_run = None
+        self._analysis_run = None
 
         self._solve_state = {
             "solving": False,
@@ -417,7 +417,7 @@ class Window(QtWidgets.QMainWindow):
         if self._custom_config is not None:
             self._apply_config_to_view(self._custom_config)
         else:
-            self._clear_completed_run()
+            self._clear_analysis_run()
             self.solver.cancel_solve()
             self.solver.cancel_lyapunov()
             self._solve_pending = False
@@ -435,7 +435,7 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_config_to_view(self, config):
-        self._clear_completed_run()
+        self._clear_analysis_run()
         self._restoring_view = True
         try:
             self.phase_portrait.clear()
@@ -469,7 +469,7 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_loaded_preset(self, config, values, n, t_max):
-        self._clear_completed_run()
+        self._clear_analysis_run()
         self._restoring_view = True
         try:
             self.phase_portrait.clear()
@@ -1483,15 +1483,15 @@ class Window(QtWidgets.QMainWindow):
         self._set_solve_state(
             solving=False,
             valid=False,
-            stale=self._completed_run is not None,
+            stale=self._analysis_run is not None,
             partial=False,
             last_error=None,
         )
 
-    def _clear_completed_run(self):
+    def _clear_analysis_run(self):
         self._active_solve_request_id = None
         self._active_run = None
-        self._completed_run = None
+        self._analysis_run = None
         self.signal_panel.set_source(None, {})
 
     def _set_solve_state(self, **updates):
@@ -1499,7 +1499,7 @@ class Window(QtWidgets.QMainWindow):
         state.update(updates)
         self._solve_state = state
         self.system_toolbar.set_solve_state(state)
-        self.signal_panel.set_source(self._completed_run, state)
+        self.signal_panel.set_source(self._analysis_run, state)
 
         return state
 
@@ -1564,6 +1564,7 @@ class Window(QtWidgets.QMainWindow):
                 solution_points=[],
             )
             return
+        full_record = full or _panel_visible(self, "signal_panel")
         user_n = self.current_n or config.time_defaults.n
         t_max = self.current_t_max
         trajectories = self.controls.trajectory_panel.get_trajectories()
@@ -1573,10 +1574,10 @@ class Window(QtWidgets.QMainWindow):
             for trajectory in trajectories:
                 trajectory_n = int(trajectory.get("n", user_n))
                 trajectory_t_max = float(trajectory.get("t_max", t_max))
-                solve_n = trajectory_n if full else min(trajectory_n, PARTIAL_N)
+                solve_n = trajectory_n if full_record else min(trajectory_n, PARTIAL_N)
                 solve_t_max = (
                     trajectory_t_max
-                    if full
+                    if full_record
                     else self._partial_t_max(
                         trajectory_n,
                         solve_n,
@@ -1592,10 +1593,10 @@ class Window(QtWidgets.QMainWindow):
                     }
                 )
         else:
-            solve_n = int(user_n if full else min(user_n, PARTIAL_N))
+            solve_n = int(user_n if full_record else min(user_n, PARTIAL_N))
             solve_t_max = (
                 t_max
-                if full
+                if full_record
                 else self._partial_t_max(
                     user_n, solve_n, t_max, config.time_defaults.t_min
                 )
@@ -1649,6 +1650,7 @@ class Window(QtWidgets.QMainWindow):
             "variables": config.variables,
             "labels": tuple(t["label"] for t in trajectories) or ("T0",),
             "colours": tuple(t["colour"].name() for t in trajectories) or (None,),
+            "analysis_ready": full_record,
         }
 
         self._set_solve_state(
@@ -1797,14 +1799,14 @@ class Window(QtWidgets.QMainWindow):
         config, _values = self._get_current_config_and_values()
         self._display_system_solution(config, solutions, is_partial)
 
-        if not is_partial and not self._solve_needed:
+        if self._active_run["analysis_ready"]:
             arrays = []
             for solution in solutions:
                 view = solution.view()
                 view.setflags(write=False)
                 arrays.append(view)
 
-            self._completed_run = {**self._active_run, "solutions": tuple(arrays)}
+            self._analysis_run = {**self._active_run, "solutions": tuple(arrays)}
 
         self._update_data_view(solutions, is_partial)
         self._set_solve_state(
@@ -2006,7 +2008,7 @@ class Window(QtWidgets.QMainWindow):
         if self._restoring_view:
             return
 
-        self._clear_completed_run()
+        self._clear_analysis_run()
         self._latest_projection_solutions = None
 
         config, _values = self._get_current_config_and_values()

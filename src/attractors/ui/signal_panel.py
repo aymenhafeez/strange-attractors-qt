@@ -21,6 +21,9 @@ class SignalPanel(QtWidgets.QWidget):
         self.signal = None
         self.selected_signal = None
         self._interval = None
+        self._analysis_source = None
+        self._spectrum_dt = None
+        self._spectrogram_dt = None
         self._spectrum = None
         self._spectrum_worker = None
         # track current analysis inputs
@@ -56,7 +59,6 @@ class SignalPanel(QtWidgets.QWidget):
         self.trace.addItem(self.region, ignoreBounds=True)
         self.region.hide()
         self.region.sigRegionChanged.connect(self._region_changed)
-        self.region.sigRegionChangeFinished.connect(self._refresh_analysis)
 
         self.start_spin = QtWidgets.QDoubleSpinBox()
         self.end_spin = QtWidgets.QDoubleSpinBox()
@@ -329,6 +331,13 @@ class SignalPanel(QtWidgets.QWidget):
             and state.get("request_id") == run["request_id"]
         )
 
+        preview = (
+            run is not None
+            and state.get("partial")
+            and not state.get("solving")
+            and state.get("request_id") == run["request_id"]
+        )
+
         if state.get("last_error"):
             text = f"Solve failed: {state['last_error']}"
         elif state.get("solving"):
@@ -337,11 +346,13 @@ class SignalPanel(QtWidgets.QWidget):
             text = "No completed run"
         elif fresh:
             text = "Completed run"
+        elif preview:
+            text = "Preview run"
         else:
             text = "Settings changed"
 
-        if run is not None and not fresh:
-            text += " - showing previous completed run"
+        if run is not None and not (fresh or preview):
+            text += " - showing previous run"
         self.status_label.setText(text)
 
         if run is self._run:
@@ -386,7 +397,8 @@ class SignalPanel(QtWidgets.QWidget):
     def _show_trace(self):
         self.signal = None
         self.selected_signal = None
-        self._queue_analysis()
+        self._spectrum = None
+        self._spectrogram = None
         self.selection_label.clear()
         self.trace.setToolTip("")
         self.region.hide()
@@ -394,6 +406,8 @@ class SignalPanel(QtWidgets.QWidget):
             widget.setEnabled(False)
 
         if self._run is None:
+            self._analysis_source = None
+            self._queue_analysis()
             self._interval = None
             self.curve.clear()
             self.trace.setLabel("left", "Value")
@@ -401,6 +415,12 @@ class SignalPanel(QtWidgets.QWidget):
 
         index = self.trajectory_combo.currentIndex()
         coordinate = self.coordinate_combo.currentText()
+        source = (self._run["attractor"], index, coordinate)
+        if source != self._analysis_source:
+            self._analysis_source = source
+            self._spectrum_revision += 1
+            self._spectrogram_revision += 1
+
         column = self._run["variables"].index(coordinate)
         solution = self._run["solutions"][index]
         spec = self._run["trajectory_specs"][index]
@@ -413,6 +433,7 @@ class SignalPanel(QtWidgets.QWidget):
                 t0=self._run["t_min"] + dt,
             )
         except ValueError as error:
+            self._queue_analysis()
             self.curve.clear()
             self.selection_label.setText(str(error))
             return
@@ -502,7 +523,7 @@ class SignalPanel(QtWidgets.QWidget):
     def _refresh_analysis(self):
         for kind in ("spectrum", "spectrogram"):
             if (
-                getattr(self, f"_{kind}_waiting") is None
+                getattr(self, f"_{kind}_waiting")
                 and getattr(self, f"_{kind}_worker") is None
             ):
                 getattr(self, f"_{kind}_timer").start(0)
@@ -518,7 +539,7 @@ class SignalPanel(QtWidgets.QWidget):
     def _queue_spectrogram(self):
         if self.selected_signal is None:
             self._spectrogram_revision += 1
-            self._spectrogram_dirty = False
+            self._spectrogram_waiting = False
             self._spectrogram_timer.stop()
             self._spectrogram = None
             self.spectrogram_image.clear()
@@ -559,16 +580,17 @@ class SignalPanel(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(int, object, str)
     def _on_spectrogram_finished(self, revision, spectrogram, error):
+        worker = self._spectrogram_worker
         self._spectrogram_worker = None
 
-        if self._spectrogram_dirty:
-            self._spectrogram_timer.start(100)
+        if self._spectrogram_waiting:
+            self._spectrogram_timer.start()
 
         if revision != self._spectrogram_revision:
             return
 
         if spectrogram is None:
-            if not self._spectrogram_dirty:
+            if not self._spectrogram_waiting:
                 self._spectrogram = None
                 self.spectrogram_image.clear()
                 self._set_status(
@@ -578,6 +600,7 @@ class SignalPanel(QtWidgets.QWidget):
                 )
             return
 
+        self._spectrogram_dt = worker.signal.dt
         self._spectrogram = spectrogram
         self._apply_spectrogram_frequency()
         self._draw_spectrogram()
@@ -591,7 +614,7 @@ class SignalPanel(QtWidgets.QWidget):
             return
 
         spectrogram = self._spectrogram
-        nyquist = 0.5 / self.selected_signal.dt
+        nyquist = 0.5 / self._spectrogram_dt
         upper = nyquist
 
         if mode == "auto":
@@ -632,7 +655,7 @@ class SignalPanel(QtWidgets.QWidget):
 
         spectrogram = self._spectrogram
         density = spectrogram.density
-        dt = self.selected_signal.dt
+        dt = self._spectrogram_dt
         time_step = spectrogram.hop_samples * dt
         frequency_step = spectrogram.bin_spacing
         frequency_count, time_count = density.shape
@@ -668,7 +691,7 @@ class SignalPanel(QtWidgets.QWidget):
         self.spectrogram_colour_bar.setLabel("left", label)
         self.spectrogram_colour_bar.setLevels((lower, upper))
 
-        if self._spectrogram_dirty or self._spectrogram_worker is not None:
+        if self._spectrogram_waiting or self._spectrogram_worker is not None:
             self._set_status("spectrogram", "Updating")
         elif peak == 0.0:
             self._set_status("spectrogram", "All spectrogram power is zero.")
@@ -679,7 +702,7 @@ class SignalPanel(QtWidgets.QWidget):
         signal = self.selected_signal
         if signal is None or signal.values.size < 4:
             self._spectrum_revision += 1
-            self._spectrum_dirty = False
+            self._spectrum_waiting = False
             self._spectrum_timer.stop()
             self._spectrum = None
             self.spectrum_curve.clear()
@@ -696,7 +719,7 @@ class SignalPanel(QtWidgets.QWidget):
         self._spectrum_waiting = True
         self._set_status("spectrum", "Updating")
         if self._spectrum_worker is None and not self._spectrum_timer.isActive():
-            self._spectrum_timer.start(100)
+            self._spectrum_timer.start()
 
     def _start_spectrum(self):
         if not self._spectrum_waiting:
@@ -724,16 +747,17 @@ class SignalPanel(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(int, object, str)
     def _on_spectrum_finished(self, revision, spectrum, error):
+        worker = self._spectrum_worker
         self._spectrum_worker = None
 
-        if self._spectrum_dirty:
-            self._spectrum_timer.start(100)
+        if self._spectrum_waiting:
+            self._spectrum_timer.start()
 
         if revision != self._spectrum_revision:
             return
 
         if spectrum is None:
-            if not self._spectrum_dirty:
+            if not self._spectrum_waiting:
                 self._spectrum = None
                 self.spectrum_curve.clear()
                 self._set_status(
@@ -743,6 +767,7 @@ class SignalPanel(QtWidgets.QWidget):
                 )
             return
 
+        self._spectrum_dt = worker.signal.dt
         self._spectrum = spectrum
         self._draw_spectrum()
 
@@ -770,10 +795,10 @@ class SignalPanel(QtWidgets.QWidget):
         text = (
             f"Bin spacing: {spectrum.bin_spacing:.6g} cycles/unit time\n"
             f"Noise bandwidth: {spectrum.noise_bandwidth:.6g} cycles/unit time\n"
-            f"Nyquist: {0.5 / self.selected_signal.dt:.6g} cycles/unit time"
+            f"Nyquist: {0.5 / self._spectrum_dt:.6g} cycles/unit time"
         )
         self.spectrum_plot.setToolTip(text)
-        if self._spectrum_dirty or self._spectrum_worker is not None:
+        if self._spectrum_waiting or self._spectrum_worker is not None:
             self._set_status("spectrum", "Updating")
         elif logarithmic and not (spectrum.density > 0).any():
             self._set_status(
