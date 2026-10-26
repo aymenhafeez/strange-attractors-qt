@@ -238,9 +238,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls.custom_panel.compile_requested.connect(self._on_custom_compile)
 
         self.poincare_panel = PoincarePanel()
-        self.poincare_panel.plane_changed.connect(
-            self.scene.grid_overlay.set_poincare_plane
-        )
+        self.poincare_panel.plane_changed.connect(self._on_poincare_plane_changed)
 
         self.lyapunov_panel = LyapunovPanel()
         self.lyapunov_panel.compute_requested.connect(self._request_lyapunov)
@@ -364,6 +362,23 @@ class Window(QtWidgets.QMainWindow):
         self._restore_app_layout()
         if profiling_enabled():
             self._set_output_panel_visible(True)
+
+    def _on_poincare_plane_changed(self, axis, value):
+        self.scene.grid_overlay.remove_poincare_plane()
+        self.phase_portrait.set_section()
+
+        config, _values = self._get_current_config_and_values()
+        if (
+            config is None
+            or axis not in config.variables
+            or not _panel_visible(self, "poincare_panel")
+        ):
+            return
+
+        if config.dimension == 2:
+            self.phase_portrait.set_section(axis, value)
+        else:
+            self.scene.grid_overlay.set_poincare_plane(axis, value)
 
     def _on_phase_seed(self, x, y):
         config, _values = self._get_current_config_and_values()
@@ -1878,10 +1893,20 @@ class Window(QtWidgets.QMainWindow):
         self.controls.animation_scroll.setEnabled(is_3d)
 
         for panel in (
+            self.lyapunov_panel,
+            self.poincare_panel,
             self.projection_panel,
             self.bifurcation_panel,
         ):
-            panel.setToolTip("" if is_3d else "Currently unavailable for 3D systems")
+            panel.setEnabled(True)
+            panel.setToolTip("")
+
+        self._cancel_lyapunov_analysis()
+        self.lyapunov_panel.clear()
+        self.poincare_panel.clear()
+        self.projection_panel.clear()
+        self.phase_portrait.set_section()
+        self.scene.grid_overlay.remove_poincare_plane()
 
         for action in (
             self.toolbar_anim_action,
@@ -2102,10 +2127,7 @@ class Window(QtWidgets.QMainWindow):
                 self.bifurcation_panel.cancel_sweep()
         for name in opened - previous:
             config, _values = self._get_current_config_and_values()
-            if config.dimension != 3 and name not in {
-                "lyapunov_panel",
-                "poincare_panel",
-            }:
+            if config is None:
                 continue
 
             if name == "lyapunov_panel" and self.lyapunov_panel.auto_enabled():
@@ -2113,13 +2135,8 @@ class Window(QtWidgets.QMainWindow):
             elif name == "projection_panel":
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
             elif name == "poincare_panel":
-                self.scene.grid_overlay.set_poincare_plane(
-                    self.poincare_panel.plane_combo.currentText(),
-                    self.poincare_panel.value_spin.value(),
-                )
                 config, values = self._get_current_config_and_values()
-                if config is not None:
-                    self.poincare_panel.set_attractor(config, values)
+                self.poincare_panel.set_attractor(config, values)
                 self.poincare_panel.recompute()
             elif name == "bifurcation_panel":
                 config, values = self._get_current_config_and_values()

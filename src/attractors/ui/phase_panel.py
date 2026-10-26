@@ -78,6 +78,11 @@ class PhasePortraitPanel(QtWidgets.QWidget):
         self.plot_widget.setLabel("bottom", "x")
         self.plot_widget.setLabel("left", "y")
 
+        self.section_line = pg.InfiniteLine(
+            movable=False, pen=pg.mkPen(plot_colours()["crosshair"], width=1.5)
+        )
+        self.plot_widget.addItem(self.section_line)
+
         self.view_box.setAspectLocked(True)
         self.view_box.disableAutoRange()
         self.view_box.setRange(xRange=(-2, 2), yRange=(-2, 2), padding=0)
@@ -101,6 +106,15 @@ class PhasePortraitPanel(QtWidgets.QWidget):
         self.view_box.sigRangeChanged.connect(lambda *_: self.request_field_update())
 
         self.apply_theme()
+
+    def set_section(self, axis=None, value=0.0):
+        if axis is None:
+            self.section_line.hide()
+            return
+
+        self.section_line.setAngle(90 if axis == "x" else 0)
+        self.section_line.setPos(value)
+        self.section_line.show()
 
     def _set_seeding_enabled(self, enabled):
         self.view_box.seeding_enabled = enabled
@@ -202,6 +216,7 @@ class PhasePortraitPanel(QtWidgets.QWidget):
         self._field_timer.stop()
         self.field_item.clear()
         self.field_item.hide()
+        self.section_line.hide()
 
     def fit(self):
         self.view_box.autoRange(padding=0.08)
