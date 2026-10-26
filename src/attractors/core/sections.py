@@ -73,7 +73,7 @@ def plane_crossings(solution, axis, value, *, direction="both", times=None):
         level=level,
         steps=np.array([], dtype=np.int64),
         times=np.array([], dtype=np.float64),
-        points=np.empty(dimension),
+        points=np.empty((0, dimension)),
         directions=np.array([]),
     )
     if len(solution) < 2:
