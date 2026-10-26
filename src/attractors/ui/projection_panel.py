@@ -25,7 +25,6 @@ class ProjectionPanel(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._projection_data = None
         self._points = None
         self._projection_key = "XY"
         self._heatmap = None
@@ -135,17 +134,30 @@ class ProjectionPanel(QtWidgets.QWidget):
         super().resizeEvent(event)
         self._render_cached_projection_data()
 
-    def update_projections(self, x, y, z):
-        self._projection_data = (x, y, z)
-        points = np.column_stack((x, y, z))
+    def update_projections(self, x, y, z=None):
+        coordinates = (x, y) if z is None else (x, y, z)
+        points = np.column_stack(coordinates)
+
+        keys = ["XY"] if z is None else list(PROJECTIONS)
+        if self.projection_combo.count() != len(keys):
+            key = self._projection_key if self._projection_key in keys else "XY"
+
+            with QtCore.QSignalBlocker(self.projection_combo):
+                self.projection_combo.clear()
+                self.projection_combo.addItems(keys)
+                self.projection_combo.setCurrentText(key)
+
+            self._projection_key = key
+            self._roi_placed = False
+
         self._points = points[np.isfinite(points).all(axis=1)]
         self._render_projection_data(reset_roi=not self._roi_placed)
 
     def reapply_projections(self, solutions):
         if solutions:
-            all_sol = np.concatenate(solutions, axis=0)
-            x, y, z = all_sol.T
-            self.update_projections(x, y, z)
+            self.update_projections(*np.concatenate(solutions, axis=0).T)
+        else:
+            self.clear()
 
     def clear(self):
         self._points = None
@@ -160,7 +172,7 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.profile_label.setText("")
 
     def _render_cached_projection_data(self):
-        if self._projection_data is not None:
+        if self._points is not None:
             self._render_projection_data(reset_roi=False)
 
     def _on_projection_changed(self, key):

@@ -1845,7 +1845,7 @@ class Window(QtWidgets.QMainWindow):
             self.live_plot_controller._refresh_live_preview(solutions)
             self._update_projection_panel_from_solutions(solutions)
 
-        if not is_partial and config.dimension == 3:
+        if not is_partial:
             self._latest_projection_solutions = solutions
             self._update_projection_panel_from_solutions(solutions)
             if (
@@ -1854,8 +1854,10 @@ class Window(QtWidgets.QMainWindow):
             ):
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
                 self._initial_full_solves += 1
-            self.scene.grid_overlay.auto_adjust_grid(solutions)
-            # self.scene.camera_controller.fit_camera_to_solutions(solutions)
+
+            if config.dimension == 3:
+                self.scene.grid_overlay.auto_adjust_grid(solutions)
+                # self.scene.camera_controller.fit_camera_to_solutions(solutions)
 
         if not is_partial:
             if self.lyapunov_panel.auto_enabled():
@@ -1929,11 +1931,11 @@ class Window(QtWidgets.QMainWindow):
         if not is_3d:
             self.scene.animation_controller.stop()
             self.scene.camera_controller.set_orbit_mode(False)
-            self.projection_panel.clear()
 
         self._cancel_lyapunov_analysis()
         self.lyapunov_panel.clear()
         self.poincare_panel.clear()
+        self.projection_panel.clear()
 
     def _select_system_view(self, config):
         widget = self.phase_portrait if config.dimension == 2 else self.scene.container
@@ -1979,7 +1981,7 @@ class Window(QtWidgets.QMainWindow):
 
     def _reapply_projections(self):
         config, _values = self._get_current_config_and_values()
-        if config is None or config.dimension != 3:
+        if config is None:
             return
 
         solutions = (
@@ -1990,25 +1992,28 @@ class Window(QtWidgets.QMainWindow):
 
     def _update_projection_panel_from_solutions(self, solutions):
         config, _values = self._get_current_config_and_values()
-        if config is None or config.dimension != 3:
+        if config is None:
             return
 
         if not _panel_visible(self, "projection_panel"):
             return
 
         all_sol = np.concatenate(solutions, axis=0)
-        x, y, z = all_sol.T
         token = perf_start(
             self,
             "projection_update",
             source="solve_result",
             points=len(all_sol),
         )
-        self.projection_panel.update_projections(x, y, z)
+        self.projection_panel.update_projections(*all_sol.T)
         perf_finish(self, token)
         self._last_projection_update = QtCore.QDateTime.currentMSecsSinceEpoch()
 
     def _on_projections_data(self, x, y, z):
+        config, _values = self._get_current_config_and_values()
+        if config is None or config.dimension != 3:
+            return
+
         if not _panel_visible(self, "projection_panel"):
             return
 
