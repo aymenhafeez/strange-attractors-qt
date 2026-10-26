@@ -402,9 +402,8 @@ class TrajectoryRenderer:
             self._set_trajectory_data(index, pos=segment, colour=segment_colours)
 
     def _trajectory_size(self, i):
-        traj = self._trajectories[i] if i < len(self._trajectories) else None
-        individual_size = traj.get("size", 1.0) if traj is not None else 1.0
-        return self._current_plot_size * individual_size
+        trajectory = self._trajectories[i] if i < len(self._trajectories) else {}
+        return trajectory.get("size", self._current_plot_size)
 
     def _set_trajectory_data(self, i, *, pos=None, colour=None):
         if i >= len(self._scatters):
