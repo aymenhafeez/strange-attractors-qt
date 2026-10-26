@@ -183,7 +183,7 @@ class PhasePortraitPanel(QtWidgets.QWidget):
 
     def request_field_update(self):
         if self.field_check.isChecked():
-            self._field_timer.start()
+            self._field_timer.start(0)
 
     def set_vector_field(self, x, y):
         self.field_item.setData(x, y)
