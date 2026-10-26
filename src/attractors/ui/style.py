@@ -107,7 +107,7 @@ def equation_label():
 
 
 ACTIVE = {
-    "light": ("#f1f3f4", "#eef0f1", "#e9ebec", "#e4e6e8", "#dfe1e3"),
+    "light": ("#f1f3f4", "#eef0f1", "#e9ebec", "#e4e6e8", "#dadbdd"),
     "dark": ("#383c42", "#32363b", "#2c3034", "#262a2e", "#202326"),
 }
 INACTIVE = {
@@ -142,7 +142,6 @@ def dock_widget_style():
         QDockWidget::title {{
             background: {gradient(inactive)};
             border: 1px solid {border};
-            border-bottom: 0px;
             border-right: 0px;
             text-align: center;
             padding: 2px 2px;
@@ -154,7 +153,7 @@ def dock_widget_style():
         QDockWidget[activeDock="true"]::title {{
             background: {gradient(active)};
             border: 1px solid palette(accent);
-            border-bottom: 0px;
+            border-bottom: 1px solid {border};
             border-right: 0px;
         }}
     """
@@ -198,6 +197,12 @@ PANEL_INPUTS = """
     QWidget#controlPanelSliders QAbstractSpinBox {
         background: palette(window);
         color: palette(window-text);
+    }
+    QWidget#panelSurface QLineEdit:hover {
+        border: 1px solid palette(accent);
+    }
+    QWidget#panelSurface QTextEdit:hover {
+        border: 1px solid palette(accent);
     }
 """
 
@@ -288,8 +293,13 @@ FILE_TREE = """
 """
 
 FILE_SEARCH = """
-    background: palette(base);
-    border: 1px solid palette(mid);
+    QLineEdit {
+        background: palette(base);
+        border: 1px solid palette(mid);
+    }
+    QLineEdit:hover {
+        border: 1px solid palette(accent);
+    }
 """
 
 TABLE_VIEW = """
