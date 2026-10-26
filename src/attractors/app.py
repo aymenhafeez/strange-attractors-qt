@@ -210,6 +210,9 @@ class Window(QtWidgets.QMainWindow):
         self.controls.plot_size_spin.valueChanged.connect(
             self.scene.trajectory_renderer.set_plot_size
         )
+        self.controls.plot_size_spin.valueChanged.connect(
+            self.controls.trajectory_panel.set_plot_size
+        )
         self.controls.head_size_spin.valueChanged.connect(
             self.scene.trajectory_renderer.set_head_size
         )
@@ -615,6 +618,8 @@ class Window(QtWidgets.QMainWindow):
 
     def _apply_theme(self):
         colours = plot_colours()
+        self.controls.plot_size_spin.setValue(colours["scatter_size"])
+        self.controls.trajectory_panel.set_plot_size(colours["scatter_size"])
 
         self.scene.view.setBackgroundColor(colours["gl_background"])
         self.scene.grid_overlay.apply_theme()
@@ -1918,7 +1923,13 @@ class Window(QtWidgets.QMainWindow):
         self._system_solutions = solutions
 
         if config.dimension == 2:
-            self.phase_portrait.display_solutions(solutions)
+            self.phase_portrait.set_trajectories(
+                self.controls.trajectory_panel.get_trajectories()
+            )
+            self.phase_portrait.display_solutions(
+                solutions,
+                initial_conditions=self._active_run["trajectories"],
+            )
             self.phase_portrait.request_field_update()
             return
 
