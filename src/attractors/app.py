@@ -1833,14 +1833,8 @@ class Window(QtWidgets.QMainWindow):
         if not is_partial and config.dimension == 3:
             self._latest_projection_solutions = solutions
             config, values = self._get_current_config_and_values()
-            if config is not None:
-                if _panel_visible(self, "poincare_panel"):
-                    self.poincare_panel.set_attractor(config, values)
-                if (
-                    self.lyapunov_panel.isVisible()
-                    and self.lyapunov_panel.auto_enabled()
-                ):
-                    self._request_lyapunov(config, values)
+            if config is not None and _panel_visible(self, "poincare_panel"):
+                self.poincare_panel.set_attractor(config, values)
             self._update_projection_panel_from_solutions(solutions)
             if (
                 _panel_visible(self, "projection_panel")
@@ -1852,6 +1846,9 @@ class Window(QtWidgets.QMainWindow):
             # self.scene.camera_controller.fit_camera_to_solutions(solutions)
 
         if not is_partial:
+            if self.lyapunov_panel.auto_enabled():
+                self._request_lyapunov()
+
             self._last_live_preview_update = None
             for plot_name in list(self.live_plot_controller.live_plots):
                 self.live_plot_controller._refresh_live_plot(plot_name)
@@ -1876,7 +1873,7 @@ class Window(QtWidgets.QMainWindow):
         self.system_toolbar.set_variables(config.variables)
         is_3d = config.dimension == 3
 
-        self.lyapunov_panel.setEnabled(is_3d)
+        self.lyapunov_panel.setEnabled(True)
         self.poincare_panel.setEnabled(is_3d)
         self.controls.animation_scroll.setEnabled(is_3d)
 
@@ -1909,10 +1906,11 @@ class Window(QtWidgets.QMainWindow):
         if not is_3d:
             self.scene.animation_controller.stop()
             self.scene.camera_controller.set_orbit_mode(False)
-            self._cancel_lyapunov_analysis()
-            self.lyapunov_panel.clear()
             self.projection_panel.clear()
             self.poincare_panel.set_attractor(config, {})
+
+        self._cancel_lyapunov_analysis()
+        self.lyapunov_panel.clear()
 
     def _select_system_view(self, config):
         widget = self.phase_portrait if config.dimension == 2 else self.scene.container
@@ -2106,7 +2104,7 @@ class Window(QtWidgets.QMainWindow):
                 self.bifurcation_panel.cancel_sweep()
         for name in opened - previous:
             config, _values = self._get_current_config_and_values()
-            if config is not None and config.dimension != 3:
+            if config.dimension != 3 and name != "lyapunov_panel":
                 continue
 
             if name == "lyapunov_panel" and self.lyapunov_panel.auto_enabled():

@@ -19,8 +19,10 @@ class PlaneCrossings:
     directions: np.ndarray
 
     def section_coordinates(self):
-        first, second = section_axes(self.axis)
-        return self.points[:, AXES[first]], self.points[:, AXES[second]]
+        variables = COORDINATE_COLUMNS[: self.points.shape[1]]
+        axes = section_axes(self.axis, variables)
+
+        return tuple(self.points[:, AXES[name]] for name in axes)
 
 
 def axis_index(axis):
@@ -37,11 +39,14 @@ def crossing_direction(direction):
     return normalised
 
 
-def section_axes(axis):
+def section_axes(axis, variables=("x", "y", "z")):
     axis_name = str(axis).lower()
     axis_index(axis_name)
-    axes = [name for name in COORDINATE_COLUMNS if name != axis_name]
-    return axes[0], axes[1]
+
+    if axis_name not in variables:
+        raise ValueError(f"Coordinate {axis_name} is not available")
+
+    return tuple(name for name in variables if name != axis_name)
 
 
 def plane_crossings(solution, axis, value, *, direction="both", times=None):
@@ -51,8 +56,10 @@ def plane_crossings(solution, axis, value, *, direction="both", times=None):
     direction = crossing_direction(direction)
     solution = np.asarray(solution)
 
-    if solution.ndim != 2 or solution.shape[1] < 3:
+    if solution.ndim != 2 or solution.shape[1] not in (2, 3):
         raise ValueError("Solution must be an array with x, y and z columns")
+
+    dimension = solution.shape[1]
 
     if times is None:
         times = np.arange(len(solution), dtype=np.float64)
@@ -66,8 +73,8 @@ def plane_crossings(solution, axis, value, *, direction="both", times=None):
         level=level,
         steps=np.array([], dtype=np.int64),
         times=np.array([], dtype=np.float64),
-        points=np.empty((0, 3), dtype=np.float64),
-        directions=np.array([], dtype=object),
+        points=np.empty(dimension),
+        directions=np.array([]),
     )
     if len(solution) < 2:
         return empty
@@ -78,8 +85,8 @@ def plane_crossings(solution, axis, value, *, direction="both", times=None):
         & np.isfinite(series[1:])
         & np.isfinite(times[:-1])
         & np.isfinite(times[1:])
-        & np.isfinite(solution[:-1, :3]).all(axis=1)
-        & np.isfinite(solution[1:, :3]).all(axis=1)
+        & np.isfinite(solution[:-1, :dimension]).all(axis=1)
+        & np.isfinite(solution[1:, :dimension]).all(axis=1)
     )
     rising = (series[:-1] < 0) & (series[1:] >= 0)
     falling = (series[:-1] > 0) & (series[1:] <= 0)
@@ -102,8 +109,8 @@ def plane_crossings(solution, axis, value, *, direction="both", times=None):
         return empty
 
     frac = -series[steps] / delta
-    points = solution[steps, :3] + frac[:, None] * (
-        solution[steps + 1, :3] - solution[steps, :3]
+    points = solution[steps, :dimension] + frac[:, None] * (
+        solution[steps + 1, :dimension] - solution[steps, :dimension]
     )
     crossing_times = times[steps] + frac * (times[steps + 1] - times[steps])
     directions = np.where(series[steps + 1] > series[steps], "positive", "negative")
