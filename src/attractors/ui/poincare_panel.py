@@ -11,7 +11,6 @@ from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
 from .style import PANEL_SURFACE, plot_colours
 
-_AXIS_LABELS = {"x": ("Y", "Z"), "y": ("X", "Z"), "z": ("X", "Y")}
 DIR_MAP = {"both": "both", "rising": "positive", "falling": "negative"}
 N_BINS = 96
 SLIDER_STEPS = 1000
@@ -95,6 +94,14 @@ class PoincarePanel(QtWidgets.QWidget):
         self.dropdown.setMinimumWidth(180)
         solve_row.addWidget(QtWidgets.QLabel("Map:"))
         solve_row.addWidget(self.dropdown)
+
+        self.planar_view_combo = QtWidgets.QComboBox()
+        self.planar_view_combo.addItems(
+            ["Crossing index", "Return map", "Return interval"]
+        )
+        self.planar_view_combo.currentTextChanged.connect(self.recompute)
+        self.planar_view_combo.hide()
+        solve_row.addWidget(self.planar_view_combo)
 
         solve_row.addStretch(1)
         layout.addLayout(solve_row)
@@ -191,17 +198,33 @@ class PoincarePanel(QtWidgets.QWidget):
         self._on_plane_changed(self.plane_combo.currentText())
 
     def set_attractor(self, config, values):
-        self.setEnabled(config.dimension == 3)
-        if config.dimension != 3:
-            self.cancel_solve()
-            self._solve_gen += 1
-            self._config = None
-            self._solutions = None
-            self._clear_plot_data()
-            return
+        old_dimension = self._config.dimension if self._config else None
+        previous_axis = self.plane_combo.currentText()
 
+        self.clear()
         self._config = config
-        self._values = values
+        self._values = dict(values)
+        self.setEnabled(True)
+
+        axis = (
+            previous_axis if previous_axis in config.variables else config.variables[0]
+        )
+
+        with QtCore.QSignalBlocker(self.plane_combo):
+            self.plane_combo.clear()
+            self.plane_combo.addItems(config.variables)
+            self.plane_combo.setCurrentText(axis)
+
+        is_2d = config.dimension == 2
+        self.planar_view_combo.setVisible(is_2d)
+        self.heatmap_check.setEnabled(not is_2d)
+        self.plot_widget.setAspectLocked(not is_2d)
+
+        if is_2d and old_dimension != 2:
+            self.dir_combo.setCurrentText("rising")
+
+        self._on_plane_changed(axis)
+
         if self.auto_check.isChecked():
             self._start_solve()
 
@@ -239,7 +262,7 @@ class PoincarePanel(QtWidgets.QWidget):
         if gen != self._solve_gen:
             return
 
-        is_valid, message = validate_solutions([sol])
+        is_valid, message = validate_solutions([sol], dimension=self._config.dimension)
         if not is_valid:
             self._solutions = None
             self._clear_plot_data()
@@ -285,22 +308,77 @@ class PoincarePanel(QtWidgets.QWidget):
         self.plane_changed.emit(self.plane_combo.currentText(), self.value_spin.value())
 
     def _on_plane_changed(self, plane):
-        lh, lv = _AXIS_LABELS[plane]
+        variables = (
+            self._config.variables if self._config is not None else ("x", "y", "z")
+        )
+        remaining = tuple(name for name in variables if name != plane)
+
+        if len(remaining) == 1:
+            lh, lv = "Crossing", remaining[0].upper()
+        else:
+            lh, lv = (name.upper() for name in remaining)
+
         self.plot_widget.setLabel("bottom", lh)
         self.plot_widget.setLabel("left", lv)
-        if self._solutions and len(self._solutions) > 0:
+
+        self._value_bounds = None
+
+        if self._solutions:
             col = axis_index(plane)
-            midpoint = (
-                self._solutions[0][:, col].max() + self._solutions[0][:, col].min()
-            ) / 2
+            values = self._solutions[0][:, col]
+            midpoint = (values.max() + values.min()) / 2
             self._set_value_bounds(plane)
             self._set_value(midpoint)
             return
 
-        self._value_bounds = None
         self.value_slider.setEnabled(False)
         self._emit_plane()
         self.recompute()
+
+    def _recompute_planar(self, plane, value, direction):
+        coordinate = next(name for name in self._config.variables if name != plane)
+        mode = self.planar_view_combo.currentText()
+        horizontal = []
+        vertical = []
+
+        for solution in self._solutions:
+            times = np.linspace(
+                self._config.time_defaults.t_min,
+                self.tmax_spin.value(),
+                len(solution) + 1,
+            )
+            points = np.vstack((self._config.initial_conditions, solution))
+            crossings = plane_crossings(
+                points, plane, value, direction=direction, times=times
+            )
+            (values,) = crossings.section_coordinates()
+
+            if mode == "Return map":
+                x = values[:-1]
+                y = values[1:]
+                bottom = f"{coordinate}ₙ"
+                left = f"{coordinate}ₙ₊₁"
+            elif mode == "Return interval":
+                x = np.arange(1, len(values))
+                y = np.diff(crossings.times)
+                bottom = "Crossing"
+                left = "Return interval"
+            else:
+                x = np.arange(len(values))
+                y = values
+                bottom = "Crossing"
+                left = coordinate
+
+            horizontal.append(x)
+            vertical.append(y)
+
+        self._img.hide()
+        self._colourbar.hide()
+        self._scatter.show()
+        self._scatter.setData(np.concatenate(horizontal), np.concatenate(vertical))
+        self.plot_widget.setLabel("bottom", bottom)
+        self.plot_widget.setLabel("left", left)
+        self.plot_widget.autoRange()
 
     def _on_value_changed(self):
         self._sync_slider_to_value(self.value_spin.value())
@@ -395,6 +473,10 @@ class PoincarePanel(QtWidgets.QWidget):
         value = self.value_spin.value()
         direction = DIR_MAP[self.dir_combo.currentText()]
 
+        if self._config.dimension == 2:
+            self._recompute_planar(plane, value, direction)
+            return
+
         all_h = []
         all_v = []
 
@@ -439,6 +521,16 @@ class PoincarePanel(QtWidgets.QWidget):
         cmap = pg.colormap.get(cmap_name, source="matplotlib")
         self._img.setLookupTable(cmap.getLookupTable())
         self._colourbar.setColorMap(cmap)
+
+    def clear(self):
+        self.cancel_solve()
+        self._solve_gen += 1
+        self._config = None
+        self._values = None
+        self._solutions = None
+        self._set_solve_enabled(True)
+        self._clear_plot_data()
+        self._error_label.hide()
 
     def apply_theme(self):
         self.plot_widget.setBackground(plot_colours()["plot_background"])
