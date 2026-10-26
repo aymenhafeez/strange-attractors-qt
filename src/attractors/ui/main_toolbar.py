@@ -207,6 +207,11 @@ def build_menu_bar(self):
     )
 
     analysis_menu = menu_bar.addMenu("&Analysis")
+
+    signal_action = self._panel_docks["signal_panel"].toggleViewAction()
+    signal_action.setText("Signal and spectrum")
+
+    analysis_menu.addAction(signal_action)
     analysis_menu.addAction(self.toolbar_lyapunov_action)
     analysis_menu.addAction(self.toolbar_projection_action)
     analysis_menu.addAction(self.toolbar_poincare_action)
@@ -309,6 +314,10 @@ def build_toolbar(self):
         "Show animation head points",
         icon=icon("media-record"),
     )
+    self.toolbar_point_action.toggled.connect(
+        self.controls.head_size_wrapper.setVisible
+    )
+    self.controls.head_size_wrapper.setVisible(self.toolbar_point_action.isChecked())
     self.toolbar_line_action = self._add_checked_toolbar_action(
         toolbar,
         "Line",

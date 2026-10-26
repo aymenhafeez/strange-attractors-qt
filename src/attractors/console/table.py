@@ -92,7 +92,7 @@ class ConsoleTableModel(QtCore.QAbstractTableModel):
             return None
 
         value = self._dataframe.iat[index.row(), index.column()]
-        if pd.isna(value):
+        if pd.api.types.is_scalar(value) and pd.isna(value):
             return ""
 
         return str(value)

@@ -64,7 +64,7 @@ class _TrajectoryRow(QtCore.QObject):
             {
                 "name": "Size",
                 "type": "float",
-                "value": 1.0,
+                "value": plot_colours()["scatter_size"],
                 "limits": (0.1, 20.0),
                 "step": 0.1,
             },
@@ -72,7 +72,7 @@ class _TrajectoryRow(QtCore.QObject):
                 "name": "Render",
                 "type": "list",
                 "limits": ["points", "line"],
-                "value": "points",
+                "value": "line" if len(ic) == 2 else "points",
             },
         ]
         if removeable:
@@ -276,6 +276,10 @@ class TrajectoryPanel(QtWidgets.QWidget):
             t_max=t_max,
             parent=self,
         )
+
+        if self._rows:
+            row.param.child("Size").setValue(self._rows[0].get_size())
+
         row.changed.connect(self._emit)
         row.style_changed.connect(self._emit_styles)
         row.remove_requested.connect(self._remove_row)
@@ -360,6 +364,17 @@ class TrajectoryPanel(QtWidgets.QWidget):
                 row.set_render_mode(mode)
         finally:
             self._suppress_emit = False
+        self._emit_styles()
+
+    def set_plot_size(self, size):
+        previous_suppression = self._suppress_emit
+        self._suppress_emit = True
+        try:
+            for row in self._rows:
+                row.param.child("Size").setValue(size)
+        finally:
+            self._suppress_emit = previous_suppression
+
         self._emit_styles()
 
 

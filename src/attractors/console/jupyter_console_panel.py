@@ -629,8 +629,7 @@ class JupyterConsolePanel(QtCore.QObject):
         self.set_explore_visible(False)
 
         self._console_host = QtWidgets.QWidget()
-        self._console_host.setObjectName("panelSurface")
-        self._console_host.setStyleSheet(PANEL_SURFACE)
+        self._console_host.setStyleSheet("QTextEdit { border: none; }")
         self._console_layout = QtWidgets.QVBoxLayout(self._console_host)
         self._console_layout.setContentsMargins(0, 0, 0, 0)
         self._console_layout.setSpacing(0)

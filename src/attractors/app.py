@@ -38,6 +38,7 @@ from .ui.phase_panel import PhasePortraitPanel
 from .ui.poincare_panel import PoincarePanel
 from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
+from .ui.signal_panel import SignalPanel
 from .ui.style import MAIN_WINDOW, plot_colours
 from .ui.system_toolbar import SystemToolbar
 from .view.view_manager import ViewManager
@@ -80,6 +81,8 @@ class Window(QtWidgets.QMainWindow):
         self._active_solve_request_id = None
         self._active_lyapunov_request_id = None
         self._system_solutions = []
+        self._active_run = None
+        self._analysis_run = None
 
         self._solve_state = {
             "solving": False,
@@ -104,6 +107,9 @@ class Window(QtWidgets.QMainWindow):
         self._perf = PerfProfiler()
         self._process_status_visible = True
         self._app_status_message = ""
+        self._app_status_error = False
+        self._signal_status_message = ""
+        self._signal_status_error = False
         self._app_status_clear_timer = None
         self._output_panel_visible = False
         self._panel_docks = {}
@@ -204,6 +210,12 @@ class Window(QtWidgets.QMainWindow):
         self.controls.plot_size_spin.valueChanged.connect(
             self.scene.trajectory_renderer.set_plot_size
         )
+        self.controls.plot_size_spin.valueChanged.connect(
+            self.controls.trajectory_panel.set_plot_size
+        )
+        self.controls.head_size_spin.valueChanged.connect(
+            self.scene.trajectory_renderer.set_head_size
+        )
         self.controls.colour_mode_changed.connect(self.scene.set_colour_mode)
         self.controls.colourmap_changed.connect(self.scene.set_colourmap)
         self.right_panel.preset_panel.preset_save_requested.connect(self._save_preset)
@@ -239,6 +251,8 @@ class Window(QtWidgets.QMainWindow):
 
         self.bifurcation_panel = BifurcationPanel()
         self.bifurcation_panel.close_requested.connect(self._close_bifurcation)
+
+        self.signal_panel = SignalPanel()
 
         self.output_panel = OutputPanel()
         self.output_panel.hide()
@@ -320,6 +334,7 @@ class Window(QtWidgets.QMainWindow):
             ("poincare_panel", "Poincare", self.poincare_panel),
             ("bifurcation_panel", "Bifurcation", self.bifurcation_panel),
             ("projection_panel", "Projection heatmaps", self.projection_panel),
+            ("signal_panel", "Signal and spectrum", self.signal_panel),
         ):
             self._panel_docks[name] = self.dock_layout.add(
                 f"analysis/{name}", title, panel
@@ -329,6 +344,8 @@ class Window(QtWidgets.QMainWindow):
         build_menu_bar(self)
         self.controls.animation_mode_changed.connect(self._set_animation_mode)
         build_status_bar(self)
+
+        self.signal_panel.status_changed.connect(self._set_signal_status)
 
         self.workspace_inspector = WorkspaceInspector(self.jupyter_console_panel)
 
@@ -406,6 +423,7 @@ class Window(QtWidgets.QMainWindow):
         if self._custom_config is not None:
             self._apply_config_to_view(self._custom_config)
         else:
+            self._clear_analysis_run()
             self.solver.cancel_solve()
             self.solver.cancel_lyapunov()
             self._solve_pending = False
@@ -423,6 +441,7 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_config_to_view(self, config):
+        self._clear_analysis_run()
         self._restoring_view = True
         try:
             self.phase_portrait.clear()
@@ -456,6 +475,7 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_loaded_preset(self, config, values, n, t_max):
+        self._clear_analysis_run()
         self._restoring_view = True
         try:
             self.phase_portrait.clear()
@@ -598,6 +618,8 @@ class Window(QtWidgets.QMainWindow):
 
     def _apply_theme(self):
         colours = plot_colours()
+        self.controls.plot_size_spin.setValue(colours["scatter_size"])
+        self.controls.trajectory_panel.set_plot_size(colours["scatter_size"])
 
         self.scene.view.setBackgroundColor(colours["gl_background"])
         self.scene.grid_overlay.apply_theme()
@@ -610,6 +632,7 @@ class Window(QtWidgets.QMainWindow):
         self.poincare_panel.apply_theme()
         self.bifurcation_panel.apply_theme()
         self.projection_panel.apply_theme()
+        self.signal_panel.apply_theme()
         self.jupyter_console_panel.apply_theme()
         self.phase_portrait.apply_theme()
 
@@ -775,13 +798,8 @@ class Window(QtWidgets.QMainWindow):
 
     def _set_app_status(self, message, error=False):
         self._app_status_message = str(message)
-        colour = "#ff6b6b" if error else "#178640"
-        self.app_status_label.setText(self._app_status_message)
-        self.app_status_label.setStyleSheet(
-            f"border: none; padding: 0 4px 3px 4px; font-size: 12px; color: {colour};"
-        )
-
-        self._sync_status_bar_visibility()
+        self._app_status_error = error
+        self._refresh_app_status()
 
     def _set_temporary_app_status(self, message, *, timeout_ms=3000, error=False):
         message = str(message)
@@ -807,13 +825,44 @@ class Window(QtWidgets.QMainWindow):
 
     def _clear_app_status(self):
         self._app_status_message = ""
-        self.app_status_label.clear()
+        self._app_status_error = False
+        self._refresh_app_status()
 
+    def _set_signal_status(self, message, error=False):
+        self._signal_status_message = str(message)
+        self._signal_status_error = error
+        self._refresh_app_status()
+
+    def _refresh_app_status(self):
+        messages = [
+            message
+            for message in (
+                self._app_status_message,
+                self._signal_status_message,
+            )
+            if message
+        ]
+        text = " · ".join(messages)
+
+        has_error = (bool(self._app_status_message) and self._app_status_error) or (
+            bool(self._signal_status_message) and self._signal_status_error
+        )
+        colour = "#ff6b6b" if has_error else "#178640"
+
+        self.app_status_label.setText(text)
+        self.app_status_label.setToolTip(text)
+        self.app_status_label.setStyleSheet(
+            f"border: none; padding: 0 4px 3px 4px; font-size: 12px; color: {colour};"
+        )
         self._sync_status_bar_visibility()
 
     def _sync_status_bar_visibility(self):
         self.statusBar().setVisible(
-            bool(self._process_status_visible or self._app_status_message)
+            bool(
+                self._process_status_visible
+                or self._app_status_message
+                or self._signal_status_message
+            )
         )
 
     def _build_jupyter_toolbar_actions(self, toolbar):
@@ -1358,6 +1407,8 @@ class Window(QtWidgets.QMainWindow):
         )
         if solve:
             self._on_controls_solve_requested(True)
+        elif self.controls.get_current_values() != current_values:
+            self._mark_settings_unsolved()
 
         return self.system.parameters()
 
@@ -1368,6 +1419,7 @@ class Window(QtWidgets.QMainWindow):
             if t_max is None
             else self._validated_console_t_max(t_max)
         )
+        time_changed = next_n != self.current_n or next_t_max != self.current_t_max
         self.current_n = next_n
         self.current_t_max = next_t_max
         self.controls.set_time_values(self.current_n, self.current_t_max)
@@ -1375,6 +1427,8 @@ class Window(QtWidgets.QMainWindow):
 
         if solve:
             self._on_controls_solve_requested(True)
+        elif time_changed:
+            self._mark_settings_unsolved()
 
         return self.system.status()
 
@@ -1427,11 +1481,33 @@ class Window(QtWidgets.QMainWindow):
 
         return self.system.status()
 
+    def _mark_settings_unsolved(self):
+        self.solver.cancel_solve()
+        self._active_solve_request_id = None
+        self._active_run = None
+        self._solve_pending = False
+        self._solve_needed = False
+        self._full_needed = False
+        self._set_solve_state(
+            solving=False,
+            valid=False,
+            stale=self._analysis_run is not None,
+            partial=False,
+            last_error=None,
+        )
+
+    def _clear_analysis_run(self):
+        self._active_solve_request_id = None
+        self._active_run = None
+        self._analysis_run = None
+        self.signal_panel.set_source(None, {})
+
     def _set_solve_state(self, **updates):
         state = dict(self._solve_state)
         state.update(updates)
         self._solve_state = state
         self.system_toolbar.set_solve_state(state)
+        self.signal_panel.set_source(self._analysis_run, state)
 
         return state
 
@@ -1496,6 +1572,7 @@ class Window(QtWidgets.QMainWindow):
                 solution_points=[],
             )
             return
+        full_record = full or _panel_visible(self, "signal_panel")
         user_n = self.current_n or config.time_defaults.n
         t_max = self.current_t_max
         trajectories = self.controls.trajectory_panel.get_trajectories()
@@ -1505,10 +1582,10 @@ class Window(QtWidgets.QMainWindow):
             for trajectory in trajectories:
                 trajectory_n = int(trajectory.get("n", user_n))
                 trajectory_t_max = float(trajectory.get("t_max", t_max))
-                solve_n = trajectory_n if full else min(trajectory_n, PARTIAL_N)
+                solve_n = trajectory_n if full_record else min(trajectory_n, PARTIAL_N)
                 solve_t_max = (
                     trajectory_t_max
-                    if full
+                    if full_record
                     else self._partial_t_max(
                         trajectory_n,
                         solve_n,
@@ -1524,10 +1601,10 @@ class Window(QtWidgets.QMainWindow):
                     }
                 )
         else:
-            solve_n = int(user_n if full else min(user_n, PARTIAL_N))
+            solve_n = int(user_n if full_record else min(user_n, PARTIAL_N))
             solve_t_max = (
                 t_max
-                if full
+                if full_record
                 else self._partial_t_max(
                     user_n, solve_n, t_max, config.time_defaults.t_min
                 )
@@ -1573,6 +1650,16 @@ class Window(QtWidgets.QMainWindow):
 
         request_id = self.solver.next_solve_request_id()
         self._active_solve_request_id = request_id
+
+        self._active_run = {
+            **signature,
+            "request_id": request_id,
+            "t_min": config.time_defaults.t_min,
+            "variables": config.variables,
+            "labels": tuple(t["label"] for t in trajectories) or ("T0",),
+            "colours": tuple(t["colour"].name() for t in trajectories) or (None,),
+            "analysis_ready": full_record,
+        }
 
         self._set_solve_state(
             solving=True,
@@ -1720,6 +1807,15 @@ class Window(QtWidgets.QMainWindow):
         config, _values = self._get_current_config_and_values()
         self._display_system_solution(config, solutions, is_partial)
 
+        if self._active_run["analysis_ready"]:
+            arrays = []
+            for solution in solutions:
+                view = solution.view()
+                view.setflags(write=False)
+                arrays.append(view)
+
+            self._analysis_run = {**self._active_run, "solutions": tuple(arrays)}
+
         self._update_data_view(solutions, is_partial)
         self._set_solve_state(
             solving=False,
@@ -1827,7 +1923,13 @@ class Window(QtWidgets.QMainWindow):
         self._system_solutions = solutions
 
         if config.dimension == 2:
-            self.phase_portrait.display_solutions(solutions)
+            self.phase_portrait.set_trajectories(
+                self.controls.trajectory_panel.get_trajectories()
+            )
+            self.phase_portrait.display_solutions(
+                solutions,
+                initial_conditions=self._active_run["trajectories"],
+            )
             self.phase_portrait.request_field_update()
             return
 
@@ -1920,6 +2022,7 @@ class Window(QtWidgets.QMainWindow):
         if self._restoring_view:
             return
 
+        self._clear_analysis_run()
         self._latest_projection_solutions = None
 
         config, _values = self._get_current_config_and_values()

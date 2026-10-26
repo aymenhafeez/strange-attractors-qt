@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Aymen Hafeez
+# SPDX-License-Identifier: GPL-3.0-only
+
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
@@ -38,6 +41,7 @@ class PhasePortraitPanel(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._curves = []
+        self._markers = []
         self._trajectories = []
         self._has_data = None
 
@@ -106,7 +110,8 @@ class PhasePortraitPanel(QtWidgets.QWidget):
         self._apply_trajectory_styles()
 
     def _apply_trajectory_styles(self):
-        palette = plot_colours()["trajectory_palette"]
+        colours = plot_colours()
+        palette = colours["trajectory_palette"]
 
         for i, curve in enumerate(self._curves):
             trajectory = self._trajectories[i] if i < len(self._trajectories) else {}
@@ -115,7 +120,8 @@ class PhasePortraitPanel(QtWidgets.QWidget):
             colour = QtGui.QColor(pg.mkColor(trajectory.get("colour", default_colour)))
             alpha = trajectory.get("alpha", 1.0)
             colour.setAlphaF(colour.alphaF() * np.clip(alpha, 0.0, 1.0))
-            size = trajectory.get("size", 1.0)
+            self._markers[i].setSymbolBrush(colour)
+            size = trajectory.get("size", colours["scatter_size"])
             line_mode = trajectory.get("render_mode", "line") == "line"
 
             if line_mode:
@@ -128,7 +134,7 @@ class PhasePortraitPanel(QtWidgets.QWidget):
                 curve.setSymbolBrush(colour)
                 curve.setSymbolSize(size)
 
-    def display_solutions(self, solutions):
+    def display_solutions(self, solutions, initial_conditions=None):
         if not solutions:
             self.clear()
             return
@@ -139,12 +145,27 @@ class PhasePortraitPanel(QtWidgets.QWidget):
 
         while len(self._curves) > len(solutions):
             self.plot_widget.removeItem(self._curves.pop())
+            self.plot_widget.removeItem(self._markers.pop())
 
         while len(self._curves) < len(solutions):
             self._curves.append(self.plot_widget.plot())
+            marker = self.plot_widget.plot(
+                pen=None, symbol="o", symbolSize=6, symbolPen=None
+            )
+            marker.setZValue(10)
+            self._markers.append(marker)
 
-        for curve, solution in zip(self._curves, solutions, strict=True):
+        starts = (
+            initial_conditions
+            if initial_conditions is not None
+            else [solution[0] for solution in solutions]
+        )
+
+        for curve, marker, solution, start in zip(
+            self._curves, self._markers, solutions, starts, strict=True
+        ):
             curve.setData(solution[:, 0], solution[:, 1])
+            marker.setData([start[0]], [start[1]])
 
         self._apply_trajectory_styles()
 
@@ -172,7 +193,11 @@ class PhasePortraitPanel(QtWidgets.QWidget):
         for curve in self._curves:
             self.plot_widget.removeItem(curve)
 
+        for marker in self._markers:
+            self.plot_widget.removeItem(marker)
+
         self._curves.clear()
+        self._markers.clear()
         self._has_data = False
         self._field_timer.stop()
         self.field_item.clear()
@@ -188,8 +213,8 @@ class PhasePortraitPanel(QtWidgets.QWidget):
 
         for position in ("bottom", "left"):
             axis = self.plot_widget.getAxis(position)
-            axis.setPen(pg.mkPen(colours["plot_pen"]))
-            axis.setTextPen(pg.mkPen(colours["plot_pen"]))
+            axis.setPen(pg.mkPen(colours["colourbar_text"]))
+            axis.setTextPen(pg.mkPen(colours["colourbar_text"]))
 
         self._apply_trajectory_styles()
 

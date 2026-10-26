@@ -176,9 +176,31 @@ class ControlPanel(QtCore.QObject):
         self.plot_size_slider.valueChanged.connect(self.plot_size_spin.setValue)
         self.plot_size_spin.valueChanged.connect(self.plot_size_slider.setValue)
 
+        head_size_row = QtWidgets.QHBoxLayout()
+        head_size_row.setSpacing(10)
+        head_size_row.addWidget(QtWidgets.QLabel("Head size"))
+        self.head_size_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.head_size_slider.setRange(0, 30)
+        self.head_size_slider.setValue(20)
+
+        self.head_size_spin = QtWidgets.QSpinBox()
+        self.head_size_spin.setKeyboardTracking(False)
+        self.head_size_spin.setRange(0, 30)
+        self.head_size_spin.setValue(20)
+
+        self.head_size_slider.valueChanged.connect(self.head_size_spin.setValue)
+        self.head_size_spin.valueChanged.connect(self.head_size_slider.setValue)
+
         plot_size_row.addWidget(self.plot_size_slider)
         plot_size_row.addWidget(self.plot_size_spin)
+        head_size_row.addWidget(self.head_size_slider)
+        head_size_row.addWidget(self.head_size_spin)
         self.animation_layout.addLayout(plot_size_row)
+
+        self.head_size_wrapper = QtWidgets.QWidget()
+        head_size_row.setContentsMargins(0, 0, 0, 0)
+        self.head_size_wrapper.setLayout(head_size_row)
+        self.animation_layout.addWidget(self.head_size_wrapper)
 
         colour_mode_row = QtWidgets.QHBoxLayout()
         colour_mode_row.setSpacing(10)

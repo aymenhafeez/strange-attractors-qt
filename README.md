@@ -16,11 +16,11 @@ analysis
 
 ## Features
 
-The app currently consists of two areas: a three dimensional ODE system exploration area and a general scripting and visualisation area.
+The app currently consists of two areas: an ODE system exploration area and a general scripting and visualisation area.
 
-### 3D ODE systems
+### ODE systems
 
-While strange attractors are the main focus point here you can also input any 3D ODE system. The following analysis modes are available:
+While strange attractors are the main focus point here you can also input any ODE system. The following analysis modes are available:
 
 * 2D heatmap projections
 * Multi trajectory view with varying initial conditions
@@ -69,7 +69,7 @@ Panels menu.
   <img src="media/image_7.png" />
   <br />
   <small>
-    3D viewport area which contains the parameter controls, view options, data viewer,
+    Viewport area which contains the parameter controls, view options, data viewer,
     multi trajectory options and the custom system and preset panels. Screenshot taken
     with the particle flow animation playing which animates the point distribution along
     the trajectory.
@@ -81,7 +81,7 @@ Panels menu.
   <br />
   <small>
     Bifuraction and Lyapunov analysis modes
-    in the 3D viewport area.
+    in the viewport area.
   </small>
 </p>
 
@@ -99,7 +99,7 @@ Panels menu.
   <br />
   <small>
     System workspace and projection heatmap analysis mode. The script and console panels
-    are also connected to the systems in the 3D viewport area allowing for time against
+    are also connected to the systems in the viewport area allowing for time against
     axis plots, trajectory separation comparison, system speed and displacement analysis
     and vector field quiver plots.
   </small>
