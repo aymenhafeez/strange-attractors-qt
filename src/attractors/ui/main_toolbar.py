@@ -314,6 +314,10 @@ def build_toolbar(self):
         "Show animation head points",
         icon=icon("media-record"),
     )
+    self.toolbar_point_action.toggled.connect(
+        self.controls.head_size_wrapper.setVisible
+    )
+    self.controls.head_size_wrapper.setVisible(self.toolbar_point_action.isChecked())
     self.toolbar_line_action = self._add_checked_toolbar_action(
         toolbar,
         "Line",

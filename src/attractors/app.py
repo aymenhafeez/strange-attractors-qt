@@ -210,6 +210,9 @@ class Window(QtWidgets.QMainWindow):
         self.controls.plot_size_spin.valueChanged.connect(
             self.scene.trajectory_renderer.set_plot_size
         )
+        self.controls.head_size_spin.valueChanged.connect(
+            self.scene.trajectory_renderer.set_head_size
+        )
         self.controls.colour_mode_changed.connect(self.scene.set_colour_mode)
         self.controls.colourmap_changed.connect(self.scene.set_colourmap)
         self.right_panel.preset_panel.preset_save_requested.connect(self._save_preset)

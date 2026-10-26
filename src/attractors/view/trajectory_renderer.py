@@ -42,6 +42,7 @@ class TrajectoryRenderer:
         self._base_colour = plot_colours()["trajectory"]
         self._current_alpha = 1.0
         self._current_plot_size = plot_colours()["scatter_size"]
+        self._current_head_size = 20
         self._line_mode = False
         self._trail_mode = False
         self._colour_mode = "solid"
@@ -96,7 +97,7 @@ class TrajectoryRenderer:
             self.view.removeItem(self._scatters.pop())
             self.view.removeItem(self._lines.pop())
         while len(self._heads) < n:
-            head = gl.GLScatterPlotItem(size=20.0)
+            head = gl.GLScatterPlotItem(size=self._current_head_size)
             head.setGLOptions(
                 "additive" if plot_colours()["is_dark"] else "translucent"
             )
@@ -128,6 +129,11 @@ class TrajectoryRenderer:
             size = self._trajectory_size(index)
             self._scatters[index].setData(size=size)
             self._lines[index].setData(width=size)
+
+    def set_head_size(self, value):
+        self._current_head_size = value
+        for head in self._heads:
+            head.setData(size=value)
 
     def set_alpha(self, val):
         self._current_alpha = val / 100.0
