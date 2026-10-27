@@ -123,3 +123,21 @@ def plane_crossings(solution, axis, value, *, direction="both", times=None):
         points=points.astype(np.float64, copy=False),
         directions=directions.astype(object, copy=False),
     )
+
+
+def stroboscopic_samples(solution, times, period, phase=0.0):
+    first = int(np.ceil((times[0] - phase) / period))
+    last = int(np.floor((times[-1] - phase) / period))
+
+    if last - first + 1 > 500000:
+        raise ValueError(
+            "too many section samples, increase the period or shorten the integration"
+        )
+
+    sample_times = phase + period * np.arange(first, last + 1)
+    points = np.empty((len(sample_times), solution.shape[1]))
+
+    for column in range(solution.shape[1]):
+        points[:, column] = np.interp(sample_times, times, solution[:, column])
+
+    return sample_times, points

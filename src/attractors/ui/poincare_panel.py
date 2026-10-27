@@ -6,7 +6,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from pyqtgraph.Qt.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
-from ..core.sections import axis_index, plane_crossings
+from ..core.sections import axis_index, plane_crossings, stroboscopic_samples
 from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
 from .style import PANEL_SURFACE, plot_colours
@@ -156,6 +156,38 @@ class PoincarePanel(QtWidgets.QWidget):
         ctrl_row.addStretch(1)
         layout.addLayout(ctrl_row)
 
+        self.sampling_controls = QtWidgets.QWidget()
+        sampling_layout = QtWidgets.QHBoxLayout(self.sampling_controls)
+        sampling_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.section_mode_combo = QtWidgets.QComboBox()
+        self.section_mode_combo.addItems(["Line", "Stroboscopic"])
+
+        self.period_spin = QtWidgets.QDoubleSpinBox()
+        self.period_spin.setDecimals(6)
+        self.period_spin.setRange(0.000001, 1000000)
+        self.period_spin.setValue(2 * np.pi)
+        self.period_spin.setKeyboardTracking(False)
+        self.period_spin.setSingleStep(0.1)
+
+        self.phase_spin = QtWidgets.QDoubleSpinBox()
+        self.phase_spin.setDecimals(6)
+        self.phase_spin.setRange(-1000000, 1000000)
+        self.phase_spin.setKeyboardTracking(False)
+
+        sampling_layout.addWidget(self.section_mode_combo)
+        sampling_layout.addWidget(QtWidgets.QLabel("Period:"))
+        sampling_layout.addWidget(self.period_spin)
+        sampling_layout.addWidget(QtWidgets.QLabel("Phase time:"))
+        sampling_layout.addWidget(self.phase_spin)
+        layout.addWidget(self.sampling_controls)
+
+        self.section_mode_combo.currentTextChanged.connect(
+            self._on_section_mode_changed
+        )
+        self.period_spin.valueChanged.connect(self.recompute)
+        self.phase_spin.valueChanged.connect(self.recompute)
+
         self._error_label = QtWidgets.QLabel("")
         self._error_label.setStyleSheet("color: #ff6b6b; font-size: 11px;")
         self._error_label.setVisible(False)
@@ -217,13 +249,13 @@ class PoincarePanel(QtWidgets.QWidget):
 
         is_2d = config.dimension == 2
         self.planar_view_combo.setVisible(is_2d)
-        self.heatmap_check.setEnabled(not is_2d)
-        self.plot_widget.setAspectLocked(not is_2d)
+        self.sampling_controls.setVisible(is_2d)
 
         if is_2d and old_dimension != 2:
             self.dir_combo.setCurrentText("rising")
 
         self._on_plane_changed(axis)
+        self._on_section_mode_changed()
 
         if self.auto_check.isChecked():
             self._start_solve()
@@ -275,6 +307,7 @@ class PoincarePanel(QtWidgets.QWidget):
         midpoint = (sol[:, col].max() + sol[:, col].min()) / 2
         self._set_value_bounds(plane)
         self._set_value(midpoint)
+        self._on_section_mode_changed()
 
     def _on_solve_finished(self, gen):
         if gen != self._solve_gen:
@@ -302,10 +335,24 @@ class PoincarePanel(QtWidgets.QWidget):
         self._img.setVisible(False)
         self._colourbar.setVisible(False)
 
+    def _is_stroboscopic(self):
+        return (
+            self._config is not None
+            and self._config.dimension == 2
+            and self.section_mode_combo.currentText() == "Stroboscopic"
+        )
+
     def _emit_plane(self):
         if not self.isVisible():
             return
-        self.plane_changed.emit(self.plane_combo.currentText(), self.value_spin.value())
+
+        stroboscopic = self._is_stroboscopic()
+        if stroboscopic:
+            self.plane_changed.emit("", 0.0)
+        else:
+            self.plane_changed.emit(
+                self.plane_combo.currentText(), self.value_spin.value()
+            )
 
     def _on_plane_changed(self, plane):
         variables = (
@@ -473,7 +520,7 @@ class PoincarePanel(QtWidgets.QWidget):
         value = self.value_spin.value()
         direction = DIR_MAP[self.dir_combo.currentText()]
 
-        if self._config.dimension == 2:
+        if self._config.dimension == 2 and not self._is_stroboscopic():
             self._recompute_planar(plane, value, direction)
             return
 
@@ -481,8 +528,26 @@ class PoincarePanel(QtWidgets.QWidget):
         all_v = []
 
         for sol in self._solutions:
-            crossings = plane_crossings(sol, plane, value, direction=direction)
-            h, v = crossings.section_coordinates()
+            if self._is_stroboscopic():
+                times = np.linspace(
+                    self._config.time_defaults.t_min,
+                    self.tmax_spin.value(),
+                    len(sol) + 1,
+                )
+                points = np.vstack((self._config.initial_conditions, sol))
+                _, samples = stroboscopic_samples(
+                    points,
+                    times,
+                    self.period_spin.value(),
+                    self.phase_spin.value(),
+                )
+                h, v = samples[:, 0], samples[:, 1]
+                self.plot_widget.setLabel("bottom", "X")
+                self.plot_widget.setLabel("left", "Y")
+            else:
+                crossings = plane_crossings(sol, plane, value, direction=direction)
+                h, v = crossings.section_coordinates()
+
             all_h.append(h)
             all_v.append(v)
 
@@ -516,6 +581,25 @@ class PoincarePanel(QtWidgets.QWidget):
                 self.plot_widget.autoRange()
                 return
             self._scatter.setData([], [])
+
+    def _on_section_mode_changed(self):
+        stroboscopic = self._is_stroboscopic()
+        is_2d = self._config is not None and self._config.dimension == 2
+
+        self.period_spin.setEnabled(stroboscopic)
+        self.phase_spin.setEnabled(stroboscopic)
+        self.plane_combo.setEnabled(not stroboscopic)
+        self.dir_combo.setEnabled(not stroboscopic)
+        self.value_spin.setEnabled(not stroboscopic)
+        self.value_slider.setEnabled(
+            not stroboscopic and self._value_bounds is not None
+        )
+        self.planar_view_combo.setEnabled(not stroboscopic)
+        self.heatmap_check.setEnabled(not is_2d or stroboscopic)
+        self.plot_widget.setAspectLocked(not is_2d or stroboscopic)
+
+        self._emit_plane()
+        self.recompute()
 
     def _update_colourmap(self, cmap_name):
         cmap = pg.colormap.get(cmap_name, source="matplotlib")
