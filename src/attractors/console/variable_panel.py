@@ -17,10 +17,10 @@ class VariablePanel(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        toolbar = QtWidgets.QToolBar(self)
-        toolbar.setMovable(False)
-        refresh = toolbar.addAction("Refresh")
-        refresh.triggered.connect(lambda: self.refresh_requested.emit())
+        # toolbar = QtWidgets.QToolBar(self)
+        # toolbar.setMovable(False)
+        # refresh = toolbar.addAction("Refresh")
+        # refresh.triggered.connect(lambda: self.refresh_requested.emit())
 
         self.tree = QtWidgets.QTreeWidget()
         self.tree.setHeaderLabels(["Name", "Type", "Shape / size", "Value"])
@@ -33,7 +33,7 @@ class VariablePanel(QtWidgets.QWidget):
         self.tree.setSortingEnabled(True)
         self.tree.sortItems(0, QtCore.Qt.SortOrder.AscendingOrder)
 
-        layout.addWidget(toolbar)
+        # layout.addWidget(toolbar)
         layout.addWidget(self.tree)
 
     def set_namespace(self, namespace, defaults):

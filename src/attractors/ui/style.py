@@ -106,31 +106,9 @@ def equation_label():
     """
 
 
-ACTIVE = {
-    "light": ("#f1f3f4", "#eef0f1", "#e9ebec", "#e4e6e8", "#dadbdd"),
-    "dark": ("#383c42", "#32363b", "#2c3034", "#262a2e", "#202326"),
-}
-INACTIVE = {
-    "light": ("#f5f6f7", "#f3f4f5", "#f0f1f2", "#eceeef", "#e8eaec"),
-    "dark": ("#34373b", "#323539", "#303337", "#2e3135", "#2c2f33"),
-}
-
-
-def gradient(c):
-    return f"""qlineargradient(
-                x1: 0, y1: 0, x2: 0, y2: 1,
-                stop: 0 {c[0]},
-                stop: 0.2 {c[1]},
-                stop: 0.3 {c[2]},
-                stop: 0.5 {c[3]},
-                stop: 1 {c[4]}
-            )"""
-
-
 def dock_widget_style():
-    active = ACTIVE["dark" if is_dark_mode() else "light"]
-    inactive = INACTIVE["dark" if is_dark_mode() else "light"]
     border = "#3d424a" if is_dark_mode() else "#c6c8ca"
+    active = border if is_dark_mode() else "#dee0e2"
 
     return f"""
         QDockWidget[activeDock="true"] {{
@@ -140,9 +118,9 @@ def dock_widget_style():
             border: 1px solid {border};
         }}
         QDockWidget::title {{
-            background: {gradient(inactive)};
             border: 1px solid {border};
             border-right: 0px;
+            border-bottom: 0px;
             text-align: center;
             padding: 2px 2px;
         }}
@@ -151,9 +129,9 @@ def dock_widget_style():
 
         }}
         QDockWidget[activeDock="true"]::title {{
-            background: {gradient(active)};
+            background: {active};
             border: 1px solid palette(accent);
-            border-bottom: 1px solid {border};
+            border-bottom: 0px;
             border-right: 0px;
         }}
     """

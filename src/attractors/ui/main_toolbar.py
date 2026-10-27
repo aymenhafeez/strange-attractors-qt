@@ -235,7 +235,7 @@ def build_toolbar(self):
     toolbar.setObjectName("sceneToolbar")
     toolbar.setMovable(False)
     toolbar.setFloatable(False)
-    toolbar.setIconSize(QtCore.QSize(20, 20))
+    toolbar.setIconSize(QtCore.QSize(22, 22))
     toolbar.setStyleSheet(SCENE_TOOLBAR)
     self.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
     self.scene_toolbar = toolbar

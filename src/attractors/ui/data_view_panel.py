@@ -300,7 +300,7 @@ class DataViewPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self.setObjectName("dataViewPanel")
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(TABLE_VIEW)
+        # self.setStyleSheet(TABLE_VIEW)
 
         self.model = TrajectoryTableModel(parent=self)
         self.measures_model = TrajectoryTableModel(MEASURE_COLUMNS, self)
@@ -370,7 +370,7 @@ class DataViewPanel(QtWidgets.QWidget):
         self.tabs.addTab(self.measures_table, "Measures")
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(5, 0, 5, 5)
         layout.setSpacing(6)
         layout.addLayout(toolbar)
         layout.addWidget(self.tabs)
