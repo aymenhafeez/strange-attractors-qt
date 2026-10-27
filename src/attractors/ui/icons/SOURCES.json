@@ -1,0 +1,407 @@
+{
+  "project": "Phosphor Icons",
+  "family": "Duotone",
+  "repository": "https://github.com/phosphor-icons/core",
+  "commit": "2b75f3ad12b420c9504ef05df8d2564a28f8500e",
+  "license": "MIT",
+  "colour": "#476478",
+  "icons": [
+    {
+      "filename": "crosshairs.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/crosshair-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/crosshair-duotone.svg",
+      "source_sha256": "0ec929c7d60c416ccdbf7956f817123567ebd4554bcf52cff5acb3e35fbb7623",
+      "bundled_sha256": "49b7692e2ea564e953471985369c624d837576138349d7f847cbae94c22da0af",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "document-new.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/file-plus-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/file-plus-duotone.svg",
+      "source_sha256": "df9d4b4276e7c6b9de7b3e208bcc41a3dc9b6eab011be751aed0ffad94c288a9",
+      "bundled_sha256": "e21226853a590c99a95fedb94cc144540d06c25a8d407a45310cac443fafd5d8",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "document-save.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/floppy-disk-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/floppy-disk-duotone.svg",
+      "source_sha256": "f71f3cd35caa70eb63a6e12fb50b0ac33051f2889cc010f7423ee8342a0d36a4",
+      "bundled_sha256": "9afc8ba85a13b88d706ab0b95625acb64a846d0a82f921e23b7e39792f8e3ff1",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "draw-line.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/line-segment-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/line-segment-duotone.svg",
+      "source_sha256": "0cde9b79f30ef1cf360b9239ca6aef491ffc9505c70db3b75767cab62cf5ca95",
+      "bundled_sha256": "ba1618142bd83fec82b805f97fb772e6be91261ba48dfc5abea0e11fcfb3c246",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "draw-path.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/bezier-curve-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/bezier-curve-duotone.svg",
+      "source_sha256": "d5f48577d2faa9bac8770190bc69cce4a15dede7c7d36f57658b53abbb9e93bb",
+      "bundled_sha256": "5d22b40ed5b82afbad7200da477ffab6d3987597d0eb55d779602217cf1f122c",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "edit-clear.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/eraser-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/eraser-duotone.svg",
+      "source_sha256": "b462fc2b65ae9854ba1e3d6fdcce43fc742f513bb9449e61599965b388fe8331",
+      "bundled_sha256": "933fc6e9accf41b5e5703a8f6fa4101036c9a94cec0fe9763fa187a24ddcc948",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "edit-clear-history.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/broom-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/broom-duotone.svg",
+      "source_sha256": "6c9eb5de6e40c538e3e9c67fe438cbcd2d1caf5ee3f531e77ef2eb092049aae3",
+      "bundled_sha256": "0a7c538d0a95484206b723bb229b98f23451c39e5d8a2b94ee82db6d88c771d7",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "edit-delete.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/trash-simple-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/trash-simple-duotone.svg",
+      "source_sha256": "38db8f182eb2e9249062ceffabcf0bc5b306de298baaa397d6a1003d807384f5",
+      "bundled_sha256": "613419e6e8fb40996cfae61b58c350bb23fd23ea751ad46f85e53e917ac6b698",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "edit-rename.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/pencil-simple-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/pencil-simple-duotone.svg",
+      "source_sha256": "03fa15e242468e14db0f279ddfc308bbb5c195af5b306680d37c4e26a86bed9a",
+      "bundled_sha256": "02e7cdb0d30582955ba85e84372e42467f898da46dec6b1d8c85a9919e6c4e1b",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "folder-new.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/folder-plus-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/folder-plus-duotone.svg",
+      "source_sha256": "67510af4bf383cb4908e96da9c6a420a43ea6e11ec485bca9329440498f1302f",
+      "bundled_sha256": "f5a838d8f0b53f70c85fb2a849aa10dae261c08242f8969b93126fcc34c13d1e",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "gnumeric-graphguru.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/chart-line-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/chart-line-duotone.svg",
+      "source_sha256": "1336718f6f42b0a6085da7cad2dbb681714dd8e4dce4acd38c8c1d7b68cfd20d",
+      "bundled_sha256": "1703ac5df0c122ca7a0693d74fef4e94888a8cf572920428e00f3d7f5a7cb5ba",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "list-add.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/plus-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/plus-duotone.svg",
+      "source_sha256": "e1dee25823800a7cfff6c5cce5693bb4daef55657e99bfde7c5b57d7c7e17998",
+      "bundled_sha256": "6a37e0140a390785bd1061e1f72a9c631987b434515797e19133fa3687deb3e9",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "media-playback-pause.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/pause-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/pause-duotone.svg",
+      "source_sha256": "d8cd1f4b61cc90a6f70bb87db2dc4bda686f8ef9f3c69722c3528860b5c43c1c",
+      "bundled_sha256": "8c1ead903ab403dd56f00939280e7f37d80639f8e99c0cb45a3efd098e91456f",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "media-playback-start.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/play-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/play-duotone.svg",
+      "source_sha256": "8485ad1efd20878370885ccf7b825aae21a3b2fede35734484475672ac707c48",
+      "bundled_sha256": "2c259c719895bdadf9fc8b68ecc27a6906329ca593517e3cfba739c4c25a95c5",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "media-playback-stop.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/stop-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/stop-duotone.svg",
+      "source_sha256": "b27b345a9ddd09b09cfad1a3b796b215275e1a906a011f24fa52a319b3a58ef5",
+      "bundled_sha256": "dc01857c2593ff106edd6cd2e40935e8963bd595ee40d35ccbfe3a5d52a80fac",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "media-playlist-repeat.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/repeat-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/repeat-duotone.svg",
+      "source_sha256": "3b6c818a506d0a591de61f835504b2a4828c3a1be60132dd49bfa5a64f60d541",
+      "bundled_sha256": "f1844e34028d8ade3645158c4970522f7249a915458f91ac52cff98a7256146d",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "media-record.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/record-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/record-duotone.svg",
+      "source_sha256": "1d427e9511c62cdce35d6cf75d4664a99eb1b724063cc2894bca19d701e1c63e",
+      "bundled_sha256": "f31623e75984359e2d28cdb0dadac7dedf19084416ad5e1b2516d677b152c750",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "media-skip-backward.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/skip-back-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/skip-back-duotone.svg",
+      "source_sha256": "a9daeb952a5db67ebd3ee48edf5c7b23cefe939ca85527fc161bc9eb17e3e59e",
+      "bundled_sha256": "b70d2e3c3a60047159872f64d1cc50502ad527dcd9027fb2f68d6b148a15f47b",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "media-skip-forward.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/skip-forward-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/skip-forward-duotone.svg",
+      "source_sha256": "a76c0760fa058cbfbf9a1b7da7fb7fb43145dee3bfc24c4c381d1497bdf86e2c",
+      "bundled_sha256": "411f6b494a09a99ca468644008a574703fc1efee4de39f85c12fb6add8a131d4",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "object-rotate-right.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/arrow-clockwise-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/arrow-clockwise-duotone.svg",
+      "source_sha256": "66db0c380b84dcb949ab83e2670443c012c72e73c59197e1173cc9abc3abc781",
+      "bundled_sha256": "8543828d8c40fd974cb1bdd048030224f0687c27fca51653913bd9cbba9d7d77",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "preferences-system-symbolic.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/sliders-horizontal-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/sliders-horizontal-duotone.svg",
+      "source_sha256": "76260b62780cba20278d8c45eb9107801090414b0fbb8a6b67c97860664d7237",
+      "bundled_sha256": "c18b8c9633d1cb0512756b48be8398c2496817be85298c2e52bc23d544b9d00d",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "preferences-system-windows-effect-coverswitch.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/browsers-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/browsers-duotone.svg",
+      "source_sha256": "3279db138c0b9799e9493dc2947dea03c048a0cef881f74db718be2bd51f3de2",
+      "bundled_sha256": "0a354e1a7bcf057e6b1008aa45edb94441654cb12ff031d4bf026f45f366b5f7",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "sidebar-expand-left.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/sidebar-simple-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/sidebar-simple-duotone.svg",
+      "source_sha256": "7b23c859cee86dec8913c8d9fda9b4f20e2e43f5d5f5d7043b87f0a3cc9ca7e6",
+      "bundled_sha256": "c2a99f2955a6c79392710115ef7ac8ca6214144f9c57b7266fd80e9f0b62cec6",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "sidebar-expand-right.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/sidebar-simple-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/sidebar-simple-duotone.svg",
+      "source_sha256": "7b23c859cee86dec8913c8d9fda9b4f20e2e43f5d5f5d7043b87f0a3cc9ca7e6",
+      "bundled_sha256": "5d1dd4da12610e603416d913d9ed36d2d9018baefb5d29a698aab33133e561ff",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering.",
+        "Mirrored the sidebar glyph horizontally to represent the right panel."
+      ]
+    },
+    {
+      "filename": "system-run.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/terminal-window-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/terminal-window-duotone.svg",
+      "source_sha256": "b2ec046efc1d26eb65403a18ee340892339842af943d24ad337ded935d2e5df2",
+      "bundled_sha256": "bdb88d1388e9f1213c6fe1819b68aae8fac35028ead589e2309a0b96bb0322ce",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "transform-move.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/arrows-out-cardinal-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/arrows-out-cardinal-duotone.svg",
+      "source_sha256": "b6c49841411fe6d8f1de365c241688b3c3e1325d2726f6cd5323e5ebe4f05f4a",
+      "bundled_sha256": "1a1abc4d95a14026702ec49317a33065f7ae294d102c3b840d8a374eb7150438",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "view-fullscreen.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/corners-out-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/corners-out-duotone.svg",
+      "source_sha256": "bda47253af4ef8f42ac7a3f1ebfb9356e74ea6665c4496b88dc94b4d7a492937",
+      "bundled_sha256": "44fe432eeabdfeea86c0fbf03533113edf7f2b5712efde09be677cbbe0515623",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "view-grid.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/grid-nine-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/grid-nine-duotone.svg",
+      "source_sha256": "a2ce684a854f339cada68550e5da7fa0e881d962a87f1e34d9a3e706d1647050",
+      "bundled_sha256": "ff9d5e4e1cee668e4ee0d4a4eb01eb4422ece44fc849c8d09c6122a460476729",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "view-refresh.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/arrows-clockwise-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/arrows-clockwise-duotone.svg",
+      "source_sha256": "32e3d1e35733d6ad0f9c03286ca756deb142e43f9cda1e5f36c3e3896b5d37ae",
+      "bundled_sha256": "27e56dc0820952902f5326dbf9fae071c8001c5869a57ca79f380b8d4df47809",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "view-split-top-bottom.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/square-split-vertical-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/square-split-vertical-duotone.svg",
+      "source_sha256": "5ca19126dae26c0bfd402c9a399f5c6c26f1d173514cd7bafe00e1b5681f3b08",
+      "bundled_sha256": "edb1d399d9d4dab91762a33773c21f86ed96fee89351192f4d6e80d1677c3a81",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "zoom-fit-best.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/frame-corners-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/frame-corners-duotone.svg",
+      "source_sha256": "191a46ae6739f685a87b18d2a39d5115d5c812a3b5a3fd01257de19f5905566a",
+      "bundled_sha256": "f8e2f2561e968931f481838bf89f918257bc2c72ed3e8b129df8ebce6667cdaf",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "zoom-in.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/magnifying-glass-plus-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/magnifying-glass-plus-duotone.svg",
+      "source_sha256": "b4804ddf84c7249758277bb7abeb138ef6dc9071287aa2fd10430a9ce204bd4e",
+      "bundled_sha256": "9a941d9b3ee35bdbc97d1dfc12a4eb560754694d2b0858b4cfd5cdc962569137",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    },
+    {
+      "filename": "zoom-original.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/arrow-counter-clockwise-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/arrow-counter-clockwise-duotone.svg",
+      "source_sha256": "7f8253410467897776eff66017822f3b9b44f15a317d9d19b9a0ba07e277118e",
+      "bundled_sha256": "eae170d270e42b10323441206f1c0731a95dca5972d4507173eba27a240609f9",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    }
+  ]
+}

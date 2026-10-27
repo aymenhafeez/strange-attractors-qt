@@ -1,11 +1,1 @@
-<svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
-    <style type="text/css" id="current-color-scheme">
-        .ColorScheme-Text {
-            color:#232629;
-        }
-    </style>
-    <g class="ColorScheme-Text" fill="currentColor">
-        <path d="m19 3v16h-16v-16zm-5 1h-10v14h10z" stroke-linecap="square" stroke-linejoin="round"/>
-        <path d="m10.646484 6.6464844-4.3535152 4.3535156 4.3535152 4.353516.707032-.707032-3.6464848-3.646484 3.6464848-3.6464844z"/>
-    </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="#476478"><g transform="translate(256 0) scale(-1 1)"><path d="M88,48V208H40a8,8,0,0,1-8-8V56a8,8,0,0,1,8-8Z" opacity="0.2"/><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM40,56H80V200H40ZM216,200H96V56H216V200Z"/></g></svg>

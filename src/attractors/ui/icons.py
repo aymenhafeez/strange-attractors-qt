@@ -7,6 +7,8 @@ from pathlib import Path
 from PyQt6.QtSvg import QSvgRenderer
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
+from .style import is_dark_mode
+
 
 class _SvgIcon(QtGui.QIconEngine):
     def __init__(self, data):
@@ -31,7 +33,14 @@ class _SvgIcon(QtGui.QIconEngine):
         )
 
         colour = palette.color(group, role).name().encode()
+        # data = self.data.replace(b"#232629", colour).replace(b"#da4453", colour)
         data = self.data.replace(b"#232629", colour).replace(b"#da4453", colour)
+
+        if mode in (QtGui.QIcon.Mode.Disabled, QtGui.QIcon.Mode.Selected):
+            data = data.replace(b"#476478", colour)
+        elif is_dark_mode():
+            data = data.replace(b"#476478", b"#c5d5e0")
+
         QSvgRenderer(data).render(painter, QtCore.QRectF(rect))
 
     def pixmap(self, size, mode, state):
