@@ -188,44 +188,24 @@ def _inspectable_config(config):
     )
 
 
-def _normalise_initial_conditions(initial_conditions):
+def _normalise_initial_conditions(initial_conditions, dimension=3):
     if initial_conditions is None:
         return None
 
-    if isinstance(initial_conditions, np.ndarray):
-        array = np.asarray(initial_conditions, dtype=np.float64)
-        if array.ndim == 1:
-            if array.shape[0] != 3:
-                raise ValueError("Initial conditions must contain three coordinates")
-            return [array.tolist()]
-        if array.ndim == 2 and array.shape[1] == 3:
-            return array.tolist()
-        raise ValueError("Initial conditions must have shape (3,) or (n, 3)")
-
     try:
-        rows = list(initial_conditions)
-    except TypeError as exc:
-        raise ValueError("Initial conditions must contain three coordinates") from exc
+        array = np.asarray(list(initial_conditions), dtype=np.float64)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Invalid initial coordinates") from exc
 
-    if len(rows) == 3 and all(np.isscalar(value) for value in rows):
-        return [[float(value) for value in rows]]
+    if array.ndim == 1:
+        array = array[None, :]
 
-    normalised = []
-    for row in rows:
-        try:
-            coords = [float(value) for value in row]
-        except TypeError as exc:
-            raise ValueError(
-                "Initial conditions must contain three coordinates"
-            ) from exc
-        if len(coords) != 3:
-            raise ValueError("Initial conditions must contain three coordinates")
-        normalised.append(coords)
+    if array.ndim != 2 or array.shape[1] != dimension or len(array) == 0:
+        raise ValueError(
+            f"Initial conditions must have shape ({dimension},) or (n, {dimension})"
+        )
 
-    if not normalised:
-        raise ValueError("At least one initial condition is required")
-
-    return normalised
+    return array.tolist()
 
 
 class _SnapshotScene:
@@ -631,7 +611,7 @@ class SystemInspector:
         if solve_t_max <= self.t_min:
             raise ValueError("t_max must be greater than t_min")
 
-        solve_ics = _normalise_initial_conditions(initial_conditions)
+        solve_ics = _normalise_initial_conditions(initial_conditions, config.dimension)
         if solve_ics is None:
             solve_ics = [
                 [float(coord) for coord in ic] for ic in self._initial_conditions()
@@ -649,7 +629,7 @@ class SystemInspector:
             )
             for ic in solve_ics
         ]
-        is_valid, message = validate_solutions(solutions)
+        is_valid, message = validate_solutions(solutions, config.dimension)
         if not is_valid:
             raise ValueError(message)
 
@@ -948,7 +928,7 @@ class SystemInspector:
 
     def crossings(
         self,
-        axis="z",
+        axis=None,
         value=None,
         *,
         direction="both",
@@ -956,8 +936,8 @@ class SystemInspector:
         t_max=None,
         n=None,
     ):
-        axis_name = str(axis).lower()
-        axis_col = axis_index(axis_name)
+        axis_name = self.variables[-1] if axis is None else str(axis).lower()
+        axis_col = self._axis_column(axis_name)
         direction = crossing_direction(direction)
         trajectory_data = self._crossing_trajectories(
             trajectory,
@@ -996,9 +976,7 @@ class SystemInspector:
                         "direction": crossing_dir,
                         "step": int(step),
                         "t": t,
-                        "x": point[0],
-                        "y": point[1],
-                        "z": point[2],
+                        **dict(zip(self.variables, point, strict=True)),
                     }
                 )
 
@@ -1009,7 +987,7 @@ class SystemInspector:
             "direction",
             "step",
             "t",
-            *COORDINATE_COLUMNS,
+            *self.variables,
         ]
         if not rows:
             return pd.DataFrame(columns=columns)
@@ -1337,7 +1315,7 @@ class SystemInspector:
 
     def plot_crossings(
         self,
-        axis="z",
+        axis=None,
         value=None,
         *,
         x_axis=None,
@@ -1352,6 +1330,7 @@ class SystemInspector:
         symbol="+",
         symbolSize=None,
     ):
+        axis = self.variables[-1] if axis is None else str(axis).lower()
         frame = self.crossings(
             axis,
             value,
@@ -1360,11 +1339,11 @@ class SystemInspector:
             t_max=t_max,
             n=n,
         )
-        section_x, section_y = section_axes(axis)
+        remaining = section_axes(axis, self.variables)
+        section_x, section_y = ("t", remaining[0]) if len(remaining) == 1 else remaining
         x_name = section_x if x_axis is None else str(x_axis).lower()
         y_name = section_y if y_axis is None else str(y_axis).lower()
-        axis_index(x_name)
-        axis_index(y_name)
+
         plot_kwargs = {"pen": pen, "symbol": symbol}
         if symbolSize is not None:
             plot_kwargs["symbolSize"] = symbolSize
