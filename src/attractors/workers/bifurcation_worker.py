@@ -110,12 +110,21 @@ class BifurcationWorker(QRunnable):
                         if ic is not None
                         else np.array(self.config.initial_conditions, dtype=np.float64)
                     )
+
+                    solve_n = _sweep_sample_count(self.n_total)
+                    if self.config.dimension == 2:
+                        defaults = self.config.time_defaults
+                        dt = (defaults.t_max - defaults.t_min) / self.n_total
+                        solve_n = max(
+                            solve_n, int(np.ceil((self.t_max - self.t_min) / dt))
+                        )
+
                     solution = solve_rk4(
                         self.config.equation,
                         y0,
                         self.t_min,
                         self.t_max,
-                        _sweep_sample_count(self.n_total),
+                        solve_n,
                         pvals,
                     )
                     valid, message = validate_solutions(

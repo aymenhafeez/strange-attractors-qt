@@ -53,6 +53,7 @@ class PoincarePanel(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._solutions = None
+        self._solution_t_max = None
         self._config = None
         self._values = None
         self._worker = None
@@ -278,7 +279,7 @@ class PoincarePanel(QtWidgets.QWidget):
         n = self.n_spin.value()
         worker = _PoincareWorker(self._config, self._values, n, t_max)
         worker.signals.result_ready.connect(
-            lambda sol, g=gen: self._on_solve_result(sol, g)
+            lambda sol, g=gen, end=t_max: self._on_solve_result(sol, g, end)
         )
         worker.signals.finished.connect(lambda g=gen: self._on_solve_finished(g))
         worker.signals.error.connect(lambda msg, g=gen: self._on_solve_error(msg, g))
@@ -290,7 +291,7 @@ class PoincarePanel(QtWidgets.QWidget):
             self._worker.cancel()
             self._worker = None
 
-    def _on_solve_result(self, sol, gen):
+    def _on_solve_result(self, sol, gen, t_max):
         if gen != self._solve_gen:
             return
 
@@ -302,6 +303,7 @@ class PoincarePanel(QtWidgets.QWidget):
             return
 
         self._solutions = [sol]
+        self._solution_t_max = t_max
         plane = self.plane_combo.currentText()
         col = axis_index(plane)
         midpoint = (sol[:, col].max() + sol[:, col].min()) / 2
@@ -391,7 +393,7 @@ class PoincarePanel(QtWidgets.QWidget):
         for solution in self._solutions:
             times = np.linspace(
                 self._config.time_defaults.t_min,
-                self.tmax_spin.value(),
+                self._solution_t_max,
                 len(solution) + 1,
             )
             points = np.vstack((self._config.initial_conditions, solution))
@@ -515,6 +517,7 @@ class PoincarePanel(QtWidgets.QWidget):
     def recompute(self):
         if self._solutions is None:
             return
+        self._error_label.hide()
 
         plane = self.plane_combo.currentText()
         value = self.value_spin.value()
@@ -531,7 +534,7 @@ class PoincarePanel(QtWidgets.QWidget):
             if self._is_stroboscopic():
                 times = np.linspace(
                     self._config.time_defaults.t_min,
-                    self.tmax_spin.value(),
+                    self._solution_t_max,
                     len(sol) + 1,
                 )
                 points = np.vstack((self._config.initial_conditions, sol))
@@ -612,6 +615,7 @@ class PoincarePanel(QtWidgets.QWidget):
         self._config = None
         self._values = None
         self._solutions = None
+        self._solution_t_max = None
         self._set_solve_enabled(True)
         self._clear_plot_data()
         self._error_label.hide()

@@ -1864,7 +1864,10 @@ class Window(QtWidgets.QMainWindow):
                 self._request_lyapunov()
 
             config, values = self._get_current_config_and_values()
-            self.poincare_panel.set_attractor(config, values)
+            if _panel_visible(self, "poincare_panel"):
+                self.poincare_panel.set_attractor(config, values)
+
+            self.bifurcation_panel.current_values = dict(values)
 
             self._last_live_preview_update = None
             for plot_name in list(self.live_plot_controller.live_plots):
