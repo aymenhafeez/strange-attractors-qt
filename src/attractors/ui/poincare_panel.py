@@ -159,6 +159,17 @@ class PoincarePanel(QtWidgets.QWidget):
 
         self.sampling_controls = QtWidgets.QWidget()
         sampling_layout = QtWidgets.QHBoxLayout(self.sampling_controls)
+
+        self.transient_spin = QtWidgets.QDoubleSpinBox()
+        self.transient_spin.setRange(0, 99)
+        self.transient_spin.setSuffix("%")
+        self.transient_spin.setValue(20)
+        self.transient_spin.setKeyboardTracking(False)
+
+        sampling_layout.addWidget(QtWidgets.QLabel("Discard"))
+        sampling_layout.addWidget(self.transient_spin)
+        self.transient_spin.valueChanged.connect(self.recompute)
+
         sampling_layout.setContentsMargins(0, 0, 0, 0)
 
         self.section_mode_combo = QtWidgets.QComboBox()
@@ -260,6 +271,11 @@ class PoincarePanel(QtWidgets.QWidget):
 
         if self.auto_check.isChecked():
             self._start_solve()
+
+    def _transient_cutoff(self):
+        start = self._config.time_defaults.t_min
+        duration = self._solution_t_max - start
+        return start + self.transient_spin.value() / 100 * duration
 
     def _set_solve_enabled(self, enabled):
         self.solve_btn.setEnabled(enabled)
@@ -401,6 +417,9 @@ class PoincarePanel(QtWidgets.QWidget):
                 points, plane, value, direction=direction, times=times
             )
             (values,) = crossings.section_coordinates()
+            keep = crossings.times >= self._transient_cutoff()
+            values = values[keep]
+            crossing_times = crossings.times[keep]
 
             if mode == "Return map":
                 x = values[:-1]
@@ -409,7 +428,7 @@ class PoincarePanel(QtWidgets.QWidget):
                 left = f"{coordinate}ₙ₊₁"
             elif mode == "Return interval":
                 x = np.arange(1, len(values))
-                y = np.diff(crossings.times)
+                y = np.diff(crossing_times)
                 bottom = "Crossing"
                 left = "Return interval"
             else:
@@ -538,12 +557,13 @@ class PoincarePanel(QtWidgets.QWidget):
                     len(sol) + 1,
                 )
                 points = np.vstack((self._config.initial_conditions, sol))
-                _, samples = stroboscopic_samples(
+                sample_times, samples = stroboscopic_samples(
                     points,
                     times,
                     self.period_spin.value(),
                     self.phase_spin.value(),
                 )
+                samples = samples[sample_times >= self._transient_cutoff()]
                 h, v = samples[:, 0], samples[:, 1]
                 self.plot_widget.setLabel("bottom", "X")
                 self.plot_widget.setLabel("left", "Y")
