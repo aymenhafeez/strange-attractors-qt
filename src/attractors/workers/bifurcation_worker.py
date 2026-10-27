@@ -5,7 +5,7 @@ import numpy as np
 from pyqtgraph.Qt.QtCore import QObject, QRunnable, pyqtSignal
 from scipy.signal import find_peaks
 
-from ..core.sections import COORDINATE_COLUMNS, plane_crossings
+from ..core.sections import COORDINATE_COLUMNS, plane_crossings, stroboscopic_samples
 from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_rk4
 
@@ -50,6 +50,8 @@ class BifurcationWorker(QRunnable):
         t_min=0,
         *,
         sampling="Midplane crossings",
+        period=2 * np.pi,
+        phase=0.0,
     ):
         super().__init__()
         self.config = config
@@ -62,6 +64,8 @@ class BifurcationWorker(QRunnable):
         self.t_max = t_max
         self.t_min = t_min
         self.sampling = sampling
+        self.period = period
+        self.phase = phase
         self.signals = _BifurcationSignals()
         self._cancel = False
 
@@ -111,19 +115,29 @@ class BifurcationWorker(QRunnable):
                         else np.array(self.config.initial_conditions, dtype=np.float64)
                     )
 
+                    solve_t_max = self.t_max
                     solve_n = _sweep_sample_count(self.n_total)
+
+                    if self.sampling == "Stroboscopic":
+                        duration = self.t_max - self.t_min
+                        cycles = max(1, int(np.ceil(duration / self.period)))
+                        solve_t_max = self.t_min + cycles * self.period
+                        solve_n = int(
+                            np.ceil(solve_n * (solve_t_max - self.t_min) / duration)
+                        )
+
                     if self.config.dimension == 2:
                         defaults = self.config.time_defaults
                         dt = (defaults.t_max - defaults.t_min) / self.n_total
                         solve_n = max(
-                            solve_n, int(np.ceil((self.t_max - self.t_min) / dt))
+                            solve_n, int(np.ceil((solve_t_max - self.t_min) / dt))
                         )
 
                     solution = solve_rk4(
                         self.config.equation,
                         y0,
                         self.t_min,
-                        self.t_max,
+                        solve_t_max,
                         solve_n,
                         pvals,
                     )
@@ -138,7 +152,17 @@ class BifurcationWorker(QRunnable):
                     tail = solution[start:]
                     series = tail[:, self.axis]
 
-                    if self.sampling == "Envolope":
+                    if self.sampling == "Stroboscopic":
+                        times = np.linspace(self.t_min, solve_t_max, len(solution) + 1)
+                        points = np.vstack((y0, solution))
+                        sample_times, samples = stroboscopic_samples(
+                            points, times, self.period, self.phase
+                        )
+                        cutoff = self.t_min + self.transient_frac * (
+                            solve_t_max - self.t_min
+                        )
+                        peaks = samples[sample_times >= cutoff, self.axis]
+                    elif self.sampling == "Envelope":
                         peaks = np.unique([series.min(), series.max()])
                     elif self.sampling == "Local maxima":
                         indices, _ = find_peaks(series)

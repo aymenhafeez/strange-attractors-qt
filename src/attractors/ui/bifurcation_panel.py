@@ -153,10 +153,38 @@ class BifurcationPanel(QtWidgets.QWidget):
 
         row1.addWidget(QtWidgets.QLabel("Sampling:"))
         self.sampling_combo = QtWidgets.QComboBox()
-        self.sampling_combo.addItems(["Midplane crossings", "Envolope", "Local maxima"])
+        self.sampling_combo.addItems(
+            ["Midplane crossings", "Envolope", "Local maxima", "Stroboscopic"]
+        )
         row1.addWidget(self.sampling_combo)
 
         layout.addLayout(row1)
+
+        self.period_controls = QtWidgets.QWidget()
+        period_layout = QtWidgets.QHBoxLayout(self.period_controls)
+        period_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.period_spin = QtWidgets.QDoubleSpinBox()
+        self.period_spin.setDecimals(6)
+        self.period_spin.setRange(0.000001, 1000000)
+        self.period_spin.setValue(2 * np.pi)
+        self.period_spin.setKeyboardTracking(False)
+
+        self.phase_spin = QtWidgets.QDoubleSpinBox()
+        self.phase_spin.setDecimals(6)
+        self.phase_spin.setRange(-1000000, 1000000)
+        self.phase_spin.setKeyboardTracking(False)
+
+        period_layout.addWidget(QtWidgets.QLabel("Period:"))
+        period_layout.addWidget(self.period_spin)
+        period_layout.addWidget(QtWidgets.QLabel("Phase time:"))
+        period_layout.addWidget(self.phase_spin)
+
+        self.period_controls.hide()
+        self.sampling_combo.currentTextChanged.connect(
+            lambda mode: self.period_controls.setVisible(mode == "Stroboscopic")
+        )
+        layout.addWidget(self.period_controls)
 
         row2 = QtWidgets.QHBoxLayout()
         row2.addWidget(QtWidgets.QLabel("From:"))
@@ -390,6 +418,8 @@ class BifurcationPanel(QtWidgets.QWidget):
             t_max,
             t_min,
             sampling=self.sampling_combo.currentText(),
+            period=self.period_spin.value(),
+            phase=self.phase_spin.value(),
         )
         worker.signals.chunk_ready.connect(
             lambda vals, peaks, g=gen: self._on_chunk_ready(vals, peaks, g)
