@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from pyqtgraph.Qt import QtCore
 
+from ..ui.style import plot_colours
 from .system import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE
 
 PREVIEW_UPDATE_INTERVAL = 120  # ms
@@ -156,7 +157,9 @@ class LivePlotController:
             index = self._auto_pen_indices.get(plot_name, 0)
         else:
             index = 0
-        pen = AUTO_PENS[index % len(AUTO_PENS)]
+
+        pens = plot_colours()["plot_auto_pens"]
+        pen = pens[index % len(pens)]
         self._auto_pen_indices[plot_name] = index + 1
 
         return pen

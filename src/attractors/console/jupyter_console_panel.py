@@ -220,7 +220,7 @@ class ConsolePlot:
         zoom_region=False,
         **kwargs,
     ):
-        kwargs.setdefault("pen", plot_colours()["scatter_brush"])
+        kwargs.setdefault("pen", plot_colours()["plot_auto_pens"][0])
         if plot is not None:
             target = self._plot_target(plot)
             return target.line(
@@ -265,7 +265,7 @@ class ConsolePlot:
         symbol_size=None,
         **kwargs,
     ):
-        kwargs.setdefault("pen", plot_colours()["scatter_brush"])
+        kwargs.setdefault("pen", plot_colours()["plot_auto_pens"][0])
         kwargs.setdefault("symbol", symbol)
         if symbol_size is not None:
             kwargs.setdefault("symbolSize", symbol_size)
