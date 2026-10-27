@@ -3,7 +3,10 @@
 
 import numpy as np
 from pyqtgraph.Qt.QtCore import QObject, QRunnable, pyqtSignal
+from scipy.signal import find_peaks
 
+from ..core.sections import COORDINATE_COLUMNS, plane_crossings
+from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_rk4
 
 SWEEP_DIRECTIONS = 2
@@ -21,16 +24,16 @@ def _sweep_sample_count(n_total):
 
 
 def _axis_midplane_crossings(solution, axis):
-    z = solution[:, 2]
-    z_mid = (z.max() + z.min()) / 2
-    crossings = np.where((z[:-1] < z_mid) & (z[1:] >= z_mid))[0]
-    if len(crossings) == 0:
-        return np.array([], dtype=np.float64)
+    dimension = solution.shape[1]
+    section_axis = 2 if dimension == 3 and axis != 2 else (axis + 1) % dimension
+    series = solution[:, section_axis]
+    level = (series.min() + series.max()) / 2
 
-    frac = (z_mid - z[crossings]) / (z[crossings + 1] - z[crossings])
-    return solution[crossings, axis] + frac * (
-        solution[crossings + 1, axis] - solution[crossings, axis]
+    crossings = plane_crossings(
+        solution, COORDINATE_COLUMNS[section_axis], level, direction="positive"
     )
+
+    return crossings.points[:, axis]
 
 
 class BifurcationWorker(QRunnable):
@@ -45,6 +48,8 @@ class BifurcationWorker(QRunnable):
         axis,
         t_max,
         t_min=0,
+        *,
+        sampling="Midplane crossings",
     ):
         super().__init__()
         self.config = config
@@ -56,6 +61,7 @@ class BifurcationWorker(QRunnable):
         self.axis = axis
         self.t_max = t_max
         self.t_min = t_min
+        self.sampling = sampling
         self.signals = _BifurcationSignals()
         self._cancel = False
 
@@ -112,10 +118,24 @@ class BifurcationWorker(QRunnable):
                         _sweep_sample_count(self.n_total),
                         pvals,
                     )
+                    valid, message = validate_solutions(
+                        [solution], dimension=self.config.dimension
+                    )
+                    if not valid:
+                        raise ValueError(message)
                     ic = solution[-1]
 
                     start = int(len(solution) * self.transient_frac)
-                    peaks = _axis_midplane_crossings(solution[start:], self.axis)
+                    tail = solution[start:]
+                    series = tail[:, self.axis]
+
+                    if self.sampling == "Envolope":
+                        peaks = np.unique([series.min(), series.max()])
+                    elif self.sampling == "Local maxima":
+                        indices, _ = find_peaks(series)
+                        peaks = series[indices]
+                    elif self.sampling == "Midplane crossings":
+                        peaks = _axis_midplane_crossings(tail, self.axis)
 
                     all_vals.append(val)
                     all_peaks.append(peaks)
