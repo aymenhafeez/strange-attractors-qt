@@ -151,7 +151,40 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.var_combo.currentTextChanged.connect(self._update_axis_label)
         row1.addWidget(self.var_combo)
 
+        row1.addWidget(QtWidgets.QLabel("Sampling:"))
+        self.sampling_combo = QtWidgets.QComboBox()
+        self.sampling_combo.addItems(
+            ["Midplane crossings", "Envolope", "Local maxima", "Stroboscopic"]
+        )
+        row1.addWidget(self.sampling_combo)
+
         layout.addLayout(row1)
+
+        self.period_controls = QtWidgets.QWidget()
+        period_layout = QtWidgets.QHBoxLayout(self.period_controls)
+        period_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.period_spin = QtWidgets.QDoubleSpinBox()
+        self.period_spin.setDecimals(6)
+        self.period_spin.setRange(0.000001, 1000000)
+        self.period_spin.setValue(2 * np.pi)
+        self.period_spin.setKeyboardTracking(False)
+
+        self.phase_spin = QtWidgets.QDoubleSpinBox()
+        self.phase_spin.setDecimals(6)
+        self.phase_spin.setRange(-1000000, 1000000)
+        self.phase_spin.setKeyboardTracking(False)
+
+        period_layout.addWidget(QtWidgets.QLabel("Period:"))
+        period_layout.addWidget(self.period_spin)
+        period_layout.addWidget(QtWidgets.QLabel("Phase time:"))
+        period_layout.addWidget(self.phase_spin)
+
+        self.period_controls.hide()
+        self.sampling_combo.currentTextChanged.connect(
+            lambda mode: self.period_controls.setVisible(mode == "Stroboscopic")
+        )
+        layout.addWidget(self.period_controls)
 
         row2 = QtWidgets.QHBoxLayout()
         row2.addWidget(QtWidgets.QLabel("From:"))
@@ -294,19 +327,34 @@ class BifurcationPanel(QtWidgets.QWidget):
             self._zoom.set_data(self._plot_x, self._plot_y)
 
     def set_config(self, config, current_values):
-        self.setEnabled(config.dimension == 3)
-        if config.dimension != 3:
-            self.cancel_sweep()
-            self._sweep_gen += 1
-            self.config = None
-            self._set_plot_data([], [])
-            return
+        self.setEnabled(True)
+        # if config.dimension != 3:
+        #     self.cancel_sweep()
+        #     self._sweep_gen += 1
+        #     self.config = None
+        #     self._set_plot_data([], [])
+        #     return
 
         self.cancel_sweep()
         self._sweep_gen += 1
         self._error_label.setVisible(False)
+        old_dimension = self.config.dimension if self.config else None
         self.config = config
         self.current_values = current_values
+
+        variable = self.var_combo.currentText()
+        with QtCore.QSignalBlocker(self.var_combo):
+            self.var_combo.clear()
+            self.var_combo.addItems(config.variables)
+            self.var_combo.setCurrentText(
+                variable if variable in config.variables else config.variables[0]
+            )
+
+        if old_dimension != config.dimension:
+            self.sampling_combo.setCurrentText(
+                "Envolope" if config.dimension == 2 else "Midplane crossings"
+            )
+        self._update_axis_label()
 
         self.param_combo.blockSignals(True)
         self.param_combo.clear()
@@ -369,6 +417,9 @@ class BifurcationPanel(QtWidgets.QWidget):
             axis,
             t_max,
             t_min,
+            sampling=self.sampling_combo.currentText(),
+            period=self.period_spin.value(),
+            phase=self.phase_spin.value(),
         )
         worker.signals.chunk_ready.connect(
             lambda vals, peaks, g=gen: self._on_chunk_ready(vals, peaks, g)

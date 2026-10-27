@@ -6,96 +6,112 @@ import numpy as np
 
 
 @numba.njit(nogil=True)
-def _numerical_jacobian(x, y, z, eq, params, J, t=0.0, eps=1e-6):
-    xyz = np.empty(3, dtype=np.float64)
-    f0 = np.empty(3, dtype=np.float64)
-    f1 = np.empty(3, dtype=np.float64)
+def _numerical_jacobian(state, eq, params, J, t=0.0, eps=1e-6):
+    dimension = len(state)
+    perturbed = state.copy()
+    f0 = np.empty(dimension, dtype=np.float64)
+    f1 = np.empty(dimension, dtype=np.float64)
 
-    xyz[0], xyz[1], xyz[2] = x, y, z
-    eq(xyz, t, params, f0)
+    eq(state, t, params, f0)
 
-    xyz[0], xyz[1], xyz[2] = x + eps, y, z
-    eq(xyz, t, params, f1)
-    for i in range(3):
-        J[i, 0] = (f1[i] - f0[i]) / eps
+    for col in range(dimension):
+        perturbed[col] += eps
+        eq(perturbed, t, params, f1)
 
-    xyz[0], xyz[1], xyz[2] = x, y + eps, z
-    eq(xyz, t, params, f1)
-    for i in range(3):
-        J[i, 1] = (f1[i] - f0[i]) / eps
+        for row in range(dimension):
+            J[row, col] = (f1[row] - f0[row]) / eps
 
-    xyz[0], xyz[1], xyz[2] = x, y, z + eps
-    eq(xyz, t, params, f1)
-    for i in range(3):
-        J[i, 2] = (f1[i] - f0[i]) / eps
+        perturbed[col] = state[col]
 
 
 @numba.njit(nogil=True)
-def _augmented_rhs(state, t, params, eq, out, J, dxdydz):
-    x, y, z = state[0], state[1], state[2]
+def _augmented_rhs(state, t, params, eq, out, J, derivative):
+    dimension = len(derivative)
+    coordinates = state[:dimension]
 
-    dxdydz_state = state[:3]
-    eq(dxdydz_state, t, params, dxdydz)
+    eq(coordinates, t, params, derivative)
+    _numerical_jacobian(coordinates, eq, params, J, t)
+    out[:dimension] = derivative
 
-    _numerical_jacobian(x, y, z, eq, params, J, t)
+    for row in range(dimension):
+        for col in range(dimension):
+            value = 0.0
 
-    out[0] = dxdydz[0]
-    out[1] = dxdydz[1]
-    out[2] = dxdydz[2]
+            for k in range(dimension):
+                value += J[row, k] * state[dimension + k * dimension + col]
 
-    for row in range(3):
-        for col in range(3):
-            acc = 0.0
-            for k in range(3):
-                acc += J[row, k] * state[3 + k * 3 + col]
-            out[3 + row * 3 + col] = acc
+            out[dimension + row * dimension + col] = value
 
 
 @numba.njit(nogil=True)
-def _rk4_step(state, t, dt, params, eq, tmp, k1, k2, k3, k4, J, dxdydz):
+def _rk4_step(state, t, dt, params, eq, tmp, k1, k2, k3, k4, J, dimension):
     half_dt = 0.5 * dt
     sixth_dt = dt / 6.0
 
-    _augmented_rhs(state, t, params, eq, k1, J, dxdydz)
+    _augmented_rhs(state, t, params, eq, k1, J, dimension)
 
-    for i in range(12):
+    for i in range(len(state)):
         tmp[i] = state[i] + half_dt * k1[i]
-    _augmented_rhs(tmp, t + half_dt, params, eq, k2, J, dxdydz)
+    _augmented_rhs(tmp, t + half_dt, params, eq, k2, J, dimension)
 
-    for i in range(12):
+    for i in range(len(state)):
         tmp[i] = state[i] + half_dt * k2[i]
-    _augmented_rhs(tmp, t + half_dt, params, eq, k3, J, dxdydz)
+    _augmented_rhs(tmp, t + half_dt, params, eq, k3, J, dimension)
 
-    for i in range(12):
+    for i in range(len(state)):
         tmp[i] = state[i] + dt * k3[i]
-    _augmented_rhs(tmp, t + dt, params, eq, k4, J, dxdydz)
+    _augmented_rhs(tmp, t + dt, params, eq, k4, J, dimension)
 
-    for i in range(12):
+    for i in range(len(state)):
         state[i] += sixth_dt * (k1[i] + 2.0 * k2[i] + 2.0 * k3[i] + k4[i])
 
 
 @numba.njit(nogil=True)
 def _gram_schmidt(theta_flat):
-    lyap_sums = np.zeros(3)
-    theta = theta_flat.reshape(3, 3).copy()
+    dimension = int(np.sqrt(len(theta_flat)))
+    theta = theta_flat.reshape(dimension, dimension).copy()
+    lyap_sums = np.empty(dimension)
 
-    for i in range(3):
-        for j in range(i):
-            dot = (
-                theta[0, i] * theta[0, j]
-                + theta[1, i] * theta[1, j]
-                + theta[2, i] * theta[2, j]
-            )
-            for k in range(3):
-                theta[k, i] -= dot * theta[k, j]
+    for col in range(dimension):
+        for previous in range(col):
+            dot = 0.0
 
-        norm = np.sqrt(theta[0, i] ** 2 + theta[1, i] ** 2 + theta[2, i] ** 2)
-        lyap_sums[i] = np.log(norm)
+            for row in range(dimension):
+                dot += theta[row, col] * theta[row, previous]
 
-        for k in range(3):
-            theta[k, i] /= norm
+            for row in range(dimension):
+                theta[row, col] -= dot * theta[row, previous]
+
+        norm_squared = 0.0
+        for row in range(dimension):
+            norm_squared += theta[row, col] ** 2
+
+        norm = np.sqrt(norm_squared)
+        if norm == 0.0 or not np.isfinite(norm):
+            raise ValueError("Lyapunov tangent basis became singular or non-finite")
+
+        lyap_sums[col] = np.log(norm)
+
+        for row in range(dimension):
+            theta[row, col] /= norm
 
     return theta.ravel(), lyap_sums
+
+
+@numba.njit(nogil=True)
+def kaplan_yorke(exponents):
+    ordered = np.sort(exponents)[::-1]
+    total = 0.0
+
+    for index in range(len(ordered)):
+        next_total = total + ordered[index]
+
+        if next_total < 0.0:
+            return index + total / abs(ordered[index])
+
+        total = next_total
+
+    return len(ordered)
 
 
 @numba.njit(nogil=True)
@@ -108,33 +124,36 @@ def compute_lyapunov(
     n,
     gs_interval=10,
 ):
-    state = np.zeros(12, dtype=np.float64)
-    state[:3] = initial_conditions
-    state[3:] = np.eye(3).ravel()
+    dimension = len(initial_conditions)
+    state_size = dimension + dimension**2
+
+    state = np.zeros(state_size)
+    state[:dimension] = initial_conditions
+    state[dimension:] = np.eye(dimension).ravel()
+
     total_time = t_max - t_min
     dt = total_time / n
-    lyap_sums = np.zeros(3)
-
+    lyap_sums = np.zeros(dimension)
     gs_counter = 0
 
     n_gs = n // gs_interval
     t_hist = np.empty(n_gs)
-    lyap_hist = np.empty((n_gs, 3))
+    lyap_hist = np.empty((n_gs, dimension))
 
-    tmp = np.empty(12, dtype=np.float64)
-    k1 = np.empty(12, dtype=np.float64)
-    k2 = np.empty(12, dtype=np.float64)
-    k3 = np.empty(12, dtype=np.float64)
-    k4 = np.empty(12, dtype=np.float64)
-    J = np.empty((3, 3), dtype=np.float64)
-    dxdydz = np.empty(3, dtype=np.float64)
+    tmp = np.empty(state_size)
+    k1 = np.empty(state_size)
+    k2 = np.empty(state_size)
+    k3 = np.empty(state_size)
+    k4 = np.empty(state_size)
+    J = np.empty((dimension, dimension))
+    derivative = np.empty(dimension)
 
     for i in range(n):
         t = t_min + i * dt
-        _rk4_step(state, t, dt, params, equation, tmp, k1, k2, k3, k4, J, dxdydz)
+        _rk4_step(state, t, dt, params, equation, tmp, k1, k2, k3, k4, J, derivative)
 
         if (i + 1) % gs_interval == 0:
-            state[3:], sums = _gram_schmidt(state[3:])
+            state[dimension:], sums = _gram_schmidt(state[dimension:])
             lyap_sums += sums
             gs_counter += 1
 
@@ -145,11 +164,6 @@ def compute_lyapunov(
     total_gs_time = gs_counter * gs_interval * dt
     lyap = lyap_sums / total_gs_time
 
-    if lyap[0] + lyap[1] >= 0 > lyap[2]:
-        ky = 2.0 + (lyap[0] + lyap[1]) / abs(lyap[2])
-    elif lyap[0] < 0:
-        ky = 0.0
-    else:
-        ky = 3.0
+    ky = kaplan_yorke(lyap)
 
     return lyap, ky, t_hist[:gs_counter], lyap_hist[:gs_counter]

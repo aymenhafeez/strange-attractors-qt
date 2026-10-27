@@ -52,9 +52,10 @@ class LyapunovPanel(QtWidgets.QWidget):
         self.plot.setLabel("left", "λ")
         layout.addWidget(self.plot)
 
-        self.curve_l1 = self.plot.plot([], [], pen=(255, 100, 100))
-        self.curve_l2 = self.plot.plot([], [], pen=(100, 255, 100))
-        self.curve_l3 = self.plot.plot([], [], pen=(100, 100, 255))
+        self.curves = [
+            self.plot.plot([], [], pen=colour)
+            for colour in ((255, 100, 100), (100, 255, 100), (100, 100, 255))
+        ]
 
     def auto_enabled(self):
         return self.auto_check.isChecked()
@@ -63,18 +64,22 @@ class LyapunovPanel(QtWidgets.QWidget):
         self.auto_check.setChecked(bool(enabled))
 
     def set_result(self, lyap, ky_dim, t_hist, lyap_hist):
-        self.result_label.setText(
-            f"λ = ({lyap[0]:+.2f}, {lyap[1]:+.2f}, {lyap[2]:+.2f})  D_KY = {ky_dim:.2f}"
-        )
-        self.curve_l1.setData(t_hist, lyap_hist[:, 0])
-        self.curve_l2.setData(t_hist, lyap_hist[:, 1])
-        self.curve_l3.setData(t_hist, lyap_hist[:, 2])
+        spectrum = ", ".join(f"{value:+.2f}" for value in lyap)
+        self.result_label.setText(f"λ = {spectrum} D_KY = {ky_dim:.2f}")
+
+        for index, curve in enumerate(self.curves):
+            active = index < len(lyap)
+            curve.setVisible(active)
+
+            if active:
+                curve.setData(t_hist, lyap_hist[:, index])
+            else:
+                curve.setData([], [])
 
     def clear(self):
         self.result_label.setText("No Lyapunov result")
-        self.curve_l1.setData([], [])
-        self.curve_l2.setData([], [])
-        self.curve_l3.setData([], [])
+        for curve in self.curves:
+            curve.setData([], [])
 
     def apply_theme(self):
         self.plot.setBackground(plot_colours()["plot_background"])
