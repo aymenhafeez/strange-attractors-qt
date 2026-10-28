@@ -35,14 +35,8 @@ def test_numerical_jacobian_matches_known_linear_system():
     params = np.array([0.1, -0.2, 0.3], dtype=np.float64)
 
     J = np.full((3, 3), np.nan)
-    _numerical_jacobian(
-        1.0,
-        2.0,
-        3.0,
-        _linear_diagonal_system,
-        params,
-        J
-    )
+    state = np.array([1.0, 2.0, 3.0])
+    _numerical_jacobian(state, _linear_diagonal_system, params, J)
 
     expected = np.array(
         [
