@@ -7,8 +7,6 @@ from bisect import bisect_right
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .style import TABLE_VIEW
-
 SAMPLE_COLUMNS = ("trajectory", "step", "t", "x", "y", "z")
 MEASURE_COLUMNS = ("trajectory", "step", "t", "radius", "speed", "displacement")
 DEFAULT_SAMPLE_SIZE = 2000

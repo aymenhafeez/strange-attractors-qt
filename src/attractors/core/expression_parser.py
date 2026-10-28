@@ -164,7 +164,7 @@ def compile_system(equations: tuple[str, ...]) -> tuple[Callable, list[str]]:
     source = "\n".join(lines) + "\n"
 
     namespace = {"np": np, "__builtins__": {}}
-    exec(compile(source, "<custom_attractor>", "exec"), namespace)
+    exec(compile(source, "<custom_attractor>", "exec"), namespace)  # noqa: S102
 
     func = numba.njit(namespace["_custom"], nogil=True)
     return func, params

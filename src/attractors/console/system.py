@@ -10,7 +10,6 @@ import pandas as pd
 from ..core.sections import (
     AXES,
     COORDINATE_COLUMNS,
-    axis_index,
     crossing_direction,
     plane_crossings,
     section_axes,
