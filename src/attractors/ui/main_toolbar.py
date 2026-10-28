@@ -401,6 +401,7 @@ def build_toolbar(self):
     # toolbar.addAction(self.output_panel_action)
 
     toolbar.addSeparator()
+    self._system_viewport_toolbar_actions = toolbar.actions()
 
     self.toolbar_system_action = toolbar.addAction(
         icon("preferences-system-symbolic"),
@@ -423,7 +424,7 @@ def build_toolbar(self):
         QtWidgets.QSizePolicy.Policy.Expanding,
         QtWidgets.QSizePolicy.Policy.Preferred,
     )
-    toolbar.addWidget(spacer)
+    self._system_viewport_toolbar_actions.append(toolbar.addWidget(spacer))
 
     self.system_toolbar_action = toolbar.addWidget(self.system_toolbar)
     self._jupyter_toolbar_actions.append(self.system_toolbar_action)
@@ -443,6 +444,7 @@ def build_toolbar(self):
         lambda checked: self._set_right_panel_visible(checked),
         "Show right panel",
     )
+    self._system_viewport_toolbar_actions.append(self.toolbar_right_panel_action)
     end_pad = QtWidgets.QWidget()
     end_pad.setFixedWidth(3)
     toolbar.addWidget(end_pad)

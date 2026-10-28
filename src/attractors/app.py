@@ -1024,6 +1024,13 @@ class Window(QtWidgets.QMainWindow):
             action.triggered.connect(callback)
             self._jupyter_toolbar_actions.append(action)
             self._keep_toolbar_action_from_taking_focus(toolbar, action)
+            if text == "Rename":
+                spacer = QtWidgets.QWidget()
+                spacer.setSizePolicy(
+                    QtWidgets.QSizePolicy.Policy.Expanding,
+                    QtWidgets.QSizePolicy.Policy.Preferred,
+                )
+                self._jupyter_toolbar_actions.append(toolbar.addWidget(spacer))
         self.workspace_controller.sync_views()
         self._keep_toolbar_action_from_taking_focus(toolbar, new_action)
 
@@ -1259,14 +1266,16 @@ class Window(QtWidgets.QMainWindow):
 
     def _sync_jupyter_toolbar_visibility(self):
         visible = _workspace_visible(self)
+        system_mode = self.workspace_mode == "system"
+
+        for action in self._system_viewport_toolbar_actions:
+            action.setVisible(system_mode)
 
         for action in self._jupyter_toolbar_actions:
             action.setVisible(visible)
 
         if self.system_toolbar_action is not None:
-            self.system_toolbar_action.setVisible(
-                visible and self.workspace_mode == "system"
-            )
+            self.system_toolbar_action.setVisible(visible and system_mode)
 
         self._sync_explore_actions()
 
