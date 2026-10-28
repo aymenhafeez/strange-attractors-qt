@@ -39,6 +39,7 @@ from .ui.poincare_panel import PoincarePanel
 from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
 from .ui.signal_panel import SignalPanel
+from .ui.startup import WelcomeDialog
 from .ui.style import MAIN_WINDOW, plot_colours
 from .ui.system_toolbar import SystemToolbar
 from .view.view_manager import ViewManager
@@ -2279,6 +2280,20 @@ class Window(QtWidgets.QMainWindow):
 
         self._set_app_status(f"Exported table to {target}")
 
+    def show_welcome(self):
+        dialog = WelcomeDialog(self, app_settings())
+        dialog.system_requested.connect(lambda: self._set_workspace_mode("system"))
+        dialog.example_requested.connect(self._open_welcome_example)
+        dialog.help_requested.connect(self.help)
+        dialog.exec()
+
+    def _open_welcome_example(self):
+        scripts = self.jupyter_console_panel.script_panel.example_scripts()
+        if scripts:
+            self._open_example_script(scripts[0])
+        else:
+            self._set_workspace_mode("explore")
+            self._set_temporary_app_status("No bundled examples available")
 
     def help(self):
         QtWidgets.QMessageBox.information(

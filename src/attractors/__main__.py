@@ -4,6 +4,7 @@
 import argparse
 
 import pyqtgraph as pg
+from pyqtgraph.Qt import QtCore
 
 from .app import Window, app_settings
 from .perf import configure_perf_logging
@@ -77,6 +78,10 @@ def main():
     configure_perf_logging()
 
     w.showFullScreen() if args.fullscreen else w.show()
+
+    if app_settings().value("startup/show_welcome", True, bool):
+        QtCore.QTimer.singleShot(0, w.show_welcome)
+
     pg.exec()
 
 

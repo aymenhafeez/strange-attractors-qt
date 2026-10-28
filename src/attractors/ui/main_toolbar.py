@@ -50,6 +50,7 @@ def build_menu_bar(self):
     file_menu.addSeparator()
     file_menu.addAction("Open preset folder", self._open_preset_folder)
     file_menu.addSeparator()
+    file_menu.addAction("Welcome", self.show_welcome)
     file_menu.addAction("Help", self.help)
 
     view_menu = menu_bar.addMenu("&View")
