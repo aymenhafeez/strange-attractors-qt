@@ -66,6 +66,7 @@ class ControlPanel(QtCore.QObject):
         self.controls_scroll.setWidget(self.controls_tab)
 
         self.animation_scroll = QtWidgets.QScrollArea()
+        self.animation_scroll.setObjectName("sidePanelAnimationScroll")
         self.animation_scroll.setWidgetResizable(True)
         self.animation_scroll.setStyleSheet(SIDE_PANEL)
 
