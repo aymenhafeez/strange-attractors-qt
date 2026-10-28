@@ -2441,6 +2441,7 @@ class Window(QtWidgets.QMainWindow):
         settings = app_settings()
         settings.remove("layout")
         settings.remove("workspace")
+        settings.remove("startup")
         settings.sync()
 
         self.reset_session_state = True

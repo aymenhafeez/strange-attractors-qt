@@ -49,6 +49,7 @@ def main():
         settings = app_settings()
         settings.remove("layout")
         settings.remove("workspace")
+        settings.remove("startup")
         settings.sync()
 
     app = pg.mkQApp()
