@@ -49,6 +49,8 @@ def build_menu_bar(self):
     )
     file_menu.addSeparator()
     file_menu.addAction("Open preset folder", self._open_preset_folder)
+    file_menu.addSeparator()
+    file_menu.addAction("Help", self.help)
 
     view_menu = menu_bar.addMenu("&View")
     self._add_menu_action(view_menu, "Left panel", self.toolbar_left_panel_action)

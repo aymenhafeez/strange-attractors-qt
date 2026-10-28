@@ -2279,6 +2279,33 @@ class Window(QtWidgets.QMainWindow):
 
         self._set_app_status(f"Exported table to {target}")
 
+
+    def help(self):
+        QtWidgets.QMessageBox.information(
+            self,
+            "Systems analysis",
+            "<p><b>Getting started</b><br>"
+            "Choose a built-in system or enter equations in the Custom panel. "
+            "Adjust parameters and initial conditions, then select "
+            "System → Solve. Use the toolbar to play the animation.</p>"
+            "<p><b>Analysis</b><br>"
+            "Open the Analysis menu for signal and spectrum analysis, "
+            "Lyapunov exponents, projections, Poincaré sections "
+            "and bifurcation diagrams.</p>"
+            "<p><b>Panels and layout</b><br>"
+            "Show or hide panels from View → Panels. Drag panel titles "
+            "to rearrange them. Use View → Reset current layout "
+            "to restore the default arrangement.</p>"
+            "<p><b>Scripting</b><br>"
+            "Choose Workspace → Mode → Explore for general Python plotting, "
+            "or System to work with the selected system. "
+            "Find sample scripts under Workspace → Examples and command "
+            "references under System help and Workspace help.</p>"
+            "<p><b>Saving and troubleshooting</b><br>"
+            "Save system configurations in Presets and export solution data "
+            "from Data view. Open View → Output panel for error messages.</p>",
+        )
+
     def _save_workspace_shell(self, settings):
         for kind, manager in (
             ("plot", self.jupyter_console_panel.plots),
