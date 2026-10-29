@@ -14,6 +14,18 @@ class SampledSignal:
     dt: float
 
 
+def sample_times(t_min, t_max, n):
+    return np.linspace(t_min, t_max, n + 1)[1:]
+
+
+def trajectory_signal(solution, column, *, t_min, t_max):
+    return SampledSignal(
+        values=solution[:, column],
+        times=sample_times(t_min, t_max, len(solution)),
+        dt=(t_max - t_min) / len(solution),
+    )
+
+
 def prepare_signal(values, *, times=None, dt=None, t0=0.0):
     if (times is None) == (dt is None):
         raise ValueError("Supply exactly one of times or dt")
