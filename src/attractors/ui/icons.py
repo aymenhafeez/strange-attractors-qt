@@ -39,7 +39,9 @@ class _SvgIcon(QtGui.QIconEngine):
         if mode in (QtGui.QIcon.Mode.Disabled, QtGui.QIcon.Mode.Selected):
             data = data.replace(b"#476478", colour)
         elif is_dark_mode():
-            data = data.replace(b"#476478", b"#c5d5e0")
+            data = data.replace(b"#476478", b"#e8eaec")
+        else:
+            data = data.replace(b"#476478", b"#202326")
 
         QSvgRenderer(data).render(painter, QtCore.QRectF(rect))
 
