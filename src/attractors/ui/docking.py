@@ -177,11 +177,16 @@ class DockLayout(QtCore.QObject):
         if self.mode == "system":
             poincare = add("analysis/poincare_panel", left)
             window.splitDockWidget(viewport, poincare, vertical)
+            trajectory_analysis = add("analysis/trajectory_analysis_panel", left)
+            window.splitDockWidget(viewport, trajectory_analysis, vertical)
 
         for name in docks:
             if name in placed:
                 continue
-            if self.mode == "system" and name == "analysis/poincare_panel":
+            if self.mode == "system" and name in (
+                "analysis/poincare_panel",
+                "analysis/trajectory_analysis_panel",
+            ):
                 continue
 
             dock = add(name, bottom if name == "output" else left)
