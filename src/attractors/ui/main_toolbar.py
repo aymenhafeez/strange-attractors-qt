@@ -213,8 +213,11 @@ def build_menu_bar(self):
 
     signal_action = self._panel_docks["signal_panel"].toggleViewAction()
     signal_action.setText("Signal and spectrum")
+    trajectory_action = self._panel_docks["trajectory_analysis_panel"].toggleViewAction()
+    trajectory_action.setText("Trajectory comparison")
 
     analysis_menu.addAction(signal_action)
+    analysis_menu.addAction(trajectory_action)
     analysis_menu.addAction(self.toolbar_lyapunov_action)
     analysis_menu.addAction(self.toolbar_projection_action)
     analysis_menu.addAction(self.toolbar_poincare_action)
@@ -256,11 +259,7 @@ def build_toolbar(self):
     )
 
     self.toolbar_anim_action = toolbar.addAction(
-        icon("media-playback-start"),
-        "Play",
-        lambda: self._sync_toolbar_animation_action(
-            self.scene.animation_controller.toggle()
-        ),
+        icon("media-playback-start"), "Play", self.scene.animation_controller.toggle
     )
     self.toolbar_anim_action.setToolTip("Play animation")
 
