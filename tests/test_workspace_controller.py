@@ -44,20 +44,20 @@ class _LivePlotControllerDouble:
         self.renames = []
         self.synced_live_menus = []
 
-    def _plot_combo_tooltip(self, plot_name):
+    def tooltip(self, plot_name):
         return f"{plot_name}: no live traces"
 
-    def _sync_live_menu(self, plot_name):
+    def sync_menu(self, plot_name):
         self.synced_live_menus.append(plot_name)
 
     def rename_plot(self, old_name, new_name):
         self.renames.append((old_name, new_name))
         self.panel.plots.rename(old_name, new_name)
 
-    def _clear_plots(self):
+    def clear_plot(self):
         self.panel.plots.clear()
 
-    def _clear_all_plots(self):
+    def clear_all(self):
         self.panel.plots.clear_all()
 
 
@@ -100,7 +100,9 @@ def test_workspace_controller_syncs_2d_and_3d_views(qapp, tmp_path):
 
     window = _workspace_window(panel)
     toolbar = _WorkspaceToolbarDouble()
-    controller = WorkspaceController(window, toolbar)
+    controller = WorkspaceController(
+        panel, toolbar, window.system_toolbar, window.live_plot_controller
+    )
 
     controller.sync_views()
 
@@ -124,7 +126,9 @@ def test_workspace_controller_selected_3d_view_from_toolbar(qapp, tmp_path):
 
     window = _workspace_window(panel)
     toolbar = _WorkspaceToolbarDouble()
-    controller = WorkspaceController(window, toolbar)
+    controller = WorkspaceController(
+        panel, toolbar, window.system_toolbar, window.live_plot_controller
+    )
     toolbar.view_combo.currentIndexChanged.connect(
         lambda _index: controller.on_toolbar_view_selected()
     )
@@ -148,7 +152,9 @@ def test_workspace_controller_2d_renames(qapp, tmp_path):
 
     window = _workspace_window(panel)
     toolbar = _WorkspaceToolbarDouble()
-    controller = WorkspaceController(window, toolbar)
+    controller = WorkspaceController(
+        panel, toolbar, window.system_toolbar, window.live_plot_controller
+    )
     controller.sync_views()
 
     toolbar.name_edit.setText("New 2D Test")
@@ -171,7 +177,9 @@ def test_workspace_controller_grid_action_3d_sync(qapp, tmp_path):
 
     window = _workspace_window(panel)
     toolbar = _WorkspaceToolbarDouble()
-    controller = WorkspaceController(window, toolbar)
+    controller = WorkspaceController(
+        panel, toolbar, window.system_toolbar, window.live_plot_controller
+    )
     toolbar.view_combo.currentIndexChanged.connect(
         lambda _index: controller.on_toolbar_view_selected()
     )
