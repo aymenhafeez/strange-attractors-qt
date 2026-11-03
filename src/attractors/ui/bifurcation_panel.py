@@ -153,9 +153,13 @@ class BifurcationPanel(QtWidgets.QWidget):
 
         row1.addWidget(QtWidgets.QLabel("Sampling:"))
         self.sampling_combo = QtWidgets.QComboBox()
-        self.sampling_combo.addItems(
-            ["Midplane crossings", "Envolope", "Local maxima", "Stroboscopic"]
-        )
+        for label, mode in (
+            ("Midplane crossings", "midplane"),
+            ("Envelope", "envelope"),
+            ("Local maxima", "maxima"),
+            ("Stroboscopic", "stroboscopic"),
+        ):
+            self.sampling_combo.addItem(label, mode)
         row1.addWidget(self.sampling_combo)
 
         layout.addLayout(row1)
@@ -181,8 +185,10 @@ class BifurcationPanel(QtWidgets.QWidget):
         period_layout.addWidget(self.phase_spin)
 
         self.period_controls.hide()
-        self.sampling_combo.currentTextChanged.connect(
-            lambda mode: self.period_controls.setVisible(mode == "Stroboscopic")
+        self.sampling_combo.currentIndexChanged.connect(
+            lambda _index: self.period_controls.setVisible(
+                self.sampling_combo.currentData() == "stroboscopic"
+            )
         )
         layout.addWidget(self.period_controls)
 
@@ -351,8 +357,10 @@ class BifurcationPanel(QtWidgets.QWidget):
             )
 
         if old_dimension != config.dimension:
-            self.sampling_combo.setCurrentText(
-                "Envolope" if config.dimension == 2 else "Midplane crossings"
+            self.sampling_combo.setCurrentIndex(
+                self.sampling_combo.findData(
+                    "envelope" if config.dimension == 2 else "midplane"
+                )
             )
         self._update_axis_label()
 
@@ -417,7 +425,7 @@ class BifurcationPanel(QtWidgets.QWidget):
             axis,
             t_max,
             t_min,
-            sampling=self.sampling_combo.currentText(),
+            sampling=self.sampling_combo.currentData(),
             period=self.period_spin.value(),
             phase=self.phase_spin.value(),
         )

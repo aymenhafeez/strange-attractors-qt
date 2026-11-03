@@ -10,6 +10,7 @@ from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_rk4
 
 SWEEP_DIRECTIONS = 2
+SAMPLING_MODES = ("midplane", "envelope", "maxima", "stroboscopic")
 
 
 class _BifurcationSignals(QObject):
@@ -49,10 +50,13 @@ class BifurcationWorker(QRunnable):
         t_max,
         t_min=0,
         *,
-        sampling="Midplane crossings",
+        sampling="midplane",
         period=2 * np.pi,
         phase=0.0,
     ):
+        if sampling not in SAMPLING_MODES:
+            raise ValueError(f"Unknown sampling mode: {sampling!r}")
+
         super().__init__()
         self.config = config
         self.base_params = base_params
@@ -118,7 +122,7 @@ class BifurcationWorker(QRunnable):
                     solve_t_max = self.t_max
                     solve_n = _sweep_sample_count(self.n_total)
 
-                    if self.sampling == "Stroboscopic":
+                    if self.sampling == "stroboscopic":
                         duration = self.t_max - self.t_min
                         cycles = max(1, int(np.ceil(duration / self.period)))
                         solve_t_max = self.t_min + cycles * self.period
@@ -152,7 +156,7 @@ class BifurcationWorker(QRunnable):
                     tail = solution[start:]
                     series = tail[:, self.axis]
 
-                    if self.sampling == "Stroboscopic":
+                    if self.sampling == "stroboscopic":
                         times = np.linspace(self.t_min, solve_t_max, len(solution) + 1)
                         points = np.vstack((y0, solution))
                         sample_times, samples = stroboscopic_samples(
@@ -162,12 +166,12 @@ class BifurcationWorker(QRunnable):
                             solve_t_max - self.t_min
                         )
                         peaks = samples[sample_times >= cutoff, self.axis]
-                    elif self.sampling == "Envelope":
+                    elif self.sampling == "envelope":
                         peaks = np.unique([series.min(), series.max()])
-                    elif self.sampling == "Local maxima":
+                    elif self.sampling == "maxima":
                         indices, _ = find_peaks(series)
                         peaks = series[indices]
-                    elif self.sampling == "Midplane crossings":
+                    else:
                         peaks = _axis_midplane_crossings(tail, self.axis)
 
                     all_vals.append(val)
