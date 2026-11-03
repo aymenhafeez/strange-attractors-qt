@@ -5,24 +5,20 @@ from pyqtgraph.Qt import QtCore
 
 
 class WorkspaceController:
-    def __init__(self, window):
+    def __init__(self, window, toolbar):
         self.window = window
+        self.toolbar = toolbar
 
     @property
     def console_panel(self):
         return self.window.jupyter_console_panel
 
     @property
-    def toolbar(self):
+    def system_toolbar(self):
         return self.window.system_toolbar
 
     def sync_views(self):
-        combo = getattr(self.window, "toolbar_workspace_combo", None)
-        name_edit = getattr(self.window, "toolbar_workspace_name", None)
-
-        if combo is None or name_edit is None:
-            return
-
+        combo = self.toolbar.view_combo
         items = self.console_panel.workspace_view_items()
         active_key = self.console_panel.active_view_key()
 
@@ -45,15 +41,14 @@ class WorkspaceController:
             if current_index >= 0:
                 combo.setCurrentIndex(current_index)
 
-        _, name = active_key
-        name_edit.setText(name)
-        self.toolbar.set_plots(items, active_key)
-
         kind, name = active_key
+        self.toolbar.name_edit.setText(name)
+        self.system_toolbar.set_plots(items, active_key)
+
         if kind == "plot":
             self.window.live_plot_controller._sync_live_menu(name)
         else:
-            self.toolbar.set_live_traces("", [])
+            self.system_toolbar.set_live_traces("", [])
 
         self.sync_grid_action()
         self.sync_crosshair_action()
@@ -66,10 +61,7 @@ class WorkspaceController:
         return self.console_panel.plots.crosshair_visible()
 
     def sync_crosshair_action(self):
-        action = getattr(self.window, "workspace_crosshair_action", None)
-        if action is None:
-            return
-
+        action = self.toolbar.crosshair_action
         kind, _name = self.console_panel.active_view_key()
         with QtCore.QSignalBlocker(action):
             action.setEnabled(kind == "plot")
@@ -84,34 +76,20 @@ class WorkspaceController:
         self.console_panel.plots.set_crosshair_visible(visible)
 
     def on_toolbar_view_selected(self):
-        combo = self.window.toolbar_workspace_combo
-        data = combo.currentData()
-
-        if isinstance(data, tuple) and len(data) == 2:
-            kind, name = data
-            self.console_panel.set_active_workspace_view(kind, name)
-            self.sync_views()
-            self.window._sync_explore_actions()
-            return
-
-        name = combo.currentText().strip()
-        if not name:
-            return
-
-        self.window.toolbar_workspace_name.setText(name)
-        self.console_panel.plots.get(name)
+        kind, name = self.toolbar.view_combo.currentData()
+        self.console_panel.set_active_workspace_view(kind, name)
+        self.sync_views()
+        self.toolbar.sync_explore()
 
     def new_plot(self):
         self.console_panel.plots.new()
-        self.window._sync_jupyter_workspace_state()
 
     def new_view3d(self):
         self.console_panel.views3d.new()
-        self.window._sync_jupyter_workspace_state()
 
     def rename_current_view(self):
         kind, old_name = self.console_panel.active_view_key()
-        new_name = self.window.toolbar_workspace_name.text().strip()
+        new_name = self.toolbar.name_edit.text().strip()
         if not new_name:
             return
 
@@ -128,16 +106,16 @@ class WorkspaceController:
             self.window.live_plot_controller._clear_plot()
         else:
             self.console_panel.views3d.clear()
-            self.toolbar.set_status("Cleared current 3D view")
+            self.system_toolbar.set_status("Cleared current 3D view")
             self.sync_views()
-            self.window._sync_explore_actions()
+            self.toolbar.sync_explore()
 
     def clear_all_views(self):
         self.window.live_plot_controller._clear_all_plots()
         self.console_panel.views3d.clear_all()
-        self.toolbar.set_status("Cleared workspace views")
+        self.system_toolbar.set_status("Cleared workspace views")
         self.sync_views()
-        self.window._sync_explore_actions()
+        self.toolbar.sync_explore()
 
     def fit_current_view(self):
         kind, _name = self.console_panel.active_view_key()
@@ -156,18 +134,13 @@ class WorkspaceController:
     def current_grid_visible(self):
         kind, _name = self.console_panel.active_view_key()
         if kind == "view3d":
-            self.console_panel.views3d.grid_visible()
             return self.console_panel.views3d.grid_visible()
 
         return self.console_panel.plots.grid_visible()
 
     def sync_grid_action(self):
-        action = getattr(self.window, "workspace_grid_action", None)
-        if action is None:
-            return
-
-        with QtCore.QSignalBlocker(action):
-            action.setChecked(self.current_grid_visible())
+        with QtCore.QSignalBlocker(self.toolbar.grid_action):
+            self.toolbar.grid_action.setChecked(self.current_grid_visible())
 
     def set_current_grid_visible(self, visible):
         kind, _name = self.console_panel.active_view_key()
@@ -180,6 +153,21 @@ class WorkspaceController:
         kind, _name = self.console_panel.active_view_key()
         if kind == "view3d":
             self.console_panel.views3d.orbit(enabled)
+
+    def clear_explore_traces(self):
+        self.console_panel.active_explorer().clear_traces()
+        self.console_panel.set_explore_visible(True)
+
+    def clear_explore_sliders(self):
+        self.console_panel.active_explorer().clear_sliders()
+        self.console_panel.set_explore_visible(True)
+
+    def clear_explore(self):
+        self.console_panel.active_explorer().clear()
+        self.console_panel.set_explore_visible(True)
+
+    def remove_explore_trace(self, name):
+        self.console_panel.active_explorer().remove_trace(name)
 
     def _view_tooltip(self, item):
         if item["kind"] == "view3d":

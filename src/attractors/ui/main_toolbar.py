@@ -8,7 +8,6 @@ from .style import SCENE_TOOLBAR
 
 
 def make_action(parent, text, icon_name=None, *, tooltip=None, checked=None):
-    # checked=None means the action isn't checkable.
     action = QtGui.QAction(text, parent)
     if icon_name is not None:
         action.setIcon(icon(icon_name))
@@ -17,6 +16,7 @@ def make_action(parent, text, icon_name=None, *, tooltip=None, checked=None):
     if checked is not None:
         action.setCheckable(True)
         action.setChecked(checked)
+
     return action
 
 
@@ -30,11 +30,10 @@ class MainToolbar(QtWidgets.QToolBar):
         self.setStyleSheet(SCENE_TOOLBAR)
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
-        # Action text is what the menus show; the toolbar shows icons only.
         self.left_panel_action = self._add(
             "Left panel", "sidebar-expand-left", tooltip="Show left panel", checked=True
         )
-        self.keep_action_from_taking_focus(self.left_panel_action)
+        self.no_focus(self.left_panel_action)
         self.anim_action = self._add(
             "Play", "media-playback-start", tooltip="Play animation"
         )
@@ -92,7 +91,6 @@ class MainToolbar(QtWidgets.QToolBar):
         self.solve_action = self._add("Solve", "system-run", tooltip="Run a full solve")
         self.addSeparator()
 
-        # Enabled only for 3D systems.
         self.scene_actions = (
             self.anim_action,
             self.loop_action,
@@ -107,7 +105,6 @@ class MainToolbar(QtWidgets.QToolBar):
             self.auto_fit_camera_action,
             self.save_view_action,
         )
-        # Shown only in System mode.
         self.viewport_actions = self.actions()
 
         self.system_action = self._add(
@@ -126,14 +123,13 @@ class MainToolbar(QtWidgets.QToolBar):
         )
         self.viewport_actions.append(self.addWidget(spacer))
 
-        # The explore toolbar controls are inserted before this action.
         self.right_panel_action = self._add(
             "Right panel",
             "sidebar-expand-right",
             tooltip="Show right panel",
             checked=True,
         )
-        self.keep_action_from_taking_focus(self.right_panel_action)
+        self.no_focus(self.right_panel_action)
         self.viewport_actions.append(self.right_panel_action)
 
         end_pad = QtWidgets.QWidget()
@@ -145,7 +141,7 @@ class MainToolbar(QtWidgets.QToolBar):
         self.addAction(action)
         return action
 
-    def keep_action_from_taking_focus(self, action):
+    def no_focus(self, action):
         self.widgetForAction(action).setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
     def set_playing(self, playing):

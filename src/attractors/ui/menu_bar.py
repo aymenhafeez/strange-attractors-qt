@@ -6,6 +6,18 @@ from pyqtgraph.Qt import QtGui, QtWidgets
 from .main_toolbar import make_action
 from .style import MENUBAR
 
+_EXAMPLE_LABELS = {
+    "plotting_methods_example.py": "Plotting methods",
+    "curve_example.py": "Reactive curves",
+    "lissajous_example.py": "Lissajous curve",
+    "fourier_example.py": "Fourier series",
+    "dejong_attractor_example.py": "De Jong attractor",
+    "param_sweep_example.py": "Parameter sweep",
+    "3d_lissajous_example.py": "3D Lissajous curve",
+    "3d_pendulum.py": "3D pendulum animation",
+    "surface_example.py": "Surface and wireframe plot",
+}
+
 
 class MainMenuBar(QtWidgets.QMenuBar):
     def __init__(
@@ -15,6 +27,7 @@ class MainMenuBar(QtWidgets.QMenuBar):
         signal_dock_action,
         trajectory_dock_action,
         plot_item,
+        example_scripts,
         parent=None,
     ):
         super().__init__(parent)
@@ -95,6 +108,7 @@ class MainMenuBar(QtWidgets.QMenuBar):
         self.explore_workspace_action = workspace_menu.addAction("Explore workspace")
         workspace_menu.addAction(self.reset_layout_action)
         self.examples_menu = workspace_menu.addMenu("Examples")
+        self._add_examples(example_scripts)
         workspace_menu.addSeparator()
         self.new_plot_action = workspace_menu.addAction("New plot")
         self.clear_view_action = workspace_menu.addAction("Clear current view")
@@ -140,6 +154,15 @@ class MainMenuBar(QtWidgets.QMenuBar):
             actions[value] = make_action(group, text, checked=not actions)
             submenu.addAction(actions[value])
         return actions
+
+    def _add_examples(self, scripts):
+        if not scripts:
+            self.examples_menu.addAction("No examples available").setEnabled(False)
+        for path in scripts:
+            label = _EXAMPLE_LABELS.get(path.name, path.stem.replace("_", " ").title())
+            action = self.examples_menu.addAction(label)
+            action.setToolTip(str(path))
+            action.setData(path)
 
     def _add_plot_actions(self, menu, plot_item):
         view_box = plot_item.getViewBox()
