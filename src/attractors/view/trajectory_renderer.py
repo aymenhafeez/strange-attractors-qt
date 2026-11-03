@@ -57,6 +57,7 @@ class TrajectoryRenderer:
         self._density_cache = None
         self._colour_limits = None
         self._displayed_points = []
+        self._animation_frames = None
 
     @property
     def solutions(self):
@@ -339,6 +340,7 @@ class TrajectoryRenderer:
         self.update_display()
 
     def display_solutions(self, solutions, is_partial):
+        self._animation_frames = None
         solution_colours = self._build_solution_colours(solutions)
 
         if not is_partial:
@@ -354,6 +356,7 @@ class TrajectoryRenderer:
             self._set_trajectory_data(index, pos=segment, colour=segment_colours)
 
     def clear_solutions(self):
+        self._animation_frames = None
         self._solutions = None
         self._solution_colours = []
         self._particle_colours = []
@@ -361,6 +364,9 @@ class TrajectoryRenderer:
         self._density_cache = None
         self._colour_limits = None
         self.sync_gl_items(0)
+
+    def reset_animation(self):
+        self._animation_frames = None
 
     def get_traj_tail_data(self, solution, colours):
         if self._traj_tail_enabled:
@@ -401,6 +407,10 @@ class TrajectoryRenderer:
             segment, segment_colours = self.get_traj_tail_data(solution, colours)
             self._set_trajectory_data(index, pos=segment, colour=segment_colours)
 
+        if self._animation_frames is not None:
+            self.render_animation_frame(self._animation_frames)
+            return
+
     def _trajectory_size(self, i):
         trajectory = self._trajectories[i] if i < len(self._trajectories) else {}
         return trajectory.get("size", self._current_plot_size)
@@ -428,14 +438,20 @@ class TrajectoryRenderer:
                 head_kwargs["pos"] = pos[-1:]
             self._heads[i].setData(**head_kwargs)
 
-    def render_animation_frame(self, frame):
+    def render_animation_frame(self, frames):
         if not self._solutions:
             return []
 
+        self._animation_frames = tuple(frames)
         all_segments = []
 
-        for index, (solution, colours) in enumerate(
-            zip(self._solutions, self._solution_colours)
+        for index, (solution, colours, frame) in enumerate(
+            zip(
+                self._solutions,
+                self._solution_colours,
+                self._animation_frames,
+                strict=True,
+            )
         ):
             if self._traj_tail_enabled:
                 start = max(0, frame - self._traj_tail_length)

@@ -42,6 +42,7 @@ from .ui.signal_panel import SignalPanel
 from .ui.startup import WelcomeDialog
 from .ui.style import MAIN_WINDOW, plot_colours
 from .ui.system_toolbar import SystemToolbar
+from .ui.trajectory_analysis_panel import TrajectoryAnalysisPanel
 from .view.view_manager import ViewManager
 from .workers.solve_manager import SolveManager
 
@@ -253,6 +254,8 @@ class Window(QtWidgets.QMainWindow):
 
         self.signal_panel = SignalPanel()
 
+        self.trajectory_analysis_panel = TrajectoryAnalysisPanel()
+
         self.output_panel = OutputPanel()
         self.output_panel.hide()
 
@@ -334,12 +337,27 @@ class Window(QtWidgets.QMainWindow):
             ("bifurcation_panel", "Bifurcation", self.bifurcation_panel),
             ("projection_panel", "Projection heatmaps", self.projection_panel),
             ("signal_panel", "Signal and spectrum", self.signal_panel),
+            (
+                "trajectory_analysis_panel",
+                "Trajectory analysis",
+                self.trajectory_analysis_panel,
+            ),
         ):
             self._panel_docks[name] = self.dock_layout.add(
                 f"analysis/{name}", title, panel
             )
         self.output_dock = self.dock_layout.add("output", "Output", self.output_panel)
         build_toolbar(self)
+
+        panel = self.trajectory_analysis_panel
+        panel.play_requested.connect(self.scene.animation_controller.toggle)
+        panel.seek_requested.connect(self.scene.seek_time)
+
+        self.scene.playback_range_changed.connect(panel.set_playback_range)
+        self.scene.playback_time_changed.connect(panel.set_playback_time)
+        self.scene.animation_state_changed.connect(panel.set_playing)
+        self.scene.animation_state_changed.connect(self._sync_toolbar_animation_action)
+
         build_menu_bar(self)
         self.controls.animation_mode_changed.connect(self._set_animation_mode)
         build_status_bar(self)
@@ -651,6 +669,7 @@ class Window(QtWidgets.QMainWindow):
         self.signal_panel.apply_theme()
         self.jupyter_console_panel.apply_theme()
         self.phase_portrait.apply_theme()
+        self.trajectory_analysis_panel.apply_theme()
 
     def _sync_theme_actions(self, theme):
         with (
@@ -1285,9 +1304,9 @@ class Window(QtWidgets.QMainWindow):
 
     def _sync_toolbar_animation_action(self, playing):
         if playing:
-            self.toolbar_anim_action.setIcon(icon("media-playback-stop"))
-            self.toolbar_anim_action.setText("Stop")
-            self.toolbar_anim_action.setToolTip("Stop animation")
+            self.toolbar_anim_action.setIcon(icon("media-playback-pause"))
+            self.toolbar_anim_action.setText("Pause")
+            self.toolbar_anim_action.setToolTip("Pause animation")
         else:
             self.toolbar_anim_action.setIcon(icon("media-playback-start"))
             self.toolbar_anim_action.setText("Play")
@@ -1526,6 +1545,9 @@ class Window(QtWidgets.QMainWindow):
         self._active_run = None
         self._analysis_run = None
         self.signal_panel.set_source(None, {})
+        self.trajectory_analysis_panel.set_source(None, {})
+        self.scene.set_playback_source(None)
+        self.toolbar_anim_action.setEnabled(False)
 
     def _set_solve_state(self, **updates):
         state = dict(self._solve_state)
@@ -1533,6 +1555,19 @@ class Window(QtWidgets.QMainWindow):
         self._solve_state = state
         self.system_toolbar.set_solve_state(state)
         self.signal_panel.set_source(self._analysis_run, state)
+        run = self._analysis_run
+        self.trajectory_analysis_panel.set_source(run, state)
+
+        playable = bool(
+            run is not None
+            and state.get("valid")
+            and not state.get("stale")
+            and not state.get("solving")
+            and state.get("request_id") == run["request_id"]
+            and len(run["variables"]) == 3
+        )
+        self.scene.set_playback_source(run if playable else None)
+        self.toolbar_anim_action.setEnabled(playable)
 
         return state
 
@@ -1597,7 +1632,10 @@ class Window(QtWidgets.QMainWindow):
                 solution_points=[],
             )
             return
-        full_record = full or _panel_visible(self, "signal_panel")
+        full_record = full or any(
+            _panel_visible(self, name)
+            for name in ("signal_panel", "trajectory_analysis_panel")
+        )
         user_n = self.current_n or config.time_defaults.n
         t_max = self.current_t_max
         trajectories = self.controls.trajectory_panel.get_trajectories()
@@ -2160,6 +2198,10 @@ class Window(QtWidgets.QMainWindow):
                 config, values = self._get_current_config_and_values()
                 if config is not None:
                     self.bifurcation_panel.set_config(config, values)
+            elif name == "trajectory_analysis_panel" and (
+                self._analysis_run is None or self._solve_state.get("partial")
+            ):
+                self._on_controls_solve_requested(True)
         self._output_panel_visible = not self.output_dock.isHidden()
         for action, docks in (
             (self.toolbar_left_panel_action, self._left_docks),

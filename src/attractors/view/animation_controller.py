@@ -22,13 +22,15 @@ class AnimationController:
         self._frame = 0
         self._step = 100
         self._loop = False
+        self._finished = False
 
     @property
     def frame(self):
         return self._frame
 
-    def reset_frame(self):
-        self._frame = 0
+    def reset_frame(self, frame=0, *, finished=False):
+        self._frame = frame
+        self._finished = finished
 
     def set_step(self, step):
         self._step = max(1, int(step))
@@ -38,13 +40,25 @@ class AnimationController:
             self.stop()
             return False
 
-        self._frame = 0
+        if self._finished:
+            self.reset_frame()
+
         self._timer.start(ANIMATION_INTERVAL)
         self._on_visibility_changed()
         return True
 
     def stop(self):
         self._timer.stop()
+        self._on_visibility_changed()
+
+    def seek(self, frame):
+        self.stop()
+        result = self._on_frame(frame, 0)
+        if result is None:
+            return
+
+        self._frame = result["frame"]
+        self._finished = result["done"]
         self._on_visibility_changed()
 
     def is_active(self):
@@ -54,16 +68,20 @@ class AnimationController:
         self._loop = checked
 
     def advance(self):
-        finished = self._on_frame(self._frame, self._step)
-        if finished is None:
+        if self._finished and self._loop:
+            self.reset_frame()
+
+        result = self._on_frame(self._frame, self._step)
+        if result is None:
+            self.stop()
             return None
 
-        self._frame = finished["frame"]
-        if finished["done"]:
-            if self._loop:
-                self._frame = 0
-            else:
-                self.stop()
-                if self._on_finished is not None:
-                    self._on_finished()
-        return finished
+        self._frame = result["frame"]
+        self._finished = result["done"]
+
+        if self._finished and not self._loop:
+            self.stop()
+            if self._on_finished is not None:
+                self._on_finished()
+
+        return result

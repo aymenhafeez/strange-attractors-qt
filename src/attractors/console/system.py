@@ -14,6 +14,7 @@ from ..core.sections import (
     plane_crossings,
     section_axes,
 )
+from ..core.signal_analysis import sample_times, trajectory_signal
 from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
 from .jupyter_console_panel import ConsolePlot
@@ -166,14 +167,6 @@ EXAMPLE_ROWS = [
     ),
     ("Export manageable data", "df = system.sample(2000)"),
 ]
-
-
-def _solver_sample_times(t_min, t_max, length):
-    if length <= 0:
-        return np.array([], dtype=np.float64)
-
-    dt = (t_max - t_min) / length
-    return t_min + (np.arange(length, dtype=np.float64) + 1.0) * dt
 
 
 def _inspectable_config(config):
@@ -665,7 +658,7 @@ class SystemInspector:
         solution = self.solution(index)
         spec = self._trajectory_solve_spec(index)
 
-        return _solver_sample_times(
+        return sample_times(
             self.t_min,
             spec.get("t_max", self.t_max),
             len(solution),
@@ -1074,10 +1067,14 @@ class SystemInspector:
             )
 
         solution = self.solution(trajectory)
+        spec = self._trajectory_solve_spec(trajectory)
+        signal = trajectory_signal(
+            solution, axis_col, t_min=self.t_min, t_max=spec.get("t_max", self.t_max)
+        )
 
         return self._plot_timeseries(
-            self.time(trajectory),
-            solution[:, axis_col],
+            signal.times,
+            signal.values,
             axis_name,
             plot=plot,
             mode=plot_mode,
@@ -1997,7 +1994,7 @@ class SystemInspector:
                 t_max=solve_t_max,
                 ic=initial_conditions[i],
             )
-            times = _solver_sample_times(self.t_min, solve_t_max, len(solution))
+            times = sample_times(self.t_min, solve_t_max, len(solution))
             rows.append((i, solution, times))
 
         return rows
