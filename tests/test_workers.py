@@ -9,6 +9,7 @@ from pyqtgraph.Qt import QtWidgets
 
 from attractors.app import Window
 from attractors.core.models import AttractorConfig, AttractorParam
+from attractors.workers.solve_session import SolveSession
 from attractors.workers.worker import LyapunovWorker, SolveWorker
 
 
@@ -204,11 +205,17 @@ def test_window_ignores_stale_solve_results():
         def display_solutions(self, solutions, is_partial):
             self.displayed = True
 
-    window = SimpleNamespace(_active_solve_request_id=2, scene=Scene())
+    scene = Scene()
+    session = SimpleNamespace(
+        _pending=SimpleNamespace(request_id=2),
+        run_accepted=SimpleNamespace(
+            emit=lambda run: scene.display_solutions(run.solutions, run.partial)
+        ),
+    )
 
-    Window._on_solve_result(window, 1, [np.zeros((1, 3))], False)
+    SolveSession._on_result(session, 1, [np.zeros((1, 3))], False)
 
-    assert window.scene.displayed is False
+    assert scene.displayed is False
 
 
 def test_window_ignores_stale_lyapunov_results():

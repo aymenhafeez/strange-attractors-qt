@@ -101,7 +101,7 @@ class TrajectoryAnalysisPanel(QtWidgets.QWidget):
             and state.get("valid")
             and not state.get("stale")
             and not state.get("solving")
-            and state.get("request_id") == run["request_id"]
+            and state.get("request_id") == run.request_id
         )
         if state.get("solving"):
             text = "Solving"
@@ -111,7 +111,7 @@ class TrajectoryAnalysisPanel(QtWidgets.QWidget):
             text = "No completed run"
         elif fresh:
             text = "Completed run"
-        elif state.get("partial") and state.get("request_id") == run["request_id"]:
+        elif state.get("partial") and state.get("request_id") == run.request_id:
             text = "Preview run"
         else:
             text = "Settings changed"
@@ -141,18 +141,16 @@ class TrajectoryAnalysisPanel(QtWidgets.QWidget):
             self.comparison_combo.addItem("None", None)
 
             if run is not None:
-                self.trajectory_combo.addItems(run["labels"])
-                self.coordinate_combo.addItems(run["variables"])
-                for index, label in enumerate(run["labels"]):
+                self.trajectory_combo.addItems(run.labels)
+                self.coordinate_combo.addItems(run.variables)
+                for index, label in enumerate(run.labels):
                     self.comparison_combo.addItem(label, index)
 
                 self.trajectory_combo.setCurrentIndex(
-                    min(trajectory, len(run["solutions"]) - 1)
+                    min(trajectory, len(run.solutions) - 1)
                 )
                 self.coordinate_combo.setCurrentText(
-                    coordinate
-                    if coordinate in run["variables"]
-                    else run["variables"][0]
+                    coordinate if coordinate in run.variables else run.variables[0]
                 )
                 self.comparison_combo.setCurrentIndex(
                     max(0, self.comparison_combo.findData(comparison))
@@ -175,12 +173,12 @@ class TrajectoryAnalysisPanel(QtWidgets.QWidget):
 
         index = self.trajectory_combo.currentIndex()
         coordinate = self.coordinate_combo.currentText()
-        column = self._run["variables"].index(coordinate)
+        column = self._run.variables.index(coordinate)
         signal = trajectory_signal(
-            self._run["solutions"][index],
+            self._run.solutions[index],
             column,
-            t_min=self._run["t_min"],
-            t_max=self._run["trajectory_specs"][index]["t_max"],
+            t_min=self._run.t_min,
+            t_max=self._run.trajectory_specs[index]["t_max"],
         )
         self.curve.setData(signal.times, signal.values)
         self.trace.setLabel("left", coordinate)
@@ -202,9 +200,9 @@ class TrajectoryAnalysisPanel(QtWidgets.QWidget):
             self.separation_plot.setTitle("Choose two different trajectories")
             return
 
-        solutions = self._run["solutions"]
-        specs = self._run["trajectory_specs"]
-        t_min = self._run["t_min"]
+        solutions = self._run.solutions
+        specs = self._run.trajectory_specs
+        t_min = self._run.t_min
         times_a = sample_times(t_min, specs[a]["t_max"], len(solutions[a]))
         times_b = sample_times(t_min, specs[b]["t_max"], len(solutions[b]))
         length = min(len(times_a), len(times_b))
@@ -215,9 +213,7 @@ class TrajectoryAnalysisPanel(QtWidgets.QWidget):
 
         distance = np.linalg.norm(solutions[a][:length] - solutions[b][:length], axis=1)
         distance[distance == 0] = np.nan
-        self.separation_plot.setTitle(
-            f"{self._run['labels'][a]} - {self._run['labels'][b]}"
-        )
+        self.separation_plot.setTitle(f"{self._run.labels[a]} - {self._run.labels[b]}")
         self.separation_curve.setData(times_a[:length], distance)
 
     def set_playback_range(self, start, end):
@@ -263,7 +259,7 @@ class TrajectoryAnalysisPanel(QtWidgets.QWidget):
         pen = colours["plot_pen"]
         if self._run is not None:
             index = self.trajectory_combo.currentIndex()
-            pen = self._run["colours"][index] or pen
+            pen = self._run.colours[index] or pen
 
         self.curve.setPen(pg.mkPen(pen))
         self.separation_curve.setPen(pg.mkPen(colours["alternate_pen"]))

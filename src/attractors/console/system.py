@@ -17,6 +17,7 @@ from ..core.sections import (
 from ..core.signal_analysis import sample_times, trajectory_signal
 from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
+from ..workers.solve_session import SolveRun, read_only
 from .jupyter_console_panel import ConsolePlot
 
 VECTOR_FIELD_SPEED_PENS = [
@@ -203,10 +204,7 @@ def _normalise_initial_conditions(initial_conditions, dimension=3):
 class _SnapshotScene:
     """Give the scene state of the current system"""
 
-    def __init__(self, solutions, camera, plot):
-        self.trajectory_renderer = SimpleNamespace(
-            solutions=tuple(np.asarray(solution) for solution in solutions),
-        )
+    def __init__(self, camera, plot):
         self.camera_controller = SimpleNamespace(
             get_camera_state=lambda: dict(camera or {}),
         )
@@ -304,7 +302,7 @@ class _SnapshotWindow:
         n,
         t_max,
         initial_conditions,
-        solutions,
+        run,
         camera,
         plot,
         status,
@@ -314,8 +312,8 @@ class _SnapshotWindow:
         self.current_t_max = float(t_max)
         self._config = config
         self._values = dict(values)
-        self._solve_state = dict(status)
-        self.scene = _SnapshotScene(solutions, camera, plot)
+        self.solve_session = SimpleNamespace(run=run, state=dict(status))
+        self.scene = _SnapshotScene(camera, plot)
         self.controls = SimpleNamespace(
             trajectory_panel=_SnapshotTrajectoryPanel(initial_conditions),
         )
@@ -400,19 +398,8 @@ class SystemInspector:
 
     @property
     def solutions(self):
-        solutions = getattr(self._window, "_system_solutions", None)
-
-        if solutions is None:
-            solutions = self._window.scene.trajectory_renderer.solutions or []
-
-        views = []
-        for solution in solutions:
-            # make the view read only so it can't accidentally get modified
-            view = np.asarray(solution).view()
-            view.setflags(write=False)
-            views.append(view)
-
-        return tuple(views)
+        run = self._window.solve_session.run
+        return () if run is None else run.solutions
 
     @property
     def has_solutions(self):
@@ -458,25 +445,11 @@ class SystemInspector:
         return self._optional_help_table(data, table, "System summary")
 
     def status(self, table=True):
-        state = dict(self._window._solve_state)
+        state = self._window.solve_session.state
         result = {
-            "solving": bool(state.get("solving", False)),
-            "valid": bool(state.get("valid", self.has_solutions)),
-            "stale": bool(state.get("stale", False)),
-            "partial": bool(state.get("partial", False)),
-            "last_error": state.get("last_error"),
-            "request_id": state.get("request_id"),
-            "attractor": state.get("attractor", self.name),
-            "parameters": dict(state.get("parameters", self.values)),
-            "n": state.get("n", self.n),
-            "t_max": state.get("t_max", self.t_max),
-            "trajectories": state.get("trajectories", len(self.solutions)),
-            "solution_points": list(
-                state.get(
-                    "solution_points",
-                    [len(solution) for solution in self.solutions],
-                )
-            ),
+            **state,
+            "parameters": dict(state["parameters"]),
+            "solution_points": list(state["solution_points"]),
             "console_solution_count": len(self.solutions),
         }
         data = pd.Series(result)
@@ -543,27 +516,27 @@ class SystemInspector:
     def trajectories(self):
         rows = []
         variables = self.variables
-        initial_conditions = self._initial_conditions()
-        metadata = self._trajectory_metadata()
+        run = self._window.solve_session.run
+        styles = self._window.controls.trajectory_panel.get_trajectories()
 
         for i, solution in enumerate(self.solutions):
             finite = solution[np.isfinite(solution).all(axis=1)]
-            trajectory_meta = metadata[i] if i < len(metadata) else {}
-            solve_spec = self._trajectory_solve_spec(i)
+            spec = run.trajectory_specs[i]
+            style = styles[i] if i < len(styles) else {}
 
             row = {
                 "trajectory": i,
-                "label": trajectory_meta.get("label", f"T{i}"),
-                "colour": trajectory_meta.get("colour"),
-                "alpha": trajectory_meta.get("alpha"),
-                "render_mode": trajectory_meta.get("render_mode"),
-                "n": trajectory_meta.get("n", solve_spec.get("n")),
-                "t_max": trajectory_meta.get("t_max", solve_spec.get("t_max")),
+                "label": run.labels[i],
+                "colour": run.colours[i],
+                "alpha": style.get("alpha"),
+                "render_mode": style.get("render_mode"),
+                "n": spec["n"],
+                "t_max": spec["t_max"],
                 "length": len(solution),
             }
 
             for col, axis in enumerate(variables):
-                row[f"initial_{axis}"] = self._coordinate(initial_conditions, i, col)
+                row[f"initial_{axis}"] = spec["ic"][col]
                 row[f"final_{axis}"] = solution[-1, col] if len(solution) else None
                 row[f"{axis}_min"] = finite[:, col].min() if len(finite) else None
                 row[f"{axis}_max"] = finite[:, col].max() if len(finite) else None
@@ -621,9 +594,23 @@ class SystemInspector:
             )
             for ic in solve_ics
         ]
-        is_valid, message = validate_solutions(solutions, config.dimension)
+        is_valid, message = validate_solutions(solutions, dimension=config.dimension)
         if not is_valid:
             raise ValueError(message)
+
+        run = SolveRun(
+            request_id=None,
+            config=config,
+            parameters=dict(variant_values),
+            trajectory_specs=tuple(
+                {"ic": ic, "n": solve_n, "t_max": solve_t_max} for ic in solve_ics
+            ),
+            labels=tuple(f"T{i}" for i in range(len(solutions))),
+            colours=(None,) * len(solutions),
+            partial=False,
+            analysis_ready=True,
+            solutions=read_only(solutions),
+        )
 
         status = {
             "solving": False,
@@ -647,7 +634,7 @@ class SystemInspector:
                 n=solve_n,
                 t_max=solve_t_max,
                 initial_conditions=solve_ics,
-                solutions=solutions,
+                run=run,
                 camera=self.camera,
                 plot=self._plot_target(None),
                 status=status,
@@ -660,7 +647,7 @@ class SystemInspector:
 
         return sample_times(
             self.t_min,
-            spec.get("t_max", self.t_max),
+            spec["t_max"],
             len(solution),
         )
 
@@ -1069,7 +1056,7 @@ class SystemInspector:
         solution = self.solution(trajectory)
         spec = self._trajectory_solve_spec(trajectory)
         signal = trajectory_signal(
-            solution, axis_col, t_min=self.t_min, t_max=spec.get("t_max", self.t_max)
+            solution, axis_col, t_min=self.t_min, t_max=spec["t_max"]
         )
 
         return self._plot_timeseries(
@@ -2035,45 +2022,8 @@ class SystemInspector:
 
         return [config.initial_conditions]
 
-    def _trajectory_metadata(self):
-        rows = []
-        for index, trajectory in enumerate(
-            self._window.controls.trajectory_panel.get_trajectories() or []
-        ):
-            colour = trajectory.get("colour")
-            if colour is not None:
-                colour = colour.name()
-            rows.append(
-                {
-                    "label": trajectory.get("label", f"T{index}"),
-                    "colour": colour,
-                    "alpha": trajectory.get("alpha"),
-                    "render_mode": trajectory.get("render_mode"),
-                    "n": trajectory.get("n"),
-                    "t_max": trajectory.get("t_max"),
-                }
-            )
-
-        return rows
-
     def _trajectory_solve_spec(self, index):
-        state = dict(self._window._solve_state)
-        specs = state.get("trajectory_specs")
-        if isinstance(specs, list):
-            try:
-                spec = specs[index]
-            except IndexError:
-                spec = None
-            if isinstance(spec, dict):
-                return dict(spec)
-
-        return {"n": self.n, "t_max": self.t_max}
-
-    def _coordinate(self, initial_conditions, trajectory, axis):
-        try:
-            return initial_conditions[trajectory][axis]
-        except (IndexError, TypeError):
-            return None
+        return self._window.solve_session.run.trajectory_specs[index]
 
     def _sample_indices(self, length, sample_size):
         if length <= sample_size:

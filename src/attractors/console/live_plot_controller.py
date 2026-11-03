@@ -37,6 +37,7 @@ def _plot_mode(mode=PLOT_MODE_REPLACE):
 class LivePlotController:
     def __init__(self, window):
         self.window = window
+        self._last_preview_update = None
         self._auto_pen_indices = {}
 
     @property
@@ -491,6 +492,11 @@ class LivePlotController:
             "; ".join(errors) if errors else self._live_status_text()
         )
 
+    def refresh_all(self):
+        self._last_preview_update = None
+        for plot_name in list(self.live_plots):
+            self._refresh_live_plot(plot_name)
+
     def _refresh_live_preview(self, solutions=None, *, kinds=None):
         live_plots = self.live_plots
         live_items = self.live_items
@@ -499,7 +505,7 @@ class LivePlotController:
 
         preview_kinds = PREVIEW if kinds is None else set(kinds)
         now_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
-        last_update = self.window._last_live_preview_update
+        last_update = self._last_preview_update
         if (
             solutions is None
             and last_update is not None
@@ -527,7 +533,7 @@ class LivePlotController:
                         refreshed = True
 
         if refreshed:
-            self.window._last_live_preview_update = now_ms
+            self._last_preview_update = now_ms
 
     def _plot_live_spec(self, spec, *, trace_index):
         kind = spec["kind"]
@@ -947,7 +953,7 @@ class LivePlotController:
 
         t_min = self.window.system.t_min
         spec = self.window.system._trajectory_solve_spec(trajectory)
-        t_max = spec.get("t_max", self.window.system.t_max)
+        t_max = spec["t_max"]
         if len(solution) <= 0:
             return np.array([], dtype=np.float64)
         dt = (t_max - t_min) / len(solution)

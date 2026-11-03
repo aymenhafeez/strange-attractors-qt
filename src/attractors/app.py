@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Aymen Hafeez
 # SPDX-License-Identifier: GPL-3.0-only
 
-import time
 from pathlib import Path
 
 import numpy as np
@@ -16,7 +15,6 @@ from .console.live_plot_controller import LivePlotController
 from .console.system import SystemInspector
 from .console.workspace_controller import WorkspaceController
 from .console.workspace_inspector import WorkspaceInspector
-from .core.solution_validation import validate_solutions
 from .perf import PerfProfiler, perf_finish, perf_start, profiling_enabled
 from .presets import (
     PresetError,
@@ -48,10 +46,10 @@ from .ui.trajectory_analysis_panel import TrajectoryAnalysisPanel
 from .ui.workspace_toolbar import WorkspaceToolbar
 from .view.view_manager import ViewManager
 from .workers.solve_manager import SolveManager
+from .workers.solve_session import SolveSession
 
 WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 850
-PARTIAL_N = 75000
 PROJECTION_UPDATE_INTERVAL = 100  # ms
 
 
@@ -67,35 +65,10 @@ class Window(QtWidgets.QMainWindow):
         self.reset_session_state = False
 
         self._initial_full_solves = 0
-        self._solve_pending = False
-        self._solve_needed = False
-        self._full_needed = False
         self._restoring_view = False
-        self._active_solve_request_id = None
         self._active_lyapunov_request_id = None
-        self._system_solutions = []
-        self._active_run = None
-        self._analysis_run = None
-
-        self._solve_state = {
-            "solving": False,
-            "valid": False,
-            "stale": False,
-            "partial": False,
-            "last_error": None,
-            "request_id": None,
-            "attractor": None,
-            "parameters": {},
-            "n": None,
-            "t_max": None,
-            "trajectories": 0,
-            "solution_points": [],
-        }
-
-        self._solve_perf_tokens = {}
         self._lyapunov_perf_tokens = {}
         self._last_projection_update = None
-        self._last_live_preview_update = None
         self._latest_projection_solutions = None
         self._perf = PerfProfiler()
         self._panel_docks = {}
@@ -128,7 +101,7 @@ class Window(QtWidgets.QMainWindow):
         self.system = SystemInspector(self)
 
         self.solver = SolveManager(self)
-        self.solver.solutions_ready.connect(self._on_solve_result)
+        self.solve_session = SolveSession(self.solver, self)
         self.solver.lyapunov_ready.connect(self._on_lyapunov_result)
         self.solver.lyapunov_failed.connect(self._on_lyapunov_failed)
 
@@ -152,7 +125,7 @@ class Window(QtWidgets.QMainWindow):
         self.right_panel = RightPanel(self.dock_layout)
         self.controls.set_right_panel(self.right_panel)
         self.controls.attractor_changed.connect(self.on_attractor_change)
-        self.controls.solve_requested.connect(self._on_controls_solve_requested)
+        self.controls.solve_requested.connect(self._solve)
         self.controls.n_changed.connect(self._on_n_changed)
         self.controls.t_max_changed.connect(
             lambda val: setattr(self, "current_t_max", val)
@@ -278,7 +251,10 @@ class Window(QtWidgets.QMainWindow):
         self.jupyter_console_panel.views3d.current_changed.connect(
             lambda _name: self.workspace_controller.sync_views()
         )
-        self.system_toolbar.set_solve_state(self._solve_state)
+        self.solve_session.state_changed.connect(self._on_solve_state)
+        self.solve_session.run_accepted.connect(self._on_run_accepted)
+        self.solve_session.failed.connect(self._on_solve_failed)
+        self.system_toolbar.set_solve_state(self.solve_session.state)
         self.workspace_controller.sync_views()
 
         self.viewport_dock = self.dock_layout.add(
@@ -388,10 +364,7 @@ class Window(QtWidgets.QMainWindow):
             (toolbar.grid_action.toggled, scene.grid_overlay.set_grid_visible),
             (toolbar.orbit_action.toggled, self._set_orbit_mode),
             (toolbar.hover_action.toggled, scene.point_hover.set_enabled),
-            (
-                toolbar.solve_action.triggered,
-                lambda: self._on_controls_solve_requested(True),
-            ),
+            (toolbar.solve_action.triggered, lambda: self._solve(True)),
             (toolbar.system_action.triggered, self._toggle_system_workspace),
             (
                 toolbar.explore_action.triggered,
@@ -409,10 +382,7 @@ class Window(QtWidgets.QMainWindow):
             (menu.reset_camera_action.triggered, self._reset_camera),
             (menu.fit_view_action.triggered, self._fit_camera),
             (menu.reset_session_action.triggered, self._reset_session_state),
-            (
-                menu.solve_action.triggered,
-                lambda: self._on_controls_solve_requested(True),
-            ),
+            (menu.solve_action.triggered, lambda: self._solve(True)),
             (menu.reset_parameters_action.triggered, self.controls.reset_to_defaults),
             (menu.summary_action.triggered, self.show_workspace_summary),
             (
@@ -559,15 +529,12 @@ class Window(QtWidgets.QMainWindow):
         if self._custom_config is not None:
             self._apply_config_to_view(self._custom_config)
         else:
-            self._clear_analysis_run()
-            self.solver.cancel_solve()
+            self.solve_session.clear()
             self.solver.cancel_lyapunov()
-            self._solve_pending = False
             self._latest_projection_solutions = None
             self.scene.clear_solutions()
-            self._clear_data_view()
+            self.controls.data_view.clear()
             self.lyapunov_panel.clear()
-            self._system_solutions = []
             self.phase_portrait.clear()
 
     def _rebuild_view_from_config(self, config):
@@ -576,11 +543,10 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_config_to_view(self, config):
-        self._clear_analysis_run()
+        self.solve_session.clear()
         self._restoring_view = True
         try:
             self.phase_portrait.clear()
-            self._system_solutions = []
             self._latest_projection_solutions = None
             self.scene.clear_solutions()
             self._select_system_view(config)
@@ -610,11 +576,10 @@ class Window(QtWidgets.QMainWindow):
         self._apply_config_to_view(config)
 
     def _apply_loaded_preset(self, config, values, n, t_max):
-        self._clear_analysis_run()
+        self.solve_session.clear()
         self._restoring_view = True
         try:
             self.phase_portrait.clear()
-            self._system_solutions = []
             self._latest_projection_solutions = None
             self.scene.clear_solutions()
             self._select_system_view(config)
@@ -916,9 +881,9 @@ class Window(QtWidgets.QMainWindow):
             self.controls.get_current_values(),
         )
         if solve:
-            self._on_controls_solve_requested(True)
+            self._solve(True)
         elif self.controls.get_current_values() != current_values:
-            self._mark_settings_unsolved()
+            self.solve_session.mark_unsolved()
 
         return self.system.parameters()
 
@@ -936,9 +901,9 @@ class Window(QtWidgets.QMainWindow):
         self.controls.set_traj_tail_max(self.current_n)
 
         if solve:
-            self._on_controls_solve_requested(True)
+            self._solve(True)
         elif time_changed:
-            self._mark_settings_unsolved()
+            self.solve_session.mark_unsolved()
 
         return self.system.status()
 
@@ -987,267 +952,59 @@ class Window(QtWidgets.QMainWindow):
         return updates
 
     def _solve_from_console(self):
-        self._on_controls_solve_requested(True)
+        self._solve(True)
 
         return self.system.status()
 
-    def _mark_settings_unsolved(self):
-        self.solver.cancel_solve()
-        self._active_solve_request_id = None
-        self._active_run = None
-        self._solve_pending = False
-        self._solve_needed = False
-        self._full_needed = False
-        self._set_solve_state(
-            solving=False,
-            valid=False,
-            stale=self._analysis_run is not None,
-            partial=False,
-            last_error=None,
-        )
-
-    def _clear_analysis_run(self):
-        self._active_solve_request_id = None
-        self._active_run = None
-        self._analysis_run = None
-        self.signal_panel.set_source(None, {})
-        self.trajectory_analysis_panel.set_source(None, {})
-        self.scene.set_playback_source(None)
-        self.main_toolbar.anim_action.setEnabled(False)
-
-    def _set_solve_state(self, **updates):
-        state = dict(self._solve_state)
-        state.update(updates)
-        self._solve_state = state
+    def _on_solve_state(self, state):
+        run = self.solve_session.analysis_run
         self.system_toolbar.set_solve_state(state)
-        self.signal_panel.set_source(self._analysis_run, state)
-        run = self._analysis_run
+        self.signal_panel.set_source(run, state)
         self.trajectory_analysis_panel.set_source(run, state)
 
-        playable = bool(
+        playable = (
             run is not None
-            and state.get("valid")
-            and not state.get("stale")
-            and not state.get("solving")
-            and state.get("request_id") == run["request_id"]
-            and len(run["variables"]) == 3
+            and state["valid"]
+            and not state["stale"]
+            and not state["solving"]
+            and state["request_id"] == run.request_id
+            and len(run.variables) == 3
         )
         self.scene.set_playback_source(run if playable else None)
         self.main_toolbar.anim_action.setEnabled(playable)
 
-        return state
-
-    def _clear_data_view(self):
-        self.controls.data_view.clear()
-
-    def _update_data_view(self, solutions, is_partial):
-        if is_partial:
-            return
-
-        config, values = self._get_current_config_and_values()
-        t_min = 0.0 if config is None else config.time_defaults.t_min
-        self.controls.data_view.set_solutions(
-            solutions,
-            t_min=t_min,
-            t_max=self.current_t_max,
-            trajectory_specs=self._solve_state.get("trajectory_specs", []),
-            config=config,
-            values=values,
-            partial=is_partial,
-        )
+        if state["solving"] and not state["partial"]:
+            count = state["trajectories"]
+            self.status_bar.set_app_message(
+                "Solving trajectory" if count == 1 else f"Solving {count} trajectories"
+            )
 
     def _update_plot(self):
-        self.scene.animation_controller.stop()
-        self.solver.cancel_solve()
-        self.solver.cancel_lyapunov()
-        self._solve_pending = False
-        self._dispatch_solve(full=True)
+        self._solve(True)
         config, values = self._get_current_config_and_values()
         if config is not None:
             self.scene.viewport_overlay.set_info(config, values)
 
-    def _partial_t_max(self, full_n, partial_n, full_t_max, t_min):
-        if partial_n >= full_n:
-            return full_t_max
-
-        dt = (full_t_max - t_min) / full_n
-
-        return t_min + partial_n * dt
-
-    def _dispatch_solve(self, full=False):
-        if self._solve_pending:
-            return
-        self._solve_pending = True
-        self._solve_needed = False
-        config, values = self._get_current_config_and_values()
-        if config is None:
-            self._solve_pending = False
-            self._set_solve_state(
-                solving=False,
-                valid=False,
-                stale=False,
-                partial=False,
-                last_error="No attractor selected",
-                request_id=None,
-                attractor=None,
-                parameters={},
-                n=None,
-                t_max=None,
-                trajectories=0,
-                solution_points=[],
-            )
-            return
-        full_record = full or any(
-            self._panel_visible(name)
-            for name in ("signal_panel", "trajectory_analysis_panel")
-        )
-        user_n = self.current_n or config.time_defaults.n
-        t_max = self.current_t_max
-        trajectories = self.controls.trajectory_panel.get_trajectories()
-
-        if trajectories:
-            trajectory_specs = []
-            for trajectory in trajectories:
-                trajectory_n = int(trajectory.get("n", user_n))
-                trajectory_t_max = float(trajectory.get("t_max", t_max))
-                solve_n = trajectory_n if full_record else min(trajectory_n, PARTIAL_N)
-                solve_t_max = (
-                    trajectory_t_max
-                    if full_record
-                    else self._partial_t_max(
-                        trajectory_n,
-                        solve_n,
-                        trajectory_t_max,
-                        config.time_defaults.t_min,
-                    )
-                )
-                trajectory_specs.append(
-                    {
-                        "ic": [float(coord) for coord in trajectory["ic"]],
-                        "n": solve_n,
-                        "t_max": solve_t_max,
-                    }
-                )
-        else:
-            solve_n = int(user_n if full_record else min(user_n, PARTIAL_N))
-            solve_t_max = (
-                t_max
-                if full_record
-                else self._partial_t_max(
-                    user_n, solve_n, t_max, config.time_defaults.t_min
-                )
-            )
-            trajectory_specs = [
-                {
-                    "ic": [float(coord) for coord in config.initial_conditions],
-                    "n": solve_n,
-                    "t_max": solve_t_max,
-                }
-            ]
-
-        dispatch_n = max(spec["n"] for spec in trajectory_specs)
-        dispatch_t_max = max(spec["t_max"] for spec in trajectory_specs)
+    def _solve(self, full):
+        self.scene.animation_controller.stop()
         self.solver.cancel_lyapunov()
-
-        if full:
-            n_trajectories = len(trajectory_specs)
-            status_text = (
-                "Solving trajectory"
-                if n_trajectories == 1
-                else f"Solving {n_trajectories} trajectories"
-            )
-            self.status_bar.set_app_message(status_text)
-
-        signature = {
-            "attractor": config.name,
-            "parameters": {str(key): float(value) for key, value in values.items()},
-            "n": int(dispatch_n),
-            "t_max": float(dispatch_t_max),
-            "trajectories": [
-                [float(coord) for coord in spec["ic"]] for spec in trajectory_specs
-            ],
-            "trajectory_specs": [
-                {
-                    "ic": [float(coord) for coord in spec["ic"]],
-                    "n": int(spec["n"]),
-                    "t_max": float(spec["t_max"]),
-                }
-                for spec in trajectory_specs
-            ],
-        }
-
-        request_id = self.solver.next_solve_request_id()
-        self._active_solve_request_id = request_id
-
-        self._active_run = {
-            **signature,
-            "request_id": request_id,
-            "t_min": config.time_defaults.t_min,
-            "variables": config.variables,
-            "labels": tuple(t["label"] for t in trajectories) or ("T0",),
-            "colours": tuple(t["colour"].name() for t in trajectories) or (None,),
-            "analysis_ready": full_record,
-        }
-
-        self._set_solve_state(
-            solving=True,
-            valid=False,
-            stale=bool(self._system_solutions),
-            partial=not full,
-            last_error=None,
-            request_id=request_id,
-            attractor=signature["attractor"],
-            parameters=signature["parameters"],
-            n=signature["n"],
-            t_max=signature["t_max"],
-            trajectories=len(trajectory_specs),
-            trajectory_specs=signature["trajectory_specs"],
-            solution_points=[],
-        )
-        token = perf_start(
-            self,
-            "solve.request",
-            key=request_id,
-            attractor=config.name,
-            full=full,
-            partial=not full,
-            n=dispatch_n,
-            t_max=dispatch_t_max,
-            trajectories=len(trajectory_specs),
-        )
-        if token is not None:
-            self._solve_perf_tokens[request_id] = token
-
-        self.solver.request_solve(
-            request_id,
+        config, values = self._get_current_config_and_values()
+        self.solve_session.solve(
+            full,
             config,
             values,
-            trajectory_specs,
-            dispatch_n,
-            not full,
-            dispatch_t_max,
+            self.current_n,
+            self.current_t_max,
+            self.controls.trajectory_panel.get_trajectories(),
+            record=self._panel_visible("signal_panel")
+            or self._panel_visible("trajectory_analysis_panel"),
         )
 
-    def _on_controls_solve_requested(self, full):
-        self.scene.animation_controller.stop()
-        if not full and self._solve_pending and self._solve_state.get("partial", False):
-            self._solve_needed = True
-            self._full_needed = False
-
-            return
-
-        self.solver.cancel_solve()
-        self._solve_pending = False
-        self._solve_needed = full
-        self._full_needed = full
-        self._dispatch_solve(full=full)
-
-    def _request_lyapunov(self, config=None, values=None):
+    def _request_lyapunov(self):
         if not self._panel_visible("lyapunov_panel"):
             return
 
-        if config is None or values is None:
-            config, values = self._get_current_config_and_values()
+        config, values = self._get_current_config_and_values()
         if config is None:
             self.status_bar.set_app_message("No attractor selected", error=True)
             return
@@ -1271,135 +1028,42 @@ class Window(QtWidgets.QMainWindow):
         if token is not None:
             self._lyapunov_perf_tokens[self._active_lyapunov_request_id] = token
 
-    def _on_solve_result(self, request_id, solutions, is_partial):
-        if request_id != self._active_solve_request_id:
-            return
-
-        solve_token = self._solve_perf_tokens.pop(request_id, None)
-        self._solve_pending = False
-
-        if solutions is None:
-            perf_finish(self, solve_token, status="failed", partial=is_partial)
-            self._set_solve_state(
-                solving=False,
-                valid=False,
-                stale=bool(self._system_solutions),
-                partial=False,
-                last_error="Solve failed",
-                solution_points=[],
-            )
-            if not is_partial:
-                self._clear_data_view()
-            if self._solve_needed:
-                self._solve_needed = False
-                self._dispatch_solve(full=self._full_needed)
-            else:
-                self.status_bar.set_app_message("Solve failed", error=True)
-            return
-
-        config, _values = self._get_current_config_and_values()
-        if config is None:
-            perf_finish(self, solve_token, status="discard")
-            return
-
-        validation_start = time.perf_counter()
-        is_valid, message = validate_solutions(solutions, dimension=config.dimension)
-
-        validation_ms = (time.perf_counter() - validation_start) * 1000
-        if not is_valid:
-            perf_finish(self, solve_token, status="invalid", partial=is_partial)
-            self._set_solve_state(
-                solving=False,
-                valid=False,
-                stale=bool(self._system_solutions),
-                partial=False,
-                last_error=message,
-                solution_points=[],
-            )
-            if not is_partial:
-                self._clear_data_view()
-            self.status_bar.set_app_message(message, error=True)
-            if self._solve_needed:
-                self._solve_needed = False
-                full = self._full_needed
-                self._full_needed = False
-                self._dispatch_solve(full=full)
-            return
-
-        perf_finish(self, solve_token, status="ok", partial=is_partial)
-
-        ui_start = time.perf_counter()
-
+    def _on_run_accepted(self, run):
+        solutions = run.solutions
         self.status_bar.clear_app_message()
-        config, _values = self._get_current_config_and_values()
-        self._display_system_solution(config, solutions, is_partial)
-
-        if self._active_run["analysis_ready"]:
-            arrays = []
-            for solution in solutions:
-                view = solution.view()
-                view.setflags(write=False)
-                arrays.append(view)
-
-            self._analysis_run = {**self._active_run, "solutions": tuple(arrays)}
-
-        self._update_data_view(solutions, is_partial)
-        self._set_solve_state(
-            solving=False,
-            valid=not is_partial,
-            stale=is_partial or bool(self._solve_needed),
-            partial=is_partial,
-            last_error=None,
-            solution_points=[len(solution) for solution in solutions or []],
-        )
-
-        if is_partial:
+        self._display_system_solution(run)
+        self._update_projection_panel_from_solutions(solutions)
+        if run.partial:
             self.live_plot_controller._refresh_live_preview(solutions)
-            self._update_projection_panel_from_solutions(solutions)
+            return
 
-        if not is_partial:
-            self._latest_projection_solutions = solutions
-            self._update_projection_panel_from_solutions(solutions)
-            if (
-                self._panel_visible("projection_panel")
-                and self._initial_full_solves == 0
-            ):
-                QtCore.QTimer.singleShot(0, self._reapply_projections)
-                self._initial_full_solves += 1
+        self.controls.data_view.set_solutions(
+            solutions,
+            t_min=run.t_min,
+            t_max=run.t_max,
+            trajectory_specs=run.trajectory_specs,
+            config=run.config,
+            values=run.parameters,
+        )
+        self._latest_projection_solutions = solutions
+        if self._panel_visible("projection_panel") and self._initial_full_solves == 0:
+            QtCore.QTimer.singleShot(0, self._reapply_projections)
+            self._initial_full_solves += 1
 
-            if config.dimension == 3:
-                self.scene.grid_overlay.auto_adjust_grid(solutions)
-                # self.scene.camera_controller.fit_camera_to_solutions(solutions)
+        if run.config.dimension == 3:
+            self.scene.grid_overlay.auto_adjust_grid(solutions)
 
-        if not is_partial:
-            if self.lyapunov_panel.auto_enabled():
-                self._request_lyapunov()
+        if self.lyapunov_panel.auto_enabled():
+            self._request_lyapunov()
+        if self._panel_visible("poincare_panel"):
+            self.poincare_panel.set_attractor(run.config, run.parameters)
+        self.bifurcation_panel.current_values = dict(run.parameters)
+        self.live_plot_controller.refresh_all()
 
-            config, values = self._get_current_config_and_values()
-            if self._panel_visible("poincare_panel"):
-                self.poincare_panel.set_attractor(config, values)
-
-            self.bifurcation_panel.current_values = dict(values)
-
-            self._last_live_preview_update = None
-            for plot_name in list(self.live_plot_controller.live_plots):
-                self.live_plot_controller._refresh_live_plot(plot_name)
-
-        ui_ms = (time.perf_counter() - ui_start) * 1000
-        if self._perf.enabled:
-            self._perf._logger.info(
-                "solve.ui completed in %.3f ms (request_id=%s partial=%s validation_ms=%.3f)",
-                ui_ms,
-                request_id,
-                is_partial,
-                validation_ms,
-            )
-
-        if self._solve_needed:
-            self._solve_needed = False
-            full = self._full_needed
-            self._full_needed = False
-            self._dispatch_solve(full=full)
+    def _on_solve_failed(self, message, partial):
+        if not partial:
+            self.controls.data_view.clear()
+        self.status_bar.set_app_message(message, error=True)
 
     def _configure_system_capabilities(self, config):
         self.system_toolbar.set_variables(config.variables)
@@ -1444,43 +1108,28 @@ class Window(QtWidgets.QMainWindow):
         widget = self.phase_portrait if config.dimension == 2 else self.scene.container
         self.system_view.setCurrentWidget(widget)
 
-    def _display_system_solution(self, config, solutions, is_partial):
-        self._select_system_view(config)
-        self._system_solutions = solutions
+    def _display_system_solution(self, run):
+        solutions = run.solutions
+        self._select_system_view(run.config)
 
-        if config.dimension == 2:
+        if run.config.dimension == 2:
             self.phase_portrait.set_trajectories(
                 self.controls.trajectory_panel.get_trajectories()
             )
             self.phase_portrait.display_solutions(
-                solutions,
-                initial_conditions=self._active_run["trajectories"],
+                solutions, initial_conditions=run.initial_conditions
             )
             self.phase_portrait.request_field_update()
             return
 
-        self.scene.trajectory_renderer.set_time_steps(self._trajectory_time_steps())
-        self.scene.display_solutions(solutions, is_partial)
+        self.scene.trajectory_renderer.set_time_steps(
+            [(spec["t_max"] - run.t_min) / spec["n"] for spec in run.trajectory_specs]
+        )
+        self.scene.display_solutions(solutions, run.partial)
 
         if self.main_toolbar.auto_fit_camera_action.isChecked():
             self.scene.camera_controller.fit_camera_to_solutions(solutions)
             self.scene.grid_overlay.auto_adjust_grid(solutions)
-
-    def _trajectory_time_steps(self):
-        config, _values = self._get_current_config_and_values()
-        if config is None:
-            return []
-
-        t_min = config.time_defaults["t_min"]
-        trajectories = self.controls.trajectory_panel.get_trajectories()
-
-        if trajectories:
-            return [
-                (trajectory["t_max"] - t_min) / trajectory["n"]
-                for trajectory in trajectories
-            ]
-
-        return [(self.current_t_max - t_min) / self.current_n]
 
     def _reapply_projections(self):
         config, _values = self._get_current_config_and_values()
@@ -1556,20 +1205,15 @@ class Window(QtWidgets.QMainWindow):
         if self._restoring_view:
             return
 
-        self._clear_analysis_run()
+        self.solve_session.clear()
         self._latest_projection_solutions = None
 
         config, _values = self._get_current_config_and_values()
         if config is None or config.dimension == 3:
             self.scene.clear_solutions()
-            self._system_solutions = []
 
-        self._clear_data_view()
-        self.solver.cancel_solve()
-        self._solve_pending = False
-        self._solve_needed = True
-        self._full_needed = True
-        self._dispatch_solve(full=True)
+        self.controls.data_view.clear()
+        self._solve(True)
 
     def _on_trajectory_styles_changed(self, trajectories):
         config, _values = self._get_current_config_and_values()
@@ -1656,9 +1300,10 @@ class Window(QtWidgets.QMainWindow):
                 if config is not None:
                     self.bifurcation_panel.set_config(config, values)
             elif name == "trajectory_analysis_panel" and (
-                self._analysis_run is None or self._solve_state.get("partial")
+                self.solve_session.analysis_run is None
+                or self.solve_session.state["partial"]
             ):
-                self._on_controls_solve_requested(True)
+                self._solve(True)
         toolbar = self.main_toolbar
         for action, checked in (
             (
