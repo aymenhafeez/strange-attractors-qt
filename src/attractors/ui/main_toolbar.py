@@ -6,34 +6,7 @@
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .icons import icon
-from .process_metrics import ProcessUsageStatus
 from .style import MENUBAR, SCENE_TOOLBAR
-
-
-def build_status_bar(self):
-    status_bar = QtWidgets.QStatusBar()
-    status_bar.setFixedHeight(24)
-
-    output_panel_button = QtWidgets.QToolButton()
-    output_panel_button.setDefaultAction(self.output_panel_action)
-    output_panel_button.setAutoRaise(True)
-    output_panel_button.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly)
-    output_panel_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-    output_panel_button.setToolTip("Toggle Output Panel")
-    status_bar.addWidget(output_panel_button)
-
-    self.app_status_label = QtWidgets.QLabel("")
-    self.app_status_label.setAlignment(
-        QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
-    )
-    self.app_status_label.setStyleSheet(
-        "border: none; padding: 0 4px 1px 4px; font-size: 12px; color: #178640;"
-    )
-    self.process_status = ProcessUsageStatus()
-    status_bar.addWidget(self.app_status_label, 1)
-    status_bar.addPermanentWidget(self.process_status)
-    self.setStatusBar(status_bar)
-    self._set_process_status_visible(self._process_status_visible)
 
 
 def build_menu_bar(self):
@@ -213,7 +186,9 @@ def build_menu_bar(self):
 
     signal_action = self._panel_docks["signal_panel"].toggleViewAction()
     signal_action.setText("Signal and spectrum")
-    trajectory_action = self._panel_docks["trajectory_analysis_panel"].toggleViewAction()
+    trajectory_action = self._panel_docks[
+        "trajectory_analysis_panel"
+    ].toggleViewAction()
     trajectory_action.setText("Trajectory comparison")
 
     analysis_menu.addAction(signal_action)
@@ -386,10 +361,8 @@ def build_toolbar(self):
         "Bifurcation diagram",
         self._toggle_bifurcation,
     )
-    self.toolbar_process_status_action = self._add_panel_menu_action(
-        "Status bar",
-        lambda: self._toggle_process_status(),
-    )
+    self.toolbar_process_status_action = QtGui.QAction("Status bar", self)
+    self.toolbar_process_status_action.setCheckable(True)
     # self.output_panel_action = self._add_panel_menu_action(
     #     "Output panel",
     #     self._toggle_output_panel,

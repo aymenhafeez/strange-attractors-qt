@@ -332,7 +332,9 @@ def test_export_current_table_from_menu(tmp_path, qapp, monkeypatch):
     statuses = []
     window = SimpleNamespace(
         jupyter_console_panel=panel,
-        _set_app_status=lambda text, error=False: statuses.append((text, error)),
+        status_bar=SimpleNamespace(
+            set_app_message=lambda text, error=False: statuses.append((text, error))
+        ),
     )
 
     monkeypatch.setattr(
@@ -353,7 +355,9 @@ def test_export_current_table_ignores_cancel(qapp, tmp_path, monkeypatch):
     statuses = []
     window = SimpleNamespace(
         jupyter_console_panel=panel,
-        _set_app_status=lambda text, error=False: statuses.append((text, error)),
+        status_bar=SimpleNamespace(
+            set_app_message=lambda text, error=False: statuses.append((text, error))
+        ),
     )
 
     monkeypatch.setattr(

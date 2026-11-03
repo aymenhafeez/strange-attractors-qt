@@ -32,7 +32,7 @@ from .ui.control_panel import ControlPanel
 from .ui.docking import DockLayout
 from .ui.icons import icon
 from .ui.lyapunov_panel import LyapunovPanel
-from .ui.main_toolbar import build_menu_bar, build_status_bar, build_toolbar
+from .ui.main_toolbar import build_menu_bar, build_toolbar
 from .ui.output_panel import OutputPanel
 from .ui.phase_panel import PhasePortraitPanel
 from .ui.poincare_panel import PoincarePanel
@@ -40,6 +40,7 @@ from .ui.projection_panel import ProjectionPanel
 from .ui.right_panel import RightPanel
 from .ui.signal_panel import SignalPanel
 from .ui.startup import WelcomeDialog
+from .ui.status_bar import AppStatusBar
 from .ui.style import MAIN_WINDOW, plot_colours
 from .ui.system_toolbar import SystemToolbar
 from .ui.trajectory_analysis_panel import TrajectoryAnalysisPanel
@@ -107,12 +108,6 @@ class Window(QtWidgets.QMainWindow):
         self._last_live_preview_update = None
         self._latest_projection_solutions = None
         self._perf = PerfProfiler()
-        self._process_status_visible = True
-        self._app_status_message = ""
-        self._app_status_error = False
-        self._signal_status_message = ""
-        self._signal_status_error = False
-        self._app_status_clear_timer = None
         self._output_panel_visible = False
         self._panel_docks = {}
         self._open_analysis_panels = set()
@@ -266,7 +261,7 @@ class Window(QtWidgets.QMainWindow):
         )
         self.system_toolbar = SystemToolbar()
         self.jupyter_console_panel.script_panel.status_changed.connect(
-            lambda message: self._set_temporary_app_status(message)
+            lambda message: self.status_bar.set_temporary_app_message(message)
         )
 
         self.jupyter_console_panel.set_explore_status_callback(
@@ -360,9 +355,11 @@ class Window(QtWidgets.QMainWindow):
 
         build_menu_bar(self)
         self.controls.animation_mode_changed.connect(self._set_animation_mode)
-        build_status_bar(self)
-
-        self.signal_panel.status_changed.connect(self._set_signal_status)
+        self.status_bar = AppStatusBar(
+            self.output_panel_action, self.toolbar_process_status_action
+        )
+        self.setStatusBar(self.status_bar)
+        self.signal_panel.status_changed.connect(self.status_bar.set_signal_message)
 
         self.workspace_inspector = WorkspaceInspector(self.jupyter_console_panel)
 
@@ -407,11 +404,11 @@ class Window(QtWidgets.QMainWindow):
         try:
             added = self.controls.trajectory_panel.add_initial_condition([x, y])
         except ValueError as e:
-            self._set_app_status(str(e), error=True)
+            self.status_bar.set_app_message(str(e), error=True)
             return
 
         if not added:
-            self._set_app_status("Trajectory limit reached", error=True)
+            self.status_bar.set_app_message("Trajectory limit reached", error=True)
 
     def _update_phase_field(self):
         panel = self.phase_portrait
@@ -434,7 +431,7 @@ class Window(QtWidgets.QMainWindow):
             x, y = self.system._vector_field_segments(frame, "x", "y", scale=0.75)
         except (ValueError, ArithmeticError) as e:
             panel.field_item.clear()
-            self._set_app_status(str(e), error=True)
+            self.status_bar.set_app_message(str(e), error=True)
             return
 
         panel.set_vector_field(x, y)
@@ -609,7 +606,9 @@ class Window(QtWidgets.QMainWindow):
     def _restore_default_layout(self):
         self.dock_layout.reset()
         self._sync_dock_state()
-        self._set_temporary_app_status(f"Restored {self.workspace_mode.title()} layout")
+        self.status_bar.set_temporary_app_message(
+            f"Restored {self.workspace_mode.title()} layout"
+        )
 
     def _hide_menu_icons(self, menu):
         for action in menu.actions():
@@ -787,7 +786,6 @@ class Window(QtWidgets.QMainWindow):
             QtCore.QSignalBlocker(self.toolbar_bifurcation_action),
             QtCore.QSignalBlocker(self.toolbar_explore_action),
             QtCore.QSignalBlocker(self.toolbar_system_action),
-            QtCore.QSignalBlocker(self.toolbar_process_status_action),
             QtCore.QSignalBlocker(self.output_panel_action),
         ):
             self.toolbar_lyapunov_action.setChecked(
@@ -806,99 +804,8 @@ class Window(QtWidgets.QMainWindow):
             self.toolbar_system_action.setChecked(
                 self.workspace_mode == "system" and _workspace_visible(self)
             )
-            self.toolbar_process_status_action.setChecked(self._process_status_visible)
             self.output_panel_action.setChecked(self._output_panel_visible)
         self._sync_jupyter_workspace_state()
-
-    def _set_process_status_visible(self, visible):
-        self._process_status_visible = bool(visible)
-
-        self.process_status.setVisible(self._process_status_visible)
-        self.process_status.set_active(self._process_status_visible)
-        self.statusBar().setVisible(self._process_status_visible)
-
-        if (
-            self.toolbar_process_status_action.isChecked()
-            != self._process_status_visible
-        ):
-            with QtCore.QSignalBlocker(self.toolbar_process_status_action):
-                self.toolbar_process_status_action.setChecked(
-                    self._process_status_visible
-                )
-
-        self._sync_status_bar_visibility()
-
-    def _toggle_process_status(self):
-        self._set_process_status_visible(not self._process_status_visible)
-
-    def _set_app_status(self, message, error=False):
-        self._app_status_message = str(message)
-        self._app_status_error = error
-        self._refresh_app_status()
-
-    def _set_temporary_app_status(self, message, *, timeout_ms=3000, error=False):
-        message = str(message)
-        self._set_app_status(message, error=error)
-
-        if self._app_status_clear_timer is None:
-            self._app_status_clear_timer = QtCore.QTimer(self)
-            self._app_status_clear_timer.setSingleShot(True)
-
-        try:
-            self._app_status_clear_timer.timeout.disconnect()
-        except TypeError:
-            pass
-
-        self._app_status_clear_timer.timeout.connect(
-            lambda expected=message: (
-                self._clear_app_status()
-                if self._app_status_message == expected
-                else None
-            )
-        )
-        self._app_status_clear_timer.start(int(timeout_ms))
-
-    def _clear_app_status(self):
-        self._app_status_message = ""
-        self._app_status_error = False
-        self._refresh_app_status()
-
-    def _set_signal_status(self, message, error=False):
-        self._signal_status_message = str(message)
-        self._signal_status_error = error
-        self._refresh_app_status()
-
-    def _refresh_app_status(self):
-        messages = [
-            message
-            for message in (
-                self._app_status_message,
-                self._signal_status_message,
-            )
-            if message
-        ]
-        text = " · ".join(messages)
-
-        has_error = (bool(self._app_status_message) and self._app_status_error) or (
-            bool(self._signal_status_message) and self._signal_status_error
-        )
-        colour = "#ff6b6b" if has_error else "#178640"
-
-        self.app_status_label.setText(text)
-        self.app_status_label.setToolTip(text)
-        self.app_status_label.setStyleSheet(
-            f"border: none; padding: 0 4px 3px 4px; font-size: 12px; color: {colour};"
-        )
-        self._sync_status_bar_visibility()
-
-    def _sync_status_bar_visibility(self):
-        self.statusBar().setVisible(
-            bool(
-                self._process_status_visible
-                or self._app_status_message
-                or self._signal_status_message
-            )
-        )
 
     def _build_jupyter_toolbar_actions(self, toolbar):
         self._jupyter_toolbar_actions = []
@@ -1245,7 +1152,7 @@ class Window(QtWidgets.QMainWindow):
     def _open_example_script(self, path):
         if self.jupyter_console_panel.script_panel.load_script(path):
             self._set_workspace_mode("explore")
-            self._set_temporary_app_status(f"Opened example: {path.name}")
+            self.status_bar.set_temporary_app_message(f"Opened example: {path.name}")
 
     def _populate_proxy_menu(self, menu, source_menu):
         source_actions = source_menu.actions()
@@ -1318,7 +1225,7 @@ class Window(QtWidgets.QMainWindow):
             QtCore.QUrl.fromLocalFile(self._preset_directory)
         )
         if not opened:
-            self._set_app_status("Could not open preset folder", error=True)
+            self.status_bar.set_app_message("Could not open preset folder", error=True)
 
     def _update_preset_summary(self, name):
         preset_name = name.strip()
@@ -1349,7 +1256,7 @@ class Window(QtWidgets.QMainWindow):
     def _save_preset(self, name, notes):
         config, values = self._get_current_config_and_values()
         if config is None:
-            self._set_app_status("No attractor selected", error=True)
+            self.status_bar.set_app_message("No attractor selected", error=True)
             return
 
         preset_name = name.strip() or f"{self.current_name} preset"
@@ -1365,16 +1272,16 @@ class Window(QtWidgets.QMainWindow):
                 notes,
             )
         except PresetError as exc:
-            self._set_app_status(str(exc), error=True)
+            self.status_bar.set_app_message(str(exc), error=True)
             return
 
         self._refresh_presets(preset_name)
-        self._set_app_status(f"Saved preset: {preset_name}")
+        self.status_bar.set_app_message(f"Saved preset: {preset_name}")
 
     def _load_preset(self, name):
         preset_name = name.strip()
         if not preset_name:
-            self._set_app_status("Select a preset to load", error=True)
+            self.status_bar.set_app_message("Select a preset to load", error=True)
             return
 
         try:
@@ -1382,27 +1289,27 @@ class Window(QtWidgets.QMainWindow):
                 self._preset_directory, preset_name
             )
         except PresetError as exc:
-            self._set_app_status(str(exc), error=True)
+            self.status_bar.set_app_message(str(exc), error=True)
             return
 
         self._apply_loaded_preset(config, values, n, t_max)
         self._refresh_presets(preset_name)
-        self._set_app_status(f"Loaded preset: {preset_name}")
+        self.status_bar.set_app_message(f"Loaded preset: {preset_name}")
 
     def _delete_preset(self, name):
         preset_name = name.strip()
         if not preset_name:
-            self._set_app_status("Select a preset to delete", error=True)
+            self.status_bar.set_app_message("Select a preset to delete", error=True)
             return
 
         try:
             delete_named_preset(self._preset_directory, preset_name)
         except PresetError as exc:
-            self._set_app_status(str(exc), error=True)
+            self.status_bar.set_app_message(str(exc), error=True)
             return
 
         self._refresh_presets()
-        self._set_app_status(f"Deleted preset: {preset_name}")
+        self.status_bar.set_app_message(f"Deleted preset: {preset_name}")
 
     def _get_current_config_and_values(self):
         if self.current_name == "Custom":
@@ -1691,7 +1598,7 @@ class Window(QtWidgets.QMainWindow):
                 if n_trajectories == 1
                 else f"Solving {n_trajectories} trajectories"
             )
-            self._set_app_status(status_text)
+            self.status_bar.set_app_message(status_text)
 
         signature = {
             "attractor": config.name,
@@ -1785,11 +1692,11 @@ class Window(QtWidgets.QMainWindow):
         if config is None or values is None:
             config, values = self._get_current_config_and_values()
         if config is None:
-            self._set_app_status("No attractor selected", error=True)
+            self.status_bar.set_app_message("No attractor selected", error=True)
             return
 
         self.solver.cancel_lyapunov()
-        self._set_app_status("Computing Lyapunov spectrum")
+        self.status_bar.set_app_message("Computing Lyapunov spectrum")
         self._active_lyapunov_request_id = self.solver.request_lyapunov(
             config,
             values,
@@ -1830,7 +1737,7 @@ class Window(QtWidgets.QMainWindow):
                 self._solve_needed = False
                 self._dispatch_solve(full=self._full_needed)
             else:
-                self._set_app_status("Solve failed", error=True)
+                self.status_bar.set_app_message("Solve failed", error=True)
             return
 
         config, _values = self._get_current_config_and_values()
@@ -1854,7 +1761,7 @@ class Window(QtWidgets.QMainWindow):
             )
             if not is_partial:
                 self._clear_data_view()
-            self._set_app_status(message, error=True)
+            self.status_bar.set_app_message(message, error=True)
             if self._solve_needed:
                 self._solve_needed = False
                 full = self._full_needed
@@ -1866,7 +1773,7 @@ class Window(QtWidgets.QMainWindow):
 
         ui_start = time.perf_counter()
 
-        self._clear_app_status()
+        self.status_bar.clear_app_message()
         config, _values = self._get_current_config_and_values()
         self._display_system_solution(config, solutions, is_partial)
 
@@ -2134,7 +2041,7 @@ class Window(QtWidgets.QMainWindow):
         token = self._lyapunov_perf_tokens.pop(request_id, None)
         perf_finish(self, token)
         self.lyapunov_panel.set_result(lyap, ky_dim, t_hist, lyap_hist)
-        self._clear_app_status()
+        self.status_bar.clear_app_message()
 
     def _on_lyapunov_failed(self, request_id, message):
         if request_id != self._active_lyapunov_request_id:
@@ -2145,7 +2052,7 @@ class Window(QtWidgets.QMainWindow):
 
         token = self._lyapunov_perf_tokens.pop(request_id, None)
         perf_finish(self, token, status="failed")
-        self._set_app_status(f"Lyapunov failed: {message}", error=True)
+        self.status_bar.set_app_message(f"Lyapunov failed: {message}", error=True)
 
     def _workspace_docks(self):
         panel = self.jupyter_console_panel
@@ -2219,7 +2126,7 @@ class Window(QtWidgets.QMainWindow):
             token = self._lyapunov_perf_tokens.pop(request_id, None)
             perf_finish(self, token, status="cancelled")
         self._active_lyapunov_request_id = None
-        self._clear_app_status()
+        self.status_bar.clear_app_message()
 
     def _close_lyapunov_panel(self):
         self._close_panel_dock("lyapunov_panel")
@@ -2276,7 +2183,7 @@ class Window(QtWidgets.QMainWindow):
         try:
             self.jupyter_console_panel.active_explorer().remove_trace(name)
         except KeyError as exc:
-            self._set_app_status(str(exc), error=True)
+            self.status_bar.set_app_message(str(exc), error=True)
 
         self._sync_explore_actions()
 
@@ -2317,10 +2224,10 @@ class Window(QtWidgets.QMainWindow):
                 path, name=name, index=False
             )
         except OSError as e:
-            self._set_app_status(f"Failed to export table: {e}", error=True)
+            self.status_bar.set_app_message(f"Failed to export table: {e}", error=True)
             return
 
-        self._set_app_status(f"Exported table to {target}")
+        self.status_bar.set_app_message(f"Exported table to {target}")
 
     def show_welcome(self):
         dialog = WelcomeDialog(self, app_settings())
@@ -2335,7 +2242,7 @@ class Window(QtWidgets.QMainWindow):
             self._open_example_script(scripts[0])
         else:
             self._set_workspace_mode("explore")
-            self._set_temporary_app_status("No bundled examples available")
+            self.status_bar.set_temporary_app_message("No bundled examples available")
 
     def help(self):
         QtWidgets.QMessageBox.information(
@@ -2487,7 +2394,7 @@ class Window(QtWidgets.QMainWindow):
         settings.sync()
 
         self.reset_session_state = True
-        self._set_temporary_app_status("Reset session state for next launch")
+        self.status_bar.set_temporary_app_message("Reset session state for next launch")
 
     def closeEvent(self, a0):
         if not self.jupyter_console_panel.script_panel.confirm_close():
