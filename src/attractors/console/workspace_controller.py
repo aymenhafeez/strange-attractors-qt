@@ -5,17 +5,11 @@ from pyqtgraph.Qt import QtCore
 
 
 class WorkspaceController:
-    def __init__(self, window, toolbar):
-        self.window = window
+    def __init__(self, console_panel, toolbar, system_toolbar, live_plots):
+        self.console_panel = console_panel
         self.toolbar = toolbar
-
-    @property
-    def console_panel(self):
-        return self.window.jupyter_console_panel
-
-    @property
-    def system_toolbar(self):
-        return self.window.system_toolbar
+        self.system_toolbar = system_toolbar
+        self.live_plots = live_plots
 
     def sync_views(self):
         combo = self.toolbar.view_combo
@@ -46,7 +40,7 @@ class WorkspaceController:
         self.system_toolbar.set_plots(items, active_key)
 
         if kind == "plot":
-            self.window.live_plot_controller._sync_live_menu(name)
+            self.live_plots.sync_menu(name)
         else:
             self.system_toolbar.set_live_traces("", [])
 
@@ -98,12 +92,12 @@ class WorkspaceController:
             self.sync_views()
             return
 
-        self.window.live_plot_controller.rename_plot(old_name, new_name)
+        self.live_plots.rename_plot(old_name, new_name)
 
     def clear_current_view(self):
         kind, _name = self.console_panel.active_view_key()
         if kind == "plot":
-            self.window.live_plot_controller._clear_plot()
+            self.live_plots.clear_plot()
         else:
             self.console_panel.views3d.clear()
             self.system_toolbar.set_status("Cleared current 3D view")
@@ -111,7 +105,7 @@ class WorkspaceController:
             self.toolbar.sync_explore()
 
     def clear_all_views(self):
-        self.window.live_plot_controller._clear_all_plots()
+        self.live_plots.clear_all()
         self.console_panel.views3d.clear_all()
         self.system_toolbar.set_status("Cleared workspace views")
         self.sync_views()
@@ -173,4 +167,4 @@ class WorkspaceController:
         if item["kind"] == "view3d":
             return f"{item['label']}: 3D view"
 
-        return self.window.live_plot_controller._plot_combo_tooltip(item["name"])
+        return self.live_plots.tooltip(item["name"])

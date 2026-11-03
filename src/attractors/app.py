@@ -12,7 +12,7 @@ from .colour import colourmap
 from .console import analysis
 from .console.jupyter_console_panel import JupyterConsolePanel
 from .console.live_plot_controller import LivePlotController
-from .console.system import SystemInspector
+from .console.system import SystemCommands, SystemInspector, SystemSettings
 from .console.workspace_controller import WorkspaceController
 from .console.workspace_inspector import WorkspaceInspector
 from .perf import PerfProfiler, perf_finish, perf_start, profiling_enabled
@@ -95,10 +95,6 @@ class Window(QtWidgets.QMainWindow):
             )
         self._scripts_directory = self._app_data_directory / "scripts"
         self._scripts_directory.mkdir(parents=True, exist_ok=True)
-        self._live_plots = {}
-        self._live_items = {}
-        self.live_plot_controller = LivePlotController(self)
-        self.system = SystemInspector(self)
 
         self.solver = SolveManager(self)
         self.solve_session = SolveSession(self.solver, self)
@@ -107,7 +103,7 @@ class Window(QtWidgets.QMainWindow):
 
         self.scene = ViewManager(self)
         self.scene.animation_segments_data.connect(
-            lambda segments: self.live_plot_controller._refresh_live_preview(
+            lambda segments: self.live_plot_controller.refresh_preview(
                 segments, kinds={"projection"}
             )
         )
@@ -214,12 +210,33 @@ class Window(QtWidgets.QMainWindow):
             script_dir=self._scripts_directory,
         )
         self.system_toolbar = SystemToolbar()
+        self.system = SystemInspector(
+            self._system_settings,
+            self.solve_session,
+            self.jupyter_console_panel,
+            self.scene.camera_controller.get_camera_state,
+            SystemCommands(
+                self._apply_console_values,
+                self._apply_console_time,
+                lambda: self._solve(True),
+            ),
+        )
+        self.live_plot_controller = LivePlotController(
+            self.system, self.jupyter_console_panel.plots, self.system_toolbar, self
+        )
+        self.system.live = self.live_plot_controller
         self.main_toolbar = MainToolbar(self)
         self.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, self.main_toolbar)
         self.workspace_toolbar = WorkspaceToolbar(
             self.main_toolbar, self.system_toolbar, self.jupyter_console_panel
         )
-        self.workspace_controller = WorkspaceController(self, self.workspace_toolbar)
+        self.workspace_controller = WorkspaceController(
+            self.jupyter_console_panel,
+            self.workspace_toolbar,
+            self.system_toolbar,
+            self.live_plot_controller,
+        )
+        self.live_plot_controller.changed.connect(self.workspace_controller.sync_views)
         self.jupyter_console_panel.script_panel.status_changed.connect(
             lambda message: self.status_bar.set_temporary_app_message(message)
         )
@@ -228,16 +245,13 @@ class Window(QtWidgets.QMainWindow):
             self.system_toolbar.set_status
         )
         self.system_toolbar.plot_requested.connect(
-            self.live_plot_controller._on_plot_requested
+            self.live_plot_controller.on_plot_requested
         )
         self.system_toolbar.live_trace_remove_requested.connect(
-            self.live_plot_controller._remove_live_trace
+            self.live_plot_controller.remove
         )
         self.system_toolbar.live_plot_clear_requested.connect(
-            self.live_plot_controller._clear_live_plot
-        )
-        self.jupyter_console_panel.plots.plots_changed.connect(
-            self.live_plot_controller._on_plots_changed
+            self.live_plot_controller.unfollow
         )
         self.jupyter_console_panel.plots.current_changed.connect(
             lambda _name: self.workspace_controller.sync_views()
@@ -868,93 +882,27 @@ class Window(QtWidgets.QMainWindow):
             "analysis": analysis,
         }
 
-    def _set_console_parameters(self, values, *, solve=False):
-        config, current_values = self._get_current_config_and_values()
-        if config is None:
-            raise ValueError("No attractor selected")
-
-        updates = self._validated_console_parameter_updates(config, values)
-        next_values = {**current_values, **updates}
-        self.controls.set_current_values(next_values)
-        self.scene.viewport_overlay.set_info(
+    def _system_settings(self):
+        config, values = self._get_current_config_and_values()
+        return SystemSettings(
+            self.current_name,
             config,
-            self.controls.get_current_values(),
+            values,
+            self.current_n,
+            self.current_t_max,
+            self.controls.trajectory_panel.get_trajectories(),
         )
-        if solve:
-            self._solve(True)
-        elif self.controls.get_current_values() != current_values:
-            self.solve_session.mark_unsolved()
 
-        return self.system.parameters()
+    def _apply_console_values(self, values):
+        config, _values = self._get_current_config_and_values()
+        self.controls.set_current_values(values)
+        self.scene.viewport_overlay.set_info(config, self.controls.get_current_values())
 
-    def _set_console_time(self, *, n=None, t_max=None, solve=False):
-        next_n = self.current_n if n is None else self._validated_console_n(n)
-        next_t_max = (
-            self.current_t_max
-            if t_max is None
-            else self._validated_console_t_max(t_max)
-        )
-        time_changed = next_n != self.current_n or next_t_max != self.current_t_max
-        self.current_n = next_n
-        self.current_t_max = next_t_max
-        self.controls.set_time_values(self.current_n, self.current_t_max)
-        self.controls.set_traj_tail_max(self.current_n)
-
-        if solve:
-            self._solve(True)
-        elif time_changed:
-            self.solve_session.mark_unsolved()
-
-        return self.system.status()
-
-    def _validated_console_n(self, value):
-        try:
-            n = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("N must be a positive integer") from exc
-        if n < 1000 or n > 500000:
-            raise ValueError("N must be between 1000 and 500000")
-
-        return n
-
-    def _validated_console_t_max(self, value):
-        try:
-            t_max = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("t_max must be a positive integer") from exc
-        if t_max < 1 or t_max > 750:
-            raise ValueError("t_max must be between 1 and 750")
-
-        return t_max
-
-    def _validated_console_parameter_updates(self, config, values):
-        if not isinstance(values, dict):
-            raise TypeError("Parameter updates must be a dictionary")
-
-        params = {param.name: param for param in config.params}
-        updates = {}
-        for name, value in values.items():
-            key = str(name)
-            if key not in params:
-                raise ValueError(f"Unknown parameter: {key}")
-            try:
-                numeric = float(value)
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f"Parameter {key} must be numeric") from exc
-
-            param = params[key]
-            if numeric < param.min_val or numeric > param.max_val:
-                raise ValueError(
-                    f"Parameter {key} must be between {param.min_val} and {param.max_val}"
-                )
-            updates[key] = numeric
-
-        return updates
-
-    def _solve_from_console(self):
-        self._solve(True)
-
-        return self.system.status()
+    def _apply_console_time(self, n, t_max):
+        self.current_n = n
+        self.current_t_max = t_max
+        self.controls.set_time_values(n, t_max)
+        self.controls.set_traj_tail_max(n)
 
     def _on_solve_state(self, state):
         run = self.solve_session.analysis_run
@@ -988,14 +936,14 @@ class Window(QtWidgets.QMainWindow):
     def _solve(self, full):
         self.scene.animation_controller.stop()
         self.solver.cancel_lyapunov()
-        config, values = self._get_current_config_and_values()
+        settings = self._system_settings()
         self.solve_session.solve(
             full,
-            config,
-            values,
-            self.current_n,
-            self.current_t_max,
-            self.controls.trajectory_panel.get_trajectories(),
+            settings.config,
+            settings.values,
+            settings.n,
+            settings.t_max,
+            settings.trajectories,
             record=self._panel_visible("signal_panel")
             or self._panel_visible("trajectory_analysis_panel"),
         )
@@ -1034,7 +982,7 @@ class Window(QtWidgets.QMainWindow):
         self._display_system_solution(run)
         self._update_projection_panel_from_solutions(solutions)
         if run.partial:
-            self.live_plot_controller._refresh_live_preview(solutions)
+            self.live_plot_controller.refresh_preview(solutions)
             return
 
         self.controls.data_view.set_solutions(

@@ -1,15 +1,17 @@
 # SPDX-FileCopyrightText: 2026 Aymen Hafeez
 # SPDX-License-Identifier: GPL-3.0-only
 
+import itertools
+from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 from pyqtgraph.Qt import QtCore
 
 from ..ui.style import plot_colours
-from .system import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE
+from .system import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE, parse_mode
 
 PREVIEW_UPDATE_INTERVAL = 120  # ms
-AXES = {"x": 0, "y": 1, "z": 2}
 PREVIEW = {
     "axis",
     "displacement",
@@ -21,65 +23,63 @@ PREVIEW = {
     "vector_field",
 }
 TIMESERIES = {"displacement", "radius", "speed"}
-AUTO_PENS = ["w", "r", "g", "b", "c", "m", "y"]
 
 
-def _plot_mode(mode=PLOT_MODE_REPLACE):
-    normalised = mode.strip().lower()
-    if normalised == PLOT_MODE_REPLACE:
-        return PLOT_MODE_REPLACE
-    if normalised == PLOT_MODE_OVERLAY:
-        return PLOT_MODE_OVERLAY
-
-    raise ValueError("Plot mode must be 'replace' or 'overlay'")
+# tracks by plot object not name so rename keeps the trace
+@dataclass(eq=False)
+class _Trace:
+    plot: object
+    spec: dict
+    items: tuple = ()
 
 
-class LivePlotController:
-    def __init__(self, window):
-        self.window = window
-        self._last_preview_update = None
+class LivePlotController(QtCore.QObject):
+    changed = QtCore.pyqtSignal()
+
+    def __init__(self, system, plots, system_toolbar, parent=None):
+        super().__init__(parent)
+        self._system = system
+        self._plots = plots
+        self._toolbar = system_toolbar
+        self._traces = {}
+        self._ids = itertools.count(1)
         self._auto_pen_indices = {}
+        self._last_preview_update = None
+        plots.plots_changed.connect(self._on_plots_changed)
 
-    @property
-    def live_plots(self):
-        return self.window._live_plots
+    def trace(self, trace_id):
+        try:
+            return self._traces[trace_id]
+        except KeyError:
+            raise LookupError(f"Live trace {trace_id} was removed") from None
 
-    @live_plots.setter
-    def live_plots(self, value):
-        self.window._live_plots = value
+    def _named(self, plot_name):
+        return [
+            (trace_id, trace)
+            for trace_id, trace in self._traces.items()
+            if trace.spec["plot"] == plot_name
+        ]
 
-    @property
-    def live_items(self):
-        return self.window._live_items
+    def _on(self, plot):
+        return [trace for trace in self._traces.values() if trace.plot is plot]
 
-    @live_items.setter
-    def live_items(self, value):
-        self.window._live_items = value
+    def _drop(self, plot):
+        for trace_id, trace in list(self._traces.items()):
+            if trace.plot is plot:
+                del self._traces[trace_id]
+
+    def _forget(self, plot):
+        self._drop(plot)
+        self._auto_pen_indices.pop(plot, None)
 
     def rename_plot(self, old_name, new_name):
-        live_specs = self.live_plots.get(old_name)
-        auto_pen_index = self._auto_pen_indices.get(old_name)
         try:
-            self.window.jupyter_console_panel.plots.rename(old_name, new_name)
+            self._plots.rename(old_name, new_name)
         except (KeyError, ValueError) as exc:
-            self.window.system_toolbar.set_status(str(exc))
-            return
+            self._toolbar.set_status(str(exc))
 
-        if live_specs is not None:
-            self.live_plots.pop(old_name, None)
-            renamed_specs = []
-            for spec in live_specs:
-                renamed_spec = dict(spec)
-                renamed_spec["plot"] = new_name
-                renamed_specs.append(renamed_spec)
-            self.live_plots[new_name] = renamed_specs
-            self._rename_live_items(old_name, new_name)
-        if auto_pen_index is not None:
-            self._auto_pen_indices.pop(old_name, None)
-            self._auto_pen_indices[new_name] = auto_pen_index
-
-    def _plot_combo_tooltip(self, plot_name):
-        count = len(self.live_plots.get(plot_name, []))
+    def tooltip(self, plot_name):
+        count = len(self._named(plot_name))
         if count == 0:
             return f"{plot_name}: no live traces"
         if count == 1:
@@ -87,24 +87,21 @@ class LivePlotController:
 
         return f"{plot_name}: {count} live traces"
 
-    def _sync_live_menu(self, plot_name=None):
-        if plot_name is None:
-            plot_name = self.window.jupyter_console_panel.plots.current_name
-        plot_name = str(plot_name).strip()
-        specs = self.live_plots.get(plot_name, [])
+    def sync_menu(self, plot_name):
         traces = [
             {
-                "index": index,
+                "id": trace_id,
                 "label": (
-                    f"{self._live_trace_label(spec)} (unavailable: {spec['error']})"
-                    if spec.get("error")
-                    else self._live_trace_label(spec)
+                    f"{self._live_trace_label(trace.spec)} "
+                    f"(unavailable: {trace.spec['error']})"
+                    if trace.spec.get("error")
+                    else self._live_trace_label(trace.spec)
                 ),
-                "mode": self._live_trace_mode(spec),
+                "mode": self._live_trace_mode(trace.spec),
             }
-            for index, spec in enumerate(specs)
+            for trace_id, trace in self._named(plot_name)
         ]
-        self.window.system_toolbar.set_live_traces(plot_name, traces)
+        self._toolbar.set_live_traces(plot_name, traces)
 
     def _live_trace_label(self, spec):
         label = spec.get("label")
@@ -143,47 +140,44 @@ class LivePlotController:
 
         return "full solve"
 
-    def _on_plot_requested(self, kind, options):
+    def on_plot_requested(self, kind, options):
         plot_options = dict(options)
         live = bool(plot_options.pop("live", True))
         plot = plot_options.pop("plot", None)
-        # if live and kind in LIVE_KINDS:
-        if live and kind in {*PREVIEW}:
-            self._register_live_plot(kind, plot=plot, **plot_options)
+        if live and kind in PREVIEW:
+            self.register(kind, plot=plot, **plot_options)
         else:
             self._run_console_plot_request(kind, plot=plot, **plot_options)
 
-    def _auto_pen(self, plot_name, mode):
+    def _auto_pen(self, plot, mode):
         if mode == PLOT_MODE_OVERLAY:
-            index = self._auto_pen_indices.get(plot_name, 0)
+            index = self._auto_pen_indices.get(plot, 0)
         else:
             index = 0
 
         pens = plot_colours()["plot_auto_pens"]
         pen = pens[index % len(pens)]
-        self._auto_pen_indices[plot_name] = index + 1
+        self._auto_pen_indices[plot] = index + 1
 
         return pen
 
-    def _plot_pen(self, plot_name, mode, pen):
+    def _plot_pen(self, plot, mode, pen):
         if pen is None:
-            return self._auto_pen(plot_name, mode)
+            return self._auto_pen(plot, mode)
 
         if mode != PLOT_MODE_OVERLAY:
-            self._auto_pen_indices[plot_name] = 0
+            self._auto_pen_indices[plot] = 0
 
         return pen
 
     def _run_console_plot_request(self, kind, *, plot=None, **options):
-        plot_name = self._plot_name(plot)
-        target = self._live_plot_target(plot_name)
-        mode = _plot_mode(options.pop("mode", PLOT_MODE_REPLACE))
+        target = self._live_plot_target(self._plot_name(plot))
+        mode = parse_mode(options.pop("mode", PLOT_MODE_REPLACE))
         label = options.pop("label", None)
-        pen = self._plot_pen(plot_name, mode, options.pop("pen", None))
+        pen = self._plot_pen(target, mode, options.pop("pen", None))
 
         if mode == PLOT_MODE_REPLACE:
-            self.live_plots.pop(plot_name, None)
-            self._clear_live_items(plot_name)
+            self._drop(target)
 
         plotter, args, kwargs, accepts_label = self._console_plot_call(kind, options)
         if accepts_label:
@@ -192,13 +186,13 @@ class LivePlotController:
             kwargs["pen"] = pen
         plotter(*args, plot=target, mode=mode, **kwargs)
 
-        self.window.system_toolbar.set_status(f"Ran {kind} plot")
-        self.window.workspace_controller.sync_views()
+        self._toolbar.set_status(f"Ran {kind} plot")
+        self.changed.emit()
 
     def _console_plot_call(self, kind, options):
         if kind == "axis":
             return (
-                self.window.system.plot_axis,
+                self._system.plot_axis,
                 (options.get("axis", "x"),),
                 {"trajectory": options.get("trajectory", 0)},
                 True,
@@ -212,21 +206,21 @@ class LivePlotController:
             )
         if kind == "projection":
             return (
-                self.window.system.plot_projection,
+                self._system.plot_projection,
                 (options.get("x_axis", "x"), options.get("y_axis", "y")),
                 {"trajectory": options.get("trajectory", 0)},
                 True,
             )
         if kind == "separation":
             return (
-                self.window.system.plot_separation,
+                self._system.plot_separation,
                 (options.get("a", 0), options.get("b", 1)),
                 {"log": options.get("log", False)},
                 True,
             )
         if kind == "separation_fit":
             return (
-                self.window.system.plot_separation_fit,
+                self._system.plot_separation_fit,
                 (options.get("a", 0), options.get("b", 1)),
                 {
                     "t_min": options.get("t_min"),
@@ -238,7 +232,7 @@ class LivePlotController:
             )
         if kind == "crossings":
             return (
-                self.window.system.plot_crossings,
+                self._system.plot_crossings,
                 (options.get("axis", "z"),),
                 {
                     "value": options.get("value"),
@@ -251,48 +245,39 @@ class LivePlotController:
         raise ValueError(f"Unknown console plot kind: {kind}")
 
     def _on_plots_changed(self):
-        names = set(self.window.jupyter_console_panel.plots.names())
-        live_plots = self.live_plots
+        names = {
+            self._plots.get(name, activate=False): name for name in self._plots.names()
+        }
+        for trace_id, trace in list(self._traces.items()):
+            if trace.plot in names:
+                trace.spec["plot"] = names[trace.plot]
+            else:
+                del self._traces[trace_id]
+        for plot in list(self._auto_pen_indices):
+            if plot not in names:
+                del self._auto_pen_indices[plot]
 
-        for name in list(live_plots):
-            if name not in names:
-                live_plots.pop(name, None)
-                self._clear_live_items(name)
-                self._auto_pen_indices.pop(name, None)
+        self.changed.emit()
 
-        self.window.workspace_controller.sync_views()
+    def clear_plot(self):
+        plot = self._plots.current
+        self._plots.clear()
+        self._forget(plot)
+        self._toolbar.set_status(self._live_status_text())
+        self.changed.emit()
 
-    def _clear_plot(self):
-        plot_name = self.window.jupyter_console_panel.plots.current_name
-        self.window.jupyter_console_panel.plots.clear()
-        self.live_plots.pop(plot_name, None)
-        self._clear_live_items(plot_name)
-        self._auto_pen_indices.pop(plot_name, None)
-        self.window.system_toolbar.set_status(self._live_status_text())
-        self._sync_live_menu(plot_name)
-
-    def _clear_all_plots(self):
-        self.window.jupyter_console_panel.plots.clear_all()
-        self.live_plots.clear()
-        self.live_items.clear()
+    def clear_all(self):
+        self._plots.clear_all()
+        self._traces.clear()
         self._auto_pen_indices.clear()
-        self.window.system_toolbar.set_status("Cleared live plots")
-        self._sync_live_menu()
+        self._toolbar.set_status("Cleared live plots")
+        self.changed.emit()
 
-    def _close_plot(self):
-        plot_name = self.window.jupyter_console_panel.plots.current_name
-        self.window.jupyter_console_panel.plots.close()
-        self.live_plots.pop(plot_name, None)
-        self._clear_live_items(plot_name)
-        self._auto_pen_indices.pop(plot_name, None)
-        self._sync_live_menu()
-
-    def _register_live_plot(
-        self, kind, *, plot=None, mode=PLOT_MODE_REPLACE, **options
-    ):
+    def register(self, kind, *, plot=None, mode=PLOT_MODE_REPLACE, **options):
         plot_name = self._plot_name(plot)
-        mode = _plot_mode(mode)
-        pen = self._plot_pen(plot_name, mode, options.pop("pen", None))
+        target = self._live_plot_target(plot_name)
+        mode = parse_mode(mode)
+        pen = self._plot_pen(target, mode, options.pop("pen", None))
         spec = {
             "source": "main",
             "kind": kind,
@@ -301,25 +286,20 @@ class LivePlotController:
             "pen": pen,
             **options,
         }
-        specs = self.live_plots.setdefault(plot_name, [])
-        if mode == PLOT_MODE_OVERLAY:
-            specs.append(spec)
-        else:
-            self.live_plots[plot_name] = [spec]
-            self._clear_live_items(plot_name)
-        self._refresh_live_plot(plot_name)
-        self.window.workspace_controller.sync_views()
+        if mode == PLOT_MODE_REPLACE:
+            self._drop(target)
+        trace_id = next(self._ids)
+        self._traces[trace_id] = _Trace(target, spec)
+        self._refresh_plot(target)
+        self.changed.emit()
 
-        return pd.Series(spec)
+        return trace_id
 
-    def _live_plot_frame(self):
-        rows = []
-        for specs in self.live_plots.values():
-            for index, spec in enumerate(specs):
-                row = dict(spec)
-                row["trace"] = index
-                rows.append(row)
-
+    def frame(self):
+        rows = [
+            {**trace.spec, "trace": trace_id}
+            for trace_id, trace in self._traces.items()
+        ]
         columns = [
             "plot",
             "trace",
@@ -356,151 +336,106 @@ class LivePlotController:
 
         return pd.DataFrame(rows).reindex(columns=columns).set_index("plot")
 
-    def _clear_live_plot(self, plot=None):
-        live_plots = self.live_plots
-
+    def unfollow(self, plot=None):
         if plot is None:
-            plot_name = self.window.jupyter_console_panel.plots.current_name
+            plot_name = self._plots.current_name
         else:
             plot_name = str(plot).strip()
 
         if not plot_name:
             raise ValueError("Plot name cannot be empty")
 
-        live_plots.pop(plot_name, None)
-        self._clear_live_items(plot_name)
-        self._auto_pen_indices.pop(plot_name, None)
-        self._live_plot_target(plot_name).clear()
-        self.window.system_toolbar.set_status(self._live_status_text())
-        self._sync_live_menu(plot_name)
-
-        return self._live_plot_frame()
-
-    def _remove_live_trace(self, plot_name, trace_index):
-        plot_name = str(plot_name).strip()
-        if not plot_name:
-            return self._live_plot_frame()
-
-        live_plots = self.live_plots
-        specs = live_plots.get(plot_name, [])
-
-        if not 0 <= int(trace_index) < len(specs):
-            return self._live_plot_frame()
-
-        specs.pop(int(trace_index))
         target = self._live_plot_target(plot_name)
+        self._forget(target)
         target.clear()
+        self._toolbar.set_status(self._live_status_text())
+        self.changed.emit()
 
-        self._clear_live_items(plot_name)
+        return self.frame()
 
-        if specs:
-            self._refresh_live_plot(plot_name)
+    def remove(self, trace_id):
+        plot = self.trace(trace_id).plot
+        del self._traces[trace_id]
+        plot.clear()
+
+        remaining = self._on(plot)
+        for trace in remaining:
+            trace.items = ()
+
+        if remaining:
+            self._refresh_plot(plot)
         else:
-            live_plots.pop(plot_name, None)
-            self.window.system_toolbar.set_status(self._live_status_text())
+            self._toolbar.set_status(self._live_status_text())
+        self.changed.emit()
 
-        self._sync_live_menu(plot_name)
+        return self.frame()
 
-        return self._live_plot_frame()
-
-    def _clear_all_live_plots(self):
-        self.live_plots.clear()
-        self.live_items.clear()
+    def unfollow_all(self):
+        self._traces.clear()
         self._auto_pen_indices.clear()
-        self.window.system_toolbar.set_status("No live plots")
-        self._sync_live_menu()
+        self._toolbar.set_status("No live plots")
+        self.changed.emit()
 
-        return self._live_plot_frame()
+        return self.frame()
 
     def _plot_name(self, plot):
-        plots = self.window.jupyter_console_panel.plots
         if plot is None:
-            return plots.current_name
+            return self._plots.current_name
 
         plot_name = str(plot).strip()
         if not plot_name:
             raise ValueError("Plot name cannot be empty")
-        if plot_name not in plots.names():
-            plots.new(plot_name)
+        if plot_name not in self._plots.names():
+            self._plots.new(plot_name)
         else:
-            plots.get(plot_name)
+            self._plots.get(plot_name)
 
         return plot_name
 
     def _live_plot_target(self, plot_name):
-        plots = self.window.jupyter_console_panel.plots
         try:
-            return plots.get(plot_name, activate=False)
+            return self._plots.get(plot_name, activate=False)
         except KeyError:
-            return plots.new(plot_name, activate=False)
+            return self._plots.new(plot_name, activate=False)
 
-    def _live_item_key(self, plot_name, trace_index):
-        return (str(plot_name), int(trace_index))
-
-    def _clear_live_items(self, plot_name):
-        live_items = self.live_items
-        plot_key = str(plot_name)
-        for key in list(live_items):
-            if key[0] == plot_key:
-                live_items.pop(key, None)
-
-    def _rename_live_items(self, old_name, new_name):
-        live_items = self.live_items
-        old_key = str(old_name)
-        new_key = str(new_name)
-        renamed = {}
-
-        for key, item in list(live_items.items()):
-            if key[0] != old_key:
-                continue
-            renamed[(new_key, key[1])] = item
-            live_items.pop(key, None)
-        live_items.update(renamed)
-
-    def _set_trace_error(self, plot_name, index, spec, error=None):
-        previous = spec.get("error")
+    def _set_trace_error(self, trace, error=None):
+        previous = trace.spec.get("error")
 
         if error is None:
-            spec.pop("error", None)
+            trace.spec.pop("error", None)
         else:
-            spec["error"] = error
+            trace.spec["error"] = error
 
-        item = self.live_items.get(self._live_item_key(plot_name, index))
-        if item is not None:
-            items = item if isinstance(item, tuple) else (item,)
-            for part in items:
-                part.setVisible(error is None)
+        for item in trace.items:
+            item.setVisible(error is None)
 
         if previous != error:
-            self._sync_live_menu()
+            self.changed.emit()
 
-    def _refresh_live_plot(self, plot_name):
-        specs = self.live_plots.get(plot_name, [])
+    def _refresh_plot(self, plot):
         errors = []
 
-        for index, spec in enumerate(specs):
+        for position, trace in enumerate(self._on(plot)):
             try:
-                self._plot_live_spec(spec, trace_index=index)
+                self._plot_trace(trace, replace=position == 0)
             except (IndexError, KeyError, TypeError, ValueError) as exc:
                 message = str(exc)
-                self._set_trace_error(plot_name, index, spec, message)
+                self._set_trace_error(trace, message)
                 errors.append(message)
             else:
-                self._set_trace_error(plot_name, index, spec)
+                self._set_trace_error(trace)
 
-        self.window.system_toolbar.set_status(
+        self._toolbar.set_status(
             "; ".join(errors) if errors else self._live_status_text()
         )
 
     def refresh_all(self):
         self._last_preview_update = None
-        for plot_name in list(self.live_plots):
-            self._refresh_live_plot(plot_name)
+        for plot in dict.fromkeys(trace.plot for trace in self._traces.values()):
+            self._refresh_plot(plot)
 
-    def _refresh_live_preview(self, solutions=None, *, kinds=None):
-        live_plots = self.live_plots
-        live_items = self.live_items
-        if not live_plots or not live_items:
+    def refresh_preview(self, solutions=None, *, kinds=None):
+        if not any(trace.items for trace in self._traces.values()):
             return
 
         preview_kinds = PREVIEW if kinds is None else set(kinds)
@@ -514,46 +449,33 @@ class LivePlotController:
             return
 
         refreshed = False
-        for plot_name, specs in list(live_plots.items()):
-            for index, spec in enumerate(specs):
-                if spec.get("kind") not in preview_kinds:
-                    continue
-                try:
-                    updated = self._update_live_item(
-                        plot_name,
-                        index,
-                        spec,
-                        solutions=solutions,
-                    )
-                except (IndexError, KeyError, TypeError, ValueError) as exc:
-                    self._set_trace_error(plot_name, index, spec, str(exc))
-                else:
-                    if updated:
-                        self._set_trace_error(plot_name, index, spec)
-                        refreshed = True
+        for trace in list(self._traces.values()):
+            if trace.spec.get("kind") not in preview_kinds:
+                continue
+            try:
+                updated = self._update_items(trace, solutions=solutions)
+            except (IndexError, KeyError, TypeError, ValueError) as exc:
+                self._set_trace_error(trace, str(exc))
+            else:
+                if updated:
+                    self._set_trace_error(trace)
+                    refreshed = True
 
         if refreshed:
             self._last_preview_update = now_ms
 
-    def _plot_live_spec(self, spec, *, trace_index):
-        kind = spec["kind"]
-        plot = spec["plot"]
-        target = self._live_plot_target(plot)
-        key = self._live_item_key(plot, trace_index)
-        live_items = self.live_items
-        if self._update_live_item(
-            plot,
-            trace_index,
-            spec,
-            target=target,
-        ):
+    def _plot_trace(self, trace, *, replace):
+        if self._update_items(trace):
             return
 
-        mode = PLOT_MODE_REPLACE if trace_index == 0 else PLOT_MODE_OVERLAY
+        spec = trace.spec
+        kind = spec["kind"]
+        target = trace.plot
+        mode = PLOT_MODE_REPLACE if replace else PLOT_MODE_OVERLAY
         pen = spec.get("pen")
         label = spec.get("label") or self._live_trace_label(spec)
         if kind == "axis":
-            item = self.window.system.plot_axis(
+            item = self._system.plot_axis(
                 spec["axis"],
                 trajectory=spec.get("trajectory", 0),
                 plot=target,
@@ -562,10 +484,7 @@ class LivePlotController:
                 label=label,
                 zoom_region=spec.get("zoom_region", False),
             )
-            live_items[key] = item
-            return
-
-        if kind in TIMESERIES:
+        elif kind in TIMESERIES:
             item = self._plot_derived_timeseries(
                 kind,
                 trajectory=spec.get("trajectory", 0),
@@ -575,11 +494,8 @@ class LivePlotController:
                 label=label,
                 zoom_region=spec.get("zoom_region", False),
             )
-            live_items[key] = item
-            return
-
-        if kind == "projection":
-            item = self.window.system.plot_projection(
+        elif kind == "projection":
+            item = self._system.plot_projection(
                 spec.get("x_axis", "x"),
                 spec.get("y_axis", "y"),
                 trajectory=spec.get("trajectory", 0),
@@ -588,11 +504,8 @@ class LivePlotController:
                 pen=pen,
                 label=label,
             )
-            live_items[key] = item
-            return
-
-        if kind == "separation":
-            item = self.window.system.plot_separation(
+        elif kind == "separation":
+            item = self._system.plot_separation(
                 spec.get("a", 0),
                 spec.get("b", 1),
                 log=spec.get("log", False),
@@ -602,22 +515,16 @@ class LivePlotController:
                 label=label,
                 zoom_region=spec.get("zoom_region", False),
             )
-            live_items[key] = item
-            return
-
-        if kind == "separation_fit":
-            items = self._plot_live_separation_fit(
+        elif kind == "separation_fit":
+            item = self._plot_live_separation_fit(
                 spec,
                 target,
                 mode=mode,
                 pen=pen,
                 label=label,
             )
-            live_items[key] = items
-            return
-
-        if kind == "vector_field":
-            item = self.window.system.plot_vector_field(
+        elif kind == "vector_field":
+            item = self._system.plot_vector_field(
                 spec.get("x_axis", "x"),
                 spec.get("y_axis", "y"),
                 fixed_axis=spec.get("fixed_axis"),
@@ -632,10 +539,10 @@ class LivePlotController:
                 colour_by_speed=spec.get("colour_by_speed", False),
                 speed_bands=spec.get("speed_bands", 5),
             )
-            live_items[key] = item
-            return
+        else:
+            raise ValueError(f"Unknown live plot kind: {kind}")
 
-        raise ValueError(f"Unknown live plot kind: {kind}")
+        trace.items = item if isinstance(item, tuple) else (item,)
 
     def _plot_derived_timeseries(
         self,
@@ -659,11 +566,11 @@ class LivePlotController:
             kwargs["pen"] = pen
 
         if kind == "displacement":
-            return self.window.system.plot_displacement(**kwargs)
+            return self._system.plot_displacement(**kwargs)
         if kind == "radius":
-            return self.window.system.plot_radius(**kwargs)
+            return self._system.plot_radius(**kwargs)
         if kind == "speed":
-            return self.window.system.plot_speed(**kwargs)
+            return self._system.plot_speed(**kwargs)
 
         raise ValueError(f"Unknown derived plot kind: {kind}")
 
@@ -703,56 +610,36 @@ class LivePlotController:
 
         return separation_item, fit_item
 
-    def _update_live_item(
-        self,
-        plot_name,
-        trace_index,
-        spec,
-        *,
-        target=None,
-        solutions=None,
-    ):
-        key = self._live_item_key(plot_name, trace_index)
-        item = self.live_items.get(key)
-        if item is None:
+    def _update_items(self, trace, *, solutions=None):
+        items = trace.items
+        target = trace.plot
+        if not items or not all(target.has_item(item) for item in items):
             return False
 
-        if target is None:
-            try:
-                target = self.window.jupyter_console_panel.plots.get(
-                    plot_name, activate=False
-                )
-            except KeyError:
-                return False
-        if isinstance(item, tuple):
-            if not all(target.has_item(part) for part in item):
-                return False
-        elif not target.has_item(item):
-            return False
-
+        spec = trace.spec
         if spec.get("kind") == "separation_fit":
-            separation_item, fit_item = item
+            separation_item, fit_item = items
             data = self._live_separation_fit_data(spec, solutions=solutions)
             separation_item.setData(data["separation_t"], data["log_distance"])
             fit_item.setData(data["fit_t"], data["fit_y"])
             target.set_labels(bottom="t", left=data["axis_label"])
         elif spec.get("kind") == "vector_field":
             data = self._live_vector_field_data(spec)
-            if isinstance(item, tuple):
-                segments = data.get("segments")
-                if segments is None or len(item) != len(segments):
-                    return False
-                for part, (x_data, y_data, _pen) in zip(item, segments):
-                    part.setData(x_data, y_data)
+            segments = data.get("segments")
+            if segments is None:
+                items[0].setData(data["x"], data["y"])
+            elif len(items) != len(segments):
+                return False
             else:
-                item.setData(data["x"], data["y"])
+                for item, (x_data, y_data, _pen) in zip(items, segments):
+                    item.setData(x_data, y_data)
             target.set_labels(bottom=data["bottom"], left=data["left"])
         else:
             x_data, y_data, bottom, left = self._live_trace_data(
                 spec,
                 solutions=solutions,
             )
-            item.setData(x_data, y_data)
+            items[0].setData(x_data, y_data)
             target.set_labels(bottom=bottom, left=left)
 
         return True
@@ -761,7 +648,7 @@ class LivePlotController:
         kind = spec["kind"]
         if kind == "axis":
             axis = str(spec["axis"]).lower()
-            column = self.window.system._axis_column(axis)
+            column = self._system._axis_column(axis)
             trajectory = spec.get("trajectory", 0)
             solution = self._live_solution(trajectory, solutions)
             return (
@@ -785,8 +672,8 @@ class LivePlotController:
         if kind == "projection":
             x_axis = str(spec.get("x_axis", "x")).lower()
             y_axis = str(spec.get("y_axis", "y")).lower()
-            x_column = self.window.system._axis_column(x_axis)
-            y_column = self.window.system._axis_column(y_axis)
+            x_column = self._system._axis_column(x_axis)
+            y_column = self._system._axis_column(y_axis)
             trajectory = spec.get("trajectory", 0)
             solution = self._live_solution(trajectory, solutions)
             return (
@@ -817,7 +704,7 @@ class LivePlotController:
                     axis_label,
                 )
 
-            frame = self.window.system.separation(a, b, log=log)
+            frame = self._system.separation(a, b, log=log)
             return (
                 frame["t"].to_numpy(),
                 frame[value_column].to_numpy(),
@@ -847,7 +734,7 @@ class LivePlotController:
     def _live_vector_field_data(self, spec):
         x_axis = str(spec.get("x_axis", "x")).lower()
         y_axis = str(spec.get("y_axis", "y")).lower()
-        frame = self.window.system.vector_field_slice(
+        frame = self._system.vector_field_slice(
             x_axis,
             y_axis,
             fixed_axis=spec.get("fixed_axis"),
@@ -858,7 +745,7 @@ class LivePlotController:
         )
         if spec.get("colour_by_speed", False):
             return {
-                "segments": self.window.system._vector_field_speed_bands(
+                "segments": self._system._vector_field_speed_bands(
                     frame,
                     x_axis,
                     y_axis,
@@ -869,7 +756,7 @@ class LivePlotController:
                 "left": y_axis,
             }
 
-        x_data, y_data = self.window.system._vector_field_segments(
+        x_data, y_data = self._system._vector_field_segments(
             frame,
             x_axis,
             y_axis,
@@ -903,7 +790,7 @@ class LivePlotController:
         if len(fit_frame) < 2:
             raise ValueError("At least two finite log-separation points are required")
 
-        fit = self.window.system._fit_log_separation(fit_frame)
+        fit = self._system._fit_log_separation(fit_frame)
         fit_t = fit_frame["t"].to_numpy()
         fit_y = fit["slope"] * fit_t + fit["intercept"]
         axis_label = f"log separation fit {a}-{b}"
@@ -918,7 +805,7 @@ class LivePlotController:
 
     def _live_separation_frame(self, a, b, *, log, solutions=None):
         if solutions is None:
-            return self.window.system.separation(a, b, log=log)
+            return self._system.separation(a, b, log=log)
 
         sol_a = self._live_solution(a, solutions)
         sol_b = self._live_solution(b, solutions)
@@ -940,19 +827,19 @@ class LivePlotController:
 
     def _live_solution(self, trajectory, solutions=None):
         if solutions is None:
-            return self.window.system.solution(trajectory)
+            return self._system.solution(trajectory)
         try:
             return solutions[trajectory]
         except IndexError as exc:
             raise IndexError(f"No trajectory at index {trajectory}") from exc
 
     def _live_time(self, trajectory, solution):
-        times = self.window.system.time(trajectory)
+        times = self._system.time(trajectory)
         if len(times) == len(solution):
             return times
 
-        t_min = self.window.system.t_min
-        spec = self.window.system._trajectory_solve_spec(trajectory)
+        t_min = self._system.t_min
+        spec = self._system._trajectory_solve_spec(trajectory)
         t_max = spec["t_max"]
         if len(solution) <= 0:
             return np.array([], dtype=np.float64)
@@ -961,8 +848,8 @@ class LivePlotController:
         return t_min + (np.arange(len(solution), dtype=np.float64) + 1.0) * dt
 
     def _live_status_text(self):
-        plot_count = len(self.live_plots)
-        trace_count = sum(len(specs) for specs in self.live_plots.values())
+        plot_count = len({trace.plot for trace in self._traces.values()})
+        trace_count = len(self._traces)
 
         if trace_count == 0:
             return "No live plots"

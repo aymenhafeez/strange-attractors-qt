@@ -63,7 +63,7 @@ def _status_summary(text):
 
 class SystemToolbar(QtWidgets.QWidget):
     plot_requested = QtCore.pyqtSignal(str, dict)
-    live_trace_remove_requested = QtCore.pyqtSignal(str, int)
+    live_trace_remove_requested = QtCore.pyqtSignal(int)
     live_plot_clear_requested = QtCore.pyqtSignal(str)
 
     def __init__(self, parent=None):
@@ -108,13 +108,13 @@ class SystemToolbar(QtWidgets.QWidget):
             action.setEnabled(False)
         else:
             for trace in traces:
-                label = str(trace.get("label") or f"Trace {trace['index'] + 1}")
-                mode = str(trace.get("mode") or "full solve")
+                label = trace["label"]
+                mode = trace["mode"]
                 action = menu.addAction(f"Remove {label} ({mode})")
                 action.setToolTip(f"{label}: {mode}")
                 action.triggered.connect(
-                    lambda _checked=False, index=trace["index"]: (
-                        self.live_trace_remove_requested.emit(plot_name, index)
+                    lambda _checked=False, trace_id=trace["id"]: (
+                        self.live_trace_remove_requested.emit(trace_id)
                     )
                 )
             menu.addSeparator()
