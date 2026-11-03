@@ -10,6 +10,13 @@ from .style import dock_widget_style
 
 class AppDock(QtWidgets.QDockWidget):
     activated = QtCore.pyqtSignal()
+    closed = QtCore.pyqtSignal()
+
+    def __init__(self, title, parent=None):
+        super().__init__(title, parent)
+        self.findChild(
+            QtWidgets.QAbstractButton, "qt_dockwidget_closebutton"
+        ).clicked.connect(self.closed)
 
     def reveal(self):
         self.show()

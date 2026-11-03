@@ -287,6 +287,7 @@ class ConsoleTableManager(QtCore.QObject):
             relative_to=self._docks[self._default_name],
         )
         dock.activated.connect(lambda: self.activate(dock.windowTitle()))
+        dock.closed.connect(lambda: self.close(dock.windowTitle()))
 
         self._tables[key] = table
         self._docks[key] = dock
