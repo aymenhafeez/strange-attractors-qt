@@ -6,9 +6,10 @@ import argparse
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore
 
-from .app import Window, app_settings
+from .app import Window
 from .perf import configure_perf_logging
 from .systems.registry import ATTRACTORS
+from .ui import session_store
 from .ui.output_panel import CaptureOutput
 
 ANALYSIS_MODES = {
@@ -46,11 +47,7 @@ def main():
 
     # needs to go before constructing the window
     if args.reset:
-        settings = app_settings()
-        settings.remove("layout")
-        settings.remove("workspace")
-        settings.remove("startup")
-        settings.sync()
+        session_store.clear(session_store.app_settings())
 
     app = pg.mkQApp()
     # set the app name strange-attractors for now so the standard path writable location
@@ -58,6 +55,8 @@ def main():
     app.setApplicationName("strange-attractors")
     app.setStyle("Fusion")
     w = Window()
+    # show first: raising a tabbed dock in a hidden window doesn't select its tab
+    w.showFullScreen() if args.fullscreen else w.show()
 
     actions = {
         "explore": lambda: w._set_workspace_mode("explore"),
@@ -78,9 +77,7 @@ def main():
 
     configure_perf_logging()
 
-    w.showFullScreen() if args.fullscreen else w.show()
-
-    if app_settings().value("startup/show_welcome", True, bool):
+    if session_store.app_settings().value("startup/show_welcome", True, bool):
         QtCore.QTimer.singleShot(0, w.show_welcome)
 
     pg.exec()

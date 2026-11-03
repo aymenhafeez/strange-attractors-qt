@@ -27,6 +27,7 @@ from .presets import (
     save_named_preset,
 )
 from .systems.registry import ATTRACTORS
+from .ui import session_store
 from .ui.bifurcation_panel import BifurcationPanel
 from .ui.control_panel import ControlPanel
 from .ui.docking import DockLayout
@@ -52,18 +53,6 @@ WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 850
 PARTIAL_N = 75000
 PROJECTION_UPDATE_INTERVAL = 100  # ms
-
-
-def _panel_visible(window, panel_name):
-    return not window._panel_docks[panel_name].isHidden()
-
-
-def _workspace_visible(window):
-    return any(not dock.isHidden() for dock in window._workspace_docks())
-
-
-def app_settings():
-    return QtCore.QSettings("Aymen Hafeez", "Systems analysis")
 
 
 class Window(QtWidgets.QMainWindow):
@@ -225,13 +214,19 @@ class Window(QtWidgets.QMainWindow):
 
         self.lyapunov_panel = LyapunovPanel()
         self.lyapunov_panel.compute_requested.connect(self._request_lyapunov)
-        self.lyapunov_panel.close_requested.connect(self._close_lyapunov_panel)
+        self.lyapunov_panel.close_requested.connect(
+            lambda: self._close_panel_dock("lyapunov_panel")
+        )
 
         self.projection_panel = ProjectionPanel()
-        self.projection_panel.close_requested.connect(self._close_projections)
+        self.projection_panel.close_requested.connect(
+            lambda: self._close_panel_dock("projection_panel")
+        )
 
         self.bifurcation_panel = BifurcationPanel()
-        self.bifurcation_panel.close_requested.connect(self._close_bifurcation)
+        self.bifurcation_panel.close_requested.connect(
+            lambda: self._close_panel_dock("bifurcation_panel")
+        )
 
         self.signal_panel = SignalPanel()
 
@@ -498,7 +493,7 @@ class Window(QtWidgets.QMainWindow):
         if (
             config is None
             or axis not in config.variables
-            or not _panel_visible(self, "poincare_panel")
+            or not self._panel_visible("poincare_panel")
         ):
             return
 
@@ -680,12 +675,12 @@ class Window(QtWidgets.QMainWindow):
     def _toggle_system_workspace(self):
         if self.workspace_mode != "system":
             self._set_workspace_mode("system")
-            if _workspace_visible(self):
+            if self._workspace_visible():
                 return
-        elif _workspace_visible(self):
+        elif self._workspace_visible():
             side_docks = [self.parameters_dock, self.right_panel.trajectory_dock]
             widths = [dock.width() for dock in side_docks]
-            for dock in self._workspace_docks():
+            for dock in self.jupyter_console_panel.docks():
                 dock.hide()
             self.resizeDocks(
                 [side_docks[0], self.viewport_dock, side_docks[1]],
@@ -1103,7 +1098,7 @@ class Window(QtWidgets.QMainWindow):
             )
             return
         full_record = full or any(
-            _panel_visible(self, name)
+            self._panel_visible(name)
             for name in ("signal_panel", "trajectory_analysis_panel")
         )
         user_n = self.current_n or config.time_defaults.n
@@ -1248,7 +1243,7 @@ class Window(QtWidgets.QMainWindow):
         self._dispatch_solve(full=full)
 
     def _request_lyapunov(self, config=None, values=None):
-        if not _panel_visible(self, "lyapunov_panel"):
+        if not self._panel_visible("lyapunov_panel"):
             return
 
         if config is None or values is None:
@@ -1366,7 +1361,7 @@ class Window(QtWidgets.QMainWindow):
             self._latest_projection_solutions = solutions
             self._update_projection_panel_from_solutions(solutions)
             if (
-                _panel_visible(self, "projection_panel")
+                self._panel_visible("projection_panel")
                 and self._initial_full_solves == 0
             ):
                 QtCore.QTimer.singleShot(0, self._reapply_projections)
@@ -1381,7 +1376,7 @@ class Window(QtWidgets.QMainWindow):
                 self._request_lyapunov()
 
             config, values = self._get_current_config_and_values()
-            if _panel_visible(self, "poincare_panel"):
+            if self._panel_visible("poincare_panel"):
                 self.poincare_panel.set_attractor(config, values)
 
             self.bifurcation_panel.current_values = dict(values)
@@ -1503,7 +1498,7 @@ class Window(QtWidgets.QMainWindow):
         if config is None:
             return
 
-        if not _panel_visible(self, "projection_panel"):
+        if not self._panel_visible("projection_panel"):
             return
 
         all_sol = np.concatenate(solutions, axis=0)
@@ -1522,7 +1517,7 @@ class Window(QtWidgets.QMainWindow):
         if config is None or config.dimension != 3:
             return
 
-        if not _panel_visible(self, "projection_panel"):
+        if not self._panel_visible("projection_panel"):
             return
 
         now_ms = QtCore.QDateTime.currentMSecsSinceEpoch()
@@ -1590,7 +1585,7 @@ class Window(QtWidgets.QMainWindow):
     def _on_lyapunov_result(self, request_id, lyap, ky_dim, t_hist, lyap_hist):
         if request_id != self._active_lyapunov_request_id:
             return
-        if not _panel_visible(self, "lyapunov_panel"):
+        if not self._panel_visible("lyapunov_panel"):
             return
 
         token = self._lyapunov_perf_tokens.pop(request_id, None)
@@ -1601,7 +1596,7 @@ class Window(QtWidgets.QMainWindow):
     def _on_lyapunov_failed(self, request_id, message):
         if request_id != self._active_lyapunov_request_id:
             return
-        if not _panel_visible(self, "lyapunov_panel"):
+        if not self._panel_visible("lyapunov_panel"):
             self._cancel_lyapunov_analysis()
             return
 
@@ -1609,17 +1604,11 @@ class Window(QtWidgets.QMainWindow):
         perf_finish(self, token, status="failed")
         self.status_bar.set_app_message(f"Lyapunov failed: {message}", error=True)
 
-    def _workspace_docks(self):
-        panel = self.jupyter_console_panel
-        return [
-            panel.script_dock,
-            panel.variables_dock,
-            panel.files_dock,
-            panel.console_dock,
-            *panel.plots._docks.values(),
-            *panel.views3d._docks.values(),
-            *panel.tables._docks.values(),
-        ]
+    def _panel_visible(self, panel_name):
+        return not self._panel_docks[panel_name].isHidden()
+
+    def _workspace_visible(self):
+        return any(not dock.isHidden() for dock in self.jupyter_console_panel.docks())
 
     def _open_panel_dock(self, panel_name):
         self._panel_docks[panel_name].reveal()
@@ -1630,7 +1619,7 @@ class Window(QtWidgets.QMainWindow):
         self._sync_dock_state()
 
     def _toggle_panel_dock(self, panel_name):
-        if _panel_visible(self, panel_name):
+        if self._panel_visible(panel_name):
             self._close_panel_dock(panel_name)
         else:
             self._open_panel_dock(panel_name)
@@ -1682,7 +1671,7 @@ class Window(QtWidgets.QMainWindow):
             ),
             (
                 toolbar.system_action,
-                self.workspace_mode == "system" and _workspace_visible(self),
+                self.workspace_mode == "system" and self._workspace_visible(),
             ),
             (toolbar.explore_action, self.workspace_mode == "explore"),
             (self.menu_bar.output_panel_action, not self.output_dock.isHidden()),
@@ -1698,7 +1687,7 @@ class Window(QtWidgets.QMainWindow):
         for action in toolbar.viewport_actions:
             action.setVisible(system_mode)
         self.workspace_toolbar.set_workspace_state(
-            self.workspace_mode, _workspace_visible(self)
+            self.workspace_mode, self._workspace_visible()
         )
 
     def _cancel_lyapunov_analysis(self):
@@ -1710,18 +1699,6 @@ class Window(QtWidgets.QMainWindow):
             perf_finish(self, token, status="cancelled")
         self._active_lyapunov_request_id = None
         self.status_bar.clear_app_message()
-
-    def _close_lyapunov_panel(self):
-        self._close_panel_dock("lyapunov_panel")
-
-    def _close_projections(self):
-        self._close_panel_dock("projection_panel")
-
-    def _close_poincare(self):
-        self._close_panel_dock("poincare_panel")
-
-    def _close_bifurcation(self):
-        self._close_panel_dock("bifurcation_panel")
 
     def _workspace_summary(self):
         plots = self.jupyter_console_panel.plots
@@ -1766,7 +1743,7 @@ class Window(QtWidgets.QMainWindow):
         self.status_bar.set_app_message(f"Exported table to {target}")
 
     def show_welcome(self):
-        dialog = WelcomeDialog(self, app_settings())
+        dialog = WelcomeDialog(self, session_store.app_settings())
         dialog.system_requested.connect(lambda: self._set_workspace_mode("system"))
         dialog.example_requested.connect(self._open_welcome_example)
         dialog.help_requested.connect(self.help)
@@ -1806,119 +1783,20 @@ class Window(QtWidgets.QMainWindow):
             "from Data view. Open View → Output panel for error messages.</p>",
         )
 
-    def _save_workspace_shell(self, settings):
-        for kind, manager in (
-            ("plot", self.jupyter_console_panel.plots),
-            ("view3d", self.jupyter_console_panel.views3d),
-            ("table", self.jupyter_console_panel.tables),
-        ):
-            settings.setValue(f"workspace/default_{kind}", manager._default_name)
-        kind, name = self.jupyter_console_panel.active_view_key()
-        script_path = self.jupyter_console_panel.script_panel.current_script_path()
-        settings.setValue("workspace/plots", self.jupyter_console_panel.plots.names())
-        settings.setValue(
-            "workspace/views3d", self.jupyter_console_panel.views3d.names()
-        )
-        settings.setValue("workspace/tables", self.jupyter_console_panel.tables.names())
-        settings.setValue("workspace/active_kind", kind)
-        settings.setValue("workspace/active_name", name)
-        settings.setValue(
-            "workspace/open_scripts",
-            [
-                str(path)
-                for path in self.jupyter_console_panel.script_panel.open_script_paths()
-            ],
-        )
-
-        if script_path is not None:
-            settings.setValue("workspace/current_script", str(script_path))
-        else:
-            settings.remove("workspace/current_script")
-
-    def _restore_workspace_shell(self, settings):
-        for kind, manager in (
-            ("plot", self.jupyter_console_panel.plots),
-            ("view3d", self.jupyter_console_panel.views3d),
-            ("table", self.jupyter_console_panel.tables),
-        ):
-            name = settings.value(f"workspace/default_{kind}", manager._default_name)
-            manager.rename(manager._default_name, name)
-        plot_names = settings.value("workspace/plots", [], type=list)
-        view_names = settings.value("workspace/views3d", [], type=list)
-        table_names = settings.value("workspace/tables", [], type=list)
-
-        for name in plot_names:
-            if name != self.jupyter_console_panel.plots._default_name:
-                self.jupyter_console_panel.plots.new(name, activate=False)
-
-        for name in view_names:
-            if name != self.jupyter_console_panel.views3d._default_name:
-                self.jupyter_console_panel.views3d.new(name, activate=False)
-
-        for name in table_names:
-            if name != self.jupyter_console_panel.tables._default_name:
-                self.jupyter_console_panel.tables.new(name, activate=False)
-
-        kind = settings.value("workspace/active_kind", "plot")
-        name = settings.value("workspace/active_name", "Plot")
-
-        try:
-            self.jupyter_console_panel.set_active_workspace_view(
-                kind, name, activate=False
-            )
-            manager = (
-                self.jupyter_console_panel.views3d
-                if kind == "view3d"
-                else self.jupyter_console_panel.plots
-            )
-            manager.activate(name)
-        except (KeyError, ValueError):
-            pass
-
-        script_path = settings.value("workspace/current_script")
-        open_scripts = settings.value("workspace/open_scripts", [], type=list)
-
-        if not open_scripts and script_path:
-            open_scripts = [script_path]
-
-        self.jupyter_console_panel.script_panel.restore_scripts(
-            open_scripts, script_path
-        )
-
-    def _save_app_layout(self):
-        settings = app_settings()
-        app = QtWidgets.QApplication.instance()
-        settings.setValue(
-            "layout/plot_theme", app.property("appTheme") if app else None
-        )
-        settings.setValue("layout/window_geometry", self.saveGeometry())
-        self.dock_layout.save(settings)
-        settings.setValue("layout/workspace_mode", self.workspace_mode)
-        self._save_workspace_shell(settings)
-
     def _restore_app_layout(self):
-        settings = app_settings()
-
-        theme = settings.value("layout/plot_theme", None)
-        self._set_theme(theme if theme in {"light", "dark"} else None)
-
-        geometry = settings.value("layout/window_geometry")
-        if geometry is not None:
-            self.restoreGeometry(geometry)
-
-        self._restore_workspace_shell(settings)
-        self.dock_layout.restore(settings)
-        mode = settings.value("layout/workspace_mode", "system")
-        self._set_workspace_mode(mode if mode in {"system", "explore"} else "system")
-        self.workspace_controller.sync_views()
+        settings = session_store.app_settings()
+        self._set_theme(session_store.saved_theme(settings))
+        session_store.restore(
+            settings,
+            self,
+            self.dock_layout,
+            self.jupyter_console_panel,
+            self.status_bar,
+        )
+        self._set_workspace_mode(session_store.saved_mode(settings))
 
     def _reset_session_state(self):
-        settings = app_settings()
-        settings.remove("layout")
-        settings.remove("workspace")
-        settings.remove("startup")
-        settings.sync()
-
+        session_store.clear(session_store.app_settings())
         self.reset_session_state = True
         self.status_bar.set_temporary_app_message("Reset session state for next launch")
 
@@ -1933,6 +1811,13 @@ class Window(QtWidgets.QMainWindow):
         self.solver.shutdown()
 
         if not self.reset_session_state:
-            self._save_app_layout()
+            session_store.save(
+                session_store.app_settings(),
+                self,
+                self.dock_layout,
+                self.jupyter_console_panel,
+                self.status_bar,
+                self.workspace_mode,
+            )
 
         super().closeEvent(a0)

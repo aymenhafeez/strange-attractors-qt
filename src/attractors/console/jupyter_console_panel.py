@@ -713,6 +713,17 @@ class JupyterConsolePanel(QtCore.QObject):
 
         return items
 
+    def docks(self):
+        return [
+            self.script_dock,
+            self.variables_dock,
+            self.files_dock,
+            self.console_dock,
+            *self.plots._docks.values(),
+            *self.views3d._docks.values(),
+            *self.tables._docks.values(),
+        ]
+
     def active_view_key(self):
         if self._active_view == "view3d":
             return ("view3d", self.views3d.current_name)
