@@ -237,6 +237,9 @@ class Window(QtWidgets.QMainWindow):
             self.live_plot_controller,
         )
         self.live_plot_controller.changed.connect(self.workspace_controller.sync_views)
+        self.live_plot_controller.trace_failed.connect(
+            lambda message: self.status_bar.set_app_message(message, error=True)
+        )
         self.jupyter_console_panel.script_panel.status_changed.connect(
             lambda message: self.status_bar.set_temporary_app_message(message)
         )

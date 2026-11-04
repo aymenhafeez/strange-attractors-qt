@@ -35,6 +35,7 @@ class _Trace:
 
 class LivePlotController(QtCore.QObject):
     changed = QtCore.pyqtSignal()
+    trace_failed = QtCore.pyqtSignal(str)
 
     def __init__(self, system, plots, system_toolbar, parent=None):
         super().__init__(parent)
@@ -411,6 +412,9 @@ class LivePlotController(QtCore.QObject):
 
         if previous != error:
             self.changed.emit()
+            if error is not None:
+                label = self._live_trace_label(trace.spec)
+                self.trace_failed.emit(f"{trace.spec['plot']}: {label}: {error}")
 
     def _refresh_plot(self, plot):
         errors = []
