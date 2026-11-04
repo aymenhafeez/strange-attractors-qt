@@ -6,6 +6,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..core.signal_analysis import sample_times, trajectory_signal
+from ..core.trajectory_analysis import separation
 from .style import PANEL_SURFACE, plot_colours
 
 
@@ -203,18 +204,21 @@ class TrajectoryAnalysisPanel(QtWidgets.QWidget):
         solutions = self._run.solutions
         specs = self._run.trajectory_specs
         t_min = self._run.t_min
-        times_a = sample_times(t_min, specs[a]["t_max"], len(solutions[a]))
-        times_b = sample_times(t_min, specs[b]["t_max"], len(solutions[b]))
-        length = min(len(times_a), len(times_b))
-
-        if not np.array_equal(times_a[:length], times_b[:length]):
+        try:
+            times, distance = separation(
+                solutions[a],
+                sample_times(t_min, specs[a]["t_max"], len(solutions[a])),
+                solutions[b],
+                sample_times(t_min, specs[b]["t_max"], len(solutions[b])),
+            )
+        except ValueError:
             self.separation_plot.setTitle("Matching sample times required")
             return
 
-        distance = np.linalg.norm(solutions[a][:length] - solutions[b][:length], axis=1)
+        # can't show zero distances on log axis
         distance[distance == 0] = np.nan
         self.separation_plot.setTitle(f"{self._run.labels[a]} - {self._run.labels[b]}")
-        self.separation_curve.setData(times_a[:length], distance)
+        self.separation_curve.setData(times, distance)
 
     def set_playback_range(self, start, end):
         self._play_bounds = (start, end) if end > start else None

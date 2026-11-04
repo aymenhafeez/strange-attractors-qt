@@ -623,7 +623,7 @@ class LivePlotController(QtCore.QObject):
         spec = trace.spec
         if spec.get("kind") == "separation_fit":
             separation_item, fit_item = items
-            data = self._live_separation_fit_data(spec, solutions=solutions)
+            data = self._live_separation_fit_data(spec)
             separation_item.setData(data["separation_t"], data["log_distance"])
             fit_item.setData(data["fit_t"], data["fit_y"])
             target.set_labels(bottom="t", left=data["axis_label"])
@@ -693,21 +693,8 @@ class LivePlotController(QtCore.QObject):
             log = spec.get("log", False)
             value_column = "log_distance" if log else "distance"
             axis_label = f"log separation {a}-{b}" if log else f"separation {a}-{b}"
-            if solutions is not None:
-                sol_a = self._live_solution(a, solutions)
-                sol_b = self._live_solution(b, solutions)
-                length = min(len(sol_a), len(sol_b))
-                distance = np.linalg.norm(sol_a[:length] - sol_b[:length], axis=1)
-                if log:
-                    with np.errstate(divide="ignore"):
-                        distance = np.log(distance)
-                return (
-                    self._live_time(a, sol_a)[:length],
-                    distance,
-                    "t",
-                    axis_label,
-                )
 
+            # passed in solutions are accepted runs so system gets them as well
             frame = self._system.separation(a, b, log=log)
             return (
                 frame["t"].to_numpy(),
@@ -769,28 +756,18 @@ class LivePlotController(QtCore.QObject):
 
         return {"x": x_data, "y": y_data, "bottom": x_axis, "left": y_axis}
 
-    def _live_separation_fit_data(self, spec, *, solutions=None):
+    def _live_separation_fit_data(self, spec):
         a = spec.get("a", 0)
         b = spec.get("b", 1)
-        frame = self._live_separation_frame(
+        frame = self._system.separation(a, b, log=True)
+        fit_frame = self._system._separation_fit_frame(
             a,
             b,
-            log=True,
-            solutions=solutions,
+            t_min=spec.get("t_min"),
+            t_max=spec.get("t_max"),
+            step_min=spec.get("step_min"),
+            step_max=spec.get("step_max"),
         )
-
-        mask = np.isfinite(frame["log_distance"].to_numpy())
-
-        if spec.get("t_min") is not None:
-            mask &= frame["t"].to_numpy() >= spec["t_min"]
-        if spec.get("t_max") is not None:
-            mask &= frame["t"].to_numpy() <= spec["t_max"]
-        if spec.get("step_min") is not None:
-            mask &= frame["step"].to_numpy() >= spec["step_min"]
-        if spec.get("step_max") is not None:
-            mask &= frame["step"].to_numpy() <= spec["step_max"]
-
-        fit_frame = frame.loc[mask].reset_index(drop=True)
         if len(fit_frame) < 2:
             raise ValueError("At least two finite log-separation points are required")
 
@@ -806,28 +783,6 @@ class LivePlotController(QtCore.QObject):
             "fit_y": fit_y,
             "axis_label": axis_label,
         }
-
-    def _live_separation_frame(self, a, b, *, log, solutions=None):
-        if solutions is None:
-            return self._system.separation(a, b, log=log)
-
-        sol_a = self._live_solution(a, solutions)
-        sol_b = self._live_solution(b, solutions)
-        length = min(len(sol_a), len(sol_b))
-        distance = np.linalg.norm(sol_a[:length] - sol_b[:length], axis=1)
-        columns = {
-            "trajectory_a": a,
-            "trajectory_b": b,
-            "step": np.arange(length),
-            "t": self._live_time(a, sol_a)[:length],
-        }
-        if log:
-            with np.errstate(divide="ignore"):
-                columns["log_distance"] = np.log(distance)
-        else:
-            columns["distance"] = distance
-
-        return pd.DataFrame(columns)
 
     def _live_solution(self, trajectory, solutions=None):
         if solutions is None:

@@ -18,6 +18,7 @@ from ..core.sections import (
 from ..core.signal_analysis import sample_times, trajectory_signal
 from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
+from ..core.trajectory_analysis import separation
 from ..workers.solve_session import SolveRun, read_only
 from .jupyter_console_panel import ConsolePlot
 
@@ -803,10 +804,9 @@ class SystemInspector:
         return self._concat_frames(rows, ["trajectory", "step", "t", "speed"])
 
     def separation(self, a=0, b=1, *, log=False):
-        sol_a = self.solution(a)
-        sol_b = self.solution(b)
-        length = min(len(sol_a), len(sol_b))
-        distance = np.linalg.norm(sol_a[:length] - sol_b[:length], axis=1)
+        times, distance = separation(
+            self.solution(a), self.time(a), self.solution(b), self.time(b)
+        )
         if log:
             with np.errstate(divide="ignore"):
                 distance = np.log(distance)
@@ -818,8 +818,8 @@ class SystemInspector:
             {
                 "trajectory_a": a,
                 "trajectory_b": b,
-                "step": np.arange(length),
-                "t": self.time(a)[:length],
+                "step": np.arange(len(times)),
+                "t": times,
                 value_column: distance,
             }
         )
