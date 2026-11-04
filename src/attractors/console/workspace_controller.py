@@ -100,14 +100,12 @@ class WorkspaceController:
             self.live_plots.clear_plot()
         else:
             self.console_panel.views3d.clear()
-            self.system_toolbar.set_status("Cleared current 3D view")
             self.sync_views()
             self.toolbar.sync_explore()
 
     def clear_all_views(self):
         self.live_plots.clear_all()
         self.console_panel.views3d.clear_all()
-        self.system_toolbar.set_status("Cleared workspace views")
         self.sync_views()
         self.toolbar.sync_explore()
 

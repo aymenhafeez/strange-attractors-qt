@@ -610,7 +610,7 @@ class PlotExplorer(QtCore.QObject):
             try:
                 trace.update()
             except (TypeError, ValueError, FloatingPointError) as exc:
-                self._set_status(f"{trace.name}: {exc}")
+                self._set_status(f"{trace.name}: {exc}", error=True)
 
     def clear(self):
         self.clear_animations()
@@ -642,6 +642,6 @@ class PlotExplorer(QtCore.QObject):
         self.changed.emit()
         self.param_widget.setVisible(self.has_controls())
 
-    def _set_status(self, message):
+    def _set_status(self, message, *, error=False):
         if self.status_callback is not None:
-            self.status_callback(message)
+            self.status_callback(message, error=error)

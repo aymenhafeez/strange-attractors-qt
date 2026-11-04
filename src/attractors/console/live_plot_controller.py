@@ -74,10 +74,7 @@ class LivePlotController(QtCore.QObject):
         self._auto_pen_indices.pop(plot, None)
 
     def rename_plot(self, old_name, new_name):
-        try:
-            self._plots.rename(old_name, new_name)
-        except (KeyError, ValueError) as exc:
-            self._toolbar.set_status(str(exc))
+        self._plots.rename(old_name, new_name)
 
     def tooltip(self, plot_name):
         count = len(self._named(plot_name))
@@ -186,8 +183,6 @@ class LivePlotController(QtCore.QObject):
         if pen is not None:
             kwargs["pen"] = pen
         plotter(*args, plot=target, mode=mode, **kwargs)
-
-        self._toolbar.set_status(f"Ran {kind} plot")
         self.changed.emit()
 
     def _console_plot_call(self, kind, options):
@@ -264,14 +259,12 @@ class LivePlotController(QtCore.QObject):
         plot = self._plots.current
         self._plots.clear()
         self._forget(plot)
-        self._toolbar.set_status(self._live_status_text())
         self.changed.emit()
 
     def clear_all(self):
         self._plots.clear_all()
         self._traces.clear()
         self._auto_pen_indices.clear()
-        self._toolbar.set_status("Cleared live plots")
         self.changed.emit()
 
     def register(self, kind, *, plot=None, mode=PLOT_MODE_REPLACE, **options):
@@ -349,7 +342,6 @@ class LivePlotController(QtCore.QObject):
         target = self._live_plot_target(plot_name)
         self._forget(target)
         target.clear()
-        self._toolbar.set_status(self._live_status_text())
         self.changed.emit()
 
         return self.frame()
@@ -365,8 +357,6 @@ class LivePlotController(QtCore.QObject):
 
         if remaining:
             self._refresh_plot(plot)
-        else:
-            self._toolbar.set_status(self._live_status_text())
         self.changed.emit()
 
         return self.frame()
@@ -374,7 +364,6 @@ class LivePlotController(QtCore.QObject):
     def unfollow_all(self):
         self._traces.clear()
         self._auto_pen_indices.clear()
-        self._toolbar.set_status("No live plots")
         self.changed.emit()
 
         return self.frame()
@@ -417,21 +406,13 @@ class LivePlotController(QtCore.QObject):
                 self.trace_failed.emit(f"{trace.spec['plot']}: {label}: {error}")
 
     def _refresh_plot(self, plot):
-        errors = []
-
         for position, trace in enumerate(self._on(plot)):
             try:
                 self._plot_trace(trace, replace=position == 0)
             except (IndexError, KeyError, TypeError, ValueError) as exc:
-                message = str(exc)
-                self._set_trace_error(trace, message)
-                errors.append(message)
+                self._set_trace_error(trace, str(exc))
             else:
                 self._set_trace_error(trace)
-
-        self._toolbar.set_status(
-            "; ".join(errors) if errors else self._live_status_text()
-        )
 
     def refresh_all(self):
         self._last_preview_update = None
@@ -656,7 +637,7 @@ class LivePlotController(QtCore.QObject):
             trajectory = spec.get("trajectory", 0)
             solution = self._live_solution(trajectory, solutions)
             return (
-                self._live_time(trajectory, solution),
+                self._system.time(trajectory),
                 solution[:, column],
                 "t",
                 axis,
@@ -665,7 +646,7 @@ class LivePlotController(QtCore.QObject):
         if kind in TIMESERIES:
             trajectory = spec.get("trajectory", 0)
             solution = self._live_solution(trajectory, solutions)
-            times = self._live_time(trajectory, solution)
+            times = self._system.time(trajectory)
             return (
                 times,
                 self._live_derived_values(kind, solution, times),
@@ -791,28 +772,3 @@ class LivePlotController(QtCore.QObject):
             return solutions[trajectory]
         except IndexError as exc:
             raise IndexError(f"No trajectory at index {trajectory}") from exc
-
-    def _live_time(self, trajectory, solution):
-        times = self._system.time(trajectory)
-        if len(times) == len(solution):
-            return times
-
-        t_min = self._system.t_min
-        spec = self._system._trajectory_solve_spec(trajectory)
-        t_max = spec["t_max"]
-        if len(solution) <= 0:
-            return np.array([], dtype=np.float64)
-        dt = (t_max - t_min) / len(solution)
-
-        return t_min + (np.arange(len(solution), dtype=np.float64) + 1.0) * dt
-
-    def _live_status_text(self):
-        plot_count = len({trace.plot for trace in self._traces.values()})
-        trace_count = len(self._traces)
-
-        if trace_count == 0:
-            return "No live plots"
-        if trace_count == 1:
-            return "Live: 1 trace"
-
-        return f"Live: {trace_count} traces across {plot_count} plots"

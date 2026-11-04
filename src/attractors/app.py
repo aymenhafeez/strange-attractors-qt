@@ -245,7 +245,9 @@ class Window(QtWidgets.QMainWindow):
         )
 
         self.jupyter_console_panel.set_explore_status_callback(
-            self.system_toolbar.set_status
+            lambda message, error=False: self.status_bar.set_temporary_app_message(
+                message, error=error
+            )
         )
         self.system_toolbar.plot_requested.connect(
             self.live_plot_controller.on_plot_requested
@@ -271,7 +273,6 @@ class Window(QtWidgets.QMainWindow):
         self.solve_session.state_changed.connect(self._on_solve_state)
         self.solve_session.run_accepted.connect(self._on_run_accepted)
         self.solve_session.failed.connect(self._on_solve_failed)
-        self.system_toolbar.set_solve_state(self.solve_session.state)
         self.workspace_controller.sync_views()
 
         self.viewport_dock = self.dock_layout.add(
@@ -909,7 +910,6 @@ class Window(QtWidgets.QMainWindow):
 
     def _on_solve_state(self, state):
         run = self.solve_session.analysis_run
-        self.system_toolbar.set_solve_state(state)
         self.signal_panel.set_source(run, state)
         self.trajectory_analysis_panel.set_source(run, state)
 
@@ -991,7 +991,6 @@ class Window(QtWidgets.QMainWindow):
         self.controls.data_view.set_solutions(
             solutions,
             t_min=run.t_min,
-            t_max=run.t_max,
             trajectory_specs=run.trajectory_specs,
             config=run.config,
             values=run.parameters,

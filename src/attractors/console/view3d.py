@@ -1051,7 +1051,7 @@ class View3DExplorer(QtCore.QObject):
                 trace.update()
                 changed = True
             except (TypeError, ValueError, FloatingPointError) as exc:
-                self._set_status(f"{trace.name}: {exc}")
+                self._set_status(f"{trace.name}: {exc}", error=True)
 
         if changed:
             self.view.auto_adjust_grid()
@@ -1096,6 +1096,18 @@ class View3DExplorer(QtCore.QObject):
 
         return self.traces()
 
+    def remove_slider(self, name):
+        key = str(name).strip()
+        param = self._params.pop(key, None)
+        if param is None:
+            raise KeyError(f"No slider named {key!r}")
+
+        dispose(param, self.param_layout)
+        self.param_widget.setVisible(self.has_controls())
+        self.changed.emit()
+
+        return self.params()
+
     def remove_animation(self, name):
         key = str(name).strip()
         animation = self._animations.pop(key, None)
@@ -1133,6 +1145,6 @@ class View3DExplorer(QtCore.QObject):
     def has_controls(self):
         return bool(self._params or self._animations)
 
-    def _set_status(self, message):
+    def _set_status(self, message, *, error=False):
         if self.status_callback is not None:
-            self.status_callback(message)
+            self.status_callback(message, error=error)

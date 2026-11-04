@@ -698,7 +698,7 @@ class SystemInspector:
         spec = self._trajectory_solve_spec(index)
 
         return sample_times(
-            self.t_min,
+            self._session.run.t_min,
             spec["t_max"],
             len(solution),
         )
@@ -1107,7 +1107,7 @@ class SystemInspector:
         solution = self.solution(trajectory)
         spec = self._trajectory_solve_spec(trajectory)
         signal = trajectory_signal(
-            solution, axis_col, t_min=self.t_min, t_max=spec["t_max"]
+            solution, axis_col, t_min=self._session.run.t_min, t_max=spec["t_max"]
         )
 
         return self._plot_timeseries(
@@ -1872,12 +1872,13 @@ class SystemInspector:
         a,
         b,
         *,
+        log=False,
         t_min=None,
         t_max=None,
         step_min=None,
         step_max=None,
     ):
-        frame = self.separation(a, b)
+        frame = self.separation(a, b, log=log)
         if t_min is not None:
             frame = frame[frame["t"] >= t_min]
         if t_max is not None:
@@ -1888,28 +1889,11 @@ class SystemInspector:
             frame = frame[frame["step"] <= step_max]
         return frame.reset_index(drop=True)
 
-    def _separation_fit_frame(
-        self,
-        a,
-        b,
-        *,
-        t_min=None,
-        t_max=None,
-        step_min=None,
-        step_max=None,
-    ):
-        frame = self.separation(a, b, log=True)
-        mask = np.isfinite(frame["log_distance"].to_numpy())
-        if t_min is not None:
-            mask &= frame["t"].to_numpy() >= t_min
-        if t_max is not None:
-            mask &= frame["t"].to_numpy() <= t_max
-        if step_min is not None:
-            mask &= frame["step"].to_numpy() >= step_min
-        if step_max is not None:
-            mask &= frame["step"].to_numpy() <= step_max
+    def _separation_fit_frame(self, a, b, **filters):
+        frame = self._separation_frame(a, b, log=True, **filters)
+        finite = np.isfinite(frame["log_distance"].to_numpy())
 
-        return frame.loc[mask].reset_index(drop=True)
+        return frame.loc[finite].reset_index(drop=True)
 
     def _separation_summary_fit(self, a, b, **filters):
         frame = self._separation_fit_frame(a, b, **filters)
