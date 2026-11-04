@@ -334,15 +334,7 @@ class BifurcationPanel(QtWidgets.QWidget):
 
     def set_config(self, config, current_values):
         self.setEnabled(True)
-        # if config.dimension != 3:
-        #     self.cancel_sweep()
-        #     self._sweep_gen += 1
-        #     self.config = None
-        #     self._set_plot_data([], [])
-        #     return
-
         self.cancel_sweep()
-        self._sweep_gen += 1
         self._error_label.setVisible(False)
         old_dimension = self.config.dimension if self.config else None
         self.config = config
@@ -407,7 +399,6 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.progress.setVisible(True)
         self.progress.setValue(0)
         self._error_label.setVisible(False)
-        self.run_btn.setText("\u25b6 Run")
         self._sweep_gen += 1
         gen = self._sweep_gen
 
@@ -434,7 +425,9 @@ class BifurcationPanel(QtWidgets.QWidget):
         )
         worker.signals.finished.connect(lambda g=gen: self._on_worker_finished(g))
         worker.signals.error.connect(lambda msg, g=gen: self._on_worker_error(msg, g))
-        worker.signals.progress.connect(self.progress.setValue)
+        worker.signals.progress.connect(
+            lambda value, g=gen: self._on_progress(value, g)
+        )
         self._worker = worker
         QThreadPool.globalInstance().start(worker)
 
@@ -442,8 +435,15 @@ class BifurcationPanel(QtWidgets.QWidget):
         if self._worker:
             self._worker.cancel()
             self._worker = None
+        self._sweep_gen += 1
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
+        self.progress.setVisible(False)
+
+    def _on_progress(self, value, gen):
+        if gen != self._sweep_gen:
+            return
+        self.progress.setValue(value)
 
     def _on_chunk_ready(self, vals, peaks_list, gen):
         if gen != self._sweep_gen:
