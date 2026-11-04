@@ -281,11 +281,12 @@ class ConsolePlot:
 
     def ensure_legend(self):
         if self._legend is None:
+            colours = plot_colours()
             self._legend = self._plot_widget.addLegend(
                 offset=LEGEND_OFFSET,
-                brush=LEGEND_BRUSH,
-                pen=LEGEND_PEN,
-                labelTextColor=LEGEND_TEXT,
+                brush=colours["legend_brush"],
+                pen=colours["legend_pen"],
+                labelTextColor=colours["legend_text"],
                 labelTextSize=LEGEND_TEXT_SIZE,
             )
         return self._legend
@@ -329,6 +330,14 @@ class ConsolePlot:
 
         self._plot_widget.setBackground(colours["plot_background"])
         self._plot_widget.showGrid(x=x_grid, y=y_grid, alpha=colours["plot_grid_alpha"])
+
+        if self._legend is not None:
+            self._legend.setBrush(colours["legend_brush"])
+            self._legend.setPen(colours["legend_pen"])
+            self._legend.setLabelTextColor(colours["legend_text"])
+
+            for _sample, label in self._legend.items:
+                label.setText(label.text, color=colours["legend_text"])
 
         if self._zoom is not None:
             self._zoom.apply_theme()
