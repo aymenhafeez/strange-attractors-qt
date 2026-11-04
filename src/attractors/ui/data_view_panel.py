@@ -107,7 +107,6 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
         self._columns = tuple(columns)
         self._solutions = []
         self._t_min = 0.0
-        self._default_t_max = 0.0
         self._trajectory_specs = []
         self._sampled = True
         self._sample_size = DEFAULT_SAMPLE_SIZE
@@ -120,13 +119,11 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
         solutions,
         *,
         t_min=0.0,
-        t_max=0.0,
         trajectory_specs=None,
     ):
         self.beginResetModel()
         self._solutions = [np.asarray(solution) for solution in solutions or []]
         self._t_min = float(t_min)
-        self._default_t_max = float(t_max)
         self._trajectory_specs = list(trajectory_specs or [])
         self._rebuild_rows()
         self.endResetModel()
@@ -274,12 +271,7 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
         return trajectory, local_row
 
     def _trajectory_t_max(self, trajectory):
-        try:
-            spec = self._trajectory_specs[trajectory]
-        except IndexError:
-            spec = {}
-
-        return spec.get("t_max", self._default_t_max)
+        return self._trajectory_specs[trajectory]["t_max"]
 
 
 class DataViewPanel(QtWidgets.QWidget):
@@ -367,7 +359,6 @@ class DataViewPanel(QtWidgets.QWidget):
         solutions,
         *,
         t_min=0.0,
-        t_max=0.0,
         trajectory_specs=None,
         config=None,
         values=None,
@@ -379,13 +370,11 @@ class DataViewPanel(QtWidgets.QWidget):
         self.model.set_solutions(
             solution_arrays,
             t_min=t_min,
-            t_max=t_max,
             trajectory_specs=specs,
         )
         self.measures_model.set_solutions(
             solution_arrays,
             t_min=t_min,
-            t_max=t_max,
             trajectory_specs=specs,
         )
 
@@ -437,8 +426,7 @@ class DataViewPanel(QtWidgets.QWidget):
     def _trajectory_rows(self, solutions, specs):
         rows = []
         for i, solution in enumerate(solutions):
-            spec = specs[i] if i < len(specs) else {}
-            initial = spec.get("ic", [None, None, None])
+            initial = specs[i]["ic"]
             final = solution[-1] if len(solution) else [None, None, None]
             rows.append(
                 {
