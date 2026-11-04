@@ -130,6 +130,13 @@ class ConsoleParam(QtCore.QObject):
         return f"ConsoleParam({self.name!r}, value={self.value:g})"
 
 
+def dispose(control, layout):
+    # pause animations first so their timer can't run before the deferred delete
+    layout.removeWidget(control.widget)
+    control.widget.deleteLater()
+    control.deleteLater()
+
+
 class ConsoleTrace:
     """Reactive 2D plot item. Data recomputed on command"""
 
@@ -217,8 +224,7 @@ class PlotExplorer(QtCore.QObject):
 
         old = self._params.pop(key, None)
         if old is not None:
-            self.param_layout.removeWidget(old.widget)
-            old.widget.deleteLater()
+            dispose(old, self.param_layout)
 
         param = ConsoleParam(key, value, start, end, step, parent=self)
         param.changed.connect(self.refresh)
@@ -252,9 +258,8 @@ class PlotExplorer(QtCore.QObject):
 
         old = self._animations.pop(key, None)
         if old is not None:
-            self.param_layout.removeWidget(old.widget)
             old.pause()
-            old.widget.deleteLater()
+            dispose(old, self.param_layout)
 
         animation = ConsoleAnimation(
             key,
@@ -272,7 +277,6 @@ class PlotExplorer(QtCore.QObject):
         self._animations[key] = animation
         self.param_layout.addWidget(widget)
         self.param_widget.setVisible(True)
-        animation.changed.connect(self.changed)
         self.changed.emit()
 
         if start:
@@ -315,8 +319,7 @@ class PlotExplorer(QtCore.QObject):
         if param is None:
             raise KeyError(f"No slider named {key!r}")
 
-        self.param_layout.removeWidget(param.widget)
-        param.widget.deleteLater()
+        dispose(param, self.param_layout)
         self.param_widget.setVisible(self.has_controls())
         self.changed.emit()
 
@@ -329,8 +332,7 @@ class PlotExplorer(QtCore.QObject):
             raise KeyError(f"No animation named {key!r}")
 
         animation.pause()
-        self.param_layout.removeWidget(animation.widget)
-        animation.widget.deleteLater()
+        dispose(animation, self.param_layout)
         self.param_widget.setVisible(self.has_controls())
         self.changed.emit()
 
@@ -625,8 +627,7 @@ class PlotExplorer(QtCore.QObject):
 
     def clear_sliders(self):
         for param in self._params.values():
-            self.param_layout.removeWidget(param.widget)
-            param.widget.deleteLater()
+            dispose(param, self.param_layout)
 
         self._params.clear()
         self.changed.emit()
@@ -635,8 +636,7 @@ class PlotExplorer(QtCore.QObject):
     def clear_animations(self):
         for animation in self._animations.values():
             animation.pause()
-            self.param_layout.removeWidget(animation.widget)
-            animation.widget.deleteLater()
+            dispose(animation, self.param_layout)
 
         self._animations.clear()
         self.changed.emit()

@@ -145,8 +145,7 @@ class ConsolePlot:
 
     def clear(self):
         self._plot_widget.clear()
-        if hasattr(self, "explore"):
-            self.explore.clear_traces()
+        self.explore.clear_traces()
 
         if self._zoom is not None:
             self._zoom.clear()

@@ -9,7 +9,7 @@ from ..ui.style import PANEL_SURFACE, plot_colours
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
 from .animation import ConsoleAnimation, ConsoleAnimationWidget
-from .explorer import ConsoleParam
+from .explorer import ConsoleParam, dispose
 
 
 def check_points(x, y=None, z=None, *, name="points"):
@@ -367,9 +367,7 @@ class ConsoleView3D:
         return "ConsoleView3D()"
 
     def clear(self):
-        if hasattr(self, "explore"):
-            self.explore.clear_traces()
-
+        self.explore.clear_traces()
         self.clear_items()
 
     def clear_items(self):
@@ -855,8 +853,7 @@ class View3DExplorer(QtCore.QObject):
 
         old = self._params.pop(key, None)
         if old is not None:
-            self.param_layout.removeWidget(old.widget)
-            old.widget.deleteLater()
+            dispose(old, self.param_layout)
 
         param = ConsoleParam(key, value, start, end, step, parent=self)
         param.changed.connect(self.refresh)
@@ -885,8 +882,7 @@ class View3DExplorer(QtCore.QObject):
         old = self._animations.pop(key, None)
         if old is not None:
             old.pause()
-            self.param_layout.removeWidget(old.widget)
-            old.widget.deleteLater()
+            dispose(old, self.param_layout)
 
         animation = ConsoleAnimation(
             key,
@@ -1074,8 +1070,7 @@ class View3DExplorer(QtCore.QObject):
 
     def clear_sliders(self):
         for param in self._params.values():
-            self.param_layout.removeWidget(param.widget)
-            param.widget.deleteLater()
+            dispose(param, self.param_layout)
 
         self._params.clear()
         self.param_widget.setVisible(self.has_controls())
@@ -1084,8 +1079,7 @@ class View3DExplorer(QtCore.QObject):
     def clear_animations(self):
         for animation in self._animations.values():
             animation.pause()
-            self.param_layout.removeWidget(animation.widget)
-            animation.widget.deleteLater()
+            dispose(animation, self.param_layout)
 
         self._animations.clear()
         self.changed.emit()
@@ -1109,8 +1103,7 @@ class View3DExplorer(QtCore.QObject):
             raise KeyError(f"No animation named {key!r}")
 
         animation.pause()
-        self.param_layout.removeWidget(animation.widget)
-        animation.widget.deleteLater()
+        dispose(animation, self.param_layout)
         self.param_widget.setVisible(self.has_controls())
         self.changed.emit()
 
