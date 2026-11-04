@@ -25,7 +25,6 @@ class _SystemToolbarDouble:
         self.plots = []
         self.current_key = None
         self.live_traces = None
-        self.status = ""
 
     def set_plots(self, items, current_key):
         self.plots = [(item["kind"], item["name"]) for item in items]
@@ -33,9 +32,6 @@ class _SystemToolbarDouble:
 
     def set_live_traces(self, plot_name, traces):
         self.live_traces = (plot_name, traces)
-
-    def set_status(self, text):
-        self.status = str(text)
 
 
 class _LivePlotControllerDouble:
