@@ -16,7 +16,6 @@ dependencies = [
     "numba>=0.65.1",
     "numpy>=2.4.6",
     "pandas>=3.0.3",
-    "pandas-stubs~=3.0.3",
     "psutil>=7.2.2",
     "pyopengl>=3.1.10",
     "pyqt6>=6.11.0",
@@ -24,7 +23,6 @@ dependencies = [
     "pyqtgraph>=0.14.0",
     "qtconsole>=5.7.0",
     "scipy>=1.18.0",
-    "scipy-stubs~=1.18.0",
 ]
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
@@ -35,8 +33,10 @@ analysis = "attractors.__main__:main"
 [dependency-groups]
 dev = [
     "ipython>=9.15.0",
+    "pandas-stubs>=3.1.0.261029",
     "pytest>=9.1.1",
     "ruff>=0.16.0",
+    "scipy-stubs>=1.18.1.1",
     "ty>=0.0.73",
 ]
 
