@@ -27,7 +27,6 @@ class ProjectionPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self._points = None
         self._projection_key = "XY"
-        self._heatmap = None
         self._image_data = None
         self._roi_placed = False
         self.setMinimumHeight(220)
@@ -90,7 +89,6 @@ class ProjectionPanel(QtWidgets.QWidget):
 
         self.img = pg.ImageItem()
         self.plot_widget.addItem(self.img)
-        self.image_items = {key: (self.img, self.plot_widget) for key in PROJECTIONS}
 
         self.roi_line = pg.LineSegmentROI(
             [[0.0, 0.0], [1.0, 0.0]],
@@ -126,14 +124,6 @@ class ProjectionPanel(QtWidgets.QWidget):
 
         self.clear()
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        QtCore.QTimer.singleShot(0, self._render_cached_projection_data)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._render_cached_projection_data()
-
     def update_projections(self, x, y, z=None):
         coordinates = (x, y) if z is None else (x, y, z)
         points = np.column_stack(coordinates)
@@ -151,7 +141,7 @@ class ProjectionPanel(QtWidgets.QWidget):
             self._roi_placed = False
 
         self._points = points[np.isfinite(points).all(axis=1)]
-        self._render_projection_data(reset_roi=not self._roi_placed)
+        self._render_projection_data()
 
     def reapply_projections(self, solutions):
         if solutions:
@@ -161,7 +151,6 @@ class ProjectionPanel(QtWidgets.QWidget):
 
     def clear(self):
         self._points = None
-        self._heatmap = None
         self._image_data = None
         self._roi_placed = False
         self.img.clear()
@@ -171,25 +160,22 @@ class ProjectionPanel(QtWidgets.QWidget):
         self.profile_curve.setData([], [], pen=plot_colours()["scatter_brush"])
         self.profile_label.setText("")
 
-    def _render_cached_projection_data(self):
-        if self._points is not None:
-            self._render_projection_data(reset_roi=False)
-
     def _on_projection_changed(self, key):
         self._projection_key = key
         self._roi_placed = False
-        self._render_cached_projection_data()
+        if self._points is not None:
+            self._render_projection_data()
 
-    def _render_projection_data(self, *, reset_roi=False):
-        if self._points is None or len(self._points) == 0:
+    def _render_projection_data(self):
+        if len(self._points) == 0:
             self.clear()
             return
 
         h_col, v_col, (lh, lv) = PROJECTIONS[self._projection_key]
         h = self._points[:, h_col]
         v = self._points[:, v_col]
-        self._heatmap, xedges, yedges = np.histogram2d(h, v, bins=128)
-        self._image_data = np.log1p(self._heatmap)
+        heatmap, xedges, yedges = np.histogram2d(h, v, bins=128)
+        self._image_data = np.log1p(heatmap)
 
         self.img.setImage(self._image_data)
         self.img.setVisible(True)
@@ -201,7 +187,7 @@ class ProjectionPanel(QtWidgets.QWidget):
         self._set_histogram_levels(self._image_data)
         self.histogram.setVisible(True)
 
-        if reset_roi or not self._roi_placed:
+        if not self._roi_placed:
             self._place_default_roi(xedges, yedges)
 
         self.roi_line.setVisible(True)
@@ -264,10 +250,10 @@ class ProjectionPanel(QtWidgets.QWidget):
         )
 
     def _update_colourmap(self, cmap_name):
-        cmap = pg.colormap.get(cmap_name, source="matplotlib")
-        self.img.setLookupTable(cmap.getLookupTable())
-        self.histogram.item.gradient.setColorMap(cmap)
-        self._render_cached_projection_data()
+        # histogram's gradient sets image lookup table
+        self.histogram.item.gradient.setColorMap(
+            pg.colormap.get(cmap_name, source="matplotlib")
+        )
 
     def apply_theme(self):
         colours = plot_colours()

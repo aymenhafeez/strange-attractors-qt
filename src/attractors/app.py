@@ -64,12 +64,10 @@ class Window(QtWidgets.QMainWindow):
 
         self.reset_session_state = False
 
-        self._initial_full_solves = 0
         self._restoring_view = False
         self._active_lyapunov_request_id = None
         self._lyapunov_perf_tokens = {}
         self._last_projection_update = None
-        self._latest_projection_solutions = None
         self._perf = PerfProfiler()
         self._panel_docks = {}
         self._open_analysis_panels = set()
@@ -549,7 +547,6 @@ class Window(QtWidgets.QMainWindow):
         else:
             self.solve_session.clear()
             self.solver.cancel_lyapunov()
-            self._latest_projection_solutions = None
             self.scene.clear_solutions()
             self.controls.data_view.clear()
             self.lyapunov_panel.clear()
@@ -565,7 +562,6 @@ class Window(QtWidgets.QMainWindow):
         self._restoring_view = True
         try:
             self.phase_portrait.clear()
-            self._latest_projection_solutions = None
             self.scene.clear_solutions()
             self._select_system_view(config)
             self._configure_system_capabilities(config)
@@ -598,7 +594,6 @@ class Window(QtWidgets.QMainWindow):
         self._restoring_view = True
         try:
             self.phase_portrait.clear()
-            self._latest_projection_solutions = None
             self.scene.clear_solutions()
             self._select_system_view(config)
             self._configure_system_capabilities(config)
@@ -995,11 +990,6 @@ class Window(QtWidgets.QMainWindow):
             config=run.config,
             values=run.parameters,
         )
-        self._latest_projection_solutions = solutions
-        if self._panel_visible("projection_panel") and self._initial_full_solves == 0:
-            QtCore.QTimer.singleShot(0, self._reapply_projections)
-            self._initial_full_solves += 1
-
         if run.config.dimension == 3:
             self.scene.grid_overlay.auto_adjust_grid(solutions)
 
@@ -1081,22 +1071,7 @@ class Window(QtWidgets.QMainWindow):
             self.scene.camera_controller.fit_camera_to_solutions(solutions)
             self.scene.grid_overlay.auto_adjust_grid(solutions)
 
-    def _reapply_projections(self):
-        config, _values = self._get_current_config_and_values()
-        if config is None:
-            return
-
-        solutions = (
-            self._latest_projection_solutions
-            or self.scene.trajectory_renderer.solutions
-        )
-        self.projection_panel.reapply_projections(solutions)
-
     def _update_projection_panel_from_solutions(self, solutions):
-        config, _values = self._get_current_config_and_values()
-        if config is None:
-            return
-
         if not self._panel_visible("projection_panel"):
             return
 
@@ -1112,10 +1087,6 @@ class Window(QtWidgets.QMainWindow):
         self._last_projection_update = QtCore.QDateTime.currentMSecsSinceEpoch()
 
     def _on_projections_data(self, x, y, z):
-        config, _values = self._get_current_config_and_values()
-        if config is None or config.dimension != 3:
-            return
-
         if not self._panel_visible("projection_panel"):
             return
 
@@ -1156,7 +1127,6 @@ class Window(QtWidgets.QMainWindow):
             return
 
         self.solve_session.clear()
-        self._latest_projection_solutions = None
 
         config, _values = self._get_current_config_and_values()
         if config is None or config.dimension == 3:
@@ -1240,7 +1210,8 @@ class Window(QtWidgets.QMainWindow):
             if name == "lyapunov_panel" and self.lyapunov_panel.auto_enabled():
                 self._request_lyapunov()
             elif name == "projection_panel":
-                QtCore.QTimer.singleShot(0, self._reapply_projections)
+                run = self.solve_session.run
+                self.projection_panel.reapply_projections(run.solutions if run else [])
             elif name == "poincare_panel":
                 config, values = self._get_current_config_and_values()
                 self.poincare_panel.set_attractor(config, values)
