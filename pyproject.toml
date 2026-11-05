@@ -44,7 +44,7 @@ dev = [
 python = ".venv"
 
 [tool.ruff]
-extend-exclude = ["examples/"]
+extend-exclude = ["src/attractors/examples/"]
 
 [tool.uv]
 package = true
