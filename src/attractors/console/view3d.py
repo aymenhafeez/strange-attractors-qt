@@ -632,6 +632,13 @@ class ConsoleView3DManager(QtCore.QObject):
     def names(self):
         return list(self._views)
 
+    @property
+    def default_name(self):
+        return self._default_name
+
+    def docks(self):
+        return list(self._docks.values())
+
     def get(self, name, *, activate=True):
         key = self._view_name(name)
         try:

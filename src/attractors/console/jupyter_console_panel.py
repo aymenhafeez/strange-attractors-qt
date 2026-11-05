@@ -386,6 +386,13 @@ class ConsolePlotManager(QtCore.QObject):
     def names(self):
         return list(self._plots)
 
+    @property
+    def default_name(self):
+        return self._default_name
+
+    def docks(self):
+        return list(self._docks.values())
+
     def set_status_callback(self, callback):
         self._status_callback = callback
         for plot in self._plots.values():
@@ -724,9 +731,9 @@ class JupyterConsolePanel(QtCore.QObject):
             self.variables_dock,
             self.files_dock,
             self.console_dock,
-            *self.plots._docks.values(),
-            *self.views3d._docks.values(),
-            *self.tables._docks.values(),
+            *self.plots.docks(),
+            *self.views3d.docks(),
+            *self.tables.docks(),
         ]
 
     def active_view_key(self):

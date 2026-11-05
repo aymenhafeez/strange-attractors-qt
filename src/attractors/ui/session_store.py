@@ -25,7 +25,7 @@ def _view_managers(console_panel):
 
 def save_workspace(settings, console_panel):
     for kind, key, manager in _view_managers(console_panel):
-        settings.setValue(f"workspace/default_{kind}", manager._default_name)
+        settings.setValue(f"workspace/default_{kind}", manager.default_name)
         settings.setValue(key, manager.names())
 
     kind, name = console_panel.active_view_key()
@@ -46,8 +46,8 @@ def save_workspace(settings, console_panel):
 
 def restore_workspace(settings, console_panel):
     for kind, key, manager in _view_managers(console_panel):
-        default = settings.value(f"workspace/default_{kind}", manager._default_name)
-        manager.rename(manager._default_name, default)
+        default = settings.value(f"workspace/default_{kind}", manager.default_name)
+        manager.rename(manager.default_name, default)
         for name in settings.value(key, [], type=list):
             if name != default:
                 manager.new(name, activate=False)
