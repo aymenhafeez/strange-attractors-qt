@@ -68,13 +68,8 @@ class ScriptStore:
         self.ensure_examples()
 
     def ensure_examples(self):
-        source = Path(__file__).resolve().parents[3] / "examples"
-
+        source = Path(__file__).resolve().parents[1] / "examples"
         target = self.root / "examples"
-
-        if not source.exists():
-            return
-
         target.mkdir(exist_ok=True)
 
         for path in source.glob("*.py"):

@@ -70,6 +70,9 @@ def plot_colours():
             "crosshair": "yellow",
             "label_text": "yellow",
             "colourbar_text": "white",
+            "legend_brush": (18, 22, 28, 220),
+            "legend_pen": (210, 220, 230, 180),
+            "legend_text": (245, 248, 252),
         }
 
     return {
@@ -92,6 +95,9 @@ def plot_colours():
         "crosshair": "#c87b00",
         "label_text": "white",
         "colourbar_text": "black",
+        "legend_brush": (230, 230, 230, 220),
+        "legend_pen": (18, 22, 28, 220),
+        "legend_text": (18, 22, 28),
     }
 
 

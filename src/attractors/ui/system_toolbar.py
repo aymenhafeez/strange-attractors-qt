@@ -26,17 +26,6 @@ LIVE_CONSOLE_PLOT_KINDS = {
 }
 
 
-STATUS_SUMMARIES = (
-    ("Fresh", "Fresh"),
-    ("Stale", "Stale"),
-    ("Solving", "Solving"),
-    ("Solve failed", "Error"),
-    ("Linked", "Linked"),
-    ("Cleared", "Clear"),
-    ("None linked", "Linked: 0"),
-    ("No solution", "No sol"),
-)
-
 PEN_OPTS = [
     ("Auto", None),
     ("White", "w"),
@@ -50,26 +39,14 @@ PEN_OPTS = [
 ]
 
 
-def _status_summary(text):
-    if not text:
-        return "Status"
-
-    for prefix, summary in STATUS_SUMMARIES:
-        if text.startswith(prefix):
-            return summary
-
-    return text.splitlines()[0]
-
-
 class SystemToolbar(QtWidgets.QWidget):
     plot_requested = QtCore.pyqtSignal(str, dict)
-    live_trace_remove_requested = QtCore.pyqtSignal(str, int)
+    live_trace_remove_requested = QtCore.pyqtSignal(int)
     live_plot_clear_requested = QtCore.pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_plot_name = ""
-        self._status_text = ""
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -108,13 +85,13 @@ class SystemToolbar(QtWidgets.QWidget):
             action.setEnabled(False)
         else:
             for trace in traces:
-                label = str(trace.get("label") or f"Trace {trace['index'] + 1}")
-                mode = str(trace.get("mode") or "full solve")
+                label = trace["label"]
+                mode = trace["mode"]
                 action = menu.addAction(f"Remove {label} ({mode})")
                 action.setToolTip(f"{label}: {mode}")
                 action.triggered.connect(
-                    lambda _checked=False, index=trace["index"]: (
-                        self.live_trace_remove_requested.emit(plot_name, index)
+                    lambda _checked=False, trace_id=trace["id"]: (
+                        self.live_trace_remove_requested.emit(trace_id)
                     )
                 )
             menu.addSeparator()
@@ -181,39 +158,6 @@ class SystemToolbar(QtWidgets.QWidget):
         self.options_widget.adjustSize()
         self.options_menu.updateGeometry()
         self.options_menu.adjustSize()
-
-    def set_solve_state(self, state):
-        if state.get("solving"):
-            text = "Solving"
-        elif state.get("valid"):
-            text = "Fresh solution"
-        elif state.get("stale"):
-            text = "Stale solution"
-        elif state.get("last_error"):
-            text = "Solve failed"
-        else:
-            text = "No solution"
-
-        attractor = state.get("attractor")
-        n = state.get("n")
-        details = []
-        if attractor:
-            details.append(str(attractor))
-        if n:
-            details.append(f"N {int(n)}")
-        if state.get("last_error"):
-            details.append(str(state["last_error"]))
-
-        status = text
-        if details:
-            status = f"{text}\n" + " | ".join(details)
-
-        self.set_status(status)
-
-    def set_status(self, text):
-        self._status_text = str(text)
-        # self.status_button.setText(_status_summary(self._status_text))
-        # self.status_button.setToolTip(self._status_text)
 
     def _sync_plot_controls(self):
         kind = self.plot_kind_combo.currentText()
@@ -336,13 +280,6 @@ class SystemToolbar(QtWidgets.QWidget):
         toolbar_layout = QtWidgets.QHBoxLayout(toolbar)
         toolbar_layout.setContentsMargins(2, 0, 2, 0)
         toolbar_layout.setSpacing(4)
-
-        # self.status_button = QtWidgets.QToolButton()
-        # self.status_button.setText("Status")
-        # self.status_button.setToolTip("No solution")
-        # self.status_button.setFixedWidth(58)
-        # self._status_text = ""
-        # toolbar_layout.addWidget(self.status_button)
 
         self.plot_kind_combo = QtWidgets.QComboBox()
         self.plot_kind_combo.addItems(CONSOLE_PLOT_KINDS)

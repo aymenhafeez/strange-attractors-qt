@@ -1,454 +1,153 @@
 # SPDX-FileCopyrightText: 2026 Aymen Hafeez
 # SPDX-License-Identifier: GPL-3.0-only
 
-# TODO: whole file and how it interacts with app.py needs to be cleaned up
-
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
 from .icons import icon
-from .process_metrics import ProcessUsageStatus
-from .style import MENUBAR, SCENE_TOOLBAR
+from .style import SCENE_TOOLBAR
 
 
-def build_status_bar(self):
-    status_bar = QtWidgets.QStatusBar()
-    status_bar.setFixedHeight(24)
-
-    output_panel_button = QtWidgets.QToolButton()
-    output_panel_button.setDefaultAction(self.output_panel_action)
-    output_panel_button.setAutoRaise(True)
-    output_panel_button.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly)
-    output_panel_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-    output_panel_button.setToolTip("Toggle Output Panel")
-    status_bar.addWidget(output_panel_button)
-
-    self.app_status_label = QtWidgets.QLabel("")
-    self.app_status_label.setAlignment(
-        QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
-    )
-    self.app_status_label.setStyleSheet(
-        "border: none; padding: 0 4px 1px 4px; font-size: 12px; color: #178640;"
-    )
-    self.process_status = ProcessUsageStatus()
-    status_bar.addWidget(self.app_status_label, 1)
-    status_bar.addPermanentWidget(self.process_status)
-    self.setStatusBar(status_bar)
-    self._set_process_status_visible(self._process_status_visible)
-
-
-def build_menu_bar(self):
-    menu_bar = self.menuBar()
-    menu_bar.setStyleSheet(MENUBAR)
-    menu_bar.clear()
-    self._menu_actions = []
-
-    file_menu = menu_bar.addMenu("&File")
-    file_menu.addAction(
-        "Save view as PNG",
-        self.scene.viewport_overlay.save_view_as_png,
-    )
-    file_menu.addSeparator()
-    file_menu.addAction("Open preset folder", self._open_preset_folder)
-    file_menu.addSeparator()
-    file_menu.addAction("Welcome", self.show_welcome)
-    file_menu.addAction("Help", self.help)
-
-    view_menu = menu_bar.addMenu("&View")
-    self._add_menu_action(view_menu, "Left panel", self.toolbar_left_panel_action)
-    self._add_menu_action(view_menu, "Right panel", self.toolbar_right_panel_action)
-    self._add_menu_action(view_menu, "Output panel", self.output_panel_action)
-    self._add_menu_action(view_menu, "Status bar", self.toolbar_process_status_action)
-    view_menu.addMenu(self.dock_layout.menu)
-    view_menu.addAction("Reset current layout", self._restore_default_layout)
-    view_menu.addSeparator()
-    view_menu.addAction(
-        "Reset camera",
-        self._reset_camera,
-    )
-    view_menu.addAction(
-        "Fit view",
-        lambda: self.scene.camera_controller.fit_camera_to_solutions(
-            self.scene.trajectory_renderer.solutions
-        ),
-    )
-
-    self._add_menu_action(view_menu, "Grid", self.toolbar_grid_action)
-
-    view_menu.addSeparator()
-
-    plot_theme_menu = view_menu.addMenu("Plot theme")
-    self.view_system_action = plot_theme_menu.addAction("System")
-    self.view_light_action = plot_theme_menu.addAction("Light")
-    self.view_dark_action = plot_theme_menu.addAction("Dark")
-
-    theme_group = QtGui.QActionGroup(self)
-    theme_group.setExclusive(True)
-    for action in (
-        self.view_system_action,
-        self.view_light_action,
-        self.view_dark_action,
-    ):
+def make_action(parent, text, icon_name=None, *, tooltip=None, checked=None):
+    action = QtGui.QAction(text, parent)
+    if icon_name is not None:
+        action.setIcon(icon(icon_name))
+    if tooltip is not None:
+        action.setToolTip(tooltip)
+    if checked is not None:
         action.setCheckable(True)
-        theme_group.addAction(action)
+        action.setChecked(checked)
 
-    self.view_system_action.setChecked(True)
+    return action
 
-    self.view_system_action.triggered.connect(lambda: self._set_theme(None))
-    self.view_light_action.triggered.connect(lambda: self._set_theme("light"))
-    self.view_dark_action.triggered.connect(lambda: self._set_theme("dark"))
 
-    view_menu.addSeparator()
-    view_menu.addAction("Reset session state", self._reset_session_state)
+class MainToolbar(QtWidgets.QToolBar):
+    def __init__(self, parent=None):
+        super().__init__("Scene", parent)
+        self.setObjectName("sceneToolbar")
+        self.setMovable(False)
+        self.setFloatable(False)
+        self.setIconSize(QtCore.QSize(22, 22))
+        self.setStyleSheet(SCENE_TOOLBAR)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
-    system_menu = menu_bar.addMenu("&System")
-    system_menu.addAction("Solve", lambda: self._on_controls_solve_requested(True))
-    system_menu.addAction(
-        "Reset parameters",
-        self.controls.reset_to_defaults,
-    )
-    # system_menu.addSeparator()
-
-    animation_mode_menu = system_menu.addMenu("Animation mode")
-
-    self.animation_mode_group = QtGui.QActionGroup(self)
-    self.animation_mode_group.setExclusive(True)
-
-    self.animation_traj_action = animation_mode_menu.addAction("Trajectory")
-    self.animation_particle_flow_action = animation_mode_menu.addAction("Particle flow")
-
-    for action in (self.animation_traj_action, self.animation_particle_flow_action):
-        action.setCheckable(True)
-        self.animation_mode_group.addAction(action)
-
-    self.animation_traj_action.setChecked(True)
-
-    self.animation_traj_action.triggered.connect(
-        lambda checked: self._set_animation_mode("trajectory") if checked else None
-    )
-    self.animation_particle_flow_action.triggered.connect(
-        lambda checked: self._set_animation_mode("particle") if checked else None
-    )
-
-    system_menu.addSeparator()
-
-    self._add_menu_action(system_menu, "Loop animation", self.toolbar_loop_action)
-    self._add_menu_action(system_menu, "Show leading point", self.toolbar_point_action)
-    self._add_menu_action(system_menu, "Show lines", self.toolbar_line_action)
-    self._add_menu_action(system_menu, "Show trail", self.toolbar_trail_action)
-
-    workspace_menu = menu_bar.addMenu("&Workspace")
-    mode_menu = workspace_menu.addMenu("Mode")
-    mode_group = QtGui.QActionGroup(self)
-    mode_group.setExclusive(True)
-    self.workspace_system_mode_action = mode_menu.addAction("System")
-    self.workspace_system_mode_action.setCheckable(True)
-    self.workspace_system_mode_action.setChecked(True)
-    self.workspace_explore_mode_action = mode_menu.addAction("Explore")
-    self.workspace_explore_mode_action.setCheckable(True)
-    mode_group.addAction(self.workspace_system_mode_action)
-    mode_group.addAction(self.workspace_explore_mode_action)
-    self.workspace_system_mode_action.triggered.connect(
-        lambda: self._set_workspace_mode("system")
-    )
-    self.workspace_explore_mode_action.triggered.connect(
-        lambda: self._set_workspace_mode("explore")
-    )
-    workspace_menu.addSeparator()
-    workspace_menu.addAction("Summary", self.show_workspace_summary)
-    workspace_menu.addAction(
-        "Explore workspace", lambda: self._set_workspace_mode("explore")
-    )
-    workspace_menu.addAction("Reset current layout", self._restore_default_layout)
-    examples_menu = workspace_menu.addMenu("Examples")
-    self._populate_examples_menu(examples_menu)
-    workspace_menu.addSeparator()
-    workspace_menu.addAction("New plot", self.workspace_controller.new_plot)
-    workspace_menu.addAction(
-        "Clear current view",
-        self.workspace_controller.clear_current_view,
-    )
-    workspace_menu.addAction("Export current table", self._export_current_table)
-    workspace_menu.addAction(
-        "Clear all views", self.workspace_controller.clear_all_views
-    )
-    workspace_menu.addSeparator()
-    workspace_menu.addAction("Clear sliders", self._clear_current_explore_sliders)
-    workspace_menu.addAction("Clear traces", self._clear_current_explore_traces)
-    workspace_menu.addAction("Clear explore state", self._clear_current_explore)
-    workspace_menu.addSeparator()
-    self._add_menu_action(workspace_menu, "View all", self.plot_view_all_action)
-    self._add_menu_action(workspace_menu, "Pan", self.plot_pan_action)
-    self._add_menu_action(workspace_menu, "Zoom", self.plot_zoom_action)
-    workspace_menu.addSeparator()
-    self._add_menu_action(workspace_menu, "X grid", self.plot_x_grid_action)
-    self._add_menu_action(workspace_menu, "Y grid", self.plot_y_grid_action)
-
-    if self.plot_options_menu is not None:
-        workspace_menu.addSeparator()
-        self._add_proxy_menu(
-            workspace_menu,
-            "Plot options",
-            self.plot_options_menu,
+        self.left_panel_action = self._add(
+            "Left panel", "sidebar-expand-left", tooltip="Show left panel", checked=True
         )
-    if self.plot_view_menu is not None:
-        self._add_proxy_menu(
-            workspace_menu,
-            "ViewBox options",
-            self.plot_view_menu,
+        self.no_focus(self.left_panel_action)
+        self.anim_action = self._add(
+            "Play", "media-playback-start", tooltip="Play animation"
         )
+        self.loop_action = self._add(
+            "Loop animation",
+            "media-playlist-repeat",
+            tooltip="Loop animation",
+            checked=False,
+        )
+        self.reset_action = self._add(
+            "Reset", "view-refresh", tooltip="Reset parameters"
+        )
+        self.reset_camera_action = self._add(
+            "Reset camera", "zoom-original", tooltip="Reset camera"
+        )
+        self.fit_camera_action = self._add(
+            "Fit", "view-fullscreen", tooltip="Fit view to trajectories"
+        )
+        self.auto_fit_camera_action = self._add(
+            "Auto fit view to trajectories", "zoom-fit-best", checked=True
+        )
+        self.save_view_action = self._add(
+            "Save", "document-save", tooltip="Save view as PNG"
+        )
+        self.point_action = self._add(
+            "Show leading point",
+            "media-record",
+            tooltip="Show animation head points",
+            checked=True,
+        )
+        self.line_action = self._add(
+            "Show lines", "draw-line", tooltip="Show trajectory lines", checked=False
+        )
+        self.trail_action = self._add(
+            "Show trail",
+            "draw-path",
+            tooltip="Show animated trajectory trails",
+            checked=False,
+        )
+        self.grid_action = self._add(
+            "Grid", "view-grid", tooltip="Show grid", checked=True
+        )
+        self.orbit_action = self._add(
+            "Orbit",
+            "object-rotate-right",
+            tooltip="Orbit camera automatically",
+            checked=False,
+        )
+        self.hover_action = self._add(
+            "Show coords",
+            "crosshairs",
+            tooltip="Show trajectory coordinates on hover",
+            checked=False,
+        )
+        self.solve_action = self._add("Solve", "system-run", tooltip="Run a full solve")
+        self.addSeparator()
 
-    workspace_menu.addSeparator()
+        self.scene_actions = (
+            self.anim_action,
+            self.loop_action,
+            self.point_action,
+            self.line_action,
+            self.trail_action,
+            self.grid_action,
+            self.orbit_action,
+            self.hover_action,
+            self.reset_camera_action,
+            self.fit_camera_action,
+            self.auto_fit_camera_action,
+            self.save_view_action,
+        )
+        self.viewport_actions = self.actions()
 
-    workspace_menu.addAction("System summary", lambda: self.system.summary(table=True))
-    workspace_menu.addAction(
-        "Workspace summary", lambda: self.workspace_inspector.summary(table=True)
-    )
-    workspace_menu.addSeparator()
-    workspace_menu.addAction("System help", lambda: self.system.help(table=True))
-    workspace_menu.addAction(
-        "Workspace help", lambda: self.workspace_inspector.help(table=True)
-    )
+        self.system_action = self._add(
+            "System",
+            "preferences-system-symbolic",
+            tooltip="Show or hide system scripting panels",
+            checked=False,
+        )
+        self.explore_action = self._add("Explore", "gnumeric-graphguru", checked=False)
+        self.addSeparator()
 
-    analysis_menu = menu_bar.addMenu("&Analysis")
+        spacer = QtWidgets.QWidget()
+        spacer.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
+        self.viewport_actions.append(self.addWidget(spacer))
 
-    signal_action = self._panel_docks["signal_panel"].toggleViewAction()
-    signal_action.setText("Signal and spectrum")
-    trajectory_action = self._panel_docks["trajectory_analysis_panel"].toggleViewAction()
-    trajectory_action.setText("Trajectory comparison")
+        self.right_panel_action = self._add(
+            "Right panel",
+            "sidebar-expand-right",
+            tooltip="Show right panel",
+            checked=True,
+        )
+        self.no_focus(self.right_panel_action)
+        self.viewport_actions.append(self.right_panel_action)
 
-    analysis_menu.addAction(signal_action)
-    analysis_menu.addAction(trajectory_action)
-    analysis_menu.addAction(self.toolbar_lyapunov_action)
-    analysis_menu.addAction(self.toolbar_projection_action)
-    analysis_menu.addAction(self.toolbar_poincare_action)
-    analysis_menu.addAction(self.toolbar_bifurcation_action)
-    analysis_menu.addAction(self.toolbar_system_action)
+        end_pad = QtWidgets.QWidget()
+        end_pad.setFixedWidth(3)
+        self.addWidget(end_pad)
 
-    self._hide_menu_icons(file_menu)
-    self._hide_menu_icons(view_menu)
-    self._hide_menu_icons(system_menu)
-    self._hide_menu_icons(workspace_menu)
-    self._hide_menu_icons(analysis_menu)
+    def _add(self, *args, **kwargs):
+        action = make_action(self, *args, **kwargs)
+        self.addAction(action)
+        return action
 
-    for action in menu_bar.actions():
-        menu = action.menu()
-        if menu is not None:
-            menu.aboutToShow.connect(self._sync_menu_actions)
+    def no_focus(self, action):
+        self.widgetForAction(action).setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
-
-def build_toolbar(self):
-    toolbar = QtWidgets.QToolBar("Scene")
-    toolbar.setObjectName("sceneToolbar")
-    toolbar.setMovable(False)
-    toolbar.setFloatable(False)
-    toolbar.setIconSize(QtCore.QSize(22, 22))
-    toolbar.setStyleSheet(SCENE_TOOLBAR)
-    self.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
-    self.scene_toolbar = toolbar
-
-    # start_pad = QtWidgets.QWidget()
-    # start_pad.setFixedWidth(3)
-    # toolbar.addWidget(start_pad)
-
-    self.toolbar_left_panel_action = self._add_checked_icon_toolbar_action(
-        toolbar,
-        icon("sidebar-expand-left"),
-        True,
-        lambda checked: self._set_left_panel_visible(checked),
-        "Show left panel",
-    )
-
-    self.toolbar_anim_action = toolbar.addAction(
-        icon("media-playback-start"), "Play", self.scene.animation_controller.toggle
-    )
-    self.toolbar_anim_action.setToolTip("Play animation")
-
-    self.toolbar_loop_action = self._add_checked_toolbar_action(
-        toolbar,
-        "Loop",
-        False,
-        self.scene.animation_controller.set_loop,
-        "Loop animation",
-        icon=icon("media-playlist-repeat"),
-    )
-
-    self.toolbar_reset_action = toolbar.addAction(icon("view-refresh"), "Reset")
-    self.toolbar_reset_action.setToolTip("Reset parameters")
-    self.toolbar_reset_action.triggered.connect(self.controls.reset_to_defaults)
-
-    self.toolbar_reset_camera_action = toolbar.addAction(
-        icon("zoom-original"),
-        "Reset camera",
-        self._reset_camera,
-    )
-    self.toolbar_reset_camera_action.setToolTip("Reset camera")
-
-    self.toolbar_fit_camera_action = toolbar.addAction(
-        icon("view-fullscreen"),
-        "Fit",
-        lambda: self.scene.camera_controller.fit_camera_to_solutions(
-            self.scene.trajectory_renderer.solutions
-        ),
-    )
-    self.toolbar_fit_camera_action.setToolTip("Fit view to trajectories")
-
-    self.toolbar_auto_fit_camera_action = toolbar.addAction(
-        icon("zoom-fit-best"), "Auto fit view to trajectories"
-    )
-    self.toolbar_auto_fit_camera_action.setCheckable(True)
-    self.toolbar_auto_fit_camera_action.setChecked(self.auto_fit_camera)
-    self.toolbar_auto_fit_camera_action.toggled.connect(
-        lambda enabled: setattr(self, "auto_fit_camera", enabled)
-    )
-
-    self.toolbar_save_view_action = toolbar.addAction(
-        icon("document-save"),
-        "Save",
-        self.scene.viewport_overlay.save_view_as_png,
-    )
-    self.toolbar_save_view_action.setToolTip("Save view as PNG")
-
-    self.toolbar_point_action = self._add_checked_toolbar_action(
-        toolbar,
-        "Point",
-        True,
-        self.scene.trajectory_renderer.set_point_mode,
-        "Show animation head points",
-        icon=icon("media-record"),
-    )
-    self.toolbar_point_action.toggled.connect(
-        self.controls.head_size_wrapper.setVisible
-    )
-    self.controls.head_size_wrapper.setVisible(self.toolbar_point_action.isChecked())
-    self.toolbar_line_action = self._add_checked_toolbar_action(
-        toolbar,
-        "Line",
-        False,
-        lambda checked: self._set_line_mode(checked),
-        "Show trajectory lines",
-        icon=icon("draw-line"),
-    )
-    self.toolbar_trail_action = self._add_checked_toolbar_action(
-        toolbar,
-        "Trail",
-        False,
-        self._set_trail_mode,
-        "Show animated trajectory trails",
-        icon=icon("draw-path"),
-    )
-    self.toolbar_grid_action = self._add_checked_toolbar_action(
-        toolbar,
-        "Grid",
-        True,
-        self.scene.grid_overlay.set_grid_visible,
-        "Show grid",
-        icon=icon("view-grid"),
-    )
-    self.toolbar_orbit_action = self._add_checked_toolbar_action(
-        toolbar,
-        "Orbit",
-        False,
-        self._set_orbit_mode,
-        "Orbit camera automatically",
-        icon=icon("object-rotate-right"),
-    )
-    self.toolbar_hover_action = self._add_checked_toolbar_action(
-        toolbar,
-        "Show coords",
-        False,
-        self.scene.point_hover.set_enabled,
-        "Show trajectory coordinates on hover",
-        icon=icon("crosshairs"),
-    )
-
-    self.toolbar_solve_action = toolbar.addAction(
-        icon("system-run"),
-        "Solve",
-    )
-    self.toolbar_solve_action.setToolTip("Run a full solve")
-    self.toolbar_solve_action.triggered.connect(
-        lambda: self._on_controls_solve_requested(True)
-    )
-
-    self.toolbar_lyapunov_action = self._add_panel_menu_action(
-        "Lyapunov spectrum",
-        self._toggle_lyapunov_panel,
-    )
-    self.toolbar_projection_action = self._add_panel_menu_action(
-        "Projection heatmaps",
-        self._toggle_projections,
-    )
-    self.toolbar_poincare_action = self._add_panel_menu_action(
-        "Poincare section",
-        self._toggle_poincare,
-    )
-    self.toolbar_bifurcation_action = self._add_panel_menu_action(
-        "Bifurcation diagram",
-        self._toggle_bifurcation,
-    )
-    self.toolbar_process_status_action = self._add_panel_menu_action(
-        "Status bar",
-        lambda: self._toggle_process_status(),
-    )
-    # self.output_panel_action = self._add_panel_menu_action(
-    #     "Output panel",
-    #     self._toggle_output_panel,
-    # )
-    self.output_panel_action = QtGui.QAction(
-        icon("view-split-top-bottom"), "Output panel", self
-    )
-    self.output_panel_action.setCheckable(True)
-    self.output_panel_action.setChecked(True)
-    self.output_panel_action.toggled.connect(self._set_output_panel_visible)
-    # toolbar.addAction(self.output_panel_action)
-
-    toolbar.addSeparator()
-    self._system_viewport_toolbar_actions = toolbar.actions()
-
-    self.toolbar_system_action = toolbar.addAction(
-        icon("preferences-system-symbolic"),
-        "System",
-        self._toggle_system_workspace,
-    )
-    self.toolbar_system_action.setToolTip("Show or hide system scripting panels")
-    self.toolbar_explore_action = toolbar.addAction(
-        icon("gnumeric-graphguru"),
-        "Explore",
-        lambda: self._set_workspace_mode("explore"),
-    )
-    self.toolbar_system_action.setCheckable(True)
-    self.toolbar_explore_action.setCheckable(True)
-
-    toolbar.addSeparator()
-
-    spacer = QtWidgets.QWidget()
-    spacer.setSizePolicy(
-        QtWidgets.QSizePolicy.Policy.Expanding,
-        QtWidgets.QSizePolicy.Policy.Preferred,
-    )
-    self._system_viewport_toolbar_actions.append(toolbar.addWidget(spacer))
-
-    self.system_toolbar_action = toolbar.addWidget(self.system_toolbar)
-    self._jupyter_toolbar_actions.append(self.system_toolbar_action)
-
-    # spacer = QtWidgets.QWidget()
-    # spacer.setSizePolicy(
-    #     QtWidgets.QSizePolicy.Policy.Expanding,
-    #     QtWidgets.QSizePolicy.Policy.Preferred,
-    # )
-    # toolbar.addWidget(spacer)
-
-    self._build_jupyter_toolbar_actions(toolbar)
-    self.toolbar_right_panel_action = self._add_checked_icon_toolbar_action(
-        toolbar,
-        icon("sidebar-expand-right"),
-        True,
-        lambda checked: self._set_right_panel_visible(checked),
-        "Show right panel",
-    )
-    self._system_viewport_toolbar_actions.append(self.toolbar_right_panel_action)
-    end_pad = QtWidgets.QWidget()
-    end_pad.setFixedWidth(3)
-    toolbar.addWidget(end_pad)
-
-    self._sync_toolbar_panel_actions()
+    def set_playing(self, playing):
+        text = "Pause" if playing else "Play"
+        self.anim_action.setIcon(
+            icon("media-playback-pause" if playing else "media-playback-start")
+        )
+        self.anim_action.setText(text)
+        self.anim_action.setToolTip(f"{text} animation")

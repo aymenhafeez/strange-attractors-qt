@@ -34,11 +34,7 @@ def _format_value(value):
     if value is None:
         return ""
     if isinstance(value, (float, np.floating)):
-        if not np.isfinite(value):
-            return str(value)
-        return f"{float(value):.6g}"
-    if isinstance(value, (int, np.integer)):
-        return str(int(value))
+        return f"{value:.6g}"
 
     return str(value)
 
@@ -74,16 +70,17 @@ class RowTableModel(QtCore.QAbstractTableModel):
         return len(self._columns)
 
     def data(self, index, role=QtCore.Qt.ItemDataRole.DisplayRole):
-        if not index.isValid() or role != QtCore.Qt.ItemDataRole.DisplayRole:
+        if not index.isValid() or role not in (
+            QtCore.Qt.ItemDataRole.DisplayRole,
+            QtCore.Qt.ItemDataRole.UserRole,
+        ):
             return None
 
-        try:
-            column = self._columns[index.column()]
-            value = self._rows[index.row()].get(column)
-        except IndexError:
-            return None
+        value = self._rows[index.row()].get(self._columns[index.column()])
+        if role == QtCore.Qt.ItemDataRole.DisplayRole:
+            return _format_value(value)
 
-        return _format_value(value)
+        return value
 
     def headerData(
         self,
@@ -95,10 +92,7 @@ class RowTableModel(QtCore.QAbstractTableModel):
             return None
 
         if orientation == QtCore.Qt.Orientation.Horizontal:
-            try:
-                return self._columns[section]
-            except IndexError:
-                return None
+            return self._columns[section]
 
         return str(section + 1)
 
@@ -113,7 +107,6 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
         self._columns = tuple(columns)
         self._solutions = []
         self._t_min = 0.0
-        self._default_t_max = 0.0
         self._trajectory_specs = []
         self._sampled = True
         self._sample_size = DEFAULT_SAMPLE_SIZE
@@ -126,13 +119,11 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
         solutions,
         *,
         t_min=0.0,
-        t_max=0.0,
         trajectory_specs=None,
     ):
         self.beginResetModel()
         self._solutions = [np.asarray(solution) for solution in solutions or []]
         self._t_min = float(t_min)
-        self._default_t_max = float(t_max)
         self._trajectory_specs = list(trajectory_specs or [])
         self._rebuild_rows()
         self.endResetModel()
@@ -173,17 +164,18 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
         return len(self._columns)
 
     def data(self, index, role=QtCore.Qt.ItemDataRole.DisplayRole):
-        if not index.isValid() or role != QtCore.Qt.ItemDataRole.DisplayRole:
+        if not index.isValid() or role not in (
+            QtCore.Qt.ItemDataRole.DisplayRole,
+            QtCore.Qt.ItemDataRole.UserRole,
+        ):
             return None
 
-        row_ref = self._row_ref(index.row())
-        if row_ref is None:
-            return None
+        trajectory, step = self._row_ref(index.row())
+        value = self._value(trajectory, step, self._columns[index.column()])
+        if role == QtCore.Qt.ItemDataRole.DisplayRole:
+            return _format_value(value)
 
-        trajectory, step = row_ref
-        column = self._columns[index.column()]
-
-        return _format_value(self._value(trajectory, step, column))
+        return value
 
     def headerData(
         self,
@@ -195,10 +187,7 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
             return None
 
         if orientation == QtCore.Qt.Orientation.Horizontal:
-            try:
-                return self._columns[section]
-            except IndexError:
-                return None
+            return self._columns[section]
 
         return str(section + 1)
 
@@ -272,9 +261,6 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
         self._row_count = total
 
     def _row_ref(self, row):
-        if row < 0 or row >= self._row_count:
-            return None
-
         trajectory = bisect_right(self._cumulative_rows, row)
         previous_total = 0 if trajectory == 0 else self._cumulative_rows[trajectory - 1]
         local_row = row - previous_total
@@ -285,12 +271,7 @@ class TrajectoryTableModel(QtCore.QAbstractTableModel):
         return trajectory, local_row
 
     def _trajectory_t_max(self, trajectory):
-        try:
-            spec = self._trajectory_specs[trajectory]
-        except IndexError:
-            spec = {}
-
-        return spec.get("t_max", self._default_t_max)
+        return self._trajectory_specs[trajectory]["t_max"]
 
 
 class DataViewPanel(QtWidgets.QWidget):
@@ -378,7 +359,6 @@ class DataViewPanel(QtWidgets.QWidget):
         solutions,
         *,
         t_min=0.0,
-        t_max=0.0,
         trajectory_specs=None,
         config=None,
         values=None,
@@ -390,13 +370,11 @@ class DataViewPanel(QtWidgets.QWidget):
         self.model.set_solutions(
             solution_arrays,
             t_min=t_min,
-            t_max=t_max,
             trajectory_specs=specs,
         )
         self.measures_model.set_solutions(
             solution_arrays,
             t_min=t_min,
-            t_max=t_max,
             trajectory_specs=specs,
         )
 
@@ -448,8 +426,7 @@ class DataViewPanel(QtWidgets.QWidget):
     def _trajectory_rows(self, solutions, specs):
         rows = []
         for i, solution in enumerate(solutions):
-            spec = specs[i] if i < len(specs) else {}
-            initial = spec.get("ic", [None, None, None])
+            initial = specs[i]["ic"]
             final = solution[-1] if len(solution) else [None, None, None]
             rows.append(
                 {
@@ -531,27 +508,17 @@ class DataViewPanel(QtWidgets.QWidget):
 
     @staticmethod
     def _model_to_rows(model):
-        # turn QAbstractTableModels into rows
         columns = [
-            model.headerData(
-                col,
-                QtCore.Qt.Orientation.Horizontal,
-                QtCore.Qt.ItemDataRole.DisplayRole,
-            )
+            model.headerData(col, QtCore.Qt.Orientation.Horizontal)
             for col in range(model.columnCount())
         ]
-
-        rows = []
-        for row in range(model.rowCount()):
-            rows.append(
-                [
-                    model.data(
-                        model.index(row, col),
-                        QtCore.Qt.ItemDataRole.DisplayRole,
-                    )
-                    for col in range(model.columnCount())
-                ]
-            )
+        rows = [
+            [
+                model.data(model.index(row, col), QtCore.Qt.ItemDataRole.UserRole)
+                for col in range(model.columnCount())
+            ]
+            for row in range(model.rowCount())
+        ]
 
         return columns, rows
 

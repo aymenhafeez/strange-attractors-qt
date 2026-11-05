@@ -10,6 +10,13 @@ from .style import dock_widget_style
 
 class AppDock(QtWidgets.QDockWidget):
     activated = QtCore.pyqtSignal()
+    closed = QtCore.pyqtSignal()
+
+    def __init__(self, title, parent=None):
+        super().__init__(title, parent)
+        self.findChild(
+            QtWidgets.QAbstractButton, "qt_dockwidget_closebutton"
+        ).clicked.connect(self.closed)
 
     def reveal(self):
         self.show()
@@ -290,8 +297,8 @@ class DockLayout(QtCore.QObject):
         if not self._changing:
             dock.activated.emit()
 
-    def _focus_changed(self, _old, widget):
-        if self._changing:
+    def _focus_changed(self, old, widget):
+        if self._changing or old is None:
             return
 
         while widget is not None:

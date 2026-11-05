@@ -25,7 +25,6 @@ class _SystemToolbarDouble:
         self.plots = []
         self.current_key = None
         self.live_traces = None
-        self.status = ""
 
     def set_plots(self, items, current_key):
         self.plots = [(item["kind"], item["name"]) for item in items]
@@ -34,9 +33,6 @@ class _SystemToolbarDouble:
     def set_live_traces(self, plot_name, traces):
         self.live_traces = (plot_name, traces)
 
-    def set_status(self, text):
-        self.status = str(text)
-
 
 class _LivePlotControllerDouble:
     def __init__(self, panel):
@@ -44,38 +40,42 @@ class _LivePlotControllerDouble:
         self.renames = []
         self.synced_live_menus = []
 
-    def _plot_combo_tooltip(self, plot_name):
+    def tooltip(self, plot_name):
         return f"{plot_name}: no live traces"
 
-    def _sync_live_menu(self, plot_name):
+    def sync_menu(self, plot_name):
         self.synced_live_menus.append(plot_name)
 
     def rename_plot(self, old_name, new_name):
         self.renames.append((old_name, new_name))
         self.panel.plots.rename(old_name, new_name)
 
-    def _clear_plots(self):
+    def clear_plot(self):
         self.panel.plots.clear()
 
-    def _clear_all_plots(self):
+    def clear_all(self):
         self.panel.plots.clear_all()
+
+
+class _WorkspaceToolbarDouble:
+    def __init__(self):
+        self.view_combo = QtWidgets.QComboBox()
+        self.name_edit = QtWidgets.QLineEdit()
+        self.grid_action = QtGui.QAction()
+        self.grid_action.setCheckable(True)
+        self.crosshair_action = QtGui.QAction()
+        self.crosshair_action.setCheckable(True)
+        self.explore_syncs = 0
+
+    def sync_explore(self):
+        self.explore_syncs += 1
 
 
 def _workspace_window(panel):
     window = SimpleNamespace()
     window.jupyter_console_panel = panel
-    window.toolbar_workspace_combo = QtWidgets.QComboBox()
-    window.toolbar_workspace_name = QtWidgets.QLineEdit()
     window.system_toolbar = _SystemToolbarDouble()
     window.live_plot_controller = _LivePlotControllerDouble(panel)
-    window.explore_syncs = 0
-    window.workspace_syncs = 0
-    window._sync_jupyter_workspace_state = lambda: setattr(
-        window, "workspace_syncs", window.workspace_syncs + 1
-    )
-    window._sync_explore_actions = lambda: setattr(
-        window, "explore_syncs", window.explore_syncs + 1
-    )
     return window
 
 
@@ -95,18 +95,18 @@ def test_workspace_controller_syncs_2d_and_3d_views(qapp, tmp_path):
     panel.views3d.new("3D Test", activate=False)
 
     window = _workspace_window(panel)
-    controller = WorkspaceController(window)
+    toolbar = _WorkspaceToolbarDouble()
+    controller = WorkspaceController(
+        panel, toolbar, window.system_toolbar, window.live_plot_controller
+    )
 
     controller.sync_views()
 
-    labels = [
-        window.toolbar_workspace_combo.itemText(i)
-        for i in range(window.toolbar_workspace_combo.count())
-    ]
+    labels = [toolbar.view_combo.itemText(i) for i in range(toolbar.view_combo.count())]
 
     assert labels == ["Plot", "2D Test", "3D: 3D View", "3D: 3D Test"]
-    assert window.toolbar_workspace_combo.currentData() == ("plot", "Plot")
-    assert window.toolbar_workspace_name.text() == "Plot"
+    assert toolbar.view_combo.currentData() == ("plot", "Plot")
+    assert toolbar.name_edit.text() == "Plot"
     assert window.system_toolbar.plots == [
         ("plot", "Plot"),
         ("plot", "2D Test"),
@@ -121,20 +121,23 @@ def test_workspace_controller_selected_3d_view_from_toolbar(qapp, tmp_path):
     panel.views3d.new("3D Test", activate=False)
 
     window = _workspace_window(panel)
-    controller = WorkspaceController(window)
-    window.toolbar_workspace_combo.currentIndexChanged.connect(
+    toolbar = _WorkspaceToolbarDouble()
+    controller = WorkspaceController(
+        panel, toolbar, window.system_toolbar, window.live_plot_controller
+    )
+    toolbar.view_combo.currentIndexChanged.connect(
         lambda _index: controller.on_toolbar_view_selected()
     )
 
     controller.sync_views()
 
-    index = _find_combo_data(window.toolbar_workspace_combo, ("view3d", "3D Test"))
+    index = _find_combo_data(toolbar.view_combo, ("view3d", "3D Test"))
     assert index >= 0
-    window.toolbar_workspace_combo.setCurrentIndex(index)
+    toolbar.view_combo.setCurrentIndex(index)
 
     assert panel.active_view_key() == ("view3d", "3D Test")
-    assert window.toolbar_workspace_name.text() == "3D Test"
-    assert window.explore_syncs == 1
+    assert toolbar.name_edit.text() == "3D Test"
+    assert toolbar.explore_syncs == 1
     assert window.system_toolbar.live_traces == ("", [])
 
 
@@ -144,10 +147,13 @@ def test_workspace_controller_2d_renames(qapp, tmp_path):
     panel.plots.new("2D Test")
 
     window = _workspace_window(panel)
-    controller = WorkspaceController(window)
+    toolbar = _WorkspaceToolbarDouble()
+    controller = WorkspaceController(
+        panel, toolbar, window.system_toolbar, window.live_plot_controller
+    )
     controller.sync_views()
 
-    window.toolbar_workspace_name.setText("New 2D Test")
+    toolbar.name_edit.setText("New 2D Test")
     controller.rename_current_view()
 
     assert panel.plots.names() == ["Plot", "New 2D Test"]
@@ -166,28 +172,29 @@ def test_workspace_controller_grid_action_3d_sync(qapp, tmp_path):
     view_b.grid(True)
 
     window = _workspace_window(panel)
-    window.workspace_grid_action = QtGui.QAction()
-    window.workspace_grid_action.setCheckable(True)
-    controller = WorkspaceController(window)
-    window.toolbar_workspace_combo.currentIndexChanged.connect(
+    toolbar = _WorkspaceToolbarDouble()
+    controller = WorkspaceController(
+        panel, toolbar, window.system_toolbar, window.live_plot_controller
+    )
+    toolbar.view_combo.currentIndexChanged.connect(
         lambda _index: controller.on_toolbar_view_selected()
     )
 
     controller.sync_views()
 
-    index_a = _find_combo_data(window.toolbar_workspace_combo, ("view3d", "A"))
+    index_a = _find_combo_data(toolbar.view_combo, ("view3d", "A"))
     assert index_a >= 0
-    window.toolbar_workspace_combo.setCurrentIndex(index_a)
+    toolbar.view_combo.setCurrentIndex(index_a)
 
     assert panel.active_view_key() == ("view3d", "A")
-    assert window.workspace_grid_action.isChecked() is False
+    assert toolbar.grid_action.isChecked() is False
     assert view_a.grid_visible() is False
 
-    index_b = _find_combo_data(window.toolbar_workspace_combo, ("view3d", "B"))
+    index_b = _find_combo_data(toolbar.view_combo, ("view3d", "B"))
     assert index_b >= 0
-    window.toolbar_workspace_combo.setCurrentIndex(index_b)
+    toolbar.view_combo.setCurrentIndex(index_b)
 
     assert panel.active_view_key() == ("view3d", "B")
-    assert window.workspace_grid_action.isChecked() is True
+    assert toolbar.grid_action.isChecked() is True
     assert view_b.grid_visible() is True
     assert view_a.grid_visible() is False

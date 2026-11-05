@@ -153,9 +153,13 @@ class BifurcationPanel(QtWidgets.QWidget):
 
         row1.addWidget(QtWidgets.QLabel("Sampling:"))
         self.sampling_combo = QtWidgets.QComboBox()
-        self.sampling_combo.addItems(
-            ["Midplane crossings", "Envolope", "Local maxima", "Stroboscopic"]
-        )
+        for label, mode in (
+            ("Midplane crossings", "midplane"),
+            ("Envelope", "envelope"),
+            ("Local maxima", "maxima"),
+            ("Stroboscopic", "stroboscopic"),
+        ):
+            self.sampling_combo.addItem(label, mode)
         row1.addWidget(self.sampling_combo)
 
         layout.addLayout(row1)
@@ -181,8 +185,10 @@ class BifurcationPanel(QtWidgets.QWidget):
         period_layout.addWidget(self.phase_spin)
 
         self.period_controls.hide()
-        self.sampling_combo.currentTextChanged.connect(
-            lambda mode: self.period_controls.setVisible(mode == "Stroboscopic")
+        self.sampling_combo.currentIndexChanged.connect(
+            lambda _index: self.period_controls.setVisible(
+                self.sampling_combo.currentData() == "stroboscopic"
+            )
         )
         layout.addWidget(self.period_controls)
 
@@ -328,15 +334,7 @@ class BifurcationPanel(QtWidgets.QWidget):
 
     def set_config(self, config, current_values):
         self.setEnabled(True)
-        # if config.dimension != 3:
-        #     self.cancel_sweep()
-        #     self._sweep_gen += 1
-        #     self.config = None
-        #     self._set_plot_data([], [])
-        #     return
-
         self.cancel_sweep()
-        self._sweep_gen += 1
         self._error_label.setVisible(False)
         old_dimension = self.config.dimension if self.config else None
         self.config = config
@@ -351,8 +349,10 @@ class BifurcationPanel(QtWidgets.QWidget):
             )
 
         if old_dimension != config.dimension:
-            self.sampling_combo.setCurrentText(
-                "Envolope" if config.dimension == 2 else "Midplane crossings"
+            self.sampling_combo.setCurrentIndex(
+                self.sampling_combo.findData(
+                    "envelope" if config.dimension == 2 else "midplane"
+                )
             )
         self._update_axis_label()
 
@@ -399,7 +399,6 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.progress.setVisible(True)
         self.progress.setValue(0)
         self._error_label.setVisible(False)
-        self.run_btn.setText("\u25b6 Run")
         self._sweep_gen += 1
         gen = self._sweep_gen
 
@@ -417,7 +416,7 @@ class BifurcationPanel(QtWidgets.QWidget):
             axis,
             t_max,
             t_min,
-            sampling=self.sampling_combo.currentText(),
+            sampling=self.sampling_combo.currentData(),
             period=self.period_spin.value(),
             phase=self.phase_spin.value(),
         )
@@ -426,7 +425,9 @@ class BifurcationPanel(QtWidgets.QWidget):
         )
         worker.signals.finished.connect(lambda g=gen: self._on_worker_finished(g))
         worker.signals.error.connect(lambda msg, g=gen: self._on_worker_error(msg, g))
-        worker.signals.progress.connect(self.progress.setValue)
+        worker.signals.progress.connect(
+            lambda value, g=gen: self._on_progress(value, g)
+        )
         self._worker = worker
         QThreadPool.globalInstance().start(worker)
 
@@ -434,8 +435,15 @@ class BifurcationPanel(QtWidgets.QWidget):
         if self._worker:
             self._worker.cancel()
             self._worker = None
+        self._sweep_gen += 1
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
+        self.progress.setVisible(False)
+
+    def _on_progress(self, value, gen):
+        if gen != self._sweep_gen:
+            return
+        self.progress.setValue(value)
 
     def _on_chunk_ready(self, vals, peaks_list, gen):
         if gen != self._sweep_gen:

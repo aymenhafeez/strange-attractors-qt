@@ -328,14 +328,14 @@ class SignalPanel(QtWidgets.QWidget):
             and state.get("valid")
             and not state.get("stale")
             and not state.get("solving")
-            and state.get("request_id") == run["request_id"]
+            and state.get("request_id") == run.request_id
         )
 
         preview = (
             run is not None
             and state.get("partial")
             and not state.get("solving")
-            and state.get("request_id") == run["request_id"]
+            and state.get("request_id") == run.request_id
         )
 
         if state.get("last_error"):
@@ -370,23 +370,21 @@ class SignalPanel(QtWidgets.QWidget):
             self.coordinate_combo.clear()
 
             if run is not None:
-                for label, spec in zip(run["labels"], run["trajectory_specs"]):
+                for label, spec in zip(run.labels, run.trajectory_specs):
                     initial = ", ".join(f"{v:g}" for v in spec["ic"])
                     self.trajectory_combo.addItem(f"{label}: ({initial})")
 
                 self.trajectory_combo.setCurrentIndex(
                     min(trajectory, self.trajectory_combo.count() - 1)
                 )
-                self.coordinate_combo.addItems(run["variables"])
+                self.coordinate_combo.addItems(run.variables)
                 self.coordinate_combo.setCurrentText(
-                    coordinate
-                    if coordinate in run["variables"]
-                    else run["variables"][0]
+                    coordinate if coordinate in run.variables else run.variables[0]
                 )
                 parameters = ", ".join(
-                    f"{name}={value:g}" for name, value in run["parameters"].items()
+                    f"{name}={value:g}" for name, value in run.parameters.items()
                 )
-                self.trajectory_combo.setToolTip(f"{run['attractor']}\n{parameters}")
+                self.trajectory_combo.setToolTip(f"{run.attractor}\n{parameters}")
             else:
                 self.trajectory_combo.setToolTip("")
 
@@ -415,22 +413,22 @@ class SignalPanel(QtWidgets.QWidget):
 
         index = self.trajectory_combo.currentIndex()
         coordinate = self.coordinate_combo.currentText()
-        source = (self._run["attractor"], index, coordinate)
+        source = (self._run.attractor, index, coordinate)
         if source != self._analysis_source:
             self._analysis_source = source
             self._spectrum_revision += 1
             self._spectrogram_revision += 1
 
-        column = self._run["variables"].index(coordinate)
-        solution = self._run["solutions"][index]
-        spec = self._run["trajectory_specs"][index]
-        dt = (spec["t_max"] - self._run["t_min"]) / spec["n"]
+        column = self._run.variables.index(coordinate)
+        solution = self._run.solutions[index]
+        spec = self._run.trajectory_specs[index]
+        dt = (spec["t_max"] - self._run.t_min) / spec["n"]
 
         try:
             self.signal = prepare_signal(
                 solution[:, column],
                 dt=dt,
-                t0=self._run["t_min"] + dt,
+                t0=self._run.t_min + dt,
             )
         except ValueError as error:
             self._queue_analysis()
@@ -816,7 +814,7 @@ class SignalPanel(QtWidgets.QWidget):
         pen = colours["plot_pen"]
         if self._run is not None:
             index = self.trajectory_combo.currentIndex()
-            pen = self._run["colours"][index] or pen
+            pen = self._run.colours[index] or pen
 
         self.curve.setPen(pg.mkPen(pen))
         self.spectrum_curve.setPen(pg.mkPen(colours["alternate_pen"]))

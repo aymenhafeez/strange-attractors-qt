@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 import json
+import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +29,20 @@ def preset_filename(name):
 
 def preset_path(directory, name):
     return Path(directory) / preset_filename(name)
+
+
+def _read(path):
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise PresetError(f"Could not read preset: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise PresetError("Preset file is not valid JSON") from exc
+
+    if not isinstance(data, dict):
+        raise PresetError("Preset file is not valid")
+
+    return data
 
 
 def _utc_timestamp():
@@ -185,20 +200,19 @@ def save_preset(
     created_at=None,
 ):
     preset = build_preset(config, values, n, t_max, preset_name, notes, created_at)
+    path = Path(path)
+    tmp = path.with_name(f"{path.name}.tmp")
+
     try:
-        Path(path).write_text(json.dumps(preset, indent=2), encoding="utf-8")
+        tmp.write_text(json.dumps(preset, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
     except OSError as exc:
+        tmp.unlink(missing_ok=True)
         raise PresetError(f"Could not save preset: {exc}") from exc
 
 
 def load_preset(path):
-    try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except OSError as exc:
-        raise PresetError(f"Could not read preset: {exc}") from exc
-    except json.JSONDecodeError as exc:
-        raise PresetError("Preset file is not valid JSON") from exc
-
+    data = _read(path)
     if data.get("version") != PRESET_VERSION:
         raise PresetError("Unsupported preset version")
 
@@ -238,16 +252,7 @@ def list_presets(directory):
 
 
 def preset_metadata(directory, name):
-    try:
-        data = json.loads(preset_path(directory, name).read_text(encoding="utf-8"))
-    except OSError as exc:
-        raise PresetError(f"Could not read preset: {exc}") from exc
-    except json.JSONDecodeError as exc:
-        raise PresetError("Preset file is not valid JSON") from exc
-
-    if not isinstance(data, dict):
-        raise PresetError("Preset file is not valid")
-
+    data = _read(preset_path(directory, name))
     return {
         "name": str(data.get("name") or name),
         "attractor": str(data.get("attractor") or "Unknown"),

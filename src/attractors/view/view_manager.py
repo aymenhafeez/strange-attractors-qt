@@ -117,18 +117,16 @@ class ViewManager(QtCore.QObject):
         self._playback_times = ()
 
         if run is not None:
-            self._playback_start = run["t_min"]
+            self._playback_start = run.t_min
             self._playback_times = tuple(
-                sample_times(run["t_min"], spec["t_max"], len(solution))
+                sample_times(run.t_min, spec["t_max"], len(solution))
                 for spec, solution in zip(
-                    run["trajectory_specs"], run["solutions"], strict=True
+                    run.trajectory_specs, run.solutions, strict=True
                 )
             )
-            first = run["trajectory_specs"][0]
-            self._playback_dt = (first["t_max"] - run["t_min"]) / len(
-                run["solutions"][0]
-            )
-            self._playback_end = max(spec["t_max"] for spec in run["trajectory_specs"])
+            first = run.trajectory_specs[0]
+            self._playback_dt = (first["t_max"] - run.t_min) / len(run.solutions[0])
+            self._playback_end = max(spec["t_max"] for spec in run.trajectory_specs)
             self._playback_frames = math.ceil(
                 (self._playback_end - self._playback_start) / self._playback_dt
             )

@@ -19,6 +19,7 @@ from attractors.console.table import (
 from attractors.console.workspace_inspector import (
     WorkspaceInspector,
 )
+from attractors.ui import session_store
 from attractors.ui.docking import DockLayout
 
 
@@ -60,17 +61,15 @@ def test_workspace_shell_persists_table_names(qapp, tmp_path):
     panel.tables.new("Test table", activate=False)
 
     settings = SettingsDouble()
-    window = SimpleNamespace(jupyter_console_panel=panel)
 
-    Window._save_workspace_shell(window, settings)
+    session_store.save_workspace(settings, panel)
 
     restored_dock_window = QtWidgets.QMainWindow()
     restored_panel = JupyterConsolePanel(
         DockLayout(restored_dock_window), dict, script_dir=tmp_path
     )
-    restored_window = SimpleNamespace(jupyter_console_panel=restored_panel)
 
-    Window._restore_workspace_shell(restored_window, settings)
+    session_store.restore_workspace(settings, restored_panel)
 
     assert restored_panel.tables.names() == ["Table", "Test table"]
     assert restored_panel.tables.current_name == "Table"
@@ -332,7 +331,9 @@ def test_export_current_table_from_menu(tmp_path, qapp, monkeypatch):
     statuses = []
     window = SimpleNamespace(
         jupyter_console_panel=panel,
-        _set_app_status=lambda text, error=False: statuses.append((text, error)),
+        status_bar=SimpleNamespace(
+            set_app_message=lambda text, error=False: statuses.append((text, error))
+        ),
     )
 
     monkeypatch.setattr(
@@ -353,7 +354,9 @@ def test_export_current_table_ignores_cancel(qapp, tmp_path, monkeypatch):
     statuses = []
     window = SimpleNamespace(
         jupyter_console_panel=panel,
-        _set_app_status=lambda text, error=False: statuses.append((text, error)),
+        status_bar=SimpleNamespace(
+            set_app_message=lambda text, error=False: statuses.append((text, error))
+        ),
     )
 
     monkeypatch.setattr(

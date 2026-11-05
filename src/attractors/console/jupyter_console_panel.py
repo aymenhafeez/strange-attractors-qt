@@ -26,9 +26,6 @@ _BaseJupyterConsole = (
     inprocess.QtInProcessRichJupyterWidget if inprocess else QtWidgets.QWidget
 )
 LEGEND_OFFSET = (-30, -30)
-LEGEND_BRUSH = (18, 22, 28, 220)
-LEGEND_PEN = (210, 220, 230, 180)
-LEGEND_TEXT = (245, 248, 252)
 LEGEND_TEXT_SIZE = "9pt"
 PLOT_MODE_REPLACE = "replace"
 PLOT_MODE_OVERLAY = "overlay"
@@ -145,8 +142,7 @@ class ConsolePlot:
 
     def clear(self):
         self._plot_widget.clear()
-        if hasattr(self, "explore"):
-            self.explore.clear_traces()
+        self.explore.clear_traces()
 
         if self._zoom is not None:
             self._zoom.clear()
@@ -282,11 +278,12 @@ class ConsolePlot:
 
     def ensure_legend(self):
         if self._legend is None:
+            colours = plot_colours()
             self._legend = self._plot_widget.addLegend(
                 offset=LEGEND_OFFSET,
-                brush=LEGEND_BRUSH,
-                pen=LEGEND_PEN,
-                labelTextColor=LEGEND_TEXT,
+                brush=colours["legend_brush"],
+                pen=colours["legend_pen"],
+                labelTextColor=colours["legend_text"],
                 labelTextSize=LEGEND_TEXT_SIZE,
             )
         return self._legend
@@ -330,6 +327,14 @@ class ConsolePlot:
 
         self._plot_widget.setBackground(colours["plot_background"])
         self._plot_widget.showGrid(x=x_grid, y=y_grid, alpha=colours["plot_grid_alpha"])
+
+        if self._legend is not None:
+            self._legend.setBrush(colours["legend_brush"])
+            self._legend.setPen(colours["legend_pen"])
+            self._legend.setLabelTextColor(colours["legend_text"])
+
+            for _sample, label in self._legend.items:
+                label.setText(label.text, color=colours["legend_text"])
 
         if self._zoom is not None:
             self._zoom.apply_theme()
@@ -380,6 +385,13 @@ class ConsolePlotManager(QtCore.QObject):
 
     def names(self):
         return list(self._plots)
+
+    @property
+    def default_name(self):
+        return self._default_name
+
+    def docks(self):
+        return list(self._docks.values())
 
     def set_status_callback(self, callback):
         self._status_callback = callback
@@ -464,6 +476,7 @@ class ConsolePlotManager(QtCore.QObject):
             relative_to=self._docks[self._default_name],
         )
         dock.activated.connect(lambda: self.activate(dock.windowTitle()))
+        dock.closed.connect(lambda: self.close(dock.windowTitle()))
 
         self._plots[key] = plot
         self._docks[key] = dock
@@ -712,6 +725,17 @@ class JupyterConsolePanel(QtCore.QObject):
 
         return items
 
+    def docks(self):
+        return [
+            self.script_dock,
+            self.variables_dock,
+            self.files_dock,
+            self.console_dock,
+            *self.plots.docks(),
+            *self.views3d.docks(),
+            *self.tables.docks(),
+        ]
+
     def active_view_key(self):
         if self._active_view == "view3d":
             return ("view3d", self.views3d.current_name)
@@ -728,14 +752,10 @@ class JupyterConsolePanel(QtCore.QObject):
         raise ValueError("Workspace view kind must be 'plot' or 'view3d'")
 
     def set_active_view(self, kind):
-        key = str(kind).strip().lower()
-        if key not in {"plot", "view3d"}:
-            raise ValueError("Active view kind must be 'plot' or 'view3d'")
-
-        if self._active_view == key:
+        if self._active_view == kind:
             return
 
-        self._active_view = key
+        self._active_view = kind
         self.active_view_changed.emit()
 
     def ensure_console(self):

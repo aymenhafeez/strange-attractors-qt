@@ -1,12 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Aymen Hafeez
 # SPDX-License-Identifier: GPL-3.0-only
 
-from dataclasses import replace
-from types import SimpleNamespace
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
 
+from ..core.models import AttractorConfig
 from ..core.sections import (
     AXES,
     COORDINATE_COLUMNS,
@@ -17,6 +18,8 @@ from ..core.sections import (
 from ..core.signal_analysis import sample_times, trajectory_signal
 from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
+from ..core.trajectory_analysis import separation
+from ..workers.solve_session import SolveRun, read_only
 from .jupyter_console_panel import ConsolePlot
 
 VECTOR_FIELD_SPEED_PENS = [
@@ -200,39 +203,95 @@ def _normalise_initial_conditions(initial_conditions, dimension=3):
     return array.tolist()
 
 
-class _SnapshotScene:
-    """Give the scene state of the current system"""
+def parse_mode(mode):
+    normalised = str(mode).strip().lower()
+    if normalised == PLOT_MODE_REPLACE:
+        return PLOT_MODE_REPLACE
+    if normalised == PLOT_MODE_OVERLAY:
+        return PLOT_MODE_OVERLAY
 
-    def __init__(self, solutions, camera, plot):
-        self.trajectory_renderer = SimpleNamespace(
-            solutions=tuple(np.asarray(solution) for solution in solutions),
-        )
-        self.camera_controller = SimpleNamespace(
-            get_camera_state=lambda: dict(camera or {}),
-        )
-        self._plot = plot
+    raise ValueError("Plot mode must be 'replace' or 'overlay'")
 
 
-class _SnapshotTrajectoryPanel:
-    """Give the initial conditions of the current system"""
+def _console_n(value):
+    try:
+        n = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("N must be a positive integer") from exc
+    if n < 1000 or n > 500000:
+        raise ValueError("N must be between 1000 and 500000")
 
-    def __init__(self, initial_conditions):
-        self._initial_conditions = [
-            [float(coord) for coord in ic] for ic in initial_conditions
-        ]
+    return n
 
-    def get_trajectories(self):
-        return [{"ic": list(ic)} for ic in self._initial_conditions]
+
+def _console_t_max(value):
+    try:
+        t_max = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("t_max must be a positive integer") from exc
+    if t_max < 1 or t_max > 750:
+        raise ValueError("t_max must be between 1 and 750")
+
+    return t_max
+
+
+def _parameter_updates(config, values):
+    params = {param.name: param for param in config.params}
+    updates = {}
+    for name, value in values.items():
+        key = str(name)
+        if key not in params:
+            raise ValueError(f"Unknown parameter: {key}")
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Parameter {key} must be numeric") from exc
+
+        param = params[key]
+        if numeric < param.min_val or numeric > param.max_val:
+            raise ValueError(
+                f"Parameter {key} must be between {param.min_val} and {param.max_val}"
+            )
+        updates[key] = numeric
+
+    return updates
+
+
+@dataclass(frozen=True)
+class SystemSettings:
+    name: str
+    config: AttractorConfig | None
+    values: dict
+    n: int
+    t_max: float
+    trajectories: list
+
+
+@dataclass(frozen=True)
+class SystemCommands:
+    set_values: Callable
+    set_time: Callable
+    solve: Callable
+
+
+@dataclass(frozen=True)
+class _Snapshot:
+    run: SolveRun
+    state: dict
 
 
 class LivePlotHandle:
-    def __init__(self, window, plot_name, trace_index):
-        self._window = window
-        self.plot_name = str(plot_name)
-        self.trace_index = int(trace_index)
+    def __init__(self, controller, trace_id):
+        self._controller = controller
+        self.trace_id = trace_id
 
     def __repr__(self):
-        return f"LivePlotHandle(plot={self.plot_name!r}, trace={self.trace_index!r})"
+        try:
+            plot = self.plot_name
+        except LookupError:
+            return f"LivePlotHandle(trace={self.trace_id!r}, removed)"
+
+        return f"LivePlotHandle(plot={plot!r}, trace={self.trace_id!r})"
 
     def __getitem__(self, key):
         return self.spec[key]
@@ -242,24 +301,23 @@ class LivePlotHandle:
 
     @property
     def spec(self):
-        live_plots = self._window.live_plot_controller.live_plots
-        return live_plots[self.plot_name][self.trace_index]
+        return self._controller.trace(self.trace_id).spec
+
+    @property
+    def plot_name(self):
+        return self.spec["plot"]
 
     @property
     def item(self):
-        items = self._window.live_plot_controller.live_items
-        return items.get((self.plot_name, self.trace_index))
+        items = self.items
+        if len(items) == 1:
+            return items[0]
+
+        return items or None
 
     @property
     def items(self):
-        item = self.item
-
-        if item is None:
-            return ()
-        if isinstance(item, tuple):
-            return item
-
-        return (item,)
+        return self._controller.trace(self.trace_id).items
 
     def options(self):
         return pd.Series(dict(self.spec))
@@ -284,59 +342,17 @@ class LivePlotHandle:
         return self
 
     def unfollow(self):
-        return self._window.live_plot_controller._remove_live_trace(
-            self.plot_name,
-            self.trace_index,
-        )
-
-
-class _SnapshotWindow:
-    """
-    Give window state and methods to SystemInspector, keep the data read only separate from the live view
-    """
-
-    def __init__(
-        self,
-        *,
-        name,
-        config,
-        values,
-        n,
-        t_max,
-        initial_conditions,
-        solutions,
-        camera,
-        plot,
-        status,
-    ):
-        self.current_name = name
-        self.current_n = int(n)
-        self.current_t_max = float(t_max)
-        self._config = config
-        self._values = dict(values)
-        self._solve_state = dict(status)
-        self.scene = _SnapshotScene(solutions, camera, plot)
-        self.controls = SimpleNamespace(
-            trajectory_panel=_SnapshotTrajectoryPanel(initial_conditions),
-        )
-        self.jupyter_console_panel = SimpleNamespace(plot=plot)
-
-    def _get_current_config_and_values(self):
-        return self._config, dict(self._values)
-
-    def _set_console_parameters(self, values, *, solve=False):
-        raise RuntimeError("Snapshot parameters are read-only")
-
-    def _set_console_time(self, *, n=None, t_max=None, solve=False):
-        raise RuntimeError("Snapshot solve time is read-only")
-
-    def _solve_from_console(self):
-        raise RuntimeError("Snapshot solves are read-only")
+        return self._controller.remove(self.trace_id)
 
 
 class SystemInspector:
-    def __init__(self, window):
-        self._window = window
+    def __init__(self, settings, session, console, camera, commands=None):
+        self._settings = settings
+        self._session = session
+        self._console = console
+        self._camera = camera
+        self._commands = commands
+        self.live = None
 
     def __repr__(self):
         return (
@@ -346,13 +362,11 @@ class SystemInspector:
 
     @property
     def name(self):
-        return self._window.current_name
+        return self._settings().name
 
     @property
     def config(self):
-        config, _values = self._window._get_current_config_and_values()
-
-        return _inspectable_config(config)
+        return _inspectable_config(self._settings().config)
 
     @property
     def variables(self):
@@ -376,16 +390,15 @@ class SystemInspector:
 
     @property
     def values(self):
-        _config, values = self._window._get_current_config_and_values()
-        return dict(values)
+        return dict(self._settings().values)
 
     @property
     def n(self):
-        return int(self._window.current_n)
+        return int(self._settings().n)
 
     @property
     def t_max(self):
-        return self._window.current_t_max
+        return self._settings().t_max
 
     @property
     def t_min(self):
@@ -396,23 +409,12 @@ class SystemInspector:
 
     @property
     def camera(self):
-        return self._window.scene.camera_controller.get_camera_state()
+        return self._camera()
 
     @property
     def solutions(self):
-        solutions = getattr(self._window, "_system_solutions", None)
-
-        if solutions is None:
-            solutions = self._window.scene.trajectory_renderer.solutions or []
-
-        views = []
-        for solution in solutions:
-            # make the view read only so it can't accidentally get modified
-            view = np.asarray(solution).view()
-            view.setflags(write=False)
-            views.append(view)
-
-        return tuple(views)
+        run = self._session.run
+        return () if run is None else run.solutions
 
     @property
     def has_solutions(self):
@@ -422,7 +424,7 @@ class SystemInspector:
         if not table:
             return data
 
-        self._window.jupyter_console_panel.tables.show(data, name=name)
+        self._console.tables.show(data, name=name)
         return data
 
     def help(self, table=False):
@@ -458,25 +460,11 @@ class SystemInspector:
         return self._optional_help_table(data, table, "System summary")
 
     def status(self, table=True):
-        state = dict(self._window._solve_state)
+        state = self._session.state
         result = {
-            "solving": bool(state.get("solving", False)),
-            "valid": bool(state.get("valid", self.has_solutions)),
-            "stale": bool(state.get("stale", False)),
-            "partial": bool(state.get("partial", False)),
-            "last_error": state.get("last_error"),
-            "request_id": state.get("request_id"),
-            "attractor": state.get("attractor", self.name),
-            "parameters": dict(state.get("parameters", self.values)),
-            "n": state.get("n", self.n),
-            "t_max": state.get("t_max", self.t_max),
-            "trajectories": state.get("trajectories", len(self.solutions)),
-            "solution_points": list(
-                state.get(
-                    "solution_points",
-                    [len(solution) for solution in self.solutions],
-                )
-            ),
+            **state,
+            "parameters": dict(state["parameters"]),
+            "solution_points": list(state["solution_points"]),
             "console_solution_count": len(self.solutions),
         }
         data = pd.Series(result)
@@ -532,38 +520,74 @@ class SystemInspector:
 
     # these three are controls for updating the main viewport plot from the console
     def set_parameters(self, values, *, solve=False):
-        return self._window._set_console_parameters(dict(values), solve=solve)
+        commands = self._main_commands()
+        settings = self._settings()
+        if settings.config is None:
+            raise ValueError("No attractor selected")
+
+        updates = _parameter_updates(settings.config, dict(values))
+        commands.set_values({**settings.values, **updates})
+        if solve:
+            commands.solve()
+        elif self.values != settings.values:
+            self._session.mark_unsolved()
+
+        return self.parameters()
 
     def set_time(self, *, n=None, t_max=None, solve=False):
-        return self._window._set_console_time(n=n, t_max=t_max, solve=solve)
+        commands = self._main_commands()
+        settings = self._settings()
+        next_n = settings.n if n is None else _console_n(n)
+        next_t_max = settings.t_max if t_max is None else _console_t_max(t_max)
+        commands.set_time(next_n, next_t_max)
+        if solve:
+            commands.solve()
+        elif (next_n, next_t_max) != (settings.n, settings.t_max):
+            self._session.mark_unsolved()
+
+        return self.status()
 
     def solve(self):
-        return self._window._solve_from_console()
+        self._main_commands().solve()
+
+        return self.status()
+
+    def _main_commands(self):
+        if self._commands is None:
+            raise RuntimeError("Variant systems are read-only")
+
+        return self._commands
+
+    def _main_live(self):
+        if self.live is None:
+            raise RuntimeError("Variant systems have no live plots")
+
+        return self.live
 
     def trajectories(self):
         rows = []
         variables = self.variables
-        initial_conditions = self._initial_conditions()
-        metadata = self._trajectory_metadata()
+        run = self._session.run
+        styles = self._settings().trajectories
 
         for i, solution in enumerate(self.solutions):
             finite = solution[np.isfinite(solution).all(axis=1)]
-            trajectory_meta = metadata[i] if i < len(metadata) else {}
-            solve_spec = self._trajectory_solve_spec(i)
+            spec = run.trajectory_specs[i]
+            style = styles[i] if i < len(styles) else {}
 
             row = {
                 "trajectory": i,
-                "label": trajectory_meta.get("label", f"T{i}"),
-                "colour": trajectory_meta.get("colour"),
-                "alpha": trajectory_meta.get("alpha"),
-                "render_mode": trajectory_meta.get("render_mode"),
-                "n": trajectory_meta.get("n", solve_spec.get("n")),
-                "t_max": trajectory_meta.get("t_max", solve_spec.get("t_max")),
+                "label": run.labels[i],
+                "colour": run.colours[i],
+                "alpha": style.get("alpha"),
+                "render_mode": style.get("render_mode"),
+                "n": spec["n"],
+                "t_max": spec["t_max"],
                 "length": len(solution),
             }
 
             for col, axis in enumerate(variables):
-                row[f"initial_{axis}"] = self._coordinate(initial_conditions, i, col)
+                row[f"initial_{axis}"] = spec["ic"][col]
                 row[f"final_{axis}"] = solution[-1, col] if len(solution) else None
                 row[f"{axis}_min"] = finite[:, col].min() if len(finite) else None
                 row[f"{axis}_max"] = finite[:, col].max() if len(finite) else None
@@ -621,9 +645,23 @@ class SystemInspector:
             )
             for ic in solve_ics
         ]
-        is_valid, message = validate_solutions(solutions, config.dimension)
+        is_valid, message = validate_solutions(solutions, dimension=config.dimension)
         if not is_valid:
             raise ValueError(message)
+
+        run = SolveRun(
+            request_id=None,
+            config=config,
+            parameters=dict(variant_values),
+            trajectory_specs=tuple(
+                {"ic": ic, "n": solve_n, "t_max": solve_t_max} for ic in solve_ics
+            ),
+            labels=tuple(f"T{i}" for i in range(len(solutions))),
+            colours=(None,) * len(solutions),
+            partial=False,
+            analysis_ready=True,
+            solutions=read_only(solutions),
+        )
 
         status = {
             "solving": False,
@@ -639,19 +677,20 @@ class SystemInspector:
             "trajectories": len(solutions),
             "solution_points": [len(solution) for solution in solutions],
         }
+        settings = SystemSettings(
+            name=f"{self.name} variant",
+            config=config,
+            values=variant_values,
+            n=solve_n,
+            t_max=solve_t_max,
+            trajectories=[{"ic": ic} for ic in solve_ics],
+        )
+        camera = self.camera
         return SystemInspector(
-            _SnapshotWindow(
-                name=f"{self.name} variant",
-                config=config,
-                values=variant_values,
-                n=solve_n,
-                t_max=solve_t_max,
-                initial_conditions=solve_ics,
-                solutions=solutions,
-                camera=self.camera,
-                plot=self._plot_target(None),
-                status=status,
-            )
+            lambda: settings,
+            _Snapshot(run, status),
+            self._console,
+            lambda: dict(camera),
         )
 
     def time(self, index=0):
@@ -659,8 +698,8 @@ class SystemInspector:
         spec = self._trajectory_solve_spec(index)
 
         return sample_times(
-            self.t_min,
-            spec.get("t_max", self.t_max),
+            self._session.run.t_min,
+            spec["t_max"],
             len(solution),
         )
 
@@ -765,10 +804,9 @@ class SystemInspector:
         return self._concat_frames(rows, ["trajectory", "step", "t", "speed"])
 
     def separation(self, a=0, b=1, *, log=False):
-        sol_a = self.solution(a)
-        sol_b = self.solution(b)
-        length = min(len(sol_a), len(sol_b))
-        distance = np.linalg.norm(sol_a[:length] - sol_b[:length], axis=1)
+        times, distance = separation(
+            self.solution(a), self.time(a), self.solution(b), self.time(b)
+        )
         if log:
             with np.errstate(divide="ignore"):
                 distance = np.log(distance)
@@ -780,8 +818,8 @@ class SystemInspector:
             {
                 "trajectory_a": a,
                 "trajectory_b": b,
-                "step": np.arange(length),
-                "t": self.time(a)[:length],
+                "step": np.arange(len(times)),
+                "t": times,
                 value_column: distance,
             }
         )
@@ -1001,7 +1039,7 @@ class SystemInspector:
         y_name = str(y_axis).lower()
         x_col = self._axis_column(x_name)
         y_col = self._axis_column(y_name)
-        plot_mode = self._plot_mode(mode)
+        plot_mode = parse_mode(mode)
         if live:
             return self._register_live_plot(
                 "projection",
@@ -1053,7 +1091,7 @@ class SystemInspector:
     ):
         axis_name = str(axis).lower()
         axis_col = self._axis_column(axis_name)
-        plot_mode = self._plot_mode(mode)
+        plot_mode = parse_mode(mode)
         if live:
             return self._register_live_plot(
                 "axis",
@@ -1069,7 +1107,7 @@ class SystemInspector:
         solution = self.solution(trajectory)
         spec = self._trajectory_solve_spec(trajectory)
         signal = trajectory_signal(
-            solution, axis_col, t_min=self.t_min, t_max=spec.get("t_max", self.t_max)
+            solution, axis_col, t_min=self._session.run.t_min, t_max=spec["t_max"]
         )
 
         return self._plot_timeseries(
@@ -1094,7 +1132,7 @@ class SystemInspector:
         label=None,
         zoom_region=False,
     ):
-        plot_mode = self._plot_mode(mode)
+        plot_mode = parse_mode(mode)
         if live:
             return self._register_live_plot(
                 "radius",
@@ -1130,7 +1168,7 @@ class SystemInspector:
         label=None,
         zoom_region=False,
     ):
-        plot_mode = self._plot_mode(mode)
+        plot_mode = parse_mode(mode)
         if live:
             return self._register_live_plot(
                 "speed",
@@ -1166,7 +1204,7 @@ class SystemInspector:
         label=None,
         zoom_region=False,
     ):
-        plot_mode = self._plot_mode(mode)
+        plot_mode = parse_mode(mode)
         if live:
             return self._register_live_plot(
                 "displacement",
@@ -1204,7 +1242,7 @@ class SystemInspector:
         label=None,
         zoom_region=False,
     ):
-        plot_mode = self._plot_mode(mode)
+        plot_mode = parse_mode(mode)
         if live:
             return self._register_live_plot(
                 "separation",
@@ -1249,7 +1287,7 @@ class SystemInspector:
         fit_pen=None,
         label=None,
     ):
-        plot_mode = self._plot_mode(mode)
+        plot_mode = parse_mode(mode)
         if live:
             return self._register_live_plot(
                 "separation_fit",
@@ -1347,7 +1385,7 @@ class SystemInspector:
             self._plot_target(plot),
             frame[x_name].to_numpy(),
             frame[y_name].to_numpy(),
-            mode=self._plot_mode(mode),
+            mode=parse_mode(mode),
             bottom=x_name,
             left=y_name,
             **plot_kwargs,
@@ -1431,7 +1469,7 @@ class SystemInspector:
         colour_by_speed=False,
         speed_bands=5,
     ):
-        plot_mode = self._plot_mode(mode)
+        plot_mode = parse_mode(mode)
         if live:
             x_name, y_name, fixed_name = self._slice_axes(
                 x_axis,
@@ -1517,14 +1555,14 @@ class SystemInspector:
         )
 
     def live_plots(self, table=False):
-        data = self._window.live_plot_controller._live_plot_frame()
+        data = self._main_live().frame()
         return self._optional_help_table(data, table, "Live plots")
 
     def unfollow(self, plot=None):
-        return self._window.live_plot_controller._clear_live_plot(plot)
+        return self._main_live().unfollow(plot)
 
     def unfollow_all(self):
-        return self._window.live_plot_controller._clear_all_live_plots()
+        return self._main_live().unfollow_all()
 
     def _crossing_level(self, axis_col, value, solutions=None):
         if value is not None:
@@ -1634,26 +1672,17 @@ class SystemInspector:
             **plot_kwargs,
         )
 
-    def _plot_mode(self, mode=PLOT_MODE_REPLACE):
-        normalised = str(mode).strip().lower()
-        if normalised == PLOT_MODE_REPLACE:
-            return PLOT_MODE_REPLACE
-        if normalised == PLOT_MODE_OVERLAY:
-            return PLOT_MODE_OVERLAY
-
-        raise ValueError("Plot mode must be 'replace' or 'overlay'")
-
     def _plot_target(self, plot):
         if plot is not None:
             if isinstance(plot, str):
-                plots = self._window.jupyter_console_panel.plots
+                plots = self._console.plots
                 try:
                     return plots.get(plot)
                 except KeyError:
                     return plots.new(plot)
             return plot
 
-        return self._window.jupyter_console_panel.plot
+        return self._console.plot
 
     def _plot_line(
         self,
@@ -1832,51 +1861,24 @@ class SystemInspector:
         return VECTOR_FIELD_SPEED_PENS[palette_index]
 
     def _register_live_plot(self, kind, *, plot=None, **options):
-        mode = self._plot_mode(options.pop("mode", PLOT_MODE_REPLACE))
-        registration = self._window.live_plot_controller._register_live_plot(
-            kind,
-            plot=plot,
-            mode=mode,
-            **options,
-        )
-        return self._live_plot_handle_or_registration(
-            registration,
-            plot=plot,
-            mode=mode,
-        )
+        live = self._main_live()
+        mode = parse_mode(options.pop("mode", PLOT_MODE_REPLACE))
+        trace_id = live.register(kind, plot=plot, mode=mode, **options)
 
-    def _live_plot_handle_or_registration(self, registration, *, plot, mode):
-        live_plots = self._window.live_plot_controller.live_plots
-
-        plot_name = None
-        if isinstance(registration, pd.Series | dict):
-            plot_name = registration.get("plot")
-        if not plot_name:
-            plot_name = plot
-        if not plot_name:
-            plot_name = self._window.jupyter_console_panel.plots.current_name
-        if not plot_name or plot_name not in live_plots:
-            return registration
-
-        specs = live_plots[plot_name]
-        trace_index = len(specs) - 1 if mode == PLOT_MODE_OVERLAY else 0
-
-        if not 0 <= trace_index < len(specs):
-            return registration
-
-        return LivePlotHandle(self._window, plot_name, trace_index)
+        return LivePlotHandle(live, trace_id)
 
     def _separation_frame(
         self,
         a,
         b,
         *,
+        log=False,
         t_min=None,
         t_max=None,
         step_min=None,
         step_max=None,
     ):
-        frame = self.separation(a, b)
+        frame = self.separation(a, b, log=log)
         if t_min is not None:
             frame = frame[frame["t"] >= t_min]
         if t_max is not None:
@@ -1887,28 +1889,11 @@ class SystemInspector:
             frame = frame[frame["step"] <= step_max]
         return frame.reset_index(drop=True)
 
-    def _separation_fit_frame(
-        self,
-        a,
-        b,
-        *,
-        t_min=None,
-        t_max=None,
-        step_min=None,
-        step_max=None,
-    ):
-        frame = self.separation(a, b, log=True)
-        mask = np.isfinite(frame["log_distance"].to_numpy())
-        if t_min is not None:
-            mask &= frame["t"].to_numpy() >= t_min
-        if t_max is not None:
-            mask &= frame["t"].to_numpy() <= t_max
-        if step_min is not None:
-            mask &= frame["step"].to_numpy() >= step_min
-        if step_max is not None:
-            mask &= frame["step"].to_numpy() <= step_max
+    def _separation_fit_frame(self, a, b, **filters):
+        frame = self._separation_frame(a, b, log=True, **filters)
+        finite = np.isfinite(frame["log_distance"].to_numpy())
 
-        return frame.loc[mask].reset_index(drop=True)
+        return frame.loc[finite].reset_index(drop=True)
 
     def _separation_summary_fit(self, a, b, **filters):
         frame = self._separation_fit_frame(a, b, **filters)
@@ -2025,7 +2010,7 @@ class SystemInspector:
         return pd.concat(rows, ignore_index=True)
 
     def _initial_conditions(self):
-        trajectories = self._window.controls.trajectory_panel.get_trajectories()
+        trajectories = self._settings().trajectories
         if trajectories:
             return [trajectory["ic"] for trajectory in trajectories]
 
@@ -2035,45 +2020,8 @@ class SystemInspector:
 
         return [config.initial_conditions]
 
-    def _trajectory_metadata(self):
-        rows = []
-        for index, trajectory in enumerate(
-            self._window.controls.trajectory_panel.get_trajectories() or []
-        ):
-            colour = trajectory.get("colour")
-            if colour is not None:
-                colour = colour.name()
-            rows.append(
-                {
-                    "label": trajectory.get("label", f"T{index}"),
-                    "colour": colour,
-                    "alpha": trajectory.get("alpha"),
-                    "render_mode": trajectory.get("render_mode"),
-                    "n": trajectory.get("n"),
-                    "t_max": trajectory.get("t_max"),
-                }
-            )
-
-        return rows
-
     def _trajectory_solve_spec(self, index):
-        state = dict(self._window._solve_state)
-        specs = state.get("trajectory_specs")
-        if isinstance(specs, list):
-            try:
-                spec = specs[index]
-            except IndexError:
-                spec = None
-            if isinstance(spec, dict):
-                return dict(spec)
-
-        return {"n": self.n, "t_max": self.t_max}
-
-    def _coordinate(self, initial_conditions, trajectory, axis):
-        try:
-            return initial_conditions[trajectory][axis]
-        except (IndexError, TypeError):
-            return None
+        return self._session.run.trajectory_specs[index]
 
     def _sample_indices(self, length, sample_size):
         if length <= sample_size:

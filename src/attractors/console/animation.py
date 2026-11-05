@@ -85,7 +85,7 @@ class ConsoleAnimation(QtCore.QObject):
                 self.callback()
         except Exception as e:
             self.pause()
-            self.set_status(f"{self.name}: {e}")
+            self.set_status(f"{self.name}: {e}", error=True)
             raise
 
     def refresh(self, *, emit=True):
@@ -161,9 +161,9 @@ class ConsoleAnimation(QtCore.QObject):
 
         return self
 
-    def set_status(self, message):
+    def set_status(self, message, *, error=False):
         if self.status_callback is not None:
-            self.status_callback(message)
+            self.status_callback(message, error=error)
 
     @staticmethod
     def accepts_animation(callback):
