@@ -11,7 +11,6 @@ from .trajectory_panel import TrajectoryPanel
 def _scrollable(widget):
     scroll = QtWidgets.QScrollArea()
     scroll.setWidgetResizable(True)
-    scroll.setMinimumWidth(230)
     scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
     scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     scroll.setWidget(widget)
@@ -23,9 +22,7 @@ class RightPanel(QtCore.QObject):
     def __init__(self, dock_layout):
         super().__init__(dock_layout)
         self.trajectory_panel = TrajectoryPanel(collapsible=False)
-        self.trajectory_panel.setMinimumWidth(230)
         self.preset_panel = PresetPanel()
-        self.preset_panel.setMinimumWidth(230)
         self.custom_panel = CustomPanel(collapsible=False)
 
         self.trajectory_dock = dock_layout.add(

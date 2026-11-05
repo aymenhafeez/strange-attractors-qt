@@ -231,6 +231,17 @@ SIDE_PANEL = (
     QWidget#sidePanelAnimationScroll {
         border: 0px;
     }
+
+    QWidget#sidePanelControlsScroll QLabel {
+        min-width: 2.6em;
+    }
+    QWidget#sidePanelAnimationScroll QLabel {
+        min-width: 5.5em;
+    }
+    QWidget#controlPanelSliders QAbstractSpinBox {
+        min-width: 3.8em;
+        max-width: 3.8em;
+    }
 """
     + PANEL_INPUTS
 )

@@ -11,6 +11,13 @@ from .style import SIDE_PANEL, plot_colours
 STEP = 1000
 
 
+def _row():
+    row = QtWidgets.QHBoxLayout()
+    row.setContentsMargins(0, 0, 0, 10)
+    row.setSpacing(8)
+    return row
+
+
 def _slider_index(value, min_val, step):
     return round((value - min_val) / step)
 
@@ -61,8 +68,8 @@ class ControlPanel(QtCore.QObject):
         self.controls_tab = QtWidgets.QWidget()
         self.controls_tab.setObjectName("controlPanelSliders")
         self.controls_layout = QtWidgets.QVBoxLayout(self.controls_tab)
-        self.controls_layout.setContentsMargins(8, 8, 8, 8)
-        self.controls_layout.setSpacing(7)
+        self.controls_layout.setContentsMargins(10, 10, 10, 10)
+        self.controls_layout.setSpacing(8)
         self.controls_scroll.setWidget(self.controls_tab)
 
         self.animation_scroll = QtWidgets.QScrollArea()
@@ -73,18 +80,18 @@ class ControlPanel(QtCore.QObject):
         self.animation_tab = QtWidgets.QWidget()
         self.animation_tab.setObjectName("controlPanelSliders")
         self.animation_layout = QtWidgets.QVBoxLayout(self.animation_tab)
-        self.animation_layout.setContentsMargins(8, 8, 8, 8)
+        self.animation_layout.setContentsMargins(10, 10, 10, 10)
         self.animation_layout.setSpacing(7)
         self.animation_scroll.setWidget(self.animation_tab)
 
         self.data_view = DataViewPanel()
         self.data_view.setMinimumHeight(190)
 
-        options = QtWidgets.QHBoxLayout()
+        options = _row()
         options.addWidget(self.dropdown)
         self.controls_layout.addLayout(options)
 
-        animation_mode_row = QtWidgets.QHBoxLayout()
+        animation_mode_row = _row()
         animation_mode_row.addWidget(QtWidgets.QLabel("Animation mode"))
 
         self.animation_mode_combo = QtWidgets.QComboBox()
@@ -98,8 +105,7 @@ class ControlPanel(QtCore.QObject):
         animation_mode_row.addWidget(self.animation_mode_combo)
         self.animation_layout.addLayout(animation_mode_row)
 
-        speed_row = QtWidgets.QHBoxLayout()
-        speed_row.setSpacing(10)
+        speed_row = _row()
         speed_label = QtWidgets.QLabel("Speed")
         self.anim_speed_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.anim_speed_slider.setRange(1, 500)
@@ -118,8 +124,7 @@ class ControlPanel(QtCore.QObject):
         speed_wrapper.setLayout(speed_row)
         self.animation_layout.addWidget(speed_wrapper)
 
-        orbit_speed_row = QtWidgets.QHBoxLayout()
-        orbit_speed_row.setSpacing(10)
+        orbit_speed_row = _row()
         orbit_speed_label = QtWidgets.QLabel("Orbit speed")
         self.orbit_speed_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.orbit_speed_slider.setRange(1, 500)
@@ -139,9 +144,8 @@ class ControlPanel(QtCore.QObject):
         self.orbit_speed_wrapper.setVisible(False)
         self.animation_layout.addWidget(self.orbit_speed_wrapper)
 
-        alpha_row = QtWidgets.QHBoxLayout()
-        alpha_row.setSpacing(10)
-        alpha_label = QtWidgets.QLabel("α ")
+        alpha_row = _row()
+        alpha_label = QtWidgets.QLabel("α")
         self.alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.alpha_slider.setRange(0, 100)
         self.alpha_slider.setValue(100)
@@ -161,8 +165,7 @@ class ControlPanel(QtCore.QObject):
         alpha_wrapper.setLayout(alpha_row)
         self.animation_layout.addWidget(alpha_wrapper)
 
-        plot_size_row = QtWidgets.QHBoxLayout()
-        plot_size_row.setSpacing(10)
+        plot_size_row = _row()
         plot_size_row.addWidget(QtWidgets.QLabel("Plot size"))
 
         self.plot_size_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
@@ -177,8 +180,7 @@ class ControlPanel(QtCore.QObject):
         self.plot_size_slider.valueChanged.connect(self.plot_size_spin.setValue)
         self.plot_size_spin.valueChanged.connect(self.plot_size_slider.setValue)
 
-        head_size_row = QtWidgets.QHBoxLayout()
-        head_size_row.setSpacing(10)
+        head_size_row = _row()
         head_size_row.addWidget(QtWidgets.QLabel("Head size"))
         self.head_size_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.head_size_slider.setRange(0, 30)
@@ -199,12 +201,10 @@ class ControlPanel(QtCore.QObject):
         self.animation_layout.addLayout(plot_size_row)
 
         self.head_size_wrapper = QtWidgets.QWidget()
-        head_size_row.setContentsMargins(0, 0, 0, 0)
         self.head_size_wrapper.setLayout(head_size_row)
         self.animation_layout.addWidget(self.head_size_wrapper)
 
-        colour_mode_row = QtWidgets.QHBoxLayout()
-        colour_mode_row.setSpacing(10)
+        colour_mode_row = _row()
         colour_mode_row.addWidget(QtWidgets.QLabel("Colour mode"))
 
         self.colour_mode_combo = QtWidgets.QComboBox()
@@ -220,8 +220,7 @@ class ControlPanel(QtCore.QObject):
         self.colour_mode_wrapper.setLayout(colour_mode_row)
         self.animation_layout.addWidget(self.colour_mode_wrapper)
 
-        colourmap_row = QtWidgets.QHBoxLayout()
-        colourmap_row.setSpacing(10)
+        colourmap_row = _row()
         colourmap_row.addWidget(QtWidgets.QLabel("Colourmap"))
 
         self.colourmap_combo = QtWidgets.QComboBox()
@@ -244,10 +243,9 @@ class ControlPanel(QtCore.QObject):
         self.particle_options_wrapper = QtWidgets.QWidget()
         particle_options_layout = QtWidgets.QVBoxLayout(self.particle_options_wrapper)
         particle_options_layout.setContentsMargins(0, 0, 0, 0)
-        particle_options_layout.setSpacing(15)
+        particle_options_layout.setSpacing(8)
 
-        particle_count_row = QtWidgets.QHBoxLayout()
-        particle_count_row.setSpacing(15)
+        particle_count_row = _row()
         particle_count_row.addWidget(QtWidgets.QLabel("Particles"))
 
         self.particle_count_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
@@ -269,8 +267,7 @@ class ControlPanel(QtCore.QObject):
         )
         self.particle_count_spin.valueChanged.connect(self.particle_count_changed.emit)
 
-        particle_trail_row = QtWidgets.QHBoxLayout()
-        particle_trail_row.setSpacing(15)
+        particle_trail_row = _row()
         particle_trail_row.addWidget(QtWidgets.QLabel("Trail length"))
 
         self.particle_trail_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
@@ -296,7 +293,7 @@ class ControlPanel(QtCore.QObject):
         particle_trail_row.addWidget(self.particle_trail_spin)
         particle_options_layout.addLayout(particle_trail_row)
 
-        self.particle_size_row = QtWidgets.QHBoxLayout()
+        self.particle_size_row = _row()
         self.particle_size_row.addWidget(QtWidgets.QLabel("Particle size"))
         self.particle_size_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.particle_size_slider.setRange(1, 10)
@@ -310,7 +307,7 @@ class ControlPanel(QtCore.QObject):
         self.particle_size_slider.valueChanged.connect(self.particle_size_spin.setValue)
         self.particle_size_spin.valueChanged.connect(self.particle_size_slider.setValue)
 
-        self.particle_trail_width_row = QtWidgets.QHBoxLayout()
+        self.particle_trail_width_row = _row()
         self.particle_trail_width_row.addWidget(QtWidgets.QLabel("Trail width"))
         self.particle_trail_width_slider = QtWidgets.QSlider(
             QtCore.Qt.Orientation.Horizontal
@@ -349,8 +346,7 @@ class ControlPanel(QtCore.QObject):
         self.particle_options_wrapper.setVisible(False)
         self.animation_layout.addWidget(self.particle_options_wrapper)
 
-        traj_tail_row = QtWidgets.QHBoxLayout()
-        traj_tail_row.setSpacing(10)
+        traj_tail_row = _row()
         traj_tail_label = QtWidgets.QLabel("Len")
         self.traj_tail_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.traj_tail_slider.setRange(1, 500)
@@ -452,7 +448,7 @@ class ControlPanel(QtCore.QObject):
                 break
 
     def _build_n_slider(self, config):
-        n_row = QtWidgets.QHBoxLayout()
+        n_row = _row()
         n_label = QtWidgets.QLabel("N")
         n_row.addWidget(n_label)
         self.n_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
@@ -483,7 +479,7 @@ class ControlPanel(QtCore.QObject):
 
     def _build_t_max_slider(self, config):
         t_max = int(config.time_defaults.t_max)
-        t_max_row = QtWidgets.QHBoxLayout()
+        t_max_row = _row()
         t_max_label = QtWidgets.QLabel("t_max")
         t_max_row.addWidget(t_max_label)
         self.t_max_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
@@ -517,7 +513,7 @@ class ControlPanel(QtCore.QObject):
 
     def _build_param_sliders(self, config):
         for p in config.params:
-            row = QtWidgets.QHBoxLayout()
+            row = _row()
             label = QtWidgets.QLabel(p.name)
             row.addWidget(label)
             s = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)

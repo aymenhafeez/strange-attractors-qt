@@ -224,12 +224,12 @@ class DockLayout(QtCore.QObject):
         if self.mode == "system":
             workspace_open = not docks["plot"].isHidden()
             columns = [docks["parameters"], docks["viewport"]]
-            sizes = [int(width * 0.22), int(width * (0.28 if workspace_open else 0.56))]
+            sizes = [int(width * 0.21), int(width * (0.3 if workspace_open else 0.6))]
             if workspace_open:
                 columns.append(docks["plot"])
-                sizes.append(int(width * 0.28))
+                sizes.append(int(width * 0.3))
             columns.append(docks["trajectories"])
-            sizes.append(int(width * 0.22))
+            sizes.append(int(width * 0.19))
             self.window.resizeDocks(columns, sizes, horizontal)
             self.window.resizeDocks(
                 [docks["parameters"], docks["data"]],
