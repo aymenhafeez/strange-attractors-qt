@@ -433,10 +433,10 @@ class Window(QtWidgets.QMainWindow):
                 workspace.view_combo.currentIndexChanged,
                 lambda _index: controller.on_toolbar_view_selected(),
             ),
-            (workspace.name_edit.returnPressed, controller.rename_current_view),
+            (workspace.name_edit.returnPressed, self._rename_current_view),
             (workspace.new_plot_action.triggered, controller.new_plot),
             (workspace.new_view3d_action.triggered, controller.new_view3d),
-            (workspace.rename_action.triggered, controller.rename_current_view),
+            (workspace.rename_action.triggered, self._rename_current_view),
             (workspace.clear_view_action.triggered, controller.clear_current_view),
             (workspace.clear_all_action.triggered, controller.clear_all_views),
             (workspace.fit_action.triggered, controller.fit_current_view),
@@ -1348,6 +1348,12 @@ class Window(QtWidgets.QMainWindow):
             "Save system configurations in Presets and export solution data "
             "from Data view. Open View → Output panel for error messages.</p>",
         )
+
+    def _rename_current_view(self):
+        try:
+            self.workspace_controller.rename_current_view()
+        except ValueError as e:
+            self.status_bar.set_temporary_app_message(str(e), error=True)
 
     def _restore_app_layout(self):
         settings = session_store.app_settings()
