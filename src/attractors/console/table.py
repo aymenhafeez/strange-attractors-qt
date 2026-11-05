@@ -232,7 +232,6 @@ class ConsoleTableManager(QtCore.QObject):
         default_table,
         default_dock,
         status_callback=None,
-        active_callback=None,
     ):
         super().__init__(dock_layout)
         self._dock_layout = dock_layout
@@ -241,7 +240,6 @@ class ConsoleTableManager(QtCore.QObject):
         self._default_name = default_name
         self._current_name = default_name
         self._status_callback = status_callback
-        self._active_callback = active_callback
 
     def __repr__(self):
         return f"ConsoleTableManager(current={self._current_name!r})"
@@ -268,7 +266,6 @@ class ConsoleTableManager(QtCore.QObject):
             raise KeyError(f"No console table named {key!r}") from e
 
         if activate:
-            self._mark_active()
             self._set_current_name(key)
             self._raise_dock(self._docks[key])
 
@@ -293,7 +290,6 @@ class ConsoleTableManager(QtCore.QObject):
         self._docks[key] = dock
 
         if activate:
-            self._mark_active()
             self._set_current_name(key)
             dock.reveal()
 
@@ -304,7 +300,6 @@ class ConsoleTableManager(QtCore.QObject):
     def show(self, data, name=None, *, activate=True):
         table = self.current if name is None else self.new(name, activate=activate)
         if name is None and activate:
-            self._mark_active()
             self._raise_dock(self._docks[self._current_name])
 
         table.set_data(data)
@@ -337,8 +332,6 @@ class ConsoleTableManager(QtCore.QObject):
             self._set_current_name(new_key)
             return self._tables[new_key]
 
-        self._mark_active()
-
         table = self._tables.pop(old_key)
         dock = self._docks.pop(old_key)
         self._tables[new_key] = table
@@ -361,7 +354,6 @@ class ConsoleTableManager(QtCore.QObject):
             return
 
         self._set_current_name(key)
-        self._mark_active()
 
     def close(self, name=None):
         key = self._current_name if name is None else self._table_name(name)
@@ -413,10 +405,6 @@ class ConsoleTableManager(QtCore.QObject):
 
         self._current_name = key
         self.current_changed.emit(key)
-
-    def _mark_active(self):
-        if self._active_callback is not None:
-            self._active_callback("table")
 
     def _next_name(self):
         index = 2

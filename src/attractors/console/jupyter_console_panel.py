@@ -745,14 +745,10 @@ class JupyterConsolePanel(QtCore.QObject):
         raise ValueError("Workspace view kind must be 'plot' or 'view3d'")
 
     def set_active_view(self, kind):
-        key = str(kind).strip().lower()
-        if key not in {"plot", "view3d"}:
-            raise ValueError("Active view kind must be 'plot' or 'view3d'")
-
-        if self._active_view == key:
+        if self._active_view == kind:
             return
 
-        self._active_view = key
+        self._active_view = kind
         self.active_view_changed.emit()
 
     def ensure_console(self):

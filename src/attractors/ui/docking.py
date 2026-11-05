@@ -297,8 +297,8 @@ class DockLayout(QtCore.QObject):
         if not self._changing:
             dock.activated.emit()
 
-    def _focus_changed(self, _old, widget):
-        if self._changing:
+    def _focus_changed(self, old, widget):
+        if self._changing or old is None:
             return
 
         while widget is not None:
