@@ -23,6 +23,7 @@ class MainMenuBar(QtWidgets.QMenuBar):
     def __init__(
         self,
         toolbar,
+        viewport_toolbar,
         panels_menu,
         signal_dock_action,
         trajectory_dock_action,
@@ -71,7 +72,7 @@ class MainMenuBar(QtWidgets.QMenuBar):
         view_menu.addSeparator()
         self.reset_camera_action = view_menu.addAction("Reset camera")
         self.fit_view_action = view_menu.addAction("Fit view")
-        view_menu.addAction(toolbar.grid_action)
+        view_menu.addAction(viewport_toolbar.grid_action)
         view_menu.addSeparator()
         self.theme_actions = self._add_choice_menu(
             view_menu,
@@ -92,10 +93,10 @@ class MainMenuBar(QtWidgets.QMenuBar):
         system_menu.addSeparator()
         system_menu.addActions(
             [
-                toolbar.loop_action,
-                toolbar.point_action,
-                toolbar.line_action,
-                toolbar.trail_action,
+                viewport_toolbar.loop_action,
+                viewport_toolbar.point_action,
+                viewport_toolbar.line_action,
+                viewport_toolbar.trail_action,
             ]
         )
 
