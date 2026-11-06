@@ -87,10 +87,6 @@ class ControlPanel(QtCore.QObject):
         self.data_view = DataViewPanel()
         self.data_view.setMinimumHeight(190)
 
-        options = _row()
-        options.addWidget(self.dropdown)
-        self.controls_layout.addLayout(options)
-
         animation_mode_row = _row()
         animation_mode_row.addWidget(QtWidgets.QLabel("Animation mode"))
 
