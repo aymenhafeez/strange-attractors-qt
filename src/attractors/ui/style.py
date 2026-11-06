@@ -341,3 +341,45 @@ TABLE_VIEW = """
         background: palette(base);
     }
 """
+
+VIEWPORT_TOOLBAR = """
+    QToolBar#viewportToolbar {
+        background: palette(base);
+        border: 0px;
+        border-bottom: 1px solid palette(mid);
+        padding: 1px 4px;
+        spacing: 1px;
+    }
+    QToolBar#viewportToolbar QToolButton {
+        padding: 2px;
+    }
+"""
+
+MODE_TOOLBAR = """
+    QToolBar#modeToolbar {
+        border: 0px;
+        padding: 4px 3px;
+        spacing: 2px;
+    }
+    QToolBar#modeToolbar::separator {
+        height: 1px;
+        background: palette(mid);
+        margin: 5px 4px;
+    }
+    QToolBar#modeToolbar QToolButton {
+        border: 1px solid transparent;
+        border-radius: 3px;
+        padding: 4px;
+    }
+    QToolBar#modeToolbar QToolButton:hover {
+        border: 1px solid palette(mid);
+    }
+    QToolBar#modeToolbar QToolButton:checked {
+        background: palette(button);
+        border: 1px solid palette(mid);
+        border-left: 2px solid palette(accent);
+    }
+    QToolButton#modeMenuButton::menu-indicator {
+        image: none;
+    }
+"""
