@@ -9,7 +9,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 SAMPLE_COLUMNS = ("trajectory", "step", "t", "x", "y", "z")
 MEASURE_COLUMNS = ("trajectory", "step", "t", "radius", "speed", "displacement")
-DEFAULT_SAMPLE_SIZE = 2000
+DEFAULT_SAMPLE_SIZE = 300
 
 
 def _sample_indices(length, sample_size):
@@ -37,6 +37,33 @@ def _format_value(value):
         return f"{value:.6g}"
 
     return str(value)
+
+
+class FillTableView(QtWidgets.QTableView):
+    """Have columns stretch to fill the width of the table. Become scrollable when the
+    table becomes too narrow
+    """
+
+    def setModel(self, model):
+        super().setModel(model)
+        model.modelReset.connect(self._fit_columns)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._fit_columns()
+
+    def _fit_columns(self):
+        header = self.horizontalHeader()
+        count = header.count()
+        if not count:
+            return
+        widths = [
+            max(self.sizeHintForColumn(i), header.sectionSizeHint(i))
+            for i in range(count)
+        ]
+        extra = max(0, self.viewport().width() - sum(widths)) // count
+        for i, width in enumerate(widths):
+            header.resizeSection(i, width + extra)
 
 
 class RowTableModel(QtCore.QAbstractTableModel):
@@ -394,7 +421,7 @@ class DataViewPanel(QtWidgets.QWidget):
 
     @staticmethod
     def _table(model):
-        table = QtWidgets.QTableView()
+        table = FillTableView()
         table.setModel(model)
         table.setAlternatingRowColors(True)
         table.setSelectionBehavior(
@@ -405,10 +432,13 @@ class DataViewPanel(QtWidgets.QWidget):
         )
         table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         table.verticalHeader().setVisible(False)
-        table.horizontalHeader().setStretchLastSection(True)
-        table.horizontalHeader().setSectionResizeMode(
-            QtWidgets.QHeaderView.ResizeMode.ResizeToContents
-        )
+        # table.horizontalHeader().setStretchLastSection(True)
+        # table.horizontalHeader().setSectionResizeMode(
+        #     QtWidgets.QHeaderView.ResizeMode.ResizeToContents
+        # )
+        # table.horizontalHeader().setSectionResizeMode(
+        #     QtWidgets.QHeaderView.ResizeMode.Stretch
+        # )
 
         return table
 
@@ -501,10 +531,7 @@ class DataViewPanel(QtWidgets.QWidget):
 
     @staticmethod
     def _coordinate(values, index):
-        try:
-            return values[index]
-        except (IndexError, TypeError):
-            return None
+        return values[index] if index < len(values) else None
 
     @staticmethod
     def _model_to_rows(model):
