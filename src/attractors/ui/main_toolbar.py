@@ -55,10 +55,11 @@ class MainToolbar(_Toolbar):
         super().__init__("Scene", "sceneToolbar", 20, SCENE_TOOLBAR, parent)
 
         self.left_panel_action = self._add(
-            "Left panel", "sidebar-expand-left", tooltip="Show left panel", checked=True
+            "Left panel", "sidebar-expand-left", tooltip="Toggle sidebar", checked=True
         )
         self.no_focus(self.left_panel_action)
         self.addSeparator()
+        sidebar_actions = self.actions()
 
         self.addWidget(QtWidgets.QLabel(" System: "))
         system_selector.setMinimumWidth(150)
@@ -72,13 +73,13 @@ class MainToolbar(_Toolbar):
             "Reset", "view-refresh", tooltip="Reset parameters"
         )
         self.addSeparator()
-        self.viewport_actions = self.actions()
+        self.viewport_actions = self.actions()[len(sidebar_actions):]
 
         self.system_action = make_action(
             self,
             "System",
             "scripting-panels",
-            tooltip="Show or hide system scripting panels",
+            tooltip="Toggle system console",
             checked=False,
         )
 
@@ -86,7 +87,7 @@ class MainToolbar(_Toolbar):
         self.right_panel_action = self._add(
             "Right panel",
             "sidebar-expand-right",
-            tooltip="Show right panel",
+            tooltip="Toggle right panel",
             checked=True,
         )
         self.no_focus(self.right_panel_action)
@@ -180,8 +181,6 @@ class ViewportToolbar(_Toolbar):
 
 
 class ModeToolbar(_Toolbar):
-    """Vertical strip for switching workspace and opening analysis panels."""
-
     def __init__(
         self,
         workspace_actions,
@@ -195,8 +194,8 @@ class ModeToolbar(_Toolbar):
         self.setOrientation(QtCore.Qt.Orientation.Vertical)
 
         for mode, icon_name in (
-            ("system", "workspace-system"),
             ("explore", "workspace-explore"),
+            ("system", "workspace-system"),
         ):
             action = workspace_actions[mode]
             action.setIcon(icon(icon_name))

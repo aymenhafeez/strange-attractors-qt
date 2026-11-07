@@ -131,29 +131,32 @@ class ScriptPanel(QtWidgets.QWidget):
         layout.setSpacing(0)
 
         self.toolbar = QtWidgets.QToolBar(self)
-        self.toolbar.setIconSize(QtCore.QSize(16, 16))
+        self.toolbar.setIconSize(QtCore.QSize(18, 18))
         self.toolbar.setToolButtonStyle(
             QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
         self.toolbar.setMovable(False)
         self.toolbar.setFloatable(False)
         self.toolbar.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-
-        spacer = QtWidgets.QWidget()
-        spacer.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Preferred,
+        style = (
+            QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly
+            if self.toolbar.width() < 250
+            else QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
-        self.toolbar.addWidget(spacer)
+        self.toolbar.setToolButtonStyle(style)
 
-        self.status_label = QtWidgets.QLabel()
-        self.toolbar.addWidget(self.status_label)
+        # spacer = QtWidgets.QWidget()
+        # spacer.setSizePolicy(
+        #     QtWidgets.QSizePolicy.Policy.Expanding,
+        #     QtWidgets.QSizePolicy.Policy.Preferred,
+        # )
+        # self.toolbar.addWidget(spacer)
 
         self.run_action = self.toolbar.addAction(icon("system-run"), "Run")
         self.run_action.setToolTip("Run script")
 
         self.run_selection_action = self.toolbar.addAction(
-            icon("system-run"), "Run selection"
+            icon("run-selection"), "Run selection"
         )
         self.run_selection_action.setToolTip("Run selection")
 
@@ -164,10 +167,11 @@ class ScriptPanel(QtWidgets.QWidget):
         self.tabs.setTabsClosable(True)
         self.tabs.setMovable(True)
         self.tabs.tabBar().setUsesScrollButtons(True)
+        self.tabs.setCornerWidget(self.toolbar, QtCore.Qt.Corner.TopRightCorner)
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self.tabs.tabCloseRequested.connect(self.close_tab)
 
-        layout.addWidget(self.toolbar)
+        # layout.addWidget(self.toolbar)
         layout.addWidget(self.tabs, 1)
 
         self.run_action.triggered.connect(self.run)
@@ -494,11 +498,8 @@ class ScriptPanel(QtWidgets.QWidget):
     def _update_status(self, action):
         path = self.current_script_path()
         if path is None:
-            self.status_label.clear()
             self.status_changed.emit("")
             return
-
-        self.status_label.setText(f"*{path.name}" if self.editor.isModified() else "")
 
         if action and action != "Modified":
             self.status_changed.emit(f"{action} {path.name}")
