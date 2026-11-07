@@ -115,9 +115,8 @@ class Window(QtWidgets.QMainWindow):
         self.system_view.addWidget(self.phase_portrait)
         self.system_view.setCurrentWidget(self.scene.container)
 
-        self.controls = ControlPanel(self)
         self.right_panel = RightPanel(self.dock_layout)
-        self.controls.set_right_panel(self.right_panel)
+        self.controls = ControlPanel(self.right_panel, self)
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._solve)
         self.controls.n_changed.connect(self._on_n_changed)
@@ -806,8 +805,8 @@ class Window(QtWidgets.QMainWindow):
 
         kind = "custom" if metadata["is_custom"] else "built-in"
         summary = (
-            f"{metadata['attractor']} ({kind}) · "
-            f"N {metadata['n']} · t_max {metadata['t_max']} · "
+            f"{metadata['attractor']} ({kind}), "
+            f"N: {metadata['n']}, t_max: {metadata['t_max']}, "
             f"{metadata['parameter_count']} parameter(s)"
         )
         updated_at = metadata.get("updated_at")
