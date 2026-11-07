@@ -195,7 +195,6 @@ MENUBAR = """
 """
 
 PANEL_INPUTS = """
-    QWidget#panelSurface QLineEdit,
     QWidget#panelSurface QTextEdit,
     QWidget#panelSurface QAbstractSpinBox,
     QWidget#controlPanelSliders QLineEdit,
@@ -203,6 +202,12 @@ PANEL_INPUTS = """
     QWidget#controlPanelSliders QAbstractSpinBox {
         background: palette(window);
         color: palette(window-text);
+    }
+    QWidget#panelSurface QLineEdit {
+        border: 1px solid palette(mid);
+    }
+    QWidget#panelSurface QTextEdit{
+        border: 1px solid palette(mid);
     }
     QWidget#panelSurface QLineEdit:hover {
         border: 1px solid palette(accent);
