@@ -7,15 +7,6 @@ from .icons import icon
 from .main_toolbar import make_action
 
 
-def _expanding_spacer():
-    spacer = QtWidgets.QWidget()
-    spacer.setSizePolicy(
-        QtWidgets.QSizePolicy.Policy.Expanding,
-        QtWidgets.QSizePolicy.Policy.Preferred,
-    )
-    return spacer
-
-
 class WorkspaceToolbar:
     def __init__(self, toolbar, system_toolbar, console_panel):
         self._toolbar = toolbar
@@ -59,7 +50,6 @@ class WorkspaceToolbar:
         self.rename_action = self._add(
             "Rename", "edit-rename", tooltip="Rename the current workspace view"
         )
-        self._add_widget(_expanding_spacer())
         self.clear_view_action = self._add(
             "Clear", "edit-clear-history", tooltip="Clear the current view"
         )

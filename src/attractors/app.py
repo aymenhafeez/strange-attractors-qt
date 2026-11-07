@@ -57,7 +57,6 @@ class Window(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Systems analysis")
-        self.setStyleSheet(MAIN_WINDOW)
         self.setContentsMargins(5, 0, 5, 0)
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
         self.dock_layout = DockLayout(self)
@@ -382,6 +381,8 @@ class Window(QtWidgets.QMainWindow):
         self._restore_app_layout()
         if profiling_enabled():
             self.menu_bar.output_panel_action.setChecked(True)
+
+        self.setStyleSheet(MAIN_WINDOW)
 
     def _connect_main_actions(self):
         toolbar = self.main_toolbar
