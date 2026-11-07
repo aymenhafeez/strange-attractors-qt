@@ -73,7 +73,7 @@ class MainToolbar(_Toolbar):
             "Reset", "view-refresh", tooltip="Reset parameters"
         )
         self.addSeparator()
-        self.viewport_actions = self.actions()[len(sidebar_actions):]
+        self.viewport_actions = self.actions()[len(sidebar_actions) :]
 
         self.system_action = make_action(
             self,
@@ -210,7 +210,6 @@ class ModeToolbar(_Toolbar):
             self._system_actions.append(action)
 
         self.addWidget(_spacer(horizontal=False))
-        self.addAction(output_action)
 
         theme_menu = QtWidgets.QMenu(self)
         theme_menu.addActions(list(theme_actions.values()))
@@ -223,6 +222,8 @@ class ModeToolbar(_Toolbar):
             QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
         )
         self.addWidget(theme_button)
+
+        self.addAction(output_action)
 
         for action in self.actions():
             widget = self.widgetForAction(action)

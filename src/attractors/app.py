@@ -358,9 +358,7 @@ class Window(QtWidgets.QMainWindow):
         self._connect_main_actions()
 
         self.controls.animation_mode_changed.connect(self._set_animation_mode)
-        self.status_bar = AppStatusBar(
-            self.menu_bar.output_panel_action, self.menu_bar.status_bar_action
-        )
+        self.status_bar = AppStatusBar(self.menu_bar.status_bar_action)
         self.setStatusBar(self.status_bar)
         self.signal_panel.status_changed.connect(self.status_bar.set_signal_message)
 
