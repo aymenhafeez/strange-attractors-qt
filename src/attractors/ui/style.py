@@ -26,17 +26,8 @@ LIGHT_TRAJECTORY_PALETTE = (
 )
 
 
-def is_dark_mode():
+def system_dark_mode():
     app = QtWidgets.QApplication.instance()
-    if app is None:
-        return False
-
-    override = app.property("appTheme")
-    if override == "dark":
-        return True
-    if override == "light":
-        return False
-
     scheme = app.styleHints().colorScheme()
     if scheme != QtCore.Qt.ColorScheme.Unknown:
         return scheme == QtCore.Qt.ColorScheme.Dark
@@ -44,8 +35,18 @@ def is_dark_mode():
     palette = app.palette()
     window = palette.color(QtGui.QPalette.ColorRole.Window)
     text = palette.color(QtGui.QPalette.ColorRole.WindowText)
-
     return window.lightness() < text.lightness()
+
+
+def is_dark_mode():
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return False
+
+    override = app.property("appTheme")
+    if override in {"dark", "light"}:
+        return override == "dark"
+    return system_dark_mode
 
 
 def plot_colours():
@@ -136,9 +137,10 @@ def gradient(c):
 
 
 def dock_widget_style():
-    active = ACTIVE["dark" if is_dark_mode() else "light"]
-    inactive = INACTIVE["dark" if is_dark_mode() else "light"]
-    border = "#3d424a" if is_dark_mode() else "#c6c8ca"
+    theme = "dark" if system_dark_mode() else "light"
+    active = ACTIVE[theme]
+    inactive = INACTIVE[theme]
+    border = "#3d424a" if theme == "dark" else "#c6c8ca"
 
     return f"""
         QDockWidget[activeDock="true"] {{
