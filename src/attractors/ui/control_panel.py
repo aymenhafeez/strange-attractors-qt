@@ -42,13 +42,13 @@ class ControlPanel(QtCore.QObject):
     colourmap_changed = QtCore.pyqtSignal(str)
     animation_mode_changed = QtCore.pyqtSignal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, right_panel, parent=None):
         super().__init__(parent)
+        self.right_panel = right_panel
+        self.trajectory_panel = right_panel.trajectory_panel
+        self.custom_panel = right_panel.custom_panel
+        self.preset_panel = right_panel.preset_panel
         self.current_name = next(iter(ATTRACTORS.keys()))
-        self.right_panel = None
-        self.trajectory_panel = None
-        self.custom_panel = None
-        self.preset_panel = None
         self.slider_rows = []
         self.n_slider = None
         self.n_spin = None
@@ -386,8 +386,8 @@ class ControlPanel(QtCore.QObject):
             index = self.dropdown.findText(name)
             if index >= 0:
                 self.dropdown.setCurrentIndex(index)
-        if self.right_panel is not None:
-            self.right_panel.set_current_attractor(name)
+
+        self.right_panel.set_current_attractor(name)
 
     def _on_colour_mode_changed(self):
         mode = self.colour_mode_combo.currentData()
@@ -398,13 +398,6 @@ class ControlPanel(QtCore.QObject):
 
     def _on_colourmap_changed(self, name):
         self.colourmap_changed.emit(name)
-
-    def set_right_panel(self, right_panel):
-        self.right_panel = right_panel
-        self.trajectory_panel = right_panel.trajectory_panel
-        self.custom_panel = right_panel.custom_panel
-        self.preset_panel = right_panel.preset_panel
-        self.right_panel.set_current_attractor(self.current_name)
 
     def set_trail_options_visible(self, visible):
         self.traj_tail_wrapper.setVisible(bool(visible))
