@@ -667,13 +667,6 @@ class JupyterConsolePanel(QtCore.QObject):
         )
 
         self.files_dock = dock_layout.add("files", "Files", self.script_browser)
-        files_action = self.files_dock.toggleViewAction()
-        files_action.setIcon(icon("sidebar-expand-left"))
-        files_action.setIconText("Files")
-        files_action.setToolTip("Toggle file browser")
-        self.script_panel.toolbar.insertAction(
-            self.script_panel.toolbar.actions()[0], files_action
-        )
 
         self.console_dock = dock_layout.add("console", "Console", self._console_host)
         self._console_timer = QtCore.QTimer(self)

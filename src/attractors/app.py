@@ -287,11 +287,11 @@ class Window(QtWidgets.QMainWindow):
             "view_options", "View options", self.controls.animation_scroll
         )
         self.data_dock = self.dock_layout.add("data", "Data", self.controls.data_view)
-        self._left_docks = [
-            self.parameters_dock,
-            self.view_options_dock,
-            self.data_dock,
-        ]
+        panel = self.jupyter_console_panel
+        self._left_docks = {
+            "system": [self.parameters_dock, self.view_options_dock, self.data_dock],
+            "explore": [panel.files_dock, panel.variables_dock],
+        }
         self._right_docks = [
             self.right_panel.trajectory_dock,
             self.right_panel.preset_dock,
@@ -738,7 +738,7 @@ class Window(QtWidgets.QMainWindow):
         self.trajectory_analysis_panel.apply_theme()
 
     def _set_left_panel_visible(self, checked):
-        for dock in self._left_docks:
+        for dock in self._left_docks[self.workspace_mode]:
             dock.setVisible(checked)
 
     def _set_trail_mode(self, checked):
@@ -1254,7 +1254,10 @@ class Window(QtWidgets.QMainWindow):
         for action, checked in (
             (
                 toolbar.left_panel_action,
-                any(not dock.isHidden() for dock in self._left_docks),
+                any(
+                    not dock.isHidden()
+                    for dock in self._left_docks[self.workspace_mode]
+                ),
             ),
             (
                 toolbar.right_panel_action,
