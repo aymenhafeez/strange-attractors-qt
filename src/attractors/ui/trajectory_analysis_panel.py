@@ -270,7 +270,7 @@ class TrajectoryAnalysisPanel(QtWidgets.QWidget):
         for cursor in self.cursors:
             cursor.setPen(
                 pg.mkPen(
-                    colours["crosshair"],
+                    colours["cursor_pen"],
                     width=colours["scatter_size"],
                     style=QtCore.Qt.PenStyle.DashLine,
                 )

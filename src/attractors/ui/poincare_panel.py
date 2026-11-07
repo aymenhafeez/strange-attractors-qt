@@ -92,7 +92,6 @@ class PoincarePanel(QtWidgets.QWidget):
         self.dropdown.currentTextChanged.connect(self._update_colourmap)
         self.dropdown.setMaxVisibleItems(12)
         self.dropdown.setStyleSheet("QComboBox { combobox-popup: 0; }")
-        self.dropdown.setMinimumWidth(180)
         solve_row.addWidget(QtWidgets.QLabel("Map:"))
         solve_row.addWidget(self.dropdown)
 
@@ -142,7 +141,7 @@ class PoincarePanel(QtWidgets.QWidget):
         self.value_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.value_slider.setRange(0, SLIDER_STEPS)
         self.value_slider.setEnabled(False)
-        self.value_slider.setFixedWidth(240)
+        self.value_slider.setMinimumWidth(100)
         self.value_slider.valueChanged.connect(self._on_slider_changed)
         ctrl_row.addWidget(self.value_slider)
 

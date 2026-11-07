@@ -90,7 +90,7 @@ class AppStatusBar(QtWidgets.QStatusBar):
             self.clear_app_message()
 
     def _refresh(self):
-        text = " · ".join(
+        text = ", ".join(
             message for message in (self._app_message, self._signal_message) if message
         )
         has_error = (self._app_message and self._app_error) or (
