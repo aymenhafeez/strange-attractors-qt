@@ -46,7 +46,7 @@ def is_dark_mode():
     override = app.property("appTheme")
     if override in {"dark", "light"}:
         return override == "dark"
-    return system_dark_mode
+    return system_dark_mode()
 
 
 def plot_colours():

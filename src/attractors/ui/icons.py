@@ -7,23 +7,7 @@ from pathlib import Path
 from PyQt6.QtSvg import QSvgRenderer
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 
-# from .style import is_dark_mode
-
-
-def dark_mode():
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        return False
-
-    scheme = app.styleHints().colorScheme()
-    if scheme != QtCore.Qt.ColorScheme.Unknown:
-        return scheme == QtCore.Qt.ColorScheme.Dark
-
-    palette = app.palette()
-    window = palette.color(QtGui.QPalette.ColorRole.Window)
-    text = palette.color(QtGui.QPalette.ColorRole.WindowText)
-
-    return window.lightness() < text.lightness()
+from .style import system_dark_mode
 
 
 class _SvgIcon(QtGui.QIconEngine):
@@ -54,7 +38,7 @@ class _SvgIcon(QtGui.QIconEngine):
 
         if mode in (QtGui.QIcon.Mode.Disabled, QtGui.QIcon.Mode.Selected):
             data = data.replace(b"#476478", colour)
-        elif dark_mode():
+        elif system_dark_mode():
             data = data.replace(b"#476478", b"#e8eaec")
         else:
             data = data.replace(b"#476478", b"#202326")
