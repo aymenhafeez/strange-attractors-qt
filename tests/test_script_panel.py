@@ -26,7 +26,7 @@ def test_script_panel_restores_existing_script(qapp, tmp_path):
 
     assert panel.restore_script(script) is True
     assert panel.current_script_path() == script.resolve()
-    assert panel._editor_text() == "print('Testing')\n"
+    assert panel.editor.text() == "print('Testing')\n"
 
 
 def test_script_restore_to_scratch_when_missing(qapp, tmp_path):

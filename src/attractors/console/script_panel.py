@@ -419,16 +419,6 @@ class ScriptPanel(QtWidgets.QWidget):
         self.run_requested.emit(text)
         self._update_status("Ran selection")
 
-    def _set_editor_text(self, text):
-        self.editor.setText(text)
-
-    def _editor_text(self):
-        return self.editor.text()
-
-    def _set_editor_modified(self, modified):
-        self.editor.setModified(bool(modified))
-        self._update_tab_title(self.editor)
-
     def _on_editor_text_changed(self, editor):
         self._update_tab_title(editor)
         if editor is self.editor:
