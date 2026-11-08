@@ -26,17 +26,8 @@ LIGHT_TRAJECTORY_PALETTE = (
 )
 
 
-def is_dark_mode():
+def system_dark_mode():
     app = QtWidgets.QApplication.instance()
-    if app is None:
-        return False
-
-    override = app.property("appTheme")
-    if override == "dark":
-        return True
-    if override == "light":
-        return False
-
     scheme = app.styleHints().colorScheme()
     if scheme != QtCore.Qt.ColorScheme.Unknown:
         return scheme == QtCore.Qt.ColorScheme.Dark
@@ -44,8 +35,18 @@ def is_dark_mode():
     palette = app.palette()
     window = palette.color(QtGui.QPalette.ColorRole.Window)
     text = palette.color(QtGui.QPalette.ColorRole.WindowText)
-
     return window.lightness() < text.lightness()
+
+
+def is_dark_mode():
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return False
+
+    override = app.property("appTheme")
+    if override in {"dark", "light"}:
+        return override == "dark"
+    return system_dark_mode()
 
 
 def plot_colours():
@@ -61,6 +62,7 @@ def plot_colours():
             "plot_grid_alpha": 0.25,
             "plot_pen": "blue",
             "alternate_pen": "#ff6a00",
+            "cursor_pen": "#ff0000",
             "scatter_brush": "white",
             "scatter_size": 1,
             "plot_auto_pens": ("w", "r", "g", "b", "c", "m", "y"),
@@ -86,6 +88,7 @@ def plot_colours():
         "plot_grid_alpha": 0.35,
         "plot_pen": "blue",
         "alternate_pen": "#cb5500",
+        "cursor_pen": "#ff0000",
         "scatter_brush": "#0e275b",
         "scatter_size": 2,
         "plot_auto_pens": ("k", "r", "g", "b", "c", "m", "y"),
@@ -134,9 +137,10 @@ def gradient(c):
 
 
 def dock_widget_style():
-    active = ACTIVE["dark" if is_dark_mode() else "light"]
-    inactive = INACTIVE["dark" if is_dark_mode() else "light"]
-    border = "#3d424a" if is_dark_mode() else "#c6c8ca"
+    theme = "dark" if system_dark_mode() else "light"
+    active = ACTIVE[theme]
+    inactive = INACTIVE[theme]
+    border = "#3d424a" if theme == "dark" else "#c6c8ca"
 
     return f"""
         QDockWidget[activeDock="true"] {{
@@ -184,6 +188,7 @@ TAB_WIDGET = """
 SCENE_TOOLBAR = """
     QToolBar#sceneToolbar {
         padding: 5px 5px;
+        spacing: 6px;
         border: 0px;
     }
 """
@@ -195,7 +200,6 @@ MENUBAR = """
 """
 
 PANEL_INPUTS = """
-    QWidget#panelSurface QLineEdit,
     QWidget#panelSurface QTextEdit,
     QWidget#panelSurface QAbstractSpinBox,
     QWidget#controlPanelSliders QLineEdit,
@@ -203,6 +207,12 @@ PANEL_INPUTS = """
     QWidget#controlPanelSliders QAbstractSpinBox {
         background: palette(window);
         color: palette(window-text);
+    }
+    QWidget#panelSurface QLineEdit {
+        border: 1px solid palette(mid);
+    }
+    QWidget#panelSurface QTextEdit{
+        border: 1px solid palette(mid);
     }
     QWidget#panelSurface QLineEdit:hover {
         border: 1px solid palette(accent);
@@ -339,5 +349,47 @@ TABLE_VIEW = """
     QTabWidget::pane {
         border: 0px;
         background: palette(base);
+    }
+"""
+
+VIEWPORT_TOOLBAR = """
+    QToolBar#viewportToolbar {
+        background: palette(base);
+        border: 0px;
+        border-bottom: 1px solid palette(mid);
+        padding: 1px 4px;
+        spacing: 1px;
+    }
+    QToolBar#viewportToolbar QToolButton {
+        padding: 2px;
+    }
+"""
+
+MODE_TOOLBAR = """
+    QToolBar#modeToolbar {
+        border: 0px;
+        padding: 4px 3px;
+        spacing: 2px;
+    }
+    QToolBar#modeToolbar::separator {
+        height: 1px;
+        background: palette(mid);
+        margin: 5px 4px;
+    }
+    QToolBar#modeToolbar QToolButton {
+        border: 1px solid transparent;
+        border-radius: 3px;
+        padding: 4px;
+    }
+    QToolBar#modeToolbar QToolButton:hover {
+        border: 1px solid palette(mid);
+    }
+    QToolBar#modeToolbar QToolButton:checked {
+        background: palette(button);
+        border: 1px solid palette(mid);
+        border-left: 2px solid palette(accent);
+    }
+    QToolButton#modeMenuButton::menu-indicator {
+        image: none;
     }
 """

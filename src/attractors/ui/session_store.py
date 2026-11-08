@@ -74,7 +74,9 @@ def save(settings, window, dock_layout, console_panel, status_bar, mode):
 
 def restore(settings, window, dock_layout, console_panel, status_bar):
     geometry = settings.value("layout/window_geometry")
-    if geometry is not None:
+    if geometry is None:
+        window.setWindowState(QtCore.Qt.WindowState.WindowMaximized)
+    else:
         window.restoreGeometry(geometry)
 
     status_bar.set_process_visible(settings.value("layout/status_bar", True, type=bool))

@@ -1,11 +1,17 @@
 # SPDX-FileCopyrightText: 2026 Aymen Hafeez
 # SPDX-License-Identifier: GPL-3.0-only
 
+from types import SimpleNamespace
+
 import pytest
 from pyqtgraph.Qt import QtWidgets
 
 from attractors.core.models import AttractorConfig, AttractorParam
 from attractors.ui.control_panel import ControlPanel, _slider_index, _slider_value
+
+
+def right_panel():
+    return SimpleNamespace(trajectory_panel=None, custom_panel=None, preset_panel=None)
 
 
 @pytest.fixture(scope="session")
@@ -50,7 +56,7 @@ def test_control_panel_gets_current_values_returns_config_defaults(qapp):
         time_defaults={"t_min": 0, "t_max": 10, "n": 1000},
     )
 
-    panel = ControlPanel()
+    panel = ControlPanel(right_panel())
     panel.configure(config)
 
     assert panel.get_current_values() == {
@@ -70,7 +76,7 @@ def test_control_panel_reset_to_defaults_restores_slider_values(qapp):
         time_defaults={"t_min": 0, "t_max": 10, "n": 1000},
     )
 
-    panel = ControlPanel()
+    panel = ControlPanel(right_panel())
     panel.configure(config)
 
     param, slider, _, _ = panel.slider_rows[0]

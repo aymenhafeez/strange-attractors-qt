@@ -42,13 +42,13 @@ class ControlPanel(QtCore.QObject):
     colourmap_changed = QtCore.pyqtSignal(str)
     animation_mode_changed = QtCore.pyqtSignal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, right_panel, parent=None):
         super().__init__(parent)
+        self.right_panel = right_panel
+        self.trajectory_panel = right_panel.trajectory_panel
+        self.custom_panel = right_panel.custom_panel
+        self.preset_panel = right_panel.preset_panel
         self.current_name = next(iter(ATTRACTORS.keys()))
-        self.right_panel = None
-        self.trajectory_panel = None
-        self.custom_panel = None
-        self.preset_panel = None
         self.slider_rows = []
         self.n_slider = None
         self.n_spin = None
@@ -86,10 +86,6 @@ class ControlPanel(QtCore.QObject):
 
         self.data_view = DataViewPanel()
         self.data_view.setMinimumHeight(190)
-
-        options = _row()
-        options.addWidget(self.dropdown)
-        self.controls_layout.addLayout(options)
 
         animation_mode_row = _row()
         animation_mode_row.addWidget(QtWidgets.QLabel("Animation mode"))
@@ -144,27 +140,6 @@ class ControlPanel(QtCore.QObject):
         self.orbit_speed_wrapper.setVisible(False)
         self.animation_layout.addWidget(self.orbit_speed_wrapper)
 
-        alpha_row = _row()
-        alpha_label = QtWidgets.QLabel("α")
-        self.alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.alpha_slider.setRange(0, 100)
-        self.alpha_slider.setValue(100)
-        self.alpha_spin = QtWidgets.QSpinBox()
-        self.alpha_spin.setKeyboardTracking(False)
-        self.alpha_spin.setRange(0, 100)
-        self.alpha_spin.setValue(100)
-        self.alpha_slider.valueChanged.connect(self.alpha_spin.setValue)
-        self.alpha_spin.valueChanged.connect(self.alpha_slider.setValue)
-        alpha_row.addWidget(alpha_label)
-        alpha_row.addWidget(self.alpha_slider)
-        alpha_row.addWidget(self.alpha_spin)
-
-        # put alpha speed and orbit speed sliders in wrapper widgets so they're so
-        # spaced out nicer
-        alpha_wrapper = QtWidgets.QWidget()
-        alpha_wrapper.setLayout(alpha_row)
-        self.animation_layout.addWidget(alpha_wrapper)
-
         plot_size_row = _row()
         plot_size_row.addWidget(QtWidgets.QLabel("Plot size"))
 
@@ -203,6 +178,60 @@ class ControlPanel(QtCore.QObject):
         self.head_size_wrapper = QtWidgets.QWidget()
         self.head_size_wrapper.setLayout(head_size_row)
         self.animation_layout.addWidget(self.head_size_wrapper)
+
+        traj_tail_row = _row()
+        traj_tail_label = QtWidgets.QLabel("Len")
+        self.traj_tail_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.traj_tail_slider.setRange(1, 500)
+        self.traj_tail_slider.setValue(5)
+        self.traj_tail_spin = QtWidgets.QSpinBox()
+        self.traj_tail_spin.setKeyboardTracking(False)
+        self.traj_tail_spin.setRange(1000, 500000)
+        self.traj_tail_spin.setSingleStep(STEP)
+        self.traj_tail_spin.setValue(5000)
+        self.traj_tail_slider.param_step = STEP
+        self.traj_tail_spin.param_step = STEP
+        self.traj_tail_slider.valueChanged.connect(
+            lambda val: self.traj_tail_spin.setValue(
+                val * self.traj_tail_slider.param_step
+            )
+        )
+        self.traj_tail_spin.valueChanged.connect(
+            lambda val: self.traj_tail_slider.setValue(
+                int(val / self.traj_tail_spin.param_step)
+            )
+        )
+        self.traj_tail_spin.valueChanged.connect(self.traj_tail_length_changed.emit)
+        traj_tail_row.addWidget(traj_tail_label)
+        traj_tail_row.addWidget(self.traj_tail_slider)
+        traj_tail_row.addWidget(self.traj_tail_spin)
+
+        # put in a wrapper widget so it's visibility can be toggled
+        self.traj_tail_wrapper = QtWidgets.QWidget()
+        self.traj_tail_wrapper.setLayout(traj_tail_row)
+        self.traj_tail_wrapper.setVisible(False)
+        self.animation_layout.addWidget(self.traj_tail_wrapper)
+
+        alpha_row = _row()
+        alpha_label = QtWidgets.QLabel("α")
+        self.alpha_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.alpha_slider.setRange(0, 100)
+        self.alpha_slider.setValue(100)
+        self.alpha_spin = QtWidgets.QSpinBox()
+        self.alpha_spin.setKeyboardTracking(False)
+        self.alpha_spin.setRange(0, 100)
+        self.alpha_spin.setValue(100)
+        self.alpha_slider.valueChanged.connect(self.alpha_spin.setValue)
+        self.alpha_spin.valueChanged.connect(self.alpha_slider.setValue)
+        alpha_row.addWidget(alpha_label)
+        alpha_row.addWidget(self.alpha_slider)
+        alpha_row.addWidget(self.alpha_spin)
+
+        # put alpha speed and orbit speed sliders in wrapper widgets so they're so
+        # spaced out nicer
+        alpha_wrapper = QtWidgets.QWidget()
+        alpha_wrapper.setLayout(alpha_row)
+        self.animation_layout.addWidget(alpha_wrapper)
 
         colour_mode_row = _row()
         colour_mode_row.addWidget(QtWidgets.QLabel("Colour mode"))
@@ -291,7 +320,6 @@ class ControlPanel(QtCore.QObject):
 
         particle_trail_row.addWidget(self.particle_trail_slider)
         particle_trail_row.addWidget(self.particle_trail_spin)
-        particle_options_layout.addLayout(particle_trail_row)
 
         self.particle_size_row = _row()
         self.particle_size_row.addWidget(QtWidgets.QLabel("Particle size"))
@@ -337,47 +365,15 @@ class ControlPanel(QtCore.QObject):
             self.particle_trail_width_changed.emit
         )
 
-        particle_options_layout.addLayout(self.particle_trail_width_row)
         particle_count_row.addWidget(self.particle_count_slider)
         particle_count_row.addWidget(self.particle_count_spin)
         particle_options_layout.addLayout(particle_count_row)
         particle_options_layout.addLayout(self.particle_size_row)
+        particle_options_layout.addLayout(particle_trail_row)
+        particle_options_layout.addLayout(self.particle_trail_width_row)
 
         self.particle_options_wrapper.setVisible(False)
         self.animation_layout.addWidget(self.particle_options_wrapper)
-
-        traj_tail_row = _row()
-        traj_tail_label = QtWidgets.QLabel("Len")
-        self.traj_tail_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.traj_tail_slider.setRange(1, 500)
-        self.traj_tail_slider.setValue(5)
-        self.traj_tail_spin = QtWidgets.QSpinBox()
-        self.traj_tail_spin.setKeyboardTracking(False)
-        self.traj_tail_spin.setRange(1000, 500000)
-        self.traj_tail_spin.setSingleStep(STEP)
-        self.traj_tail_spin.setValue(5000)
-        self.traj_tail_slider.param_step = STEP
-        self.traj_tail_spin.param_step = STEP
-        self.traj_tail_slider.valueChanged.connect(
-            lambda val: self.traj_tail_spin.setValue(
-                val * self.traj_tail_slider.param_step
-            )
-        )
-        self.traj_tail_spin.valueChanged.connect(
-            lambda val: self.traj_tail_slider.setValue(
-                int(val / self.traj_tail_spin.param_step)
-            )
-        )
-        self.traj_tail_spin.valueChanged.connect(self.traj_tail_length_changed.emit)
-        traj_tail_row.addWidget(traj_tail_label)
-        traj_tail_row.addWidget(self.traj_tail_slider)
-        traj_tail_row.addWidget(self.traj_tail_spin)
-
-        # put in a wrapper widget so it's visibility can be toggled
-        self.traj_tail_wrapper = QtWidgets.QWidget()
-        self.traj_tail_wrapper.setLayout(traj_tail_row)
-        self.traj_tail_wrapper.setVisible(False)
-        self.animation_layout.addWidget(self.traj_tail_wrapper)
         self.animation_layout.addStretch()
 
     def _on_attractor_selected(self, name):
@@ -390,8 +386,8 @@ class ControlPanel(QtCore.QObject):
             index = self.dropdown.findText(name)
             if index >= 0:
                 self.dropdown.setCurrentIndex(index)
-        if self.right_panel is not None:
-            self.right_panel.set_current_attractor(name)
+
+        self.right_panel.set_current_attractor(name)
 
     def _on_colour_mode_changed(self):
         mode = self.colour_mode_combo.currentData()
@@ -402,13 +398,6 @@ class ControlPanel(QtCore.QObject):
 
     def _on_colourmap_changed(self, name):
         self.colourmap_changed.emit(name)
-
-    def set_right_panel(self, right_panel):
-        self.right_panel = right_panel
-        self.trajectory_panel = right_panel.trajectory_panel
-        self.custom_panel = right_panel.custom_panel
-        self.preset_panel = right_panel.preset_panel
-        self.right_panel.set_current_attractor(self.current_name)
 
     def set_trail_options_visible(self, visible):
         self.traj_tail_wrapper.setVisible(bool(visible))

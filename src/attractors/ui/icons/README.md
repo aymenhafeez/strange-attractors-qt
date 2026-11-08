@@ -6,3 +6,6 @@ Copyright Phosphor Icons; distributed under the MIT license in `LICENSE-MIT.txt`
 `SOURCES.json` records pinned URLs, original and bundled hashes, and modifications
 for every icon. The artwork is unchanged apart from replacing `currentColor`
 with a shared colour and mirroring the right-sidebar glyph.
+
+The workspace and analysis glyphs (`workspace-*.svg`, `analysis-*.svg`,
+`scripting-panels.svg`, `theme.svg`) are original to this project.

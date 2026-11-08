@@ -30,7 +30,7 @@ from .ui.bifurcation_panel import BifurcationPanel
 from .ui.control_panel import ControlPanel
 from .ui.docking import DockLayout
 from .ui.lyapunov_panel import LyapunovPanel
-from .ui.main_toolbar import MainToolbar
+from .ui.main_toolbar import MainToolbar, ModeToolbar, ViewportToolbar
 from .ui.menu_bar import MainMenuBar
 from .ui.output_panel import OutputPanel
 from .ui.phase_panel import PhasePortraitPanel
@@ -57,7 +57,6 @@ class Window(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Systems analysis")
-        self.setStyleSheet(MAIN_WINDOW)
         self.setContentsMargins(5, 0, 5, 0)
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
         self.dock_layout = DockLayout(self)
@@ -115,9 +114,8 @@ class Window(QtWidgets.QMainWindow):
         self.system_view.addWidget(self.phase_portrait)
         self.system_view.setCurrentWidget(self.scene.container)
 
-        self.controls = ControlPanel(self)
         self.right_panel = RightPanel(self.dock_layout)
-        self.controls.set_right_panel(self.right_panel)
+        self.controls = ControlPanel(self.right_panel, self)
         self.controls.attractor_changed.connect(self.on_attractor_change)
         self.controls.solve_requested.connect(self._solve)
         self.controls.n_changed.connect(self._on_n_changed)
@@ -223,8 +221,9 @@ class Window(QtWidgets.QMainWindow):
             self.system, self.jupyter_console_panel.plots, self.system_toolbar, self
         )
         self.system.live = self.live_plot_controller
-        self.main_toolbar = MainToolbar(self)
+        self.main_toolbar = MainToolbar(self.controls.dropdown, self)
         self.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, self.main_toolbar)
+        self.viewport_toolbar = ViewportToolbar()
         self.workspace_toolbar = WorkspaceToolbar(
             self.main_toolbar, self.system_toolbar, self.jupyter_console_panel
         )
@@ -273,9 +272,13 @@ class Window(QtWidgets.QMainWindow):
         self.solve_session.failed.connect(self._on_solve_failed)
         self.workspace_controller.sync_views()
 
-        self.viewport_dock = self.dock_layout.add(
-            "viewport", "Viewport", self.system_view
-        )
+        viewport_host = QtWidgets.QWidget()
+        viewport_layout = QtWidgets.QVBoxLayout(viewport_host)
+        viewport_layout.setContentsMargins(0, 0, 0, 0)
+        viewport_layout.setSpacing(0)
+        viewport_layout.addWidget(self.viewport_toolbar)
+        viewport_layout.addWidget(self.system_view, 1)
+        self.viewport_dock = self.dock_layout.add("viewport", "Viewport", viewport_host)
         self.parameters_dock = self.dock_layout.add(
             "parameters", "Parameters", self.controls.controls_scroll
         )
@@ -283,11 +286,11 @@ class Window(QtWidgets.QMainWindow):
             "view_options", "View options", self.controls.animation_scroll
         )
         self.data_dock = self.dock_layout.add("data", "Data", self.controls.data_view)
-        self._left_docks = [
-            self.parameters_dock,
-            self.view_options_dock,
-            self.data_dock,
-        ]
+        panel = self.jupyter_console_panel
+        self._left_docks = {
+            "system": [self.parameters_dock, self.view_options_dock, self.data_dock],
+            "explore": [panel.files_dock, panel.variables_dock],
+        }
         self._right_docks = [
             self.right_panel.trajectory_dock,
             self.right_panel.preset_dock,
@@ -317,10 +320,11 @@ class Window(QtWidgets.QMainWindow):
         self.scene.playback_range_changed.connect(panel.set_playback_range)
         self.scene.playback_time_changed.connect(panel.set_playback_time)
         self.scene.animation_state_changed.connect(panel.set_playing)
-        self.scene.animation_state_changed.connect(self.main_toolbar.set_playing)
+        self.scene.animation_state_changed.connect(self.viewport_toolbar.set_playing)
 
         self.menu_bar = MainMenuBar(
             self.main_toolbar,
+            self.viewport_toolbar,
             self.dock_layout.menu,
             self._panel_docks["signal_panel"].toggleViewAction(),
             self._panel_docks["trajectory_analysis_panel"].toggleViewAction(),
@@ -328,12 +332,33 @@ class Window(QtWidgets.QMainWindow):
             self.jupyter_console_panel.script_panel.example_scripts(),
         )
         self.setMenuBar(self.menu_bar)
+        panel_actions = self.menu_bar.panel_actions
+        self.mode_toolbar = ModeToolbar(
+            self.menu_bar.workspace_mode_actions,
+            self.main_toolbar.system_action,
+            (
+                (
+                    self._panel_docks["signal_panel"].toggleViewAction(),
+                    "analysis-signal",
+                ),
+                (
+                    self._panel_docks["trajectory_analysis_panel"].toggleViewAction(),
+                    "analysis-comparison",
+                ),
+                (panel_actions["lyapunov_panel"], "analysis-lyapunov"),
+                (panel_actions["projection_panel"], "analysis-projection"),
+                (panel_actions["poincare_panel"], "analysis-poincare"),
+                (panel_actions["bifurcation_panel"], "analysis-bifurcation"),
+            ),
+            self.menu_bar.output_panel_action,
+            self.menu_bar.theme_actions,
+            self,
+        )
+        self.addToolBar(QtCore.Qt.ToolBarArea.LeftToolBarArea, self.mode_toolbar)
         self._connect_main_actions()
 
         self.controls.animation_mode_changed.connect(self._set_animation_mode)
-        self.status_bar = AppStatusBar(
-            self.menu_bar.output_panel_action, self.menu_bar.status_bar_action
-        )
+        self.status_bar = AppStatusBar(self.menu_bar.status_bar_action)
         self.setStatusBar(self.status_bar)
         self.signal_panel.status_changed.connect(self.status_bar.set_signal_message)
 
@@ -355,8 +380,11 @@ class Window(QtWidgets.QMainWindow):
         if profiling_enabled():
             self.menu_bar.output_panel_action.setChecked(True)
 
+        self.setStyleSheet(MAIN_WINDOW)
+
     def _connect_main_actions(self):
         toolbar = self.main_toolbar
+        view = self.viewport_toolbar
         menu = self.menu_bar
         workspace = self.workspace_toolbar
         controller = self.workspace_controller
@@ -364,28 +392,24 @@ class Window(QtWidgets.QMainWindow):
         for signal, slot in (
             (toolbar.left_panel_action.toggled, self._set_left_panel_visible),
             (toolbar.right_panel_action.toggled, self._set_right_panel_visible),
-            (toolbar.anim_action.triggered, scene.animation_controller.toggle),
-            (toolbar.loop_action.toggled, scene.animation_controller.set_loop),
+            (view.anim_action.triggered, scene.animation_controller.toggle),
+            (view.loop_action.toggled, scene.animation_controller.set_loop),
             (toolbar.reset_action.triggered, self.controls.reset_to_defaults),
-            (toolbar.reset_camera_action.triggered, self._reset_camera),
-            (toolbar.fit_camera_action.triggered, self._fit_camera),
+            (view.reset_camera_action.triggered, self._reset_camera),
+            (view.fit_camera_action.triggered, self._fit_camera),
             (
-                toolbar.save_view_action.triggered,
+                view.save_view_action.triggered,
                 scene.viewport_overlay.save_view_as_png,
             ),
-            (toolbar.point_action.toggled, scene.trajectory_renderer.set_point_mode),
-            (toolbar.point_action.toggled, self.controls.head_size_wrapper.setVisible),
-            (toolbar.line_action.toggled, self._set_line_mode),
-            (toolbar.trail_action.toggled, self._set_trail_mode),
-            (toolbar.grid_action.toggled, scene.grid_overlay.set_grid_visible),
-            (toolbar.orbit_action.toggled, self._set_orbit_mode),
-            (toolbar.hover_action.toggled, scene.point_hover.set_enabled),
+            (view.point_action.toggled, scene.trajectory_renderer.set_point_mode),
+            (view.point_action.toggled, self.controls.head_size_wrapper.setVisible),
+            (view.line_action.toggled, self._set_line_mode),
+            (view.trail_action.toggled, self._set_trail_mode),
+            (view.grid_action.toggled, scene.grid_overlay.set_grid_visible),
+            (view.orbit_action.toggled, self._set_orbit_mode),
+            (view.hover_action.toggled, scene.point_hover.set_enabled),
             (toolbar.solve_action.triggered, lambda: self._solve(True)),
             (toolbar.system_action.triggered, self._toggle_system_workspace),
-            (
-                toolbar.explore_action.triggered,
-                lambda: self._set_workspace_mode("explore"),
-            ),
             (menu.output_panel_action.toggled, self.output_dock.setVisible),
             (
                 menu.save_view_action.triggered,
@@ -458,7 +482,7 @@ class Window(QtWidgets.QMainWindow):
             (workspace.clear_explore_action.triggered, controller.clear_explore),
         ):
             signal.connect(slot)
-        self.controls.head_size_wrapper.setVisible(toolbar.point_action.isChecked())
+        self.controls.head_size_wrapper.setVisible(view.point_action.isChecked())
 
         for actions, slot in (
             (menu.theme_actions, self._set_theme),
@@ -713,7 +737,7 @@ class Window(QtWidgets.QMainWindow):
         self.trajectory_analysis_panel.apply_theme()
 
     def _set_left_panel_visible(self, checked):
-        for dock in self._left_docks:
+        for dock in self._left_docks[self.workspace_mode]:
             dock.setVisible(checked)
 
     def _set_trail_mode(self, checked):
@@ -733,8 +757,8 @@ class Window(QtWidgets.QMainWindow):
         particle_flow = mode == "particle"
 
         self.controls.set_particle_options_visible(particle_flow)
-        self.main_toolbar.loop_action.setEnabled(not particle_flow)
-        self.main_toolbar.point_action.setEnabled(not particle_flow)
+        self.viewport_toolbar.loop_action.setEnabled(not particle_flow)
+        self.viewport_toolbar.point_action.setEnabled(not particle_flow)
         self.menu_bar.animation_mode_actions[mode].setChecked(True)
 
     def _set_line_mode(self, checked):
@@ -780,8 +804,8 @@ class Window(QtWidgets.QMainWindow):
 
         kind = "custom" if metadata["is_custom"] else "built-in"
         summary = (
-            f"{metadata['attractor']} ({kind}) · "
-            f"N {metadata['n']} · t_max {metadata['t_max']} · "
+            f"{metadata['attractor']} ({kind}), "
+            f"N: {metadata['n']}, t_max: {metadata['t_max']}, "
             f"{metadata['parameter_count']} parameter(s)"
         )
         updated_at = metadata.get("updated_at")
@@ -917,7 +941,7 @@ class Window(QtWidgets.QMainWindow):
             and len(run.variables) == 3
         )
         self.scene.set_playback_source(run if playable else None)
-        self.main_toolbar.anim_action.setEnabled(playable)
+        self.viewport_toolbar.anim_action.setEnabled(playable)
 
         if state["solving"] and not state["partial"]:
             count = state["trajectories"]
@@ -1030,7 +1054,7 @@ class Window(QtWidgets.QMainWindow):
         self.scene.grid_overlay.remove_poincare_plane()
 
         for action in (
-            *self.main_toolbar.scene_actions,
+            *self.viewport_toolbar.scene_actions,
             *self.menu_bar.animation_mode_actions.values(),
         ):
             action.setEnabled(is_3d)
@@ -1067,7 +1091,7 @@ class Window(QtWidgets.QMainWindow):
         )
         self.scene.display_solutions(solutions, run.partial)
 
-        if self.main_toolbar.auto_fit_camera_action.isChecked():
+        if self.viewport_toolbar.auto_fit_camera_action.isChecked():
             self.scene.camera_controller.fit_camera_to_solutions(solutions)
             self.scene.grid_overlay.auto_adjust_grid(solutions)
 
@@ -1229,7 +1253,10 @@ class Window(QtWidgets.QMainWindow):
         for action, checked in (
             (
                 toolbar.left_panel_action,
-                any(not dock.isHidden() for dock in self._left_docks),
+                any(
+                    not dock.isHidden()
+                    for dock in self._left_docks[self.workspace_mode]
+                ),
             ),
             (
                 toolbar.right_panel_action,
@@ -1239,7 +1266,6 @@ class Window(QtWidgets.QMainWindow):
                 toolbar.system_action,
                 self.workspace_mode == "system" and self._workspace_visible(),
             ),
-            (toolbar.explore_action, self.workspace_mode == "explore"),
             (self.menu_bar.output_panel_action, not self.output_dock.isHidden()),
             *(
                 (action, name in opened)
@@ -1252,6 +1278,7 @@ class Window(QtWidgets.QMainWindow):
         system_mode = self.workspace_mode == "system"
         for action in toolbar.viewport_actions:
             action.setVisible(system_mode)
+        self.mode_toolbar.set_system_mode(system_mode)
         self.workspace_toolbar.set_workspace_state(
             self.workspace_mode, self._workspace_visible()
         )

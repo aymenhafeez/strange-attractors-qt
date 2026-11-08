@@ -157,6 +157,17 @@ class TrajectoryPanel(QtWidgets.QWidget):
         content_layout = QtWidgets.QVBoxLayout(self._content)
         content_layout.setContentsMargins(0, 0, 0, 0)
 
+        controls = QtWidgets.QHBoxLayout()
+        self._enable_check = QtWidgets.QCheckBox("Enable multi-trajectory")
+        self._enable_check.toggled.connect(self._on_enable_toggled)
+        self._add_button = QtWidgets.QPushButton("Add trajectory")
+        self._add_button.clicked.connect(lambda: self._add_row())
+        self._add_button.setEnabled(False)
+        controls.addWidget(self._enable_check)
+        controls.addStretch(1)
+        controls.addWidget(self._add_button)
+        content_layout.addLayout(controls)
+
         self._rows_container = ParameterTree(showHeader=True)
         self._rows_container.setObjectName("panelSurface")
         self._rows_container.setStyleSheet(PANEL_SURFACE)
@@ -165,26 +176,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
         self._rows_container.setMinimumHeight(96)
-        self._root_param = Parameter.create(
-            name="Trajectories",
-            type="group",
-            children=[
-                {
-                    "name": "Enable multi-trajectory",
-                    "type": "bool",
-                    "value": False,
-                },
-                {"name": "Add trajectory", "type": "action"},
-            ],
-        )
-        _remove_parameter_defaults(self._root_param)
-        self._enable_param = self._root_param.child("Enable multi-trajectory")
-        self._add_param = self._root_param.child("Add trajectory")
-        self._enable_param.sigValueChanged.connect(
-            lambda _param, value: self._on_enable_toggled(value)
-        )
-        self._add_param.sigActivated.connect(lambda _param: self._add_row())
-        self._add_param.setOpts(enabled=False)
+        self._root_param = Parameter.create(name="Trajectories", type="group")
         self._rows_container.addParameters(self._root_param, showTop=False)
 
         self._rows: list[_TrajectoryRow] = []
@@ -207,13 +199,13 @@ class TrajectoryPanel(QtWidgets.QWidget):
         self.adjustSize()
 
     def _on_enable_toggled(self, enabled: bool):
-        self._add_param.setOpts(enabled=enabled)
+        self._add_button.setEnabled(enabled)
         for row in self._rows:
             row.set_enabled(enabled)
         self._emit()
 
     def is_enabled(self) -> bool:
-        return bool(self._enable_param.value())
+        return self._enable_check.isChecked()
 
     def reset(self, config):
         previous_supression = self._suppress_emit
@@ -284,8 +276,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         row.style_changed.connect(self._emit_styles)
         row.remove_requested.connect(self._remove_row)
         self._rows.append(row)
-        insert_at = max(0, len(self._root_param.children()) - 1)
-        self._root_param.insertChild(insert_at, row.param)
+        self._root_param.addChild(row.param)
         row.set_enabled(self.is_enabled())
         self._sync_row_identities()
         self._emit()
@@ -310,7 +301,7 @@ class TrajectoryPanel(QtWidgets.QWidget):
         previous_suppression = self._suppress_emit
         self._suppress_emit = True
         try:
-            self._enable_param.setValue(True)
+            self._enable_check.setChecked(True)
             self._add_row(ic=coordinates)
         finally:
             self._suppress_emit = previous_suppression

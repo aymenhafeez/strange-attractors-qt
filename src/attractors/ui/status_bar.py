@@ -10,7 +10,7 @@ ERROR_COLOUR = "#ff6b6b"
 
 
 class AppStatusBar(QtWidgets.QStatusBar):
-    def __init__(self, output_panel_action, visibility_action, parent=None):
+    def __init__(self, visibility_action, parent=None):
         super().__init__(parent)
         self.setFixedHeight(24)
 
@@ -20,16 +20,6 @@ class AppStatusBar(QtWidgets.QStatusBar):
         self._signal_error = False
         self._temporary_message = None
         self._process_visible = True
-
-        output_panel_button = QtWidgets.QToolButton()
-        output_panel_button.setDefaultAction(output_panel_action)
-        output_panel_button.setAutoRaise(True)
-        output_panel_button.setToolButtonStyle(
-            QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly
-        )
-        output_panel_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-        output_panel_button.setToolTip("Toggle Output Panel")
-        self.addWidget(output_panel_button)
 
         self.app_status_label = QtWidgets.QLabel("")
         self.app_status_label.setAlignment(
@@ -90,7 +80,7 @@ class AppStatusBar(QtWidgets.QStatusBar):
             self.clear_app_message()
 
     def _refresh(self):
-        text = " · ".join(
+        text = ", ".join(
             message for message in (self._app_message, self._signal_message) if message
         )
         has_error = (self._app_message and self._app_error) or (

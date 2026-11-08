@@ -24,6 +24,7 @@ class PresetPanel(QtWidgets.QWidget):
 
         self.preset_label = QtWidgets.QLabel("Preset library")
         self.preset_name_edit = QtWidgets.QLineEdit()
+        self.preset_name_edit.setStyleSheet("background: palette(window);")
         self.preset_name_edit.setPlaceholderText("Preset name")
         self.preset_notes_edit = QtWidgets.QTextEdit()
         self.preset_notes_edit.setPlaceholderText("Notes")

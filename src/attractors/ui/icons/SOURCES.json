@@ -403,5 +403,17 @@
         "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
       ]
     }
+    {
+      "filename": "edit-select-text.svg",
+      "family": "Phosphor Duotone",
+      "license": "MIT",
+      "source_path": "assets/duotone/cursor-text-duotone.svg",
+      "source_url": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/duotone/cursor-text-duotone.svg",
+      "source_sha256": "8ba3564a52adb05351effcfa5b33a500a6c888f256f764bdefead3135c167444",
+      "bundled_sha256": "b55ecbd04e4d7feb05ff67f368f80f9830ab24524682eda033a2a85bc62f9d5d",
+      "modifications": [
+        "Replaced currentColor with the shared blue-grey #476478 for standalone Qt SVG rendering."
+      ]
+    }
   ]
 }
