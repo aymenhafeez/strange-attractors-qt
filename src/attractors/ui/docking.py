@@ -250,7 +250,7 @@ class DockLayout(QtCore.QObject):
         else:
             self.window.resizeDocks(
                 [docks["files"], docks["script"], docks["plot"]],
-                [int(width * 0.2), int(width * 0.45), int(width * 0.35)],
+                [int(width * 0.22), int(width * 0.45), int(width * 0.33)],
                 horizontal,
             )
             self.window.resizeDocks(
@@ -260,7 +260,7 @@ class DockLayout(QtCore.QObject):
             )
             self.window.resizeDocks(
                 [docks["plot"], docks["console"]],
-                [int(height * 0.6), int(height * 0.4)],
+                [int(height * 0.65), int(height * 0.35)],
                 vertical,
             )
 

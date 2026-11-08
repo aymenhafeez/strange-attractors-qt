@@ -50,6 +50,15 @@ class WorkspaceToolbar:
         self.rename_action = self._add(
             "Rename", "edit-rename", tooltip="Rename the current workspace view"
         )
+
+        spacer = QtWidgets.QWidget()
+        spacer.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
+
+        spacer_action = self._add_widget(spacer)
+
         self.clear_view_action = self._add(
             "Clear", "edit-clear-history", tooltip="Clear the current view"
         )
@@ -95,6 +104,7 @@ class WorkspaceToolbar:
             tooltip="Clear sliders and reactive traces for the current view",
         )
         self._explore_actions = (
+            spacer_action,
             trace_action,
             self.clear_sliders_action,
             self.clear_explore_action,
