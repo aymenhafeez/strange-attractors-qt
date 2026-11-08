@@ -930,7 +930,7 @@ class Window(QtWidgets.QMainWindow):
     def _on_solve_state(self, state):
         run = self.solve_session.analysis_run
         self.signal_panel.set_source(run, state)
-        self.trajectory_analysis_panel.set_source(run, state)
+        self.trajectory_analysis_panel.set_run(run)
 
         playable = (
             run is not None

@@ -73,13 +73,11 @@ class TrajectoryAnalysisPanel(QtWidgets.QWidget):
         self.scrubber.setRange(0, 10000)
         self.scrubber.valueChanged.connect(self._seek)
         self.time_label = QtWidgets.QLabel()
-        self.source_label = QtWidgets.QLabel("No completed run")
 
         transport = QtWidgets.QHBoxLayout()
         transport.addWidget(self.play_button)
         transport.addWidget(self.scrubber, 1)
         transport.addWidget(self.time_label)
-        transport.addWidget(self.source_label)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -92,37 +90,10 @@ class TrajectoryAnalysisPanel(QtWidgets.QWidget):
         self.coordinate_combo.currentIndexChanged.connect(self._show_trace)
         self.comparison_combo.currentIndexChanged.connect(self._show_separation)
 
-        self.set_source(None, {})
         self.set_playback_range(0.0, 0.0)
         self.apply_theme()
 
-    def set_source(self, run, state):
-        fresh = bool(
-            run is not None
-            and state.get("valid")
-            and not state.get("stale")
-            and not state.get("solving")
-            and state.get("request_id") == run.request_id
-        )
-        if state.get("solving"):
-            text = "Solving"
-        elif state.get("last_error"):
-            text = "Solve failed"
-        elif run is None:
-            text = "No completed run"
-        elif fresh:
-            text = "Completed run"
-        elif state.get("partial") and state.get("request_id") == run.request_id:
-            text = "Preview run"
-        else:
-            text = "Settings changed"
-
-        if run is not None and not fresh:
-            text += ", playback unavailable"
-
-        self.source_label.setText(text)
-        self.source_label.setToolTip(state.get("last_error") or "")
-
+    def set_run(self, run):
         if run is self._run:
             return
 

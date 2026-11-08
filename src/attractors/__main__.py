@@ -17,6 +17,8 @@ ANALYSIS_MODES = {
     "Projection": "projection_panel",
     "Poincare": "poincare_panel",
     "Bifurcation": "bifurcation_panel",
+    "Signal": "signal_panel",
+    "Trajectory": "trajectory_analysis_panel",
 }
 
 

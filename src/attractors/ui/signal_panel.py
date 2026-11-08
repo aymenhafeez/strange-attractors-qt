@@ -518,14 +518,6 @@ class SignalPanel(QtWidgets.QWidget):
 
         self._set_interval(start, end)
 
-    def _refresh_analysis(self):
-        for kind in ("spectrum", "spectrogram"):
-            if (
-                getattr(self, f"_{kind}_waiting")
-                and getattr(self, f"_{kind}_worker") is None
-            ):
-                getattr(self, f"_{kind}_timer").start(0)
-
     def _reset_interval(self):
         if self.signal is not None:
             self._set_interval(self.signal.times[0], self.signal.times[-1])
