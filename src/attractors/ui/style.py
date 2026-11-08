@@ -185,31 +185,13 @@ TAB_WIDGET = """
     border-top: 0px;
 """
 
-TOOL_BUTTONS = """
-    QToolButton {
-        border: 1px solid transparent;
-        border-radius: 3px;
-    }
-    QToolButton:hover {
-        border: 1px solid palette(mid);
-    }
-    QToolButton:checked {
-        background: palette(button);
-        border: 1px solid palette(mid);
-        border-bottom: 2px solid palette(accent);
-    }
-"""
-
-SCENE_TOOLBAR = (
-    """
+SCENE_TOOLBAR = """
     QToolBar#sceneToolbar {
         padding: 5px 5px;
         spacing: 6px;
         border: 0px;
     }
 """
-    + TOOL_BUTTONS
-)
 
 MENUBAR = """
     QMenuBar {
@@ -370,8 +352,7 @@ TABLE_VIEW = """
     }
 """
 
-VIEWPORT_TOOLBAR = (
-    """
+VIEWPORT_TOOLBAR = """
     QToolBar#viewportToolbar {
         background: palette(base);
         border: 0px;
@@ -383,8 +364,6 @@ VIEWPORT_TOOLBAR = (
         padding: 2px;
     }
 """
-    + TOOL_BUTTONS
-)
 
 MODE_TOOLBAR = """
     QToolBar#modeToolbar {
