@@ -59,7 +59,7 @@ The selected system can be controlled from the parameter control panel, with the
 and animation options located in the _View options_ panel. Data for the current system
 can be exported from the _Data view_ panel. The _Trajectory_ panel allows for comparison
 of the current system at varying initial conditions. The selected system can then be
-explored through the available analysis modes:
+explored through the available analysis modes which can be toggled from the left toolbar.
 
 <table>
   <tr>
@@ -75,11 +75,11 @@ explored through the available analysis modes:
   <tr>
     <td width="50%" align="center">
       <img src="media/image_10.png" />
-      <small>Projection heatmap</small>
+      <small>Projection heatmap and Poincaré section</small>
     </td>
     <td width="50%" align="center">
       <img src="media/image_12.png" />
-      <small>Poincaré section map</small>
+      <small>Multi-trajectory comparison</small>
     </td>
   </tr>
 </table>
@@ -87,10 +87,10 @@ explored through the available analysis modes:
 ### System workspace
 
 The system workspace allows you to explore the selected system through the text editor
-and console. It can be toggled from the toolbar or from the _Analysis_ $\rightarrow$
-_System_ menu option. All commands here are prefixed with `system.`, so tabbing in the
-console will show all the available commands. `system.help()` will also show the
-available commands, and can optionally be viewed in the table viewer by passing
+and console. It can be toggled from the left toolbar or from the _Analysis_
+$\rightarrow$ _System_ menu option. All commands here are prefixed with `system.`, so
+tabbing in the console will show all the available commands. `system.help()` will also
+show the available commands, and can optionally be viewed in the table viewer by passing
 `table=True`.
 
 <table>
@@ -110,17 +110,18 @@ available commands, and can optionally be viewed in the table viewer by passing
 
 ### Explore workspace
 
-The explore workspace is a general scripting area. It can be accessed from the
-_Workspace_ $\rightarrow$ _Mode_ $\rightarrow$ _Explore_ menu option. Here, you can
-create 2D and 3D interactive plots and animations with standard Python and the app's
-plotting API. The app comes bundled with an 'examples' directory in file browser,
-including the above interactive plot of the Peter de Jong attractor. You can also run
-`explore.help()`, also optionally with `table=True`, to see all the available commands.
+The explore workspace is a general scripting area. It can be accessed from either the
+action in the left toolbar or the _Workspace_ $\rightarrow$ _Mode_ $\rightarrow$
+_Explore_ menu option. Here, you can create 2D and 3D interactive plots and animations
+with standard Python and the app's plotting API. The app comes bundled with an
+'examples' directory in file the browser, including the interactive plot shown below of
+the Peter de Jong attractor. You can also run `explore.help()`, also optionally with
+`table=True`, to see all the available commands.
 
 <img src="media/image_4.png" />
 
-You can return to the viewport area from _Workspace_ $\rightarrow$ _Mode_ $\rightarrow$
-_System_.
+You can return to the viewport area from the toolbar or _Workspace_ $\rightarrow$ _Mode_
+$\rightarrow$ _System_.
 
 If you run into any issues check the output panel (toggled from the bottom left or the
 _View_ menu option) and file a bug report.
