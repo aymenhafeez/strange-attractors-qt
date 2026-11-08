@@ -212,7 +212,6 @@ class ConsolePlot:
         left=None,
         plot=None,
         mode=PLOT_MODE_REPLACE,
-        width=1.0,
         zoom_region=False,
         **kwargs,
     ):
@@ -225,7 +224,6 @@ class ConsolePlot:
                 mode=mode,
                 bottom=bottom,
                 left=left,
-                width=width,
                 zoom_region=zoom_region,
                 **kwargs,
             )
