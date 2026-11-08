@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Aymen Hafeez
 # SPDX-License-Identifier: GPL-3.0-only
 
+import reprlib
+from collections.abc import Sized
 from types import BuiltinFunctionType, FunctionType, ModuleType
 
 import numpy as np
@@ -32,6 +34,7 @@ class VariablePanel(QtWidgets.QWidget):
         )
         self.tree.setSortingEnabled(True)
         self.tree.sortItems(0, QtCore.Qt.SortOrder.AscendingOrder)
+        # self.tree.header().setStretchLastSection(False)
 
         # layout.addWidget(toolbar)
         layout.addWidget(self.tree)
@@ -50,10 +53,7 @@ class VariablePanel(QtWidgets.QWidget):
             if isinstance(value, (ModuleType, FunctionType, BuiltinFunctionType, type)):
                 continue
 
-            try:
-                size, preview = self._describe(value)
-            except Exception:  # noqa: BLE001 - Keep preview errors out of the console.
-                size, preview = "", "<preview unavailable>"
+            size, preview = self._describe(value)
 
             item = QtWidgets.QTreeWidgetItem(
                 [name, type(value).__name__, size, preview]
@@ -62,22 +62,31 @@ class VariablePanel(QtWidgets.QWidget):
 
         self.tree.setSortingEnabled(True)
 
+        # fit columns to contents on refresh so they can still be resized
+        for column in range(self.tree.columnCount()):
+            self.tree.resizeColumnToContents(column)
+
     @staticmethod
     def _describe(value):
+        preview = reprlib.Repr(maxstring=80, maxother=80)
+
         if isinstance(value, np.ndarray):
             return str(value.shape), f"dtype={value.dtype}"
+
         if isinstance(value, (pd.DataFrame, pd.Series)):
             return str(value.shape), ""
-        if type(value) in (str, bytes):
-            preview = repr(value[:80])
-            if len(value) > 80:
-                preview += "..."
-            return str(len(value)), preview
-        if type(value) in (list, tuple, dict, set, frozenset):
-            return str(len(value)), ""
-        if value is None or type(value) in (bool, int, float, complex):
-            return "", repr(value)[:120]
-        if isinstance(value, (np.number, np.bool_)):
-            return "", repr(value)[:120]
 
-        return "", ""
+        if isinstance(value, (str, bytes)):
+            return str(len(value)), preview.repr(value)
+
+        if isinstance(value, Sized):
+            return str(len(value)), ""
+
+        if type(value).__repr__ is object.__repr__:
+            return "", ""
+
+        # show numpy scalars as the actual value rather than of np.float(value)
+        with np.printoptions(legacy="1.25"):
+            preview = preview.repr(value)
+
+        return "", "" if "\n" in preview else preview
