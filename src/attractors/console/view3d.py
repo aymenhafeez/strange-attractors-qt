@@ -32,11 +32,6 @@ def check_points(x, y=None, z=None, *, name="points"):
 
         points = np.column_stack([x_data, y_data, z_data])
 
-    # removing this check for now to allow initialising plots with empty arrays
-    # for 3D animations to keep things consisten with 2D animations
-    # if len(points) == 0:
-    #     raise ValueError(f"{name} cannot be empty")
-
     if not np.all(np.isfinite(points)):
         raise ValueError(f"{name} can't contain non finite values")
 
@@ -124,9 +119,6 @@ def surface_wireframe_lines(x_grid, y_grid, z_grid):
         )
         rows.append(np.full((1, 3), np.nan))
 
-    if not rows:
-        return np.empty((0, 3))
-
     return np.vstack(rows[:-1])
 
 
@@ -143,7 +135,7 @@ def normalise_colour(colour):
     if data.shape == (3,):
         return (data[0], data[1], data[2], 1.0)
     if data.shape == (4,):
-        return tuple(v for v in data)
+        return tuple(data)
 
     # per point rgb(a)
     if data.ndim == 2 and data.shape[1] in {3, 4}:
@@ -202,7 +194,6 @@ class ConsoleTrace3D:
 
         colour = self.colour_data(len(points))
         if colour is not None:
-            # arg getting passed to GLLinePlotItem and GLScatterPlotItem which expect 'color' not 'colour'
             kwargs["color"] = colour
 
         if self.kind == "scatter3d":
@@ -334,23 +325,12 @@ class ConsoleView3D:
         self.param_layout.setContentsMargins(6, 5, 6, 6)
         self.param_layout.setSpacing(4)
 
-        header = QtWidgets.QWidget()
-        header_layout = QtWidgets.QHBoxLayout(header)
-        header_layout.setContentsMargins(0, 0, 0, 2)
-        header_layout.setSpacing(4)
-
-        self.param_title = QtWidgets.QLabel("Parameters")
-        self.param_title.setObjectName("ConsolePlotParamTitle")
-        header_layout.addWidget(self.param_title)
-        header_layout.addStretch(1)
-
         self.param_controls = QtWidgets.QFrame()
         self.param_controls.setObjectName("ConsolePlotParamControls")
         self.param_controls_layout = QtWidgets.QVBoxLayout(self.param_controls)
         self.param_controls_layout.setContentsMargins(5, 5, 5, 5)
         self.param_controls_layout.setSpacing(3)
 
-        # self.param_layout.addWidget(header)
         self.param_layout.addWidget(self.param_controls)
 
         self.explore = View3DExplorer(
@@ -397,8 +377,9 @@ class ConsoleView3D:
         return point_sets
 
     def fit(self):
-        self.grid_overlay.auto_adjust_grid(self.point_sets())
-        self.camera_controller.fit_camera_to_solutions(self.point_sets())
+        sets = self.point_sets()
+        self.grid_overlay.auto_adjust_grid(sets)
+        self.camera_controller.fit_camera_to_solutions(sets)
         return self
 
     def auto_adjust_grid(self):
@@ -947,7 +928,6 @@ class View3DExplorer(QtCore.QObject):
         if old is not None:
             old.remove()
 
-        # user facing arg so use 'colour' here
         colour = kwargs.get("colour")
         if callable(colour):
             kwargs = kwargs.copy()

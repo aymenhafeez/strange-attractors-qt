@@ -60,9 +60,6 @@ class LyapunovPanel(QtWidgets.QWidget):
     def auto_enabled(self):
         return self.auto_check.isChecked()
 
-    def set_auto_enabled(self, enabled):
-        self.auto_check.setChecked(bool(enabled))
-
     def set_result(self, lyap, ky_dim, t_hist, lyap_hist):
         spectrum = ", ".join(f"{value:+.2f}" for value in lyap)
         self.result_label.setText(f"λ = {spectrum} D_KY = {ky_dim:.2f}")

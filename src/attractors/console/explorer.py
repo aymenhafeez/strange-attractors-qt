@@ -131,7 +131,6 @@ class ConsoleParam(QtCore.QObject):
 
 
 def dispose(control, layout):
-    # pause animations first so their timer can't run before the deferred delete
     layout.removeWidget(control.widget)
     control.widget.deleteLater()
     control.deleteLater()

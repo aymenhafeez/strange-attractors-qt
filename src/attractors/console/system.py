@@ -1634,16 +1634,6 @@ class SystemInspector:
 
         return parsed
 
-    def _non_negative_int(self, value, label):
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"{label} must be a non-negative integer") from exc
-        if parsed < 0:
-            raise ValueError(f"{label} must be a non-negative integer")
-
-        return parsed
-
     def _plot_timeseries(
         self,
         times,

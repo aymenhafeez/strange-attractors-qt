@@ -754,12 +754,6 @@ class JupyterConsolePanel(QtCore.QObject):
         shell = self._console.kernel_manager.kernel.shell
         self.variable_panel.set_namespace(shell.user_ns, shell._variable_defaults)
 
-    def focus_console(self):
-        if self._console is not None:
-            self._console.setFocus()
-        else:
-            self.plot_widget.setFocus()
-
     def shutdown_kernel(self):
         if self._console is not None:
             shell = self._console.kernel_manager.kernel.shell
