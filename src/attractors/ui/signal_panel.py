@@ -382,7 +382,7 @@ class SignalPanel(QtWidgets.QWidget):
             self._run.solutions[index],
             self._run.variables.index(coordinate),
             t_min=self._run.t_min,
-            t_max=self._run.trajectory_specs["t_max"],
+            t_max=self._run.trajectory_specs[index]["t_max"],
         )
         dt = self.signal.dt
 
