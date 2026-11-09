@@ -51,7 +51,7 @@ def test_normalise_colours_input_kind():
     assert normalise_colour((0.1, 0.2, 0.3)) == (0.1, 0.2, 0.3, 1.0)
     assert normalise_colour((0.1, 0.2, 0.3, 0.4)) == (0.1, 0.2, 0.3, 0.4)
 
-    colours = normalise_colour([[1, 0, 0], [0, 1, 0]])
+    colours = normalise_colour([[1, 0, 0], [0, 1, 0]], 2)
     assert colours.shape == (2, 4)
     np.testing.assert_allclose(colours[:, 3], [1, 1])
 

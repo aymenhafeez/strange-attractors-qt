@@ -114,7 +114,7 @@ def surface_wireframe_lines(x_grid, y_grid, z_grid):
     return np.vstack(rows[:-1])
 
 
-def normalise_colour(colour):
+def normalise_colour(colour, n=None):
     if isinstance(colour, str):
         qcolour = QtGui.QColor(colour)
         if not qcolour.isValid():
@@ -123,23 +123,23 @@ def normalise_colour(colour):
         return qcolour.redF(), qcolour.greenF(), qcolour.blueF(), qcolour.alphaF()
 
     data = np.asarray(colour, dtype=np.float32)
-
     if data.shape == (3,):
-        return (data[0], data[1], data[2], 1.0)
+        return (*data, 1.0)
     if data.shape == (4,):
         return tuple(data)
+    if data.ndim != 2 or data.shape[1] not in {3, 4}:
+        raise ValueError(
+            "Colour must be a name, hex string, RGB(A) or an (N, 3)/(N, 4) array"
+        )
 
-    # per point rgb(a)
-    if data.ndim == 2 and data.shape[1] in {3, 4}:
-        if data.shape[1] == 3:
-            alpha = np.ones((len(data), 1), dtype=np.float32)
-            data = np.column_stack([data, alpha])
+    if n is None:
+        raise TypeError("Colour must be a single colour")
+    if len(data) != n:
+        raise ValueError("Colour array must be the same length as points")
+    if data.shape[1] == 3:
+        data = np.column_stack([data, np.ones(len(data), dtype=np.float32)])
 
-        return data
-
-    raise ValueError(
-        "Colour must be a name, hex string, RGB(A) or an (N, 3)/(N, 4) array"
-    )
+    return data
 
 
 def normalise_size(size, n):
@@ -201,12 +201,8 @@ class ConsoleTrace3D:
             return None
 
         colour_data = self.colour() if callable(self.colour) else self.colour
-        colour = normalise_colour(colour_data)
 
-        if isinstance(colour, np.ndarray) and len(colour) != n:
-            raise ValueError("Colour array must be the same length as points")
-
-        return colour
+        return normalise_colour(colour_data, n)
 
     def size_data(self, n):
         if self.size is None:
@@ -271,12 +267,7 @@ class ConsoleSurfaceTrace3D:
             return
 
         colour_data = self.colour() if callable(self.colour) else self.colour
-        colour = normalise_colour(colour_data)
-
-        if isinstance(colour, np.ndarray):
-            raise TypeError(f"{self.kind} colour must be a single colour")
-
-        return colour
+        return normalise_colour(colour_data)
 
     def remove(self):
         self.explorer.view.remove_item(self.item)
@@ -421,8 +412,6 @@ class ConsoleView3D:
             self.clear()
 
         colour = normalise_colour(colour)
-        if isinstance(colour, np.ndarray) and len(colour) != len(points):
-            raise ValueError("Colour array must be the same length as points")
 
         item = gl.GLLinePlotItem(
             pos=points,
@@ -457,9 +446,6 @@ class ConsoleView3D:
             self.clear()
 
         colour = normalise_colour(colour)
-        if isinstance(colour, np.ndarray) and len(colour) != len(points):
-            raise ValueError("Colour array must be the same length as points")
-
         size = normalise_size(size, len(points))
 
         item = gl.GLScatterPlotItem(
@@ -497,8 +483,6 @@ class ConsoleView3D:
             self.clear()
 
         colour = normalise_colour(colour)
-        if isinstance(colour, np.ndarray):
-            raise TypeError("surface3d colour must be a single colour")
 
         item = gl.GLSurfacePlotItem(
             x=x_axis,
@@ -535,8 +519,6 @@ class ConsoleView3D:
             self.clear()
 
         colour = normalise_colour(colour)
-        if isinstance(colour, np.ndarray):
-            raise TypeError("wireframe3d colour must be a single colour")
 
         item = gl.GLLinePlotItem(
             pos=surface_wireframe_lines(x_grid, y_grid, z_grid),
