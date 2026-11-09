@@ -16,7 +16,11 @@ class SignalPanel(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._status = {"spectrum": ("", False), "spectrogram": ("", False)}
+        self._status = {
+            "selection": ("", False),
+            "spectrum": ("", False),
+            "spectrogram": ("", False),
+        }
         self._run = None
         self.signal = None
         self.selected_signal = None
@@ -71,9 +75,6 @@ class SignalPanel(QtWidgets.QWidget):
         self.full_button = QtWidgets.QPushButton("Full record")
         self.full_button.setEnabled(False)
         self.full_button.clicked.connect(self._reset_interval)
-
-        self.selection_label = QtWidgets.QLabel()
-        self.selection_label.setWordWrap(True)
 
         self.mean_check = QtWidgets.QCheckBox("Remove mean")
         self.mean_check.setChecked(True)
@@ -397,7 +398,7 @@ class SignalPanel(QtWidgets.QWidget):
         self.selected_signal = None
         self._spectrum = None
         self._spectrogram = None
-        self.selection_label.clear()
+        self._set_status("selection")
         self.trace.setToolTip("")
         self.region.hide()
         for widget in (self.start_spin, self.end_spin, self.full_button):
@@ -424,17 +425,11 @@ class SignalPanel(QtWidgets.QWidget):
         spec = self._run.trajectory_specs[index]
         dt = (spec["t_max"] - self._run.t_min) / spec["n"]
 
-        try:
-            self.signal = prepare_signal(
-                solution[:, column],
-                dt=dt,
-                t0=self._run.t_min + dt,
-            )
-        except ValueError as error:
-            self._queue_analysis()
-            self.curve.clear()
-            self.selection_label.setText(str(error))
-            return
+        self.signal = prepare_signal(
+            solution[:, column],
+            dt=dt,
+            t0=self._run.t_min + dt,
+        )
 
         self.curve.setData(self.signal.times, self.signal.values)
         self.trace.setLabel("left", coordinate)
@@ -491,16 +486,11 @@ class SignalPanel(QtWidgets.QWidget):
         try:
             self.selected_signal = select_interval(self.signal, start, end)
         except ValueError as error:
-            self.selection_label.setText(str(error))
+            self._set_status("selection", str(error), error=True)
             self._queue_analysis()
             return
 
-        selected = self.selected_signal
-        self.selection_label.setText(
-            f"Selected: {selected.values.size:,} samples | "
-            f"Time: {selected.times[0]:.9g} to {selected.times[-1]:.9g} | "
-            f"Span: {selected.times[-1] - selected.times[0]:.9g}"
-        )
+        self._set_status("selection")
         self._queue_analysis()
 
     def _region_changed(self):
@@ -510,9 +500,11 @@ class SignalPanel(QtWidgets.QWidget):
         start = self.start_spin.value()
         end = self.end_spin.value()
 
+        # swapMode="block" covers the region lines being dragged past each other but
+        # still need to cover the spinboxes
         if start >= end:
             self.selected_signal = None
-            self.selection_label.setText("Start must be before end")
+            self._set_status("selection", "Start must be before end", error=True)
             self._queue_analysis()
             return
 
