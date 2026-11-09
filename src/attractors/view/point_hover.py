@@ -81,7 +81,13 @@ class PointHover(QtCore.QObject):
         clip = coordinates @ matrix.T
         valid = clip[:, 3] > 0
         ndc = np.zeros((len(points), 3))
-        ndc[valid] = clip[valid, :3,] / clip[valid, 3, None]
+        ndc[valid] = (
+            clip[
+                valid,
+                :3,
+            ]
+            / clip[valid, 3, None]
+        )
         valid &= np.all(np.abs(ndc) <= 1, axis=1)
 
         x = (ndc[:, 0] + 1) * width / 2
@@ -100,5 +106,5 @@ class PointHover(QtCore.QObject):
         self.marker.show()
         QtWidgets.QToolTip.showText(
             self.view.mapToGlobal(self.position.toPoint() + QtCore.QPoint(12, 12)),
-            f"x={point[0]:.3f}, y={point[1]:.3f}, z={point[2]:.3f}"
+            f"x={point[0]:.3f}, y={point[1]:.3f}, z={point[2]:.3f}",
         )

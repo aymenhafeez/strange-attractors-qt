@@ -4,7 +4,6 @@
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from ..ui.icons import icon
 from ..ui.style import PANEL_SURFACE, plot_colours
 from .explorer import PlotExplorer
 from .script_browser import ScriptBrowser

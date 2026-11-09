@@ -1244,7 +1244,7 @@ class Window(QtWidgets.QMainWindow):
                 config, values = self._get_current_config_and_values()
                 if config is not None:
                     self.bifurcation_panel.set_config(config, values)
-            elif name == "trajectory_analysis_panel" and (
+            elif name in ("signal_panel", "trajectory_analysis_panel") and (
                 self.solve_session.analysis_run is None
                 or self.solve_session.state["partial"]
             ):
