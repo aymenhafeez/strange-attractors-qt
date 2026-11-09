@@ -26,24 +26,6 @@ def trajectory_signal(solution, column, *, t_min, t_max):
     )
 
 
-def prepare_signal(values, *, times=None, dt=None, t0=0.0):
-    if (times is None) == (dt is None):
-        raise ValueError("Supply exactly one of times or dt")
-
-    values = np.asarray(values)
-
-    if times is None:
-        times = t0 + np.arange(values.size) * dt
-    else:
-        times = np.asarray(times, dtype=np.float64)
-        if times.shape != values.shape:
-            raise ValueError("Sample times must match the signal shape")
-
-        dt = (times[-1] - times[0]) / (times.size - 1)
-
-    return SampledSignal(values=values, times=times, dt=float(dt))
-
-
 @dataclass(frozen=True)
 class PowerSpectrum:
     frequencies: np.ndarray

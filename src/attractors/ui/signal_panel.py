@@ -5,7 +5,7 @@ import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from ..core.signal_analysis import prepare_signal, select_interval
+from ..core.signal_analysis import select_interval, trajectory_signal
 from ..workers.spectrogram_worker import SpectrogramWorker
 from ..workers.spectrum_worker import SpectrumWorker
 from .style import SIGNAL_PANEL, SIGNAL_PLOTS, plot_colours
@@ -378,16 +378,13 @@ class SignalPanel(QtWidgets.QWidget):
             self._spectrum_revision += 1
             self._spectrogram_revision += 1
 
-        column = self._run.variables.index(coordinate)
-        solution = self._run.solutions[index]
-        spec = self._run.trajectory_specs[index]
-        dt = (spec["t_max"] - self._run.t_min) / spec["n"]
-
-        self.signal = prepare_signal(
-            solution[:, column],
-            dt=dt,
-            t0=self._run.t_min + dt,
+        self.signal = trajectory_signal(
+            self._run.solutions[index],
+            self._run.variables.index(coordinate),
+            t_min=self._run.t_min,
+            t_max=self._run.trajectory_specs["t_max"],
         )
+        dt = self.signal.dt
 
         self.curve.setData(self.signal.times, self.signal.values)
         self.trace.setLabel("left", coordinate)
@@ -647,8 +644,9 @@ class SignalPanel(QtWidgets.QWidget):
             self._spectrum = None
             self.spectrum_curve.clear()
             self.spectrum_plot.setToolTip("")
-            self._set_status("spectrum")
-            if signal is not None:
+            if signal is None:
+                self._set_status("spectrum")
+            else:
                 self._set_status(
                     "spectrum",
                     "Spectrum analysis requires at least four samples",
