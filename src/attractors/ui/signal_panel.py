@@ -49,9 +49,6 @@ class SignalPanel(QtWidgets.QWidget):
         self.trajectory_combo.setEnabled(False)
         self.coordinate_combo.setEnabled(False)
 
-        self.status_label = QtWidgets.QLabel("No completed run")
-        self.status_label.setWordWrap(True)
-
         self.trace = pg.PlotWidget()
         self.trace.setLabel("bottom", "Time")
         self.curve = self.trace.plot()
@@ -199,13 +196,6 @@ class SignalPanel(QtWidgets.QWidget):
         source_row.addWidget(QtWidgets.QLabel("Window"))
         source_row.addWidget(self.window_combo)
         source_row.addWidget(self.mean_check)
-        self.status_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
-        )
-        self.status_label.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Preferred,
-            QtWidgets.QSizePolicy.Policy.Preferred,
-        )
         source_row.addStretch(1)
 
         interval_row = QtWidgets.QHBoxLayout()
@@ -323,39 +313,7 @@ class SignalPanel(QtWidgets.QWidget):
         finally:
             self._syncing_time_range = False
 
-    def set_source(self, run, state):
-        fresh = (
-            run is not None
-            and state.get("valid")
-            and not state.get("stale")
-            and not state.get("solving")
-            and state.get("request_id") == run.request_id
-        )
-
-        preview = (
-            run is not None
-            and state.get("partial")
-            and not state.get("solving")
-            and state.get("request_id") == run.request_id
-        )
-
-        if state.get("last_error"):
-            text = f"Solve failed: {state['last_error']}"
-        elif state.get("solving"):
-            text = "Solving"
-        elif run is None:
-            text = "No completed run"
-        elif fresh:
-            text = "Completed run"
-        elif preview:
-            text = "Preview run"
-        else:
-            text = "Settings changed"
-
-        if run is not None and not (fresh or preview):
-            text += " - showing previous run"
-        self.status_label.setText(text)
-
+    def set_source(self, run):
         if run is self._run:
             return
 
