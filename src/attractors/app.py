@@ -326,8 +326,6 @@ class Window(QtWidgets.QMainWindow):
             self.main_toolbar,
             self.viewport_toolbar,
             self.dock_layout.menu,
-            self._panel_docks["signal_panel"].toggleViewAction(),
-            self._panel_docks["trajectory_analysis_panel"].toggleViewAction(),
             self.jupyter_console_panel.plot_widget.getPlotItem(),
             self.jupyter_console_panel.script_panel.example_scripts(),
         )
@@ -337,14 +335,8 @@ class Window(QtWidgets.QMainWindow):
             self.menu_bar.workspace_mode_actions,
             self.main_toolbar.system_action,
             (
-                (
-                    self._panel_docks["signal_panel"].toggleViewAction(),
-                    "analysis-signal",
-                ),
-                (
-                    self._panel_docks["trajectory_analysis_panel"].toggleViewAction(),
-                    "analysis-comparison",
-                ),
+                (panel_actions["signal_panel"], "analysis-signal"),
+                (panel_actions["trajectory_analysis_panel"], "analysis-comparison"),
                 (panel_actions["lyapunov_panel"], "analysis-lyapunov"),
                 (panel_actions["projection_panel"], "analysis-projection"),
                 (panel_actions["poincare_panel"], "analysis-poincare"),

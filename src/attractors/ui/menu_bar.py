@@ -25,8 +25,6 @@ class MainMenuBar(QtWidgets.QMenuBar):
         toolbar,
         viewport_toolbar,
         panels_menu,
-        signal_dock_action,
-        trajectory_dock_action,
         plot_item,
         example_scripts,
         parent=None,
@@ -42,6 +40,8 @@ class MainMenuBar(QtWidgets.QMenuBar):
         self.panel_actions = {
             name: make_action(self, text, checked=False)
             for name, text in (
+                ("signal_panel", "Signal and spectrum"),
+                ("trajectory_analysis_panel", "Trajectory comparison"),
                 ("lyapunov_panel", "Lyapunov spectrum"),
                 ("projection_panel", "Projection heatmaps"),
                 ("poincare_panel", "Poincare section"),
@@ -134,16 +134,7 @@ class MainMenuBar(QtWidgets.QMenuBar):
         self.workspace_help_action = workspace_menu.addAction("Workspace help")
 
         analysis_menu = self.addMenu("&Analysis")
-        signal_dock_action.setText("Signal and spectrum")
-        trajectory_dock_action.setText("Trajectory comparison")
-        analysis_menu.addActions(
-            [
-                signal_dock_action,
-                trajectory_dock_action,
-                *self.panel_actions.values(),
-                toolbar.system_action,
-            ]
-        )
+        analysis_menu.addActions([*self.panel_actions.values(), toolbar.system_action])
 
         _hide_menu_icons(self)
 
