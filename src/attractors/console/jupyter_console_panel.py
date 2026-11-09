@@ -3,6 +3,7 @@
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
+from qtconsole import inprocess
 
 from ..ui.style import PANEL_SURFACE, plot_colours
 from .explorer import PlotExplorer
@@ -12,18 +13,7 @@ from .table import ConsoleTable, ConsoleTableManager
 from .variable_panel import VariablePanel
 from .view3d import ConsoleView3D, ConsoleView3DManager
 
-try:
-    from qtconsole import inprocess
-except (ImportError, NameError) as exc:
-    inprocess = None
-    CONSOLE_IMPORT_ERROR = exc
-else:
-    CONSOLE_IMPORT_ERROR = None
-
-
-_BaseJupyterConsole = (
-    inprocess.QtInProcessRichJupyterWidget if inprocess else QtWidgets.QWidget
-)
+_BaseJupyterConsole = inprocess.QtInProcessRichJupyterWidget
 LEGEND_OFFSET = (-30, -30)
 LEGEND_TEXT_SIZE = "9pt"
 PLOT_MODE_REPLACE = "replace"
@@ -673,13 +663,6 @@ class JupyterConsolePanel(QtCore.QObject):
             lambda visible: self._console_timer.start(0) if visible else None
         )
 
-        if CONSOLE_IMPORT_ERROR is not None:
-            message = QtWidgets.QLabel(
-                "Install qtconsole and ipykernel to enable the embedded Jupyter console."
-            )
-            message.setWordWrap(True)
-            self._console_layout.addWidget(message)
-
     def _open_browser_script(self, path):
         if self.script_panel.load_script(path):
             self.script_dock.reveal()
@@ -749,7 +732,7 @@ class JupyterConsolePanel(QtCore.QObject):
         self.active_view_changed.emit()
 
     def ensure_console(self):
-        if self._console is not None or CONSOLE_IMPORT_ERROR is not None:
+        if self._console is not None:
             return
 
         self._console = _RichJupyterConsole(
