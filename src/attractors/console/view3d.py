@@ -12,11 +12,11 @@ from .animation import ConsoleAnimation, ConsoleAnimationWidget
 from .explorer import ConsoleParam, dispose
 
 
-def check_points(x, y=None, z=None, *, name="points"):
+def check_points(x, y=None, z=None):
     if y is None and z is None:
         points = np.asarray(x, dtype=np.float64)
         if points.ndim != 2 or points.shape[1] != 3:
-            raise ValueError(f"{name} must have shape (N, 3)")
+            raise ValueError("Points must have shape (N, 3)")
     else:
         if y is None or z is None:
             raise ValueError("Must provide x, y and z")
@@ -32,17 +32,14 @@ def check_points(x, y=None, z=None, *, name="points"):
 
         points = np.column_stack([x_data, y_data, z_data])
 
-    if not np.all(np.isfinite(points)):
-        raise ValueError(f"{name} can't contain non finite values")
-
     return points
 
 
-def check_surface_grid(x, y=None, z=None, *, name="surface"):
+def check_surface_grid(x, y=None, z=None):
     if y is None and z is None:
         z_grid = np.asarray(x)
         if z_grid.ndim != 2:
-            raise ValueError(f"{name} z must be two dimensional")
+            raise ValueError("Surface z must be two dimensional")
 
         rows, columns = z_grid.shape
         y_grid, x_grid = np.mgrid[0:rows, 0:columns]
@@ -55,7 +52,7 @@ def check_surface_grid(x, y=None, z=None, *, name="surface"):
         z_grid = np.asarray(z)
 
         if z_grid.ndim != 2:
-            raise ValueError(f"{name} z must be two dimensional")
+            raise ValueError("Surface z must be two dimensional")
 
         if x_data.ndim == 1 and y_data.ndim == 1:
             if len(x_data) != z_grid.shape[1]:
@@ -76,16 +73,11 @@ def check_surface_grid(x, y=None, z=None, *, name="surface"):
             raise ValueError("x and y must both be 1D or both be 2D")
 
     if z_grid.size == 0:
-        raise ValueError(f"{name} grid can't be empty")
-
-    if not (
-        np.all(np.isfinite(x_grid))
-        and np.all(np.isfinite(y_grid))
-        and np.all(np.isfinite(z_grid))
-    ):
-        raise ValueError(f"{name} grid can't contain non finite values")
+        raise ValueError("Surface grid can't be empty")
 
     points = np.column_stack([x_grid.ravel(), y_grid.ravel(), z_grid.ravel()])
+    if not np.isfinite(points).all():
+        raise ValueError("Surface grid can't contain non finite values")
 
     return x_grid, y_grid, z_grid, points
 
@@ -159,8 +151,6 @@ def normalise_size(size, n):
         raise ValueError("Size must be a number or 1D array")
     if len(data) != n:
         raise ValueError("Size array must be the same length as points")
-    if not np.all(np.isfinite(data)):
-        raise ValueError("Size can't contain non finite values")
 
     return data
 

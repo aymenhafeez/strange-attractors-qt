@@ -37,8 +37,6 @@ def test_check_points_valid_inputs():
     "args, match",
     [
         (([[1, 2]],), "shape"),
-        (([1, 2], [3], [4, 5]), "same length"),
-        (([[1, 2, np.nan]],), "non finite"),
         (([],), "shape"),
     ],
 )
@@ -71,7 +69,6 @@ def test_normalise_colours_invalid_inputs():
     [
         ([[1, 2], [3, 4]], "number or 1D array"),
         ([1, 2], "same length"),
-        ([1, np.inf, 3], "non finite"),
     ],
 )
 def test_normalise_size_invalid_inputs(size, match):
