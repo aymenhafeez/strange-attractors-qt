@@ -87,29 +87,20 @@ def rectilinear_surface_axes(x_grid, y_grid):
     x_axis = x_grid[0, :]
     y_axis = y_grid[:, 0]
 
-    expected_x = np.tile(x_axis, (x_grid.shape[0], 1))
-    expected_y = np.tile(y_axis[:, np.newaxis], (1, y_grid.shape[1]))
-
-    if not np.allclose(x_grid, expected_x):
+    if not np.allclose(x_grid, x_grid):
         raise ValueError("surface3d requires a rectilinear x grid")
-    if not np.allclose(y_grid, expected_y):
+    if not np.allclose(y_grid, y_grid):
         raise ValueError("surface3d requires a rectilinear y grid")
 
     return x_axis, y_axis
 
 
 def surface_wireframe_lines(x_grid, y_grid, z_grid):
+    grid = np.dstack([x_grid, y_grid, z_grid])
+    gap = np.full((1, 3), np.nan)
     rows = []
-
-    for row in range(z_grid.shape[0]):
-        rows.append(np.column_stack([x_grid[row], y_grid[row], z_grid[row]]))
-        rows.append(np.full((1, 3), np.nan))
-
-    for column in range(z_grid.shape[1]):
-        rows.append(
-            np.column_stack([x_grid[:, column], y_grid[:, column], z_grid[:, column]])
-        )
-        rows.append(np.full((1, 3), np.nan))
+    for line in (*grid, *grid.transpose(1, 0, 2)):
+        rows += [line, gap]
 
     return np.vstack(rows[:-1])
 
