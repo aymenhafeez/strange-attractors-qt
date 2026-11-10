@@ -87,9 +87,9 @@ def rectilinear_surface_axes(x_grid, y_grid):
     x_axis = x_grid[0, :]
     y_axis = y_grid[:, 0]
 
-    if not np.allclose(x_grid, x_grid):
+    if not np.allclose(x_grid, x_axis):
         raise ValueError("surface3d requires a rectilinear x grid")
-    if not np.allclose(y_grid, y_grid):
+    if not np.allclose(y_grid, y_axis[:, np.newaxis]):
         raise ValueError("surface3d requires a rectilinear y grid")
 
     return x_axis, y_axis
@@ -255,7 +255,7 @@ class ConsoleSurfaceTrace3D:
 
     def colour_data(self):
         if self.colour is None:
-            return
+            return None
 
         colour_data = self.colour() if callable(self.colour) else self.colour
         return normalise_colour(colour_data)
@@ -402,7 +402,7 @@ class ConsoleView3D:
         if self.clear_for_mode(mode):
             self.clear()
 
-        colour = normalise_colour(colour)
+        colour = normalise_colour(colour, len(points))
 
         item = gl.GLLinePlotItem(
             pos=points,
@@ -436,7 +436,7 @@ class ConsoleView3D:
         if self.clear_for_mode(mode):
             self.clear()
 
-        colour = normalise_colour(colour)
+        colour = normalise_colour(colour, len(points))
         size = normalise_size(size, len(points))
 
         item = gl.GLScatterPlotItem(
