@@ -329,8 +329,6 @@ class DataViewPanel(QtWidgets.QWidget):
         )
         self.bounds_model = RowTableModel(("axis", "min", "max", "range"), self)
 
-        self.summary_label = QtWidgets.QLabel("No data")
-        self.summary_label.setObjectName("dataViewSummary")
         self._partial = False
 
         self.sample_mode = QtWidgets.QCheckBox("Sample")
@@ -349,8 +347,6 @@ class DataViewPanel(QtWidgets.QWidget):
         toolbar = QtWidgets.QHBoxLayout()
         toolbar.setContentsMargins(6, 6, 6, 0)
         toolbar.setSpacing(6)
-        # TODO: consider removing the summary label altogether, takes up too much space
-        # toolbar.addWidget(self.summary_label, 1)
         toolbar.addWidget(self.sample_mode)
         toolbar.addWidget(self.sample_size)
         toolbar.addStretch(1)
@@ -365,7 +361,6 @@ class DataViewPanel(QtWidgets.QWidget):
         samples_tab = QtWidgets.QWidget()
         samples_layout = QtWidgets.QVBoxLayout(samples_tab)
         samples_layout.setContentsMargins(0, 0, 0, 0)
-        # samples_layout.addLayout(toolbar)
         samples_layout.addWidget(self.table)
 
         self.tabs = QtWidgets.QTabWidget()
@@ -408,7 +403,6 @@ class DataViewPanel(QtWidgets.QWidget):
         self.trajectory_model.set_rows(self._trajectory_rows(solutions, specs))
         self.parameter_model.set_rows(self._parameter_rows(config, values or {}))
         self.bounds_model.set_rows(self._bounds_rows(solutions))
-        self._update_summary()
 
     def clear(self):
         self._partial = False
@@ -417,7 +411,6 @@ class DataViewPanel(QtWidgets.QWidget):
         self.trajectory_model.clear()
         self.parameter_model.clear()
         self.bounds_model.clear()
-        self.summary_label.setText("No data")
 
     @staticmethod
     def _table(model):
@@ -446,12 +439,10 @@ class DataViewPanel(QtWidgets.QWidget):
         self.sample_size.setEnabled(checked)
         self.model.set_sampled(checked)
         self.measures_model.set_sampled(checked)
-        self._update_summary()
 
     def _on_sample_size_changed(self, value):
         self.model.set_sample_size(value)
         self.measures_model.set_sample_size(value)
-        self._update_summary()
 
     def _trajectory_rows(self, solutions, specs):
         rows = []
@@ -518,16 +509,6 @@ class DataViewPanel(QtWidgets.QWidget):
 
         return rows
 
-    def _update_summary(self):
-        total_points = sum(len(solution) for solution in self.model._solutions)
-        shown_points = self.model.rowCount()
-
-        if total_points == 0:
-            self.summary_label.setText("No data")
-            return
-
-        suffix = " partial" if self._partial else ""
-        self.summary_label.setText(f"{shown_points:,} / {total_points:,}{suffix}")
 
     @staticmethod
     def _coordinate(values, index):
