@@ -9,7 +9,7 @@ import pandas as pd
 from pyqtgraph.Qt import QtCore
 
 from ..ui.style import plot_colours
-from .system import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE, parse_mode
+from .explorer import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE, line_kwargs, parse_mode
 
 PREVIEW_UPDATE_INTERVAL = 120  # ms
 PREVIEW = {
@@ -373,20 +373,12 @@ class LivePlotController(QtCore.QObject):
             return self._plots.current_name
 
         plot_name = str(plot).strip()
-        if not plot_name:
-            raise ValueError("Plot name cannot be empty")
-        if plot_name not in self._plots.names():
-            self._plots.new(plot_name)
-        else:
-            self._plots.get(plot_name)
+        self._plots.new(plot_name)
 
         return plot_name
 
     def _live_plot_target(self, plot_name):
-        try:
-            return self._plots.get(plot_name, activate=False)
-        except KeyError:
-            return self._plots.new(plot_name, activate=False)
+        return self._plots.new(plot_name, activate=False)
 
     def _set_trace_error(self, trace, error=None):
         previous = trace.spec.get("error")
@@ -562,19 +554,10 @@ class LivePlotController(QtCore.QObject):
     def _plot_live_separation_fit(self, spec, target, *, mode, pen, label):
         data = self._live_separation_fit_data(spec)
 
-        separation_kwargs = {}
-        if pen is not None:
-            separation_kwargs["pen"] = pen
-        if label is not None:
-            separation_kwargs["name"] = str(label)
-
-        fit_pen = spec.get("fit_pen", pen)
-        fit_label = f"{label} fit" if label else None
-        fit_kwargs = {}
-        if fit_pen is not None:
-            fit_kwargs["pen"] = fit_pen
-        if fit_label is not None:
-            fit_kwargs["name"] = fit_label
+        separation_kwargs = line_kwargs(pen, label)
+        fit_kwargs = line_kwargs(
+            spec.get("fit_pen", pen), f"{label} fit" if label else None
+        )
 
         separation_item = target.line(
             data["separation_t"],

@@ -6,7 +6,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 from qtconsole import inprocess
 
 from ..ui.style import PANEL_SURFACE, plot_colours
-from .explorer import PlotExplorer
+from .explorer import PLOT_MODE_REPLACE, PlotExplorer, parse_mode
 from .script_browser import ScriptBrowser
 from .script_panel import ScriptPanel
 from .table import ConsoleTable, ConsoleTableManager
@@ -16,8 +16,6 @@ from .view3d import ConsoleView3D, ConsoleView3DManager
 _BaseJupyterConsole = inprocess.QtInProcessRichJupyterWidget
 LEGEND_OFFSET = (-30, -30)
 LEGEND_TEXT_SIZE = "9pt"
-PLOT_MODE_REPLACE = "replace"
-PLOT_MODE_OVERLAY = "overlay"
 
 
 def _build_console_plot_widget():
@@ -217,7 +215,8 @@ class ConsolePlot:
                 **kwargs,
             )
 
-        if self._clear_for_mode(mode):
+        mode = parse_mode(mode)
+        if mode == PLOT_MODE_REPLACE:
             self.clear()
         if zoom_region:
             self.zoom_region(True)
@@ -279,20 +278,9 @@ class ConsolePlot:
         if isinstance(plot_widget, str):
             if self._manager is None:
                 raise ValueError("Named plot targets require a plot manager")
-            try:
-                return self._manager.get(plot_widget)
-            except KeyError:
-                return self._manager.new(plot_widget)
+            return self._manager.new(plot_widget)
 
         return plot_widget
-
-    def _clear_for_mode(self, mode):
-        mode = str(mode).strip().lower()
-        if mode == PLOT_MODE_REPLACE:
-            return True
-        if mode == PLOT_MODE_OVERLAY:
-            return False
-        raise ValueError("Plot mode must be 'replace' or 'overlay'")
 
     def set_table_manager(self, table_manager):
         self._table_manager = table_manager

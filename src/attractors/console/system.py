@@ -20,7 +20,7 @@ from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
 from ..core.trajectory_analysis import separation
 from ..workers.solve_session import SolveRun, read_only
-from .jupyter_console_panel import ConsolePlot
+from .explorer import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE, line_kwargs, parse_mode
 
 VECTOR_FIELD_SPEED_PENS = [
     (65, 105, 155),
@@ -29,8 +29,6 @@ VECTOR_FIELD_SPEED_PENS = [
     (120, 185, 115),
     (235, 190, 80),
 ]
-PLOT_MODE_REPLACE = "replace"
-PLOT_MODE_OVERLAY = "overlay"
 
 HELP_ROWS = [
     (
@@ -201,16 +199,6 @@ def _normalise_initial_conditions(initial_conditions, dimension=3):
         )
 
     return array.tolist()
-
-
-def parse_mode(mode):
-    normalised = str(mode).strip().lower()
-    if normalised == PLOT_MODE_REPLACE:
-        return PLOT_MODE_REPLACE
-    if normalised == PLOT_MODE_OVERLAY:
-        return PLOT_MODE_OVERLAY
-
-    raise ValueError("Plot mode must be 'replace' or 'overlay'")
 
 
 def _console_n(value):
@@ -1053,19 +1041,13 @@ class SystemInspector:
             )
 
         solution = self.solution(trajectory)
-        plot_kwargs = {}
-        if pen is not None:
-            plot_kwargs["pen"] = pen
-        if label is not None:
-            plot_kwargs["name"] = str(label)
-        return self._plot_line(
-            self._plot_target(plot),
+        return self._plot_target(plot).line(
             solution[:, x_col],
             solution[:, y_col],
             mode=plot_mode,
             bottom=x_name,
             left=y_name,
-            **plot_kwargs,
+            **line_kwargs(pen, label),
         )
 
     def plot_xy(self, **kwargs):
@@ -1331,20 +1313,16 @@ class SystemInspector:
             step_max=step_max,
         )
         fitted = fit["slope"] * frame["t"].to_numpy() + fit["intercept"]
-        plot_kwargs = {}
-        fit_line_pen = pen if fit_pen is None else fit_pen
-        if fit_line_pen is not None:
-            plot_kwargs["pen"] = fit_line_pen
-        if label is not None:
-            plot_kwargs["name"] = f"{label} fit"
-        return self._plot_line(
-            target,
+        return target.line(
             frame["t"].to_numpy(),
             fitted,
             mode=PLOT_MODE_OVERLAY,
             bottom="t",
             left=f"log separation fit {a}-{b}",
-            **plot_kwargs,
+            **line_kwargs(
+                pen if fit_pen is None else fit_pen,
+                None if label is None else f"{label} fit",
+            ),
         )
 
     def plot_crossings(
@@ -1378,17 +1356,15 @@ class SystemInspector:
         x_name = section_x if x_axis is None else str(x_axis).lower()
         y_name = section_y if y_axis is None else str(y_axis).lower()
 
-        plot_kwargs = {"pen": pen, "symbol": symbol}
-        if symbolSize is not None:
-            plot_kwargs["symbolSize"] = symbolSize
-        return self._plot_scatter(
-            self._plot_target(plot),
+        return self._plot_target(plot).scatter(
             frame[x_name].to_numpy(),
             frame[y_name].to_numpy(),
             mode=parse_mode(mode),
             bottom=x_name,
             left=y_name,
-            **plot_kwargs,
+            pen=pen,
+            symbol=symbol,
+            symbol_size=symbolSize,
         )
 
     def vector_field_slice(
@@ -1526,8 +1502,7 @@ class SystemInspector:
                 )
             ):
                 items.append(
-                    self._plot_line(
-                        target,
+                    target.line(
                         x_data,
                         y_data,
                         mode=plot_mode if index == 0 else PLOT_MODE_OVERLAY,
@@ -1539,19 +1514,13 @@ class SystemInspector:
             return tuple(items)
 
         x_data, y_data = self._vector_field_segments(frame, x_name, y_name, scale)
-        plot_kwargs = {}
-        if pen is not None:
-            plot_kwargs["pen"] = pen
-        if label is not None:
-            plot_kwargs["name"] = str(label)
-        return self._plot_line(
-            target,
+        return target.line(
             x_data,
             y_data,
             mode=plot_mode,
             bottom=x_name,
             left=y_name,
-            **plot_kwargs,
+            **line_kwargs(pen, label),
         )
 
     def live_plots(self, table=False):
@@ -1646,83 +1615,23 @@ class SystemInspector:
         label=None,
         zoom_region=False,
     ):
-        plot_kwargs = {}
-        if pen is not None:
-            plot_kwargs["pen"] = pen
-        if label is not None:
-            plot_kwargs["name"] = str(label)
-        return self._plot_line(
-            self._plot_target(plot),
+        return self._plot_target(plot).line(
             times,
             values,
             mode=mode,
             bottom="t",
             left=axis_label,
             zoom_region=zoom_region,
-            **plot_kwargs,
+            **line_kwargs(pen, label),
         )
 
     def _plot_target(self, plot):
-        if plot is not None:
-            if isinstance(plot, str):
-                plots = self._console.plots
-                try:
-                    return plots.get(plot)
-                except KeyError:
-                    return plots.new(plot)
-            return plot
+        if plot is None:
+            return self._console.plot
+        if isinstance(plot, str):
+            return self._console.plots.new(plot)
 
-        return self._console.plot
-
-    def _plot_line(
-        self,
-        target,
-        x,
-        y,
-        *,
-        mode,
-        bottom,
-        left,
-        zoom_region=False,
-        **kwargs,
-    ):
-        if isinstance(target, ConsolePlot):
-            return target.line(
-                x,
-                y,
-                mode=mode,
-                bottom=bottom,
-                left=left,
-                zoom_region=zoom_region,
-                **kwargs,
-            )
-
-        if mode == PLOT_MODE_REPLACE:
-            target.clear()
-        item = target.plot(x, y, **kwargs)
-        target.setLabel("bottom", bottom)
-        target.setLabel("left", left)
-        return item
-
-    def _plot_scatter(self, target, x, y, *, mode, bottom, left, **kwargs):
-        if isinstance(target, ConsolePlot):
-            symbol_size = kwargs.pop("symbolSize", None)
-            return target.scatter(
-                x,
-                y,
-                mode=mode,
-                bottom=bottom,
-                left=left,
-                symbol_size=symbol_size,
-                **kwargs,
-            )
-
-        if mode == PLOT_MODE_REPLACE:
-            target.clear()
-        item = target.plot(x, y, **kwargs)
-        target.setLabel("bottom", bottom)
-        target.setLabel("left", left)
-        return item
+        return plot
 
     def _vector_field_segments(self, frame, x_axis, y_axis, scale):
         x = frame[x_axis].to_numpy(dtype=np.float64)

@@ -13,6 +13,28 @@ PLOT_MODE_REPLACE = "replace"
 PLOT_MODE_OVERLAY = "overlay"
 
 
+def parse_mode(mode):
+    normalised = str(mode).strip().lower()
+    if normalised not in (PLOT_MODE_REPLACE, PLOT_MODE_OVERLAY):
+        raise ValueError("Plot mode must be 'replace' or 'overlay'")
+
+    return normalised
+
+
+def resolve(value):
+    return value() if callable(value) else value
+
+
+def line_kwargs(pen=None, label=None):
+    kwargs = {}
+    if pen is not None:
+        kwargs["pen"] = pen
+    if label is not None:
+        kwargs["name"] = str(label)
+
+    return kwargs
+
+
 def check_array_dim(value, name):
     data = np.asarray(value, dtype=np.float64)
 
@@ -36,7 +58,7 @@ def check_scalar(value, name):
 
 
 def check_bins(value):
-    value = value() if callable(value) else value
+    value = resolve(value)
 
     if np.isscalar(value):
         bins = int(value)
@@ -150,7 +172,6 @@ class ConsoleTrace:
         self.update_callback(self.item)
 
     def remove(self):
-        # avoid trying to remove the same item twice
         if self.item.scene() is None:
             return
 
@@ -358,23 +379,16 @@ class PlotExplorer(QtCore.QObject):
         return functools.partial(self._update_trace_data, x, y)
 
     def _update_trace_data(self, x, y, item):
-        x_data = x() if callable(x) else x
-        y_data = y() if callable(y) else y
-        x_array = check_array_dim(x_data, "x")
-        y_array = check_array_dim(y_data, "y")
+        x_array = check_array_dim(resolve(x), "x")
+        y_array = check_array_dim(resolve(y), "y")
 
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
 
         item.setData(x=x_array, y=y_array)
 
-    def _hist_trace_update(self, values, bins, density):
-        return functools.partial(self._update_hist_data, values, bins, density)
-
     def _update_hist_data(self, values, bins, density, item):
-        values_data = values() if callable(values) else values
-        x_array, y_array = hist_step(values_data, bins, density=density)
-
+        x_array, y_array = hist_step(resolve(values), bins, density=density)
         item.setData(x=x_array, y=y_array)
 
     def _trace_data(self, name, item):
@@ -424,21 +438,12 @@ class PlotExplorer(QtCore.QObject):
         **kwargs,
     ):
         target = self.plot
-        mode = mode.strip().lower()
+        mode = parse_mode(mode)
 
-        if mode not in {PLOT_MODE_REPLACE, PLOT_MODE_OVERLAY}:
-            raise ValueError("Plot mode must be either 'replace' or 'overlay'")
+        plot_kwargs = {**kwargs, **line_kwargs(pen, label)}
 
-        plot_kwargs = kwargs.copy()
-        if pen is not None:
-            plot_kwargs["pen"] = pen
-        if label is not None:
-            plot_kwargs["name"] = str(label)
-
-        x_data = x() if callable(x) else x
-        y_data = y() if callable(y) else y
-        x_array = check_array_dim(x_data, "x")
-        y_array = check_array_dim(y_data, "y")
+        x_array = check_array_dim(resolve(x), "x")
+        y_array = check_array_dim(resolve(y), "y")
 
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
@@ -448,7 +453,7 @@ class PlotExplorer(QtCore.QObject):
             name,
             item,
             target,
-            self._data_trace_update(x, y),
+            functools.partial(self._update_trace_data, x, y),
             data_provider=functools.partial(self._trace_data, name, item),
         )
         self._connect_trace_data(trace)
@@ -468,19 +473,12 @@ class PlotExplorer(QtCore.QObject):
         **kwargs,
     ):
         target = self.plot
-        mode = mode.strip().lower()
+        mode = parse_mode(mode)
 
-        if mode not in {PLOT_MODE_REPLACE, PLOT_MODE_OVERLAY}:
-            raise ValueError("Plot mode must be either 'replace' or 'overlay'")
+        plot_kwargs = {**kwargs, **line_kwargs(label=label)}
 
-        plot_kwargs = kwargs.copy()
-        if label is not None:
-            plot_kwargs["name"] = str(label)
-
-        x_data = x() if callable(x) else x
-        y_data = y() if callable(y) else y
-        x_array = check_array_dim(x_data, "x")
-        y_array = check_array_dim(y_data, "y")
+        x_array = check_array_dim(resolve(x), "x")
+        y_array = check_array_dim(resolve(y), "y")
 
         if len(x_array) != len(y_array):
             raise ValueError("x and y must be the same length")
@@ -497,7 +495,7 @@ class PlotExplorer(QtCore.QObject):
             name,
             item,
             target,
-            self._data_trace_update(x, y),
+            functools.partial(self._update_trace_data, x, y),
             data_provider=functools.partial(self._trace_data, name, item),
         )
         self._connect_trace_data(trace)
@@ -518,26 +516,18 @@ class PlotExplorer(QtCore.QObject):
         **kwargs,
     ):
         target = self.plot
-        mode = mode.strip().lower()
+        mode = parse_mode(mode)
 
-        if mode not in {PLOT_MODE_REPLACE, PLOT_MODE_OVERLAY}:
-            raise ValueError("Plot mode must be either 'replace' or 'overlay'")
+        plot_kwargs = {**kwargs, **line_kwargs(pen, label)}
 
-        plot_kwargs = kwargs.copy()
-        if pen is not None:
-            plot_kwargs["pen"] = pen
-        if label is not None:
-            plot_kwargs["name"] = str(label)
-
-        values_data = values() if callable(values) else values
-        x_array, y_array = hist_step(values_data, bins, density=density)
+        x_array, y_array = hist_step(resolve(values), bins, density=density)
 
         item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
         trace = ConsoleTrace(
             name,
             item,
             target,
-            self._hist_trace_update(values, bins, density),
+            functools.partial(self._update_hist_data, values, bins, density),
             data_provider=functools.partial(self._trace_data, name, item),
         )
         self._connect_trace_data(trace)
@@ -569,8 +559,7 @@ class PlotExplorer(QtCore.QObject):
         )
 
     def _update_line(self, value, value_name, line):
-        raw_value = value() if callable(value) else value
-        line.setValue(check_scalar(raw_value, value_name))
+        line.setValue(check_scalar(resolve(value), value_name))
 
     def line(
         self,
@@ -590,9 +579,8 @@ class PlotExplorer(QtCore.QObject):
         if label is not None:
             plot_kwargs["label"] = str(label)
 
-        raw_value = value() if callable(value) else value
         item = pg.InfiniteLine(
-            pos=check_scalar(raw_value, value_name),
+            pos=check_scalar(resolve(value), value_name),
             angle=angle,
             movable=movable,
             **plot_kwargs,

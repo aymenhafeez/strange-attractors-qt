@@ -509,7 +509,6 @@ class DataViewPanel(QtWidgets.QWidget):
 
         return rows
 
-
     @staticmethod
     def _coordinate(values, index):
         return values[index] if index < len(values) else None

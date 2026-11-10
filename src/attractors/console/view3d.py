@@ -9,7 +9,14 @@ from ..ui.style import PANEL_SURFACE, plot_colours
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
 from .animation import ConsoleAnimation, ConsoleAnimationWidget
-from .explorer import ConsoleParam, dispose
+from .explorer import (
+    PLOT_MODE_OVERLAY,
+    PLOT_MODE_REPLACE,
+    ConsoleParam,
+    dispose,
+    parse_mode,
+    resolve,
+)
 
 
 def check_points(x, y=None, z=None):
@@ -159,15 +166,7 @@ class ConsoleTrace3D:
         self.explorer = explorer
 
     def points(self):
-        x_data = self.x() if callable(self.x) else self.x
-
-        if self.y is None and self.z is None:
-            return check_points(x_data)
-
-        y_data = self.y() if callable(self.y) else self.y
-        z_data = self.z() if callable(self.z) else self.z
-
-        return check_points(x_data, y_data, z_data)
+        return check_points(resolve(self.x), resolve(self.y), resolve(self.z))
 
     def update(self):
         points = self.points()
@@ -191,17 +190,13 @@ class ConsoleTrace3D:
         if self.colour is None:
             return None
 
-        colour_data = self.colour() if callable(self.colour) else self.colour
-
-        return normalise_colour(colour_data, n)
+        return normalise_colour(resolve(self.colour), n)
 
     def size_data(self, n):
         if self.size is None:
             return None
 
-        size_data = self.size() if callable(self.size) else self.size
-
-        return normalise_size(size_data, n)
+        return normalise_size(resolve(self.size), n)
 
 
 class ConsoleSurfaceTrace3D:
@@ -219,15 +214,7 @@ class ConsoleSurfaceTrace3D:
         self.wireframe = wireframe
 
     def grid(self):
-        x_data = self.x() if callable(self.x) else self.x
-
-        if self.y is None and self.z is None:
-            return check_surface_grid(x_data)
-
-        y_data = self.y() if callable(self.y) else self.y
-        z_data = self.z() if callable(self.z) else self.z
-
-        return check_surface_grid(x_data, y_data, z_data)
+        return check_surface_grid(resolve(self.x), resolve(self.y), resolve(self.z))
 
     def points(self):
         return self.grid()[3]
@@ -257,8 +244,7 @@ class ConsoleSurfaceTrace3D:
         if self.colour is None:
             return None
 
-        colour_data = self.colour() if callable(self.colour) else self.colour
-        return normalise_colour(colour_data)
+        return normalise_colour(resolve(self.colour))
 
     def remove(self):
         self.explorer.view.remove_item(self.item)
@@ -377,29 +363,20 @@ class ConsoleView3D:
     def grid_visible(self):
         return self.grid_overlay._grid_visible
 
-    def clear_for_mode(self, mode):
-        mode = str(mode).strip().lower()
-        if mode == "replace":
-            return True
-        if mode == "overlay":
-            return False
-
-        raise ValueError("Mode must be 'replace' or 'overlay'")
-
     def line3d(
         self,
         x,
         y=None,
         z=None,
         *,
-        mode="replace",
+        mode=PLOT_MODE_REPLACE,
         colour=(1.0, 1.0, 1.0, 1.0),
         width=1.0,
         antialias=True,
     ):
         points = check_points(x, y, z)
 
-        if self.clear_for_mode(mode):
+        if parse_mode(mode) == PLOT_MODE_REPLACE:
             self.clear()
 
         colour = normalise_colour(colour, len(points))
@@ -426,14 +403,14 @@ class ConsoleView3D:
         y=None,
         z=None,
         *,
-        mode="replace",
+        mode=PLOT_MODE_REPLACE,
         colour=(1.0, 1.0, 1.0, 1.0),
         size=5.0,
         px_mode=True,
     ):
         points = check_points(x, y, z)
 
-        if self.clear_for_mode(mode):
+        if parse_mode(mode) == PLOT_MODE_REPLACE:
             self.clear()
 
         colour = normalise_colour(colour, len(points))
@@ -461,7 +438,7 @@ class ConsoleView3D:
         y=None,
         z=None,
         *,
-        mode="replace",
+        mode=PLOT_MODE_REPLACE,
         colour=(0.2, 0.8, 1.0, 1.0),
         shader="shaded",
         smooth=True,
@@ -470,7 +447,7 @@ class ConsoleView3D:
         x_grid, y_grid, z_grid, points = check_surface_grid(x, y, z)
         x_axis, y_axis = rectilinear_surface_axes(x_grid, y_grid)
 
-        if self.clear_for_mode(mode):
+        if parse_mode(mode) == PLOT_MODE_REPLACE:
             self.clear()
 
         colour = normalise_colour(colour)
@@ -499,14 +476,14 @@ class ConsoleView3D:
         y=None,
         z=None,
         *,
-        mode="replace",
+        mode=PLOT_MODE_REPLACE,
         colour=(0.8, 0.8, 0.8, 1.0),
         width=1.0,
         antialias=True,
     ):
         x_grid, y_grid, z_grid, points = check_surface_grid(x, y, z)
 
-        if self.clear_for_mode(mode):
+        if parse_mode(mode) == PLOT_MODE_REPLACE:
             self.clear()
 
         colour = normalise_colour(colour)
@@ -786,17 +763,6 @@ class View3DExplorer(QtCore.QObject):
         self._traces = {}
         self._animations = {}
 
-    def _trace_points(self, x, y=None, z=None):
-        x_data = x() if callable(x) else x
-
-        if y is None and z is None:
-            return check_points(x_data)
-
-        y_data = y() if callable(y) else y
-        z_data = z() if callable(z) else z
-
-        return check_points(x_data, y_data, z_data)
-
     def slider(self, name, value=0.0, start=0.0, end=1.0, step=0.01):
         key = str(name).strip()
         if not key:
@@ -877,32 +843,22 @@ class View3DExplorer(QtCore.QObject):
         if not key:
             raise ValueError("Trace name cannot be empty")
 
-        # clear registered traces if mode is replace before adding a new one
-        mode = mode.strip().lower()
-        plot_mode = mode
-        if mode == "replace":
+        if parse_mode(mode) == PLOT_MODE_REPLACE:
             self.clear_traces()
             self.view.clear_items()
-            plot_mode = "overlay"
-        elif mode != "overlay":
-            raise ValueError("Mode must be 'replace' or 'overlay'")
 
         old = self._traces.pop(key, None)
         if old is not None:
             old.remove()
 
         colour = kwargs.get("colour")
-        if callable(colour):
-            kwargs = kwargs.copy()
-            kwargs["colour"] = colour()
-
         size = kwargs.get("size")
-        if callable(size):
-            kwargs = kwargs.copy()
-            kwargs["size"] = size()
+        for arg in ("colour", "size"):
+            if arg in kwargs:
+                kwargs[arg] = resolve(kwargs[arg])
 
-        points = self._trace_points(x, y, z)
-        item = plotter(points, mode=plot_mode, **kwargs)
+        points = check_points(resolve(x), resolve(y), resolve(z))
+        item = plotter(points, mode=PLOT_MODE_OVERLAY, **kwargs)
         trace = ConsoleTrace3D(
             key, x, y, z, item, self, kind=kind, colour=colour, size=size
         )
@@ -918,29 +874,17 @@ class View3DExplorer(QtCore.QObject):
         if not key:
             raise ValueError("Trace name can't be empty")
 
-        mode = mode.strip().lower()
-        if mode == "replace":
+        if parse_mode(mode) == PLOT_MODE_REPLACE:
             self.clear_traces()
             self.view.clear_items()
-            plot_mode = "overlay"
-        elif mode == "overlay":
-            plot_mode = "overlay"
-        else:
-            raise ValueError("Mode must be 'replace' or 'overlay'")
 
         colour = kwargs.get("colour")
-        if callable(colour):
-            kwargs = kwargs.copy()
-            kwargs["colour"] = colour()
+        if "colour" in kwargs:
+            kwargs["colour"] = resolve(colour)
 
-        x_data = x() if callable(x) else x
-
-        if y is None and z is None:
-            item = plotter(x_data, mode=plot_mode, **kwargs)
-        else:
-            y_data = y() if callable(y) else y
-            z_data = z() if callable(z) else z
-            item = plotter(x_data, y_data, z_data, mode=plot_mode, **kwargs)
+        item = plotter(
+            resolve(x), resolve(y), resolve(z), mode=PLOT_MODE_OVERLAY, **kwargs
+        )
 
         trace = ConsoleSurfaceTrace3D(
             key, x, y, z, item, self, kind=kind, colour=colour, wireframe=wireframe
@@ -950,12 +894,12 @@ class View3DExplorer(QtCore.QObject):
 
         return trace
 
-    def line3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
+    def line3d(self, name, x, y=None, z=None, *, mode=PLOT_MODE_REPLACE, **kwargs):
         return self._add_trace3d(
             name, x, y, z, mode=mode, plotter=self.view.line3d, kind="line3d", **kwargs
         )
 
-    def scatter3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
+    def scatter3d(self, name, x, y=None, z=None, *, mode=PLOT_MODE_REPLACE, **kwargs):
         return self._add_trace3d(
             name,
             x,
@@ -967,7 +911,7 @@ class View3DExplorer(QtCore.QObject):
             **kwargs,
         )
 
-    def surface3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
+    def surface3d(self, name, x, y=None, z=None, *, mode=PLOT_MODE_REPLACE, **kwargs):
         return self._add_surface_trace3d(
             name,
             x,
@@ -980,7 +924,7 @@ class View3DExplorer(QtCore.QObject):
             **kwargs,
         )
 
-    def wireframe3d(self, name, x, y=None, z=None, *, mode="replace", **kwargs):
+    def wireframe3d(self, name, x, y=None, z=None, *, mode=PLOT_MODE_REPLACE, **kwargs):
         return self._add_surface_trace3d(
             name,
             x,
