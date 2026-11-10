@@ -83,9 +83,6 @@ class SignalPanel(QtWidgets.QWidget):
         self.log_check = QtWidgets.QCheckBox("Log power")
         self.log_check.setChecked(True)
 
-        self.fft_check = QtWidgets.QCheckBox("FFT")
-        self.fft_check.setChecked(False)
-
         self.spectrum_plot = pg.PlotWidget()
         self.spectrum_plot.setLabel("bottom", "Frequency (cycles per unit time)")
         self.spectrum_plot.setLabel("left", "Power spectral density")
@@ -172,11 +169,6 @@ class SignalPanel(QtWidgets.QWidget):
         self.mean_check.toggled.connect(self._queue_analysis)
         self.window_combo.currentIndexChanged.connect(self._queue_analysis)
         self.log_check.toggled.connect(self._draw_spectrum)
-        # plot options -> Transforms -> FFT
-        fft_control = self.spectrum_plot.getPlotItem().ctrl.fftCheck
-        self.fft_check.toggled.connect(fft_control.setChecked)
-        fft_control.toggled.connect(self.fft_check.setChecked)
-        self.fft_check.toggled.connect(self._draw_spectrum)
 
         self.trajectory_combo.setMinimumContentsLength(18)
         self.trajectory_combo.setSizeAdjustPolicy(
@@ -223,7 +215,6 @@ class SignalPanel(QtWidgets.QWidget):
         spectrum_row = QtWidgets.QHBoxLayout(spectrum_header)
         spectrum_row.setContentsMargins(3, 0, 0, 0)
         spectrum_row.addWidget(self.log_check)
-        spectrum_row.addWidget(self.fft_check)
         spectrum_row.addStretch(1)
 
         spectrogram_header = QtWidgets.QWidget()
@@ -719,12 +710,8 @@ class SignalPanel(QtWidgets.QWidget):
         spectrum = self._spectrum
         coordinate = self.coordinate_combo.currentText()
 
-        if self.fft_check.isChecked():
-            label = "|FFT(PSD)|"
-            self.spectrum_plot.setLabel("bottom", "Conjugate time")
-        else:
-            label = f"PSD ({coordinate}^2) / (cycles/unit time)"
-            self.spectrum_plot.setLabel("bottom", "Frequency (cycles per unit time)")
+        label = f"PSD ({coordinate}^2) / (cycles/unit time)"
+        self.spectrum_plot.setLabel("bottom", "Frequency (cycles per unit time)")
 
         self.spectrum_plot.setLabel("left", label)
         self.spectrum_curve.setData(spectrum.frequencies, spectrum.density)
