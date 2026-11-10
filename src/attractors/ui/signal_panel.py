@@ -30,7 +30,6 @@ class SignalPanel(QtWidgets.QWidget):
         self._spectrogram_dt = None
         self._spectrum = None
         self._spectrum_worker = None
-        # track current analysis inputs
         self._spectrum_revision = 0
         self._spectrum_waiting = False
         self._syncing_time_range = False
@@ -108,6 +107,7 @@ class SignalPanel(QtWidgets.QWidget):
         self.colour_scale_combo = QtWidgets.QComboBox()
         self.colour_scale_combo.addItem("Linear PSD", "linear")
         self.colour_scale_combo.addItem("dB re 1", "db")
+        self.colour_scale_combo.setCurrentIndex(1)
 
         self.frequency_view_combo = QtWidgets.QComboBox()
         self.frequency_view_combo.addItem("Auto band", "auto")
@@ -164,7 +164,6 @@ class SignalPanel(QtWidgets.QWidget):
         self.duration_spin.valueChanged.connect(self._queue_spectrogram)
         self.overlap_spin.valueChanged.connect(self._queue_spectrogram)
         self.colour_scale_combo.currentIndexChanged.connect(self._draw_spectrogram)
-        self.colour_scale_combo.setCurrentIndex(1)
 
         self.mean_check.toggled.connect(self._queue_analysis)
         self.window_combo.currentIndexChanged.connect(self._queue_analysis)
@@ -228,9 +227,6 @@ class SignalPanel(QtWidgets.QWidget):
         spectrogram_row.addWidget(self.frequency_view_combo)
         spectrogram_row.addWidget(self.colour_scale_combo)
 
-        self.spectrum_plot.setTitle(None)
-        self.spectrogram_plot.setTitle(None)
-
         spectrum_area = QtWidgets.QFrame()
         spectrum_area.setObjectName("panelSurface")
         spectrum_area.setStyleSheet(SIGNAL_PLOTS)
@@ -287,7 +283,7 @@ class SignalPanel(QtWidgets.QWidget):
                 messages.append(f"{name.title()}: {text}")
                 has_error |= is_error
 
-        self.status_changed.emit(" . ".join(messages), has_error)
+        self.status_changed.emit(", ".join(messages), has_error)
 
     @QtCore.pyqtSlot(object, object)
     def _sync_time_range(self, source, bounds):
