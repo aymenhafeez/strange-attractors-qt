@@ -648,7 +648,6 @@ class JupyterConsolePanel(QtCore.QObject):
         self.script_browser.select_path(self.script_panel.current_script_path())
 
         self.variable_panel = VariablePanel()
-        self.variable_panel.refresh_requested.connect(self._refresh_variables)
         self.variables_dock = dock_layout.add(
             "variables", "Variables", self.variable_panel
         )

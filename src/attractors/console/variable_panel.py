@@ -11,8 +11,6 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 
 
 class VariablePanel(QtWidgets.QWidget):
-    refresh_requested = QtCore.pyqtSignal()
-
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QtWidgets.QVBoxLayout(self)
