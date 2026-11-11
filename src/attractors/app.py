@@ -150,7 +150,7 @@ class Window(QtWidgets.QMainWindow):
         self.controls.colour_mode_changed.connect(self.scene.set_colour_mode)
         self.controls.colourmap_changed.connect(self.scene.set_colourmap)
         self.right_panel.preset_panel.preset_save_requested.connect(self._save_preset)
-        self.right_panel.preset_panel.preset_load_requested.connect(self._load_preset)
+        self.right_panel.preset_panel.preset_load_requested.connect(self.load_preset)
         self.right_panel.preset_panel.preset_delete_requested.connect(
             self._delete_preset
         )
@@ -404,7 +404,7 @@ class Window(QtWidgets.QMainWindow):
             (menu.open_preset_folder_action.triggered, self._open_preset_folder),
             (menu.welcome_action.triggered, self.show_welcome),
             (menu.help_action.triggered, self.help),
-            (menu.reset_layout_action.triggered, self._restore_default_layout),
+            (menu.reset_layout_action.triggered, self.restore_default_layout),
             (menu.reset_camera_action.triggered, self._reset_camera),
             (menu.fit_view_action.triggered, self._fit_camera),
             (menu.reset_session_action.triggered, self._reset_session_state),
@@ -413,7 +413,7 @@ class Window(QtWidgets.QMainWindow):
             (menu.summary_action.triggered, self.show_workspace_summary),
             (
                 menu.explore_workspace_action.triggered,
-                lambda: self._set_workspace_mode("explore"),
+                lambda: self.set_workspace_mode("explore"),
             ),
             (
                 menu.examples_menu.triggered,
@@ -471,9 +471,9 @@ class Window(QtWidgets.QMainWindow):
         self.controls.head_size_wrapper.setVisible(view.point_action.isChecked())
 
         for actions, slot in (
-            (menu.theme_actions, self._set_theme),
+            (menu.theme_actions, self.set_theme),
             (menu.animation_mode_actions, self._set_animation_mode),
-            (menu.workspace_mode_actions, self._set_workspace_mode),
+            (menu.workspace_mode_actions, self.set_workspace_mode),
             (menu.panel_actions, self._toggle_panel_dock),
         ):
             for value, action in actions.items():
@@ -606,7 +606,7 @@ class Window(QtWidgets.QMainWindow):
         preset_panel.set_saved_presets(list_presets(self._preset_directory), selected)
         self._update_preset_summary(selected or preset_panel.current_preset_name())
 
-    def _set_workspace_mode(self, mode):
+    def set_workspace_mode(self, mode):
         self.workspace_mode = mode
         self.dock_layout.switch(mode)
         self.jupyter_console_panel.set_explore_visible(mode == "explore")
@@ -615,7 +615,7 @@ class Window(QtWidgets.QMainWindow):
 
     def _toggle_system_workspace(self):
         if self.workspace_mode != "system":
-            self._set_workspace_mode("system")
+            self.set_workspace_mode("system")
             if self._workspace_visible():
                 return
         elif self._workspace_visible():
@@ -642,14 +642,14 @@ class Window(QtWidgets.QMainWindow):
         self.dock_layout.resize_defaults()
         self._sync_dock_state()
 
-    def _restore_default_layout(self):
+    def restore_default_layout(self):
         self.dock_layout.reset()
         self._sync_dock_state()
         self.status_bar.set_temporary_app_message(
             f"Restored {self.workspace_mode.title()} layout"
         )
 
-    def _set_theme(self, theme):
+    def set_theme(self, theme):
         QtWidgets.QApplication.instance().setProperty("appTheme", theme)
         self.menu_bar.theme_actions[theme].setChecked(True)
         self._apply_theme()
@@ -716,7 +716,7 @@ class Window(QtWidgets.QMainWindow):
 
     def _open_example_script(self, path):
         if self.jupyter_console_panel.script_panel.load_script(path):
-            self._set_workspace_mode("explore")
+            self.set_workspace_mode("explore")
             self.status_bar.set_temporary_app_message(f"Opened example: {path.name}")
 
     def _open_preset_folder(self):
@@ -778,7 +778,7 @@ class Window(QtWidgets.QMainWindow):
         self._refresh_presets(preset_name)
         self.status_bar.set_app_message(f"Saved preset: {preset_name}")
 
-    def _load_preset(self, name):
+    def load_preset(self, name):
         preset_name = name.strip()
         if not preset_name:
             self.status_bar.set_app_message("Select a preset to load", error=True)
@@ -1131,7 +1131,7 @@ class Window(QtWidgets.QMainWindow):
     def _workspace_visible(self):
         return any(not dock.isHidden() for dock in self.jupyter_console_panel.docks())
 
-    def _open_panel_dock(self, panel_name):
+    def open_panel_dock(self, panel_name):
         self._panel_docks[panel_name].reveal()
         self._sync_dock_state()
 
@@ -1143,7 +1143,7 @@ class Window(QtWidgets.QMainWindow):
         if self._panel_visible(panel_name):
             self._close_panel_dock(panel_name)
         else:
-            self._open_panel_dock(panel_name)
+            self.open_panel_dock(panel_name)
 
     def _sync_dock_state(self):
         opened = {
@@ -1274,7 +1274,7 @@ class Window(QtWidgets.QMainWindow):
 
     def show_welcome(self):
         dialog = WelcomeDialog(self, session_store.app_settings())
-        dialog.system_requested.connect(lambda: self._set_workspace_mode("system"))
+        dialog.system_requested.connect(lambda: self.set_workspace_mode("system"))
         dialog.example_requested.connect(self._open_welcome_example)
         dialog.help_requested.connect(self.help)
         dialog.exec()
@@ -1284,7 +1284,7 @@ class Window(QtWidgets.QMainWindow):
         if scripts:
             self._open_example_script(scripts[0])
         else:
-            self._set_workspace_mode("explore")
+            self.set_workspace_mode("explore")
             self.status_bar.set_temporary_app_message("No bundled examples available")
 
     def help(self):
@@ -1321,7 +1321,7 @@ class Window(QtWidgets.QMainWindow):
 
     def _restore_app_layout(self):
         settings = session_store.app_settings()
-        self._set_theme(session_store.saved_theme(settings))
+        self.set_theme(session_store.saved_theme(settings))
         session_store.restore(
             settings,
             self,
@@ -1329,7 +1329,7 @@ class Window(QtWidgets.QMainWindow):
             self.jupyter_console_panel,
             self.status_bar,
         )
-        self._set_workspace_mode(session_store.saved_mode(settings))
+        self.set_workspace_mode(session_store.saved_mode(settings))
 
     def _reset_session_state(self):
         session_store.clear(session_store.app_settings())

@@ -57,17 +57,16 @@ def main():
     app.setApplicationName("strange-attractors")
     app.setStyle("Fusion")
     w = Window()
-    # show first: raising a tabbed dock in a hidden window doesn't select its tab
     w.showFullScreen() if args.fullscreen else w.show()
 
     actions = {
-        "explore": lambda: w._set_workspace_mode("explore"),
-        "system": lambda: w._set_workspace_mode("system"),
-        "default": w._restore_default_layout,
-        "attractor": lambda: w.controls._on_attractor_selected(args.attractor),
-        "preset": lambda: w._load_preset(args.preset),
-        "mode": lambda: w._open_panel_dock(ANALYSIS_MODES[args.mode]),
-        "theme": lambda: w._set_theme(None if args.theme == "system" else args.theme),
+        "explore": lambda: w.set_workspace_mode("explore"),
+        "system": lambda: w.set_workspace_mode("system"),
+        "default": w.restore_default_layout,
+        "attractor": lambda: w.controls.dropdown.setCurrentText(args.attractor),
+        "preset": lambda: w.load_preset(args.preset),
+        "mode": lambda: w.open_panel_dock(ANALYSIS_MODES[args.mode]),
+        "theme": lambda: w.set_theme(None if args.theme == "system" else args.theme),
     }
 
     for name, func in actions.items():
