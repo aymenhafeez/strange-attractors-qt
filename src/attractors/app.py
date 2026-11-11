@@ -1151,37 +1151,41 @@ class Window(QtWidgets.QMainWindow):
         }
         previous = self._open_analysis_panels
         self._open_analysis_panels = opened
-        for name in previous - opened:
-            if name == "lyapunov_panel":
-                self._cancel_lyapunov_analysis()
-            elif name == "poincare_panel":
-                self.poincare_panel.cancel_solve()
-                self.scene.grid_overlay.remove_poincare_plane()
-            elif name == "bifurcation_panel":
-                self.bifurcation_panel.cancel_sweep()
-        for name in opened - previous:
-            config, _values = self._get_current_config_and_values()
-            if config is None:
-                continue
+        self._on_panels_closed(previous - opened)
+        self._on_panels_opened(opened - previous)
+        self._sync_action_states()
 
-            if name == "lyapunov_panel" and self.lyapunov_panel.auto_enabled():
-                self._request_lyapunov()
-            elif name == "projection_panel":
-                run = self.solve_session.run
-                self.projection_panel.reapply_projections(run.solutions if run else [])
-            elif name == "poincare_panel":
-                config, values = self._get_current_config_and_values()
-                self.poincare_panel.set_attractor(config, values)
-                self.poincare_panel.recompute()
-            elif name == "bifurcation_panel":
-                config, values = self._get_current_config_and_values()
-                if config is not None:
-                    self.bifurcation_panel.set_config(config, values)
-            elif name in ("signal_panel", "trajectory_analysis_panel") and (
-                self.solve_session.analysis_run is None
-                or self.solve_session.state["partial"]
-            ):
-                self._solve(True)
+    def _on_panels_closed(self, names):
+        if "lyapunov_panel" in names:
+            self._cancel_lyapunov_analysis()
+        if "poincare_panel" in names:
+            self.poincare_panel.cancel_solve()
+            self.scene.grid_overlay.remove_poincare_plane()
+        if "bifurcation_panel" in names:
+            self.bifurcation_panel.cancel_sweep()
+
+    def _on_panels_opened(self, names):
+        config, values = self._get_current_config_and_values()
+        if not names or config is None:
+            return
+
+        if "lyapunov_panel" in names and self.lyapunov_panel.auto_enabled():
+            self._request_lyapunov()
+        if "projection_panel" in names:
+            run = self.solve_session.run
+            self.projection_panel.reapply_projections(run.solutions if run else [])
+        if "poincare_panel" in names:
+            self.poincare_panel.set_attractor(config, values)
+            self.poincare_panel.recompute()
+        if "bifurcation_panel" in names:
+            self.bifurcation_panel.set_config(config, values)
+        if names & {"signal_panel", "trajectory_analysis_panel"} and (
+            self.solve_session.analysis_run is None
+            or self.solve_session.state["partial"]
+        ):
+            self._solve(True)
+
+    def _sync_action_states(self):
         toolbar = self.main_toolbar
         for action, checked in (
             (
@@ -1201,7 +1205,7 @@ class Window(QtWidgets.QMainWindow):
             ),
             (self.menu_bar.output_panel_action, not self.output_dock.isHidden()),
             *(
-                (action, name in opened)
+                (action, name in self._open_analysis_panels)
                 for name, action in self.menu_bar.panel_actions.items()
             ),
         ):
