@@ -1013,28 +1013,9 @@ class Window(QtWidgets.QMainWindow):
         self.status_bar.set_app_message(message, error=True)
 
     def _configure_system_capabilities(self, config):
-        self.system_toolbar.set_variables(config.variables)
         is_3d = config.dimension == 3
-
-        self.lyapunov_panel.setEnabled(True)
-        self.poincare_panel.setEnabled(True)
+        self.system_toolbar.set_variables(config.variables)
         self.controls.animation_scroll.setEnabled(is_3d)
-
-        for panel in (
-            self.lyapunov_panel,
-            self.poincare_panel,
-            self.projection_panel,
-            self.bifurcation_panel,
-        ):
-            panel.setEnabled(True)
-            panel.setToolTip("")
-
-        self._cancel_lyapunov_analysis()
-        self.lyapunov_panel.clear()
-        self.poincare_panel.clear()
-        self.projection_panel.clear()
-        self.phase_portrait.set_section()
-        self.scene.grid_overlay.remove_poincare_plane()
 
         for action in (
             *self.viewport_toolbar.scene_actions,
@@ -1050,6 +1031,8 @@ class Window(QtWidgets.QMainWindow):
         self.lyapunov_panel.clear()
         self.poincare_panel.clear()
         self.projection_panel.clear()
+        self.phase_portrait.set_section()
+        self.scene.grid_overlay.remove_poincare_plane()
 
     def _select_system_view(self, config):
         widget = self.phase_portrait if config.dimension == 2 else self.scene.container
