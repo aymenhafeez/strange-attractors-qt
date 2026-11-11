@@ -410,7 +410,6 @@ class Window(QtWidgets.QMainWindow):
             (menu.reset_session_action.triggered, self._reset_session_state),
             (menu.solve_action.triggered, lambda: self._solve(True)),
             (menu.reset_parameters_action.triggered, self.controls.reset_to_defaults),
-            (menu.summary_action.triggered, self.show_workspace_summary),
             (
                 menu.explore_workspace_action.triggered,
                 lambda: self.set_workspace_mode("explore"),
@@ -908,14 +907,14 @@ class Window(QtWidgets.QMainWindow):
     def _solve(self, full):
         self.scene.animation_controller.stop()
         self.solver.cancel_lyapunov()
-        settings = self._system_settings()
+        config, values = self._get_current_config_and_values()
         self.solve_session.solve(
             full,
-            settings.config,
-            settings.values,
-            settings.n,
-            settings.t_max,
-            settings.trajectories,
+            config,
+            values,
+            self.current_n,
+            self.current_t_max,
+            self.controls.trajectory_panel.get_trajectories(),
             record=self._panel_visible("signal_panel")
             or self._panel_visible("trajectory_analysis_panel"),
         )

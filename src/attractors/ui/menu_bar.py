@@ -105,7 +105,6 @@ class MainMenuBar(QtWidgets.QMenuBar):
             workspace_menu, "Mode", {"system": "System", "explore": "Explore"}
         )
         workspace_menu.addSeparator()
-        self.summary_action = workspace_menu.addAction("Summary")
         self.explore_workspace_action = workspace_menu.addAction("Explore workspace")
         workspace_menu.addAction(self.reset_layout_action)
         self.examples_menu = workspace_menu.addMenu("Examples")
