@@ -22,6 +22,7 @@ from .presets import (
     list_presets,
     load_named_preset,
     preset_metadata,
+    preset_name_for_config,
     save_named_preset,
 )
 from .systems.registry import ATTRACTORS
@@ -566,24 +567,26 @@ class Window(QtWidgets.QMainWindow):
         self.controls.show_standard_controls()
         self._apply_config_to_view(config)
 
-    def _apply_config_to_view(self, config):
+    def _apply_config_to_view(self, config, values=None, n=None, t_max=None):
         self.solve_session.clear()
         self._restoring_view = True
+
         try:
             self.phase_portrait.clear()
             self.scene.clear_solutions()
             self._select_system_view(config)
             self._configure_system_capabilities(config)
-            self.scene.viewport_overlay.set_info(
-                config,
-                self.controls.get_current_values(),
-            )
             self.scene.camera_controller.set_camera(config)
             self.controls.configure(config)
-            self.current_n = config.time_defaults.n
-            self.current_t_max = config.time_defaults.t_max
+            if values is not None:
+                self.controls.set_current_values(values)
+            self.current_n = config.time_defaults.n if n is None else n
+            self.current_t_max = config.time_defaults.t_max if t_max is None else t_max
+            self.controls.set_time_values(self.current_n, self.current_t_max)
             self.controls.set_traj_tail_max(self.current_n)
-            self.lyapunov_panel.clear()
+            self.scene.viewport_overlay.set_info(
+                config, self.controls.get_current_values()
+            )
             self.controls.trajectory_panel.reset(config)
             self.bifurcation_panel.set_config(
                 config, self.controls.get_current_values()
@@ -597,53 +600,6 @@ class Window(QtWidgets.QMainWindow):
         self.current_name = "Custom"
         self.controls.set_current_attractor("Custom")
         self._apply_config_to_view(config)
-
-    def _apply_loaded_preset(self, config, values, n, t_max):
-        self.solve_session.clear()
-        self._restoring_view = True
-        try:
-            self.phase_portrait.clear()
-            self.scene.clear_solutions()
-            self._select_system_view(config)
-            self._configure_system_capabilities(config)
-            if config.name == "Custom":
-                self._custom_config = config
-                self.current_name = "Custom"
-                self.controls.set_current_attractor("Custom")
-                self.controls.hide_standard_controls()
-            else:
-                name = next(
-                    (name for name, con in ATTRACTORS.items() if con is config),
-                    config.name,
-                )
-                self.current_name = name
-                self.controls.set_current_attractor(name)
-                self.controls.show_standard_controls()
-
-            self.scene.animation_controller.stop()
-            self.scene.camera_controller.set_camera(config)
-            self.controls.configure(config)
-
-            if config.name == "Custom":
-                self.controls.custom_panel.set_from_config(config)
-
-            self.controls.set_current_values(values)
-            self.controls.set_time_values(n, t_max)
-            self.current_n = n
-            self.current_t_max = t_max
-            self.controls.set_traj_tail_max(self.current_n)
-            self.scene.viewport_overlay.set_info(
-                config,
-                self.controls.get_current_values(),
-            )
-            self.lyapunov_panel.clear()
-            self.controls.trajectory_panel.reset(config)
-            self.bifurcation_panel.set_config(
-                config, self.controls.get_current_values()
-            )
-        finally:
-            self._restoring_view = False
-        self._update_plot()
 
     def _refresh_presets(self, selected=None):
         preset_panel = self.controls.preset_panel
@@ -836,7 +792,18 @@ class Window(QtWidgets.QMainWindow):
             self.status_bar.set_app_message(str(exc), error=True)
             return
 
-        self._apply_loaded_preset(config, values, n, t_max)
+        if config.name == "Custom":
+            self._custom_config = config
+            self.current_name = "Custom"
+            self.controls.custom_panel.set_from_config(config)
+            self.controls.hide_standard_controls()
+        else:
+            self.current_name = preset_name_for_config(config)
+            self.controls.show_standard_controls()
+
+        self.controls.set_current_attractor(self.current_name)
+        self.scene.animation_controller.stop()
+        self._apply_config_to_view(config, values, n, t_max)
         self._refresh_presets(preset_name)
         self.status_bar.set_app_message(f"Loaded preset: {preset_name}")
 

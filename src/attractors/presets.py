@@ -86,7 +86,7 @@ def _custom_equations_from_config(config):
     return equations
 
 
-def _preset_name_for_config(config):
+def preset_name_for_config(config):
     if config.name == "Custom":
         return "Custom"
 
@@ -154,7 +154,7 @@ def build_preset(
     created_at=None,
     updated_at=None,
 ):
-    attractor_name = _preset_name_for_config(config)
+    attractor_name = preset_name_for_config(config)
     now = updated_at or _utc_timestamp()
     preset = {
         "version": PRESET_VERSION,
