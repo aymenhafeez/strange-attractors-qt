@@ -77,19 +77,13 @@ class Window(QtWidgets.QMainWindow):
         self.current_name = next(iter(ATTRACTORS.keys()))
         self._custom_config = None
 
-        app_data_location = QtCore.QStandardPaths.writableLocation(
-            QtCore.QStandardPaths.StandardLocation.AppDataLocation
+        self._app_data_directory = Path(
+            QtCore.QStandardPaths.writableLocation(
+                QtCore.QStandardPaths.StandardLocation.AppDataLocation
+            )
         )
-        if app_data_location:
-            self._preset_directory = app_data_location + "/presets"
-            self._app_data_directory = Path(app_data_location)
-        else:
-            self._preset_directory = (
-                QtCore.QDir.homePath() + "/.strange-attractors/presets"
-            )
-            self._app_data_directory = Path(
-                QtCore.QDir.homePath() + "/.strange-attractors"
-            )
+        self._preset_directory = str(self._app_data_directory / "presets")
+        self._scripts_directory = self._app_data_directory / "scripts"
         self._scripts_directory = self._app_data_directory / "scripts"
         self._scripts_directory.mkdir(parents=True, exist_ok=True)
 
@@ -658,8 +652,6 @@ class Window(QtWidgets.QMainWindow):
         self._update_preset_summary(selected or preset_panel.current_preset_name())
 
     def _set_workspace_mode(self, mode):
-        if mode not in {"system", "explore"}:
-            raise ValueError("Workspace mode must be 'system' or 'explore'")
         self.workspace_mode = mode
         self.dock_layout.switch(mode)
         self.jupyter_console_panel.set_explore_visible(mode == "explore")
