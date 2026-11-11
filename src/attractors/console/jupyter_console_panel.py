@@ -13,7 +13,6 @@ from .table import ConsoleTable, ConsoleTableManager
 from .variable_panel import VariablePanel
 from .view3d import ConsoleView3D, ConsoleView3DManager
 
-_BaseJupyterConsole = inprocess.QtInProcessRichJupyterWidget
 LEGEND_OFFSET = (-30, -30)
 LEGEND_TEXT_SIZE = "9pt"
 
@@ -32,7 +31,7 @@ def _build_console_plot_widget():
 
 
 # Adapted from the Rich Jupyter Console pyqtgraph example
-class _RichJupyterConsole(_BaseJupyterConsole):
+class _RichJupyterConsole(inprocess.QtInProcessRichJupyterWidget):
     def __init__(self, namespace, script_dir=None, parent=None):
         super().__init__(parent)
         self.kernel_manager = inprocess.QtInProcessKernelManager()

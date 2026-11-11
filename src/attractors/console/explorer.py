@@ -407,16 +407,16 @@ class PlotExplorer(QtCore.QObject):
         }
 
     def _connect_trace_data(self, trace):
-        set_clickable = getattr(trace.item, "setCurveClickable", None)
-        if set_clickable is not None:
-            try:
-                set_clickable(True, width=8)
-            except TypeError:
-                set_clickable(True)
-
+        trace.item.setCurveClickable(True, width=8)
         trace.item.sigClicked.connect(
             lambda _item, ev, trace=trace: self._trace_clicked(trace, ev)
         )
+
+    def _trace_clicked(self, trace, ev):
+        if ev.double():
+            return
+
+        self.plot.show_trace_data(trace)
 
     def _trace_clicked(self, trace, ev):
         is_double = getattr(ev, "double", None)
