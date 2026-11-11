@@ -418,13 +418,6 @@ class PlotExplorer(QtCore.QObject):
 
         self.plot.show_trace_data(trace)
 
-    def _trace_clicked(self, trace, ev):
-        is_double = getattr(ev, "double", None)
-        if is_double is not None and is_double():
-            return
-
-        self.plot.show_trace_data(trace)
-
     # TODO: write a helper around curve() and scatter()
     def curve(
         self,

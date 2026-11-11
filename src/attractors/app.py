@@ -84,7 +84,6 @@ class Window(QtWidgets.QMainWindow):
         )
         self._preset_directory = str(self._app_data_directory / "presets")
         self._scripts_directory = self._app_data_directory / "scripts"
-        self._scripts_directory = self._app_data_directory / "scripts"
         self._scripts_directory.mkdir(parents=True, exist_ok=True)
 
         self.solver = SolveManager(self)
