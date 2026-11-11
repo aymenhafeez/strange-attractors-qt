@@ -323,10 +323,9 @@ class ConsoleView3D:
         trace_items = set()
         point_sets = []
 
-        if hasattr(self, "explore"):
-            for trace in self.explore._traces.values():
-                trace_items.add(trace.item)
-                point_sets.append(trace.points())
+        for trace in self.explore._traces.values():
+            trace_items.add(trace.item)
+            point_sets.append(trace.points())
 
         for item, points in zip(self._items, self._point_sets):
             if item not in trace_items:
@@ -512,8 +511,7 @@ class ConsoleView3D:
         self.grid_overlay.apply_theme()
 
         for item in self._items:
-            if hasattr(item, "setGLOptions"):
-                item.setGLOptions(gl_options)
+            item.setGLOptions(gl_options)
 
 
 # adapting this from ConsolePlotManager, will need to generalise to 3D
