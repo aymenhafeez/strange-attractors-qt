@@ -51,7 +51,10 @@ def test_solve_worker_emits_one_solution_per_initial_condition(qapp, monkeypatch
         7,
         _config(),
         {"a": 1.0},
-        [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+        [
+            {"ic": [1.0, 2.0, 3.0], "n": 123, "t_max": 50.0},
+            {"ic": [4.0, 5.0, 6.0], "n": 123, "t_max": 50.0},
+        ],
         123,
         True,
         50.0,
@@ -87,7 +90,7 @@ def test_solve_worker_emits_failure_result_on_exception(qapp, monkeypatch):
         8,
         _config(),
         {"a": 1.0},
-        [[1.0, 2.0, 3.0]],
+        [{"ic": [1.0, 2.0, 3.0], "n": 123, "t_max": 50.0}],
         123,
         True,
         50.0,
@@ -118,7 +121,7 @@ def test_solve_worker_cancel_suppresses_emit(qapp, monkeypatch):
         9,
         _config(),
         {"a": 1.0},
-        [[1.0, 2.0, 3.0]],
+        [{"ic": [1.0, 2.0, 3.0], "n": 123, "t_max": 50.0}],
         123,
         True,
         50.0,
@@ -153,7 +156,7 @@ def test_lyapunov_worker_emits_computation_result(qapp, monkeypatch):
         )
     )
 
-    worker.compute(11, _config(), {"a": 1.5})
+    worker.compute(11, _config(), {"a": 1.5}, 1000, 10)
 
     assert len(emitted) == 1
 
@@ -191,7 +194,7 @@ def test_lyapunov_worker_emits_failure_on_exception(qapp, monkeypatch):
         lambda request_id, message: failures.append((request_id, message))
     )
 
-    worker.compute(12, _config(), {"a": 1.5})
+    worker.compute(12, _config(), {"a": 1.5}, 1000, 10)
 
     assert results == []
     assert failures == [(12, "boom")]

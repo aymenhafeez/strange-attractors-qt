@@ -40,14 +40,11 @@ class SolveManager(QtCore.QObject):
 
     def request_solve(self, request_id, config, values, ics, n, is_partial, t_max):
         self._solve_request.emit(request_id, config, values, ics, n, is_partial, t_max)
-        return request_id
 
-    def request_lyapunov(self, config, values, n=None, t_max=None):
+    def request_lyapunov(self, config, values, n, t_max):
         self._lyapunov_request_id += 1
         request_id = self._lyapunov_request_id
-        solve_n = int(config.time_defaults.n if n is None else n)
-        solve_t_max = float(config.time_defaults.t_max if t_max is None else t_max)
-        self._lyapunov_request.emit(request_id, config, values, solve_n, solve_t_max)
+        self._lyapunov_request.emit(request_id, config, values, n, t_max)
 
         return request_id
 

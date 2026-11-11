@@ -23,32 +23,20 @@ class SolveWorker(QObject):
         self._cancel = False
 
     @pyqtSlot(int, object, dict, list, int, bool, float)
-    def solve(self, request_id, config, values, ics, n, is_partial, t_max):
+    def solve(self, request_id, config, values, specs, n, is_partial, t_max):
         self._cancel = False
         solutions = []
         profile = profiling_enabled()
         worker_start = time.perf_counter()
 
         try:
-            for index, entry in enumerate(ics):
+            for index, spec in enumerate(specs):
                 if self._cancel:
                     return
-                if isinstance(entry, dict):
-                    ic = entry.get("ic")
-                    solve_n = int(entry.get("n", n))
-                    solve_t_max = float(entry.get("t_max", t_max))
-                else:
-                    ic = entry
-                    solve_n = n
-                    solve_t_max = t_max
 
                 kernel_start = time.perf_counter()
                 sol = solve_attractor(
-                    config,
-                    values,
-                    solve_n,
-                    t_max=solve_t_max,
-                    ic=ic,
+                    config, values, spec["n"], t_max=spec["t_max"], ic=spec["ic"]
                 )
                 kernel_ms = (time.perf_counter() - kernel_start) * 1000
 
@@ -62,8 +50,8 @@ class SolveWorker(QObject):
                         config.name,
                         is_partial,
                         index,
-                        solve_n,
-                        solve_t_max,
+                        spec["n"],
+                        spec["t_max"],
                         len(sol),
                     )
 
@@ -101,12 +89,10 @@ class LyapunovWorker(QObject):
         self._cancel = False
 
     @pyqtSlot(int, object, dict, int, float)
-    def compute(self, request_id, config, values, n=None, t_max=None):
+    def compute(self, request_id, config, values, n, t_max):
         self._cancel = False
 
         try:
-            solve_n = int(config.time_defaults.n if n is None else n)
-            solve_t_max = float(config.time_defaults.t_max if t_max is None else t_max)
             pvals = np.ascontiguousarray(
                 [values[p.name] for p in config.params], dtype=np.float64
             )
@@ -118,8 +104,8 @@ class LyapunovWorker(QObject):
                 initial_conditions,
                 pvals,
                 config.time_defaults.t_min,
-                solve_t_max,
-                solve_n,
+                t_max,
+                n,
             )
 
             if not self._cancel:
