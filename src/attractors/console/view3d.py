@@ -8,7 +8,6 @@ from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
 from ..ui.style import PANEL_SURFACE, plot_colours
 from ..view.camera_controller import CameraController
 from ..view.grid_overlay import GridOverlay
-from .animation import ConsoleAnimation, ConsoleAnimationWidget
 from .explorer import (
     PLOT_MODE_OVERLAY,
     PLOT_MODE_REPLACE,
@@ -319,6 +318,15 @@ class ConsoleView3D:
             self._items.pop(index)
             self._point_sets.pop(index)
 
+    def _add(self, item, points):
+        self.view.addItem(item)
+        self._items.append(item)
+        self._point_sets.append(points)
+        self.auto_adjust_grid()
+        self.camera_controller.fit_camera_to_solutions([points])
+
+        return item
+
     def point_sets(self):
         trace_items = set()
         point_sets = []
@@ -388,13 +396,7 @@ class ConsoleView3D:
             mode="line_strip",
         )
 
-        self.view.addItem(item)
-        self._items.append(item)
-        self._point_sets.append(points)
-        self.auto_adjust_grid()
-        self.camera_controller.fit_camera_to_solutions([points])
-
-        return item
+        return self._add(item, points)
 
     def scatter3d(
         self,
@@ -421,15 +423,9 @@ class ConsoleView3D:
             size=size,
             pxMode=px_mode,
         )
-
         item.setGLOptions("additive" if plot_colours()["is_dark"] else "translucent")
-        self.view.addItem(item)
-        self._items.append(item)
-        self._point_sets.append(points)
-        self.auto_adjust_grid()
-        self.camera_controller.fit_camera_to_solutions([points])
 
-        return item
+        return self._add(item, points)
 
     def surface3d(
         self,
@@ -461,13 +457,7 @@ class ConsoleView3D:
             showGrid=show_grid,
         )
 
-        self.view.addItem(item)
-        self._items.append(item)
-        self._point_sets.append(points)
-        self.auto_adjust_grid()
-        self.camera_controller.fit_camera_to_solutions([points])
-
-        return item
+        return self._add(item, points)
 
     def wireframe3d(
         self,
@@ -495,13 +485,7 @@ class ConsoleView3D:
             mode="line_strip",
         )
 
-        self.view.addItem(item)
-        self._items.append(item)
-        self._point_sets.append(points)
-        self.auto_adjust_grid()
-        self.camera_controller.fit_camera_to_solutions([points])
-
-        return item
+        return self._add(item, points)
 
     def apply_theme(self):
         colours = plot_colours()
@@ -760,7 +744,7 @@ class View3DExplorer(ExplorerControls):
             self.clear_traces()
             self.view.clear_items()
 
-        # drop the old trace before plotting, so point_sets() doesn't evaluate it
+        # drop the old trace before plotting so point_sets() doesn't evaluate it
         return self._new_trace_key(key)
 
     def _add_trace3d(self, name, x, y, z, mode, plotter, kind, **kwargs):
