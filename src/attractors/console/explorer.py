@@ -46,6 +46,15 @@ def check_array_dim(value, name):
     return data
 
 
+def check_xy(x, y):
+    x_array = check_array_dim(resolve(x), "x")
+    y_array = check_array_dim(resolve(y), "y")
+    if len(x_array) != len(y_array):
+        raise ValueError("x and y must be the same length")
+
+    return x_array, y_array
+
+
 def check_scalar(value, name):
     value = np.asarray(value, dtype=np.float64)
 
@@ -158,90 +167,28 @@ def dispose(control, layout):
     control.deleteLater()
 
 
-class ConsoleTrace:
-    """Reactive 2D plot item. Data recomputed on command"""
+def control_key(name, kind):
+    key = str(name).strip()
+    if not key:
+        raise ValueError(f"{kind} name cannot be empty")
 
-    def __init__(self, name, item, plot, update_callback, data_provider=None):
-        self.name = name
-        self.item = item
-        self.plot = plot
-        self.update_callback = update_callback
-        self.data_provider = data_provider
-
-    def update(self):
-        self.update_callback(self.item)
-
-    def remove(self):
-        if self.item.scene() is None:
-            return
-
-        self.plot._plot_widget.removeItem(self.item)
-
-    def data(self):
-        if self.data_provider is None:
-            raise ValueError(f"Trace {self.name!r} has no point data")
-
-        return self.data_provider()
+    return key
 
 
-class PlotExplorer(QtCore.QObject):
-    """Manage reactive plots and parameters for a single console plot"""
-
+class ExplorerControls(QtCore.QObject):
     changed = QtCore.pyqtSignal()
 
-    def __init__(
-        self,
-        plot,
-        param_widget,
-        param_layout,
-        trace_menu,
-        status_callback=None,
-        parent=None,
-    ):
+    def __init__(self, param_widget, param_layout, status_callback=None, parent=None):
         super().__init__(parent)
-        self.plot = plot
         self.param_widget = param_widget
         self.param_layout = param_layout
-        self.trace_menu = trace_menu
         self.status_callback = status_callback
         self._params = {}
-        self._traces = {}
         self._animations = {}
-        self._sync_trace_menu()
-
-    def trace_names(self):
-        return list(self._traces)
-
-    def slider_names(self):
-        return list(self._params)
-
-    def animation_names(self):
-        return list(self._animations)
-
-    # should make panel visibility easier
-    def has_controls(self):
-        return bool(self._params or self._animations)
-
-    def _sync_trace_menu(self):
-        self.trace_menu.clear()
-
-        if not self._traces:
-            action = self.trace_menu.addAction("No traces")
-            action.setEnabled(False)
-            return
-
-        for name in self._traces:
-            action = self.trace_menu.addAction(name)
-            action.setToolTip(f"Remove trace {name!r}")
-            action.triggered.connect(
-                lambda checked=False, name=name: self.remove_trace(name)
-            )
+        self._traces = {}
 
     def slider(self, name, value=0.0, start=0.0, end=1.0, step=0.01):
-        key = name.strip()
-        if not key:
-            raise ValueError("Slider key cannot be empty")
-
+        key = control_key(name, "Slider")
         old = self._params.pop(key, None)
         if old is not None:
             dispose(old, self.param_layout)
@@ -257,9 +204,7 @@ class PlotExplorer(QtCore.QObject):
 
     def int_slider(self, name, value=0, start=0, end=100, step=1):
         # useful for when setting sliders to array sizes
-        return self.slider(
-            name, value=int(value), start=int(start), end=int(end), step=int(step)
-        )
+        return self.slider(name, int(value), int(start), int(end), int(step))
 
     def animation(
         self,
@@ -272,10 +217,7 @@ class PlotExplorer(QtCore.QObject):
         loop=False,
         start=False,
     ):
-        key = str(name).strip()
-        if not key:
-            raise ValueError("Animation name can't be empty")
-
+        key = control_key(name, "Animation")
         old = self._animations.pop(key, None)
         if old is not None:
             old.pause()
@@ -304,9 +246,6 @@ class PlotExplorer(QtCore.QObject):
 
         return animation
 
-    def traces(self):
-        return {name: trace.name for name, trace in self._traces.items()}
-
     def params(self):
         return {name: param.value for name, param in self._params.items()}
 
@@ -321,17 +260,17 @@ class PlotExplorer(QtCore.QObject):
             for name, animation in self._animations.items()
         }
 
-    def remove_trace(self, name):
-        key = str(name).strip()
-        trace = self._traces.pop(key, None)
-        if trace is None:
-            raise KeyError(f"No trace named {key!r}")
+    def slider_names(self):
+        return list(self._params)
 
-        trace.remove()
-        self._sync_trace_menu()
-        self.changed.emit()
+    def trace_names(self):
+        return list(self._traces)
 
-        return self.traces()
+    def animation_names(self):
+        return list(self._animations)
+
+    def has_controls(self):
+        return bool(self._params or self._animations)
 
     def remove_slider(self, name):
         key = str(name).strip()
@@ -358,33 +297,144 @@ class PlotExplorer(QtCore.QObject):
 
         return self.animations()
 
-    def _replace_trace(self, name, trace):
+    def remove_trace(self, name):
         key = str(name).strip()
+        trace = self._traces.pop(key, None)
+        if trace is None:
+            raise KeyError(f"No trace named {key!r}")
 
-        if not key:
-            raise ValueError("Trace name cannot be empty")
+        trace.remove()
+        self._sync_trace_menu()
+        self.changed.emit()
 
+        return self.traces()
+
+    def refresh(self):
+        updated = False
+        for trace in list(self._traces.values()):
+            try:
+                trace.update()
+                updated = True
+            except (TypeError, ValueError, FloatingPointError) as exc:
+                self._set_status(f"{trace.name}: {exc}", error=True)
+
+        return updated
+
+    def clear(self):
+        self.clear_animations()
+        self.clear_sliders()
+        self.clear_traces()
+
+    def clear_traces(self):
+        for trace in list(self._traces.values()):
+            trace.remove()
+
+        self._traces.clear()
+        self._sync_trace_menu()
+        self.changed.emit()
+
+    def clear_sliders(self):
+        for param in self._params.values():
+            dispose(param, self.param_layout)
+
+        self._params.clear()
+        self.param_widget.setVisible(self.has_controls())
+        self.changed.emit()
+
+    def clear_animations(self):
+        for animation in self._animations.values():
+            animation.pause()
+            dispose(animation, self.param_layout)
+
+        self._animations.clear()
+        self.param_widget.setVisible(self.has_controls())
+        self.changed.emit()
+
+    def _new_trace_key(self, name):
+        key = control_key(name, "Trace")
         old = self._traces.pop(key, None)
-
         if old is not None:
             old.remove()
 
+        return key
+
+    def _store_trace(self, key, trace):
         self._traces[key] = trace
         self._sync_trace_menu()
         self.changed.emit()
 
         return trace
 
+    def _sync_trace_menu(self):
+        """Hook for explorers that list their traces in a menu"""
+
+    def _set_status(self, message, *, error=False):
+        if self.status_callback is not None:
+            self.status_callback(message, error=error)
+
+
+class ConsoleTrace:
+    def __init__(self, name, item, plot, update_callback, data_provider=None):
+        self.name = name
+        self.item = item
+        self.plot = plot
+        self.update_callback = update_callback
+        self.data_provider = data_provider
+
+    def update(self):
+        self.update_callback(self.item)
+
+    def remove(self):
+        if self.item.scene() is None:
+            return
+
+        self.plot._plot_widget.removeItem(self.item)
+
+    def data(self):
+        if self.data_provider is None:
+            raise ValueError(f"Trace {self.name!r} has no point data")
+
+        return self.data_provider()
+
+
+class PlotExplorer(ExplorerControls):
+    def __init__(
+        self,
+        plot,
+        param_widget,
+        param_layout,
+        trace_menu,
+        status_callback=None,
+        parent=None,
+    ):
+        super().__init__(param_widget, param_layout, status_callback, parent)
+        self.plot = plot
+        self.trace_menu = trace_menu
+        self._sync_trace_menu()
+
+    def _sync_trace_menu(self):
+        self.trace_menu.clear()
+
+        if not self._traces:
+            action = self.trace_menu.addAction("No traces")
+            action.setEnabled(False)
+            return
+
+        for name in self._traces:
+            action = self.trace_menu.addAction(name)
+            action.setToolTip(f"Remove trace {name!r}")
+            action.triggered.connect(
+                lambda checked=False, name=name: self.remove_trace(name)
+            )
+
+    def traces(self):
+        return {name: trace.name for name, trace in self._traces.items()}
+
     def _data_trace_update(self, x, y):
         return functools.partial(self._update_trace_data, x, y)
 
     def _update_trace_data(self, x, y, item):
-        x_array = check_array_dim(resolve(x), "x")
-        y_array = check_array_dim(resolve(y), "y")
-
-        if len(x_array) != len(y_array):
-            raise ValueError("x and y must be the same length")
-
+        x_array, y_array = check_xy(x, y)
         item.setData(x=x_array, y=y_array)
 
     def _update_hist_data(self, values, bins, density, item):
@@ -392,12 +442,7 @@ class PlotExplorer(QtCore.QObject):
         item.setData(x=x_array, y=y_array)
 
     def _trace_data(self, name, item):
-        x_data, y_data = item.getData()
-        x_array = check_array_dim(x_data, "x")
-        y_array = check_array_dim(y_data, "y")
-
-        if len(x_array) != len(y_array):
-            raise ValueError("x and y must be the same length")
+        x_array, y_array = check_xy(*item.getData())
 
         return {
             "trace": np.full(len(x_array), name),
@@ -405,6 +450,18 @@ class PlotExplorer(QtCore.QObject):
             "x": x_array,
             "y": y_array,
         }
+
+    def _add_data_trace(self, key, item, update):
+        trace = ConsoleTrace(
+            key,
+            item,
+            self.plot,
+            update,
+            data_provider=functools.partial(self._trace_data, key, item),
+        )
+        self._connect_trace_data(trace)
+
+        return self._store_trace(key, trace)
 
     def _connect_trace_data(self, trace):
         trace.item.setCurveClickable(True, width=8)
@@ -418,7 +475,6 @@ class PlotExplorer(QtCore.QObject):
 
         self.plot.show_trace_data(trace)
 
-    # TODO: write a helper around curve() and scatter()
     def curve(
         self,
         name,
@@ -430,28 +486,16 @@ class PlotExplorer(QtCore.QObject):
         pen=None,
         **kwargs,
     ):
-        target = self.plot
         mode = parse_mode(mode)
-
-        plot_kwargs = {**kwargs, **line_kwargs(pen, label)}
-
-        x_array = check_array_dim(resolve(x), "x")
-        y_array = check_array_dim(resolve(y), "y")
-
-        if len(x_array) != len(y_array):
-            raise ValueError("x and y must be the same length")
-
-        item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
-        trace = ConsoleTrace(
-            name,
-            item,
-            target,
-            functools.partial(self._update_trace_data, x, y),
-            data_provider=functools.partial(self._trace_data, name, item),
+        x_array, y_array = check_xy(x, y)
+        key = self._new_trace_key(name)
+        item = self.plot.line(
+            x_array, y_array, mode=mode, **{**kwargs, **line_kwargs(pen, label)}
         )
-        self._connect_trace_data(trace)
 
-        return self._replace_trace(name, trace)
+        return self._add_data_trace(
+            key, item, functools.partial(self._update_trace_data, x, y)
+        )
 
     def scatter(
         self,
@@ -465,35 +509,21 @@ class PlotExplorer(QtCore.QObject):
         symbol_size=None,
         **kwargs,
     ):
-        target = self.plot
         mode = parse_mode(mode)
-
-        plot_kwargs = {**kwargs, **line_kwargs(label=label)}
-
-        x_array = check_array_dim(resolve(x), "x")
-        y_array = check_array_dim(resolve(y), "y")
-
-        if len(x_array) != len(y_array):
-            raise ValueError("x and y must be the same length")
-
-        item = target.scatter(
+        x_array, y_array = check_xy(x, y)
+        key = self._new_trace_key(name)
+        item = self.plot.scatter(
             x_array,
             y_array,
             mode=mode,
             symbol=symbol,
             symbol_size=symbol_size,
-            **plot_kwargs,
+            **{**kwargs, **line_kwargs(label=label)},
         )
-        trace = ConsoleTrace(
-            name,
-            item,
-            target,
-            functools.partial(self._update_trace_data, x, y),
-            data_provider=functools.partial(self._trace_data, name, item),
-        )
-        self._connect_trace_data(trace)
 
-        return self._replace_trace(name, trace)
+        return self._add_data_trace(
+            key, item, functools.partial(self._update_trace_data, x, y)
+        )
 
     # TODO: add brush and fill bars rather than a simple step curve
     def hist(
@@ -508,24 +538,18 @@ class PlotExplorer(QtCore.QObject):
         pen=None,
         **kwargs,
     ):
-        target = self.plot
         mode = parse_mode(mode)
-
-        plot_kwargs = {**kwargs, **line_kwargs(pen, label)}
-
         x_array, y_array = hist_step(resolve(values), bins, density=density)
-
-        item = target.line(x_array, y_array, mode=mode, **plot_kwargs)
-        trace = ConsoleTrace(
-            name,
-            item,
-            target,
-            functools.partial(self._update_hist_data, values, bins, density),
-            data_provider=functools.partial(self._trace_data, name, item),
+        key = self._new_trace_key(name)
+        item = self.plot.line(
+            x_array, y_array, mode=mode, **{**kwargs, **line_kwargs(pen, label)}
         )
-        self._connect_trace_data(trace)
 
-        return self._replace_trace(name, trace)
+        return self._add_data_trace(
+            key,
+            item,
+            functools.partial(self._update_hist_data, values, bins, density),
+        )
 
     def vline(self, name, x, *, pen=None, label=None, movable=False, **kwargs):
         return self.line(
@@ -572,56 +596,13 @@ class PlotExplorer(QtCore.QObject):
         if label is not None:
             plot_kwargs["label"] = str(label)
 
+        position = check_scalar(resolve(value), value_name)
+        key = self._new_trace_key(name)
         item = pg.InfiniteLine(
-            pos=check_scalar(resolve(value), value_name),
-            angle=angle,
-            movable=movable,
-            **plot_kwargs,
+            pos=position, angle=angle, movable=movable, **plot_kwargs
         )
         self.plot._plot_widget.addItem(item)
 
         update = functools.partial(self._update_line, value, value_name)
-        trace = ConsoleTrace(name, item, self.plot, update)
 
-        return self._replace_trace(name, trace)
-
-    def refresh(self):
-        for trace in list(self._traces.values()):
-            try:
-                trace.update()
-            except (TypeError, ValueError, FloatingPointError) as exc:
-                self._set_status(f"{trace.name}: {exc}", error=True)
-
-    def clear(self):
-        self.clear_animations()
-        self.clear_sliders()
-        self.clear_traces()
-
-    def clear_traces(self):
-        for trace in self._traces.values():
-            trace.remove()
-
-        self._traces.clear()
-        self._sync_trace_menu()
-        self.changed.emit()
-
-    def clear_sliders(self):
-        for param in self._params.values():
-            dispose(param, self.param_layout)
-
-        self._params.clear()
-        self.changed.emit()
-        self.param_widget.setVisible(self.has_controls())
-
-    def clear_animations(self):
-        for animation in self._animations.values():
-            animation.pause()
-            dispose(animation, self.param_layout)
-
-        self._animations.clear()
-        self.changed.emit()
-        self.param_widget.setVisible(self.has_controls())
-
-    def _set_status(self, message, *, error=False):
-        if self.status_callback is not None:
-            self.status_callback(message, error=error)
+        return self._store_trace(key, ConsoleTrace(key, item, self.plot, update))
