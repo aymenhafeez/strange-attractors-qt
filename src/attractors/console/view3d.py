@@ -12,8 +12,8 @@ from .animation import ConsoleAnimation, ConsoleAnimationWidget
 from .explorer import (
     PLOT_MODE_OVERLAY,
     PLOT_MODE_REPLACE,
-    ConsoleParam,
-    dispose,
+    ExplorerControls,
+    control_key,
     parse_mode,
     resolve,
 )
@@ -746,136 +746,43 @@ class ConsoleView3DManager(QtCore.QObject):
             view.apply_theme()
 
 
-class View3DExplorer(QtCore.QObject):
-    changed = QtCore.pyqtSignal()
-
+class View3DExplorer(ExplorerControls):
     def __init__(
         self, view, param_widget, param_layout, status_callback=None, parent=None
     ):
-        super().__init__(parent)
+        super().__init__(param_widget, param_layout, status_callback, parent)
         self.view = view
-        self.param_widget = param_widget
-        self.param_layout = param_layout
-        self.status_callback = status_callback
-        self._params = {}
-        self._traces = {}
-        self._animations = {}
 
-    def slider(self, name, value=0.0, start=0.0, end=1.0, step=0.01):
-        key = str(name).strip()
-        if not key:
-            raise ValueError("Slider key cannot be empty")
-
-        old = self._params.pop(key, None)
-        if old is not None:
-            dispose(old, self.param_layout)
-
-        param = ConsoleParam(key, value, start, end, step, parent=self)
-        param.changed.connect(self.refresh)
-        self._params[key] = param
-        self.param_layout.addWidget(param.widget)
-        self.param_widget.setVisible(True)
-        self.changed.emit()
-
-        return param
-
-    def animation(
-        self,
-        name,
-        callback,
-        *,
-        interval=16,
-        dt=None,
-        frames=None,
-        loop=False,
-        start=False,
-    ):
-        key = str(name).strip()
-        if not key:
-            raise ValueError("Animation name can't be empty")
-
-        old = self._animations.pop(key, None)
-        if old is not None:
-            old.pause()
-            dispose(old, self.param_layout)
-
-        animation = ConsoleAnimation(
-            key,
-            callback,
-            interval=interval,
-            dt=dt,
-            frames=frames,
-            loop=loop,
-            status_callback=self.status_callback,
-            parent=self,
-        )
-        widget = ConsoleAnimationWidget(animation)
-        animation.widget = widget
-
-        self._animations[key] = animation
-        self.param_layout.addWidget(widget)
-        self.param_widget.setVisible(True)
-        self.changed.emit()
-
-        if start:
-            animation.play()
-
-        return animation
-
-    def animations(self):
-        return {
-            name: {
-                "name": animation.name,
-                "interval": animation.interval,
-                "frame": animation.frame,
-                "active": animation.is_active(),
-            }
-            for name, animation in self._animations.items()
-        }
-
-    def int_slider(self, name, value=0, start=0, end=100, step=1):
-        return self.slider(name, int(value), int(start), int(end), int(step))
-
-    def _add_trace3d(self, name, x, y, z, mode, plotter, kind, **kwargs):
-        key = str(name).strip()
-        if not key:
-            raise ValueError("Trace name cannot be empty")
-
-        if parse_mode(mode) == PLOT_MODE_REPLACE:
+    def _begin_trace(self, name, mode):
+        mode = parse_mode(mode)
+        key = control_key(name, "Trace")
+        if mode == PLOT_MODE_REPLACE:
             self.clear_traces()
             self.view.clear_items()
 
-        old = self._traces.pop(key, None)
-        if old is not None:
-            old.remove()
+        # drop the old trace before plotting, so point_sets() doesn't evaluate it
+        return self._new_trace_key(key)
 
+    def _add_trace3d(self, name, x, y, z, mode, plotter, kind, **kwargs):
+        key = self._begin_trace(name, mode)
         colour = kwargs.get("colour")
         size = kwargs.get("size")
-        for arg in ("colour", "size"):
-            if arg in kwargs:
-                kwargs[arg] = resolve(kwargs[arg])
+        for option in ("colour", "size"):
+            if option in kwargs:
+                kwargs[option] = resolve(kwargs[option])
 
         points = check_points(resolve(x), resolve(y), resolve(z))
         item = plotter(points, mode=PLOT_MODE_OVERLAY, **kwargs)
         trace = ConsoleTrace3D(
             key, x, y, z, item, self, kind=kind, colour=colour, size=size
         )
-        self._traces[key] = trace
-        self.changed.emit()
 
-        return trace
+        return self._store_trace(key, trace)
 
     def _add_surface_trace3d(
         self, name, x, y, z, mode, plotter, kind, wireframe, **kwargs
     ):
-        key = name.strip()
-        if not key:
-            raise ValueError("Trace name can't be empty")
-
-        if parse_mode(mode) == PLOT_MODE_REPLACE:
-            self.clear_traces()
-            self.view.clear_items()
-
+        key = self._begin_trace(name, mode)
         colour = kwargs.get("colour")
         if "colour" in kwargs:
             kwargs["colour"] = resolve(colour)
@@ -883,14 +790,11 @@ class View3DExplorer(QtCore.QObject):
         item = plotter(
             resolve(x), resolve(y), resolve(z), mode=PLOT_MODE_OVERLAY, **kwargs
         )
-
         trace = ConsoleSurfaceTrace3D(
             key, x, y, z, item, self, kind=kind, colour=colour, wireframe=wireframe
         )
-        self._traces[key] = trace
-        self.changed.emit()
 
-        return trace
+        return self._store_trace(key, trace)
 
     def line3d(self, name, x, y=None, z=None, *, mode=PLOT_MODE_REPLACE, **kwargs):
         return self._add_trace3d(
@@ -936,85 +840,11 @@ class View3DExplorer(QtCore.QObject):
         )
 
     def refresh(self):
-        changed = False
-
-        for trace in list(self._traces.values()):
-            try:
-                trace.update()
-                changed = True
-            except (TypeError, ValueError, FloatingPointError) as exc:
-                self._set_status(f"{trace.name}: {exc}", error=True)
-
-        if changed:
+        updated = super().refresh()
+        if updated:
             self.view.auto_adjust_grid()
 
-    def clear(self):
-        self.clear_animations()
-        self.clear_sliders()
-        self.clear_traces()
-
-    def clear_traces(self):
-        for trace in list(self._traces.values()):
-            trace.remove()
-
-        self._traces.clear()
-        self.changed.emit()
-
-    def clear_sliders(self):
-        for param in self._params.values():
-            dispose(param, self.param_layout)
-
-        self._params.clear()
-        self.param_widget.setVisible(self.has_controls())
-        self.changed.emit()
-
-    def clear_animations(self):
-        for animation in self._animations.values():
-            animation.pause()
-            dispose(animation, self.param_layout)
-
-        self._animations.clear()
-        self.changed.emit()
-        self.param_widget.setVisible(self.has_controls())
-
-    def remove_trace(self, name):
-        key = str(name).strip()
-        trace = self._traces.pop(key, None)
-        if trace is None:
-            raise KeyError(f"No trace named {key!r}")
-
-        trace.remove()
-        self.changed.emit()
-
-        return self.traces()
-
-    def remove_slider(self, name):
-        key = str(name).strip()
-        param = self._params.pop(key, None)
-        if param is None:
-            raise KeyError(f"No slider named {key!r}")
-
-        dispose(param, self.param_layout)
-        self.param_widget.setVisible(self.has_controls())
-        self.changed.emit()
-
-        return self.params()
-
-    def remove_animation(self, name):
-        key = str(name).strip()
-        animation = self._animations.pop(key, None)
-        if animation is None:
-            raise KeyError(f"No animation named {key!r}")
-
-        animation.pause()
-        dispose(animation, self.param_layout)
-        self.param_widget.setVisible(self.has_controls())
-        self.changed.emit()
-
-        return self.animations()
-
-    def params(self):
-        return {name: param.value for name, param in self._params.items()}
+        return updated
 
     def traces(self):
         return {
@@ -1024,19 +854,3 @@ class View3DExplorer(QtCore.QObject):
             }
             for name, trace in self._traces.items()
         }
-
-    def slider_names(self):
-        return list(self._params)
-
-    def trace_names(self):
-        return list(self._traces)
-
-    def animation_names(self):
-        return list(self._animations)
-
-    def has_controls(self):
-        return bool(self._params or self._animations)
-
-    def _set_status(self, message, *, error=False):
-        if self.status_callback is not None:
-            self.status_callback(message, error=error)
