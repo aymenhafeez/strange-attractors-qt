@@ -220,6 +220,10 @@ PANEL_INPUTS = """
     QWidget#panelSurface QTextEdit:hover {
         border: 1px solid palette(accent);
     }
+    QWidget#panelSurface QAbstractSpinBox {
+        min-width: 3.5em;
+        max-width: 3.5em;
+    }
 """
 
 SIDE_PANEL = (
@@ -266,7 +270,8 @@ RIGHT_PANEL = """
 
 PANEL_SURFACE = (
     """
-    QWidget#panelSurface {
+    QWidget#panelSurface,
+    QWidget#bifurcationPanel {
         background: palette(base);
         border: 0px;
     }

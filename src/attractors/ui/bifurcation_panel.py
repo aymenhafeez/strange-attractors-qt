@@ -138,7 +138,10 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.setStyleSheet(PANEL_SURFACE)
 
         layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        toolbar = QtWidgets.QHBoxLayout()
 
+        toolbar_layout1 = QtWidgets.QVBoxLayout()
         row1 = QtWidgets.QHBoxLayout()
         row1.addWidget(QtWidgets.QLabel("Sweep param:"))
         self.param_combo = QtWidgets.QComboBox()
@@ -162,7 +165,8 @@ class BifurcationPanel(QtWidgets.QWidget):
             self.sampling_combo.addItem(label, mode)
         row1.addWidget(self.sampling_combo)
 
-        layout.addLayout(row1)
+        row1.addStretch(1)
+        toolbar_layout1.addLayout(row1)
 
         self.period_controls = QtWidgets.QWidget()
         period_layout = QtWidgets.QHBoxLayout(self.period_controls)
@@ -190,7 +194,8 @@ class BifurcationPanel(QtWidgets.QWidget):
                 self.sampling_combo.currentData() == "stroboscopic"
             )
         )
-        layout.addWidget(self.period_controls)
+        period_layout.addStretch()
+        toolbar_layout1.addWidget(self.period_controls)
 
         row2 = QtWidgets.QHBoxLayout()
         row2.addWidget(QtWidgets.QLabel("From:"))
@@ -217,36 +222,44 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.transient_spin.setSingleStep(0.05)
         self.transient_spin.setValue(0.85)
         row2.addWidget(self.transient_spin)
-        layout.addLayout(row2)
+        row2.addStretch()
+        toolbar_layout1.addLayout(row2)
 
+        toolbar_layout2 = QtWidgets.QVBoxLayout()
         row3 = QtWidgets.QHBoxLayout()
-        self.run_btn = QtWidgets.QPushButton("\u25b6 Run")
+        row3_1 = QtWidgets.QVBoxLayout()
+        row3_2 = QtWidgets.QVBoxLayout()
+        self.run_btn = QtWidgets.QPushButton("Run")
         self.run_btn.clicked.connect(self._run_sweep)
-        row3.addWidget(self.run_btn)
+        row3_1.addWidget(self.run_btn)
 
-        self.cancel_btn = QtWidgets.QPushButton("\u25a0 Cancel")
+        self.cancel_btn = QtWidgets.QPushButton("Cancel")
         self.cancel_btn.setEnabled(False)
         self.cancel_btn.clicked.connect(self.cancel_sweep)
-        row3.addWidget(self.cancel_btn)
+        row3_1.addWidget(self.cancel_btn)
 
-        self.export_btn = QtWidgets.QPushButton("Export PNG...")
+        self.export_btn = QtWidgets.QPushButton("Export PNG")
         self.export_btn.clicked.connect(self._export_plot)
-        row3.addWidget(self.export_btn)
+        row3_2.addWidget(self.export_btn)
 
         self.zoom_check = QtWidgets.QCheckBox("ROI")
         self.zoom_check.toggled.connect(self._set_zoom_enabled)
-        row3.addWidget(self.zoom_check)
+        row3_2.addWidget(self.zoom_check)
 
-        layout.addLayout(row3)
+        row3.addLayout(row3_1)
+        row3.addLayout(row3_2)
+        toolbar_layout2.addLayout(row3)
 
         self.progress = QtWidgets.QProgressBar()
         self.progress.setVisible(False)
-        layout.addWidget(self.progress)
+        self.progress_timer = QtCore.QTimer(self)
+        self.progress_timer.setSingleShot(True)
+        self.progress_timer.setInterval(2000)
+        self.progress_timer.timeout.connect(self.progress.hide)
 
         self._error_label = QtWidgets.QLabel("")
         self._error_label.setStyleSheet("color: #ff6b6b; font-size: 11px;")
         self._error_label.setVisible(False)
-        layout.addWidget(self._error_label)
 
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.showGrid(
@@ -269,6 +282,11 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.plot_layout.setSpacing(0)
         self.plot_layout.addWidget(self.plot_widget)
 
+        toolbar.addLayout(toolbar_layout1)
+        toolbar.addLayout(toolbar_layout2)
+        layout.addLayout(toolbar)
+        layout.addWidget(self.progress)
+        layout.addWidget(self._error_label)
         layout.addLayout(self.plot_layout, 1)
 
     def _update_defaults(self):
@@ -396,6 +414,7 @@ class BifurcationPanel(QtWidgets.QWidget):
 
         self.run_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
+        self.progress_timer.stop()
         self.progress.setVisible(True)
         self.progress.setValue(0)
         self._error_label.setVisible(False)
@@ -468,6 +487,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
         self.progress.setValue(100)
+        self.progress_timer.start()
         self._worker = None
 
     def _on_worker_error(self, msg, gen):
