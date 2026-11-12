@@ -529,7 +529,7 @@ class Window(QtWidgets.QMainWindow):
             frame = self.system.vector_field_slice(
                 x_range=x_range, y_range=y_range, density=21
             )
-            x, y = self.system._vector_field_segments(frame, "x", "y", scale=0.75)
+            x, y = self.system.vector_field_lines(frame, "x", "y", scale=0.75)
         except (ValueError, ArithmeticError) as e:
             panel.field_item.clear()
             self.status_bar.set_app_message(str(e), error=True)
@@ -1228,29 +1228,6 @@ class Window(QtWidgets.QMainWindow):
             perf_finish(self, token, status="cancelled")
         self._active_lyapunov_request_id = None
         self.status_bar.clear_app_message()
-
-    def _workspace_summary(self):
-        plots = self.jupyter_console_panel.plots
-        current_plot = plots.current
-        plot_names = plots.names()
-        slider_names = current_plot.explore.slider_names()
-        trace_names = current_plot.explore.trace_names()
-
-        return "\n".join(
-            [
-                f"Plots: {', '.join(plot_names)}",
-                f"Current view: {plots.current_name}",
-                f"Sliders: {', '.join(slider_names)}",
-                f"Traces: {', '.join(trace_names)}",
-            ]
-        )
-
-    def show_workspace_summary(self):
-        QtWidgets.QMessageBox.information(
-            self,
-            "Jupyter Workspace Summary",
-            self._workspace_summary(),
-        )
 
     def _export_current_table(self):
         name = self.jupyter_console_panel.tables.current_name

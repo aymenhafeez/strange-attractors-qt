@@ -1513,7 +1513,7 @@ class SystemInspector:
                 )
             return tuple(items)
 
-        x_data, y_data = self._vector_field_segments(frame, x_name, y_name, scale)
+        x_data, y_data = self.vector_field_lines(frame, x_name, y_name, scale)
         return target.line(
             x_data,
             y_data,
@@ -1633,7 +1633,7 @@ class SystemInspector:
 
         return plot
 
-    def _vector_field_segments(self, frame, x_axis, y_axis, scale):
+    def vector_field_lines(self, frame, x_axis, y_axis, scale):
         x = frame[x_axis].to_numpy(dtype=np.float64)
         y = frame[y_axis].to_numpy(dtype=np.float64)
         u = frame["u"].to_numpy(dtype=np.float64)
@@ -1740,7 +1740,7 @@ class SystemInspector:
                 mask = (speeds >= edges[index]) & (speeds <= edges[index + 1])
             else:
                 mask = (speeds >= edges[index]) & (speeds < edges[index + 1])
-            x_data, y_data = self._vector_field_segments(
+            x_data, y_data = self.vector_field_lines(
                 frame.loc[mask],
                 x_axis,
                 y_axis,

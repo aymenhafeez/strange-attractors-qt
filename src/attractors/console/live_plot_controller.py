@@ -711,7 +711,7 @@ class LivePlotController(QtCore.QObject):
                 "left": y_axis,
             }
 
-        x_data, y_data = self._system._vector_field_segments(
+        x_data, y_data = self._system.vector_field_lines(
             frame,
             x_axis,
             y_axis,
