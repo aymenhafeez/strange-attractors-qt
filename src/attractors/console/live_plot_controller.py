@@ -46,7 +46,8 @@ class LivePlotController(QtCore.QObject):
         self._ids = itertools.count(1)
         self._auto_pen_indices = {}
         self._last_preview_update = None
-        plots.plots_changed.connect(self._on_plots_changed)
+        # plots.plots_changed.connect(self._on_plots_changed)
+        plots.views_changed.connect(self._on_plots_changed)
 
     def trace(self, trace_id):
         try:
