@@ -380,6 +380,7 @@ class JupyterConsolePanel(QtCore.QObject):
         super().__init__(dock_layout)
         self._namespace_factory = namespace_factory
         self._console = None
+        self._variable_defaults = {}
         self._script_dir = script_dir
         self._active_view = "plot"
         self.dock_layout = dock_layout
@@ -441,10 +442,10 @@ class JupyterConsolePanel(QtCore.QObject):
         self.script_dock = dock_layout.add("script", "Script", self.script_panel)
 
         self.script_browser = ScriptBrowser(self.script_panel.scripts_dir)
-        self.script_browser.confirm_delete = self.script_panel._confirm_delete
+        self.script_browser.confirm_delete = self.script_panel.confirm_delete
         self.script_browser.script_selected.connect(self._open_browser_script)
-        self.script_browser.path_renamed.connect(self.script_panel._on_path_renamed)
-        self.script_browser.path_deleted.connect(self.script_panel._on_path_deleted)
+        self.script_browser.path_renamed.connect(self.script_panel.on_path_renamed)
+        self.script_browser.path_deleted.connect(self.script_panel.on_path_deleted)
         self.script_panel.script_changed.connect(self.script_browser.select_path)
         self.script_browser.select_path(self.script_panel.current_script_path())
 
@@ -543,7 +544,7 @@ class JupyterConsolePanel(QtCore.QObject):
         self._console_layout.addWidget(self._console)
 
         shell = self._console.kernel_manager.kernel.shell
-        shell._variable_defaults = dict(shell.user_ns)
+        self._variable_defaults = dict(shell.user_ns)
         shell.events.register("post_run_cell", self._refresh_variables)
         self._refresh_variables()
 
@@ -552,7 +553,7 @@ class JupyterConsolePanel(QtCore.QObject):
             return
 
         shell = self._console.kernel_manager.kernel.shell
-        self.variable_panel.set_namespace(shell.user_ns, shell._variable_defaults)
+        self.variable_panel.set_namespace(shell.user_ns, self._variable_defaults)
 
     def shutdown_kernel(self):
         if self._console is not None:
