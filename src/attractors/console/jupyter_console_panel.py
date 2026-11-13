@@ -59,7 +59,7 @@ class _RichJupyterConsole(inprocess.QtInProcessRichJupyterWidget):
 
 
 class ConsolePlot:
-    def __init__(self, plot_widget, status_callback=None):
+    def __init__(self, plot_widget):
         self._plot_widget = plot_widget
 
         self._manager = None
@@ -117,7 +117,6 @@ class ConsolePlot:
             self.param_widget,
             self.param_controls_layout,
             self.trace_menu,
-            status_callback=status_callback,
             parent=self.host,
         )
 
@@ -330,11 +329,6 @@ class ConsolePlotManager(DockedViewManager):
     def __call__(self, x, y, **kwargs):
         return self.current(x, y, **kwargs)
 
-    def set_status_callback(self, callback):
-        super().set_status_callback(callback)
-        for plot in self._views.values():
-            plot.explore.status_callback = callback
-
     def set_table_manager(self, table_manager):
         self._table_manager = table_manager
         for plot in self._views.values():
@@ -375,22 +369,22 @@ class ConsolePlotManager(DockedViewManager):
 
     def _connect_view(self, plot):
         plot._manager = self
-        plot.explore.status_callback = self._status_callback
+        plot.explore.status_message.connect(self.status_message)
 
 
 class JupyterConsolePanel(QtCore.QObject):
     active_view_changed = QtCore.pyqtSignal()
+    status_message = QtCore.pyqtSignal(str, bool)
 
     def __init__(self, dock_layout, namespace_factory, script_dir=None):
         super().__init__(dock_layout)
         self._namespace_factory = namespace_factory
         self._console = None
         self._script_dir = script_dir
-        self._explore_status_callback = None
         self._active_view = "plot"
         self.dock_layout = dock_layout
 
-        self.view3d = ConsoleView3D(status_callback=self._explore_status_callback)
+        self.view3d = ConsoleView3D()
         self.view3d_dock = dock_layout.add("view3d", "3D View", self.view3d.host)
 
         self.views3d = ConsoleView3DManager(
@@ -398,7 +392,6 @@ class JupyterConsolePanel(QtCore.QObject):
             "3D View",
             self.view3d,
             self.view3d_dock,
-            status_callback=self._explore_status_callback,
             active_callback=self.set_active_view,
         )
 
@@ -407,28 +400,23 @@ class JupyterConsolePanel(QtCore.QObject):
         )
 
         self.plot_widget = _build_console_plot_widget()
-        self.plot = ConsolePlot(
-            self.plot_widget, status_callback=self._explore_status_callback
-        )
+        self.plot = ConsolePlot(self.plot_widget)
         self.plot_dock = dock_layout.add("plot", "Plot", self.plot.host)
         self.plots = ConsolePlotManager(
             self.dock_layout,
             "Plot",
             self.plot,
             self.plot_dock,
-            status_callback=self._explore_status_callback,
             active_callback=self.set_active_view,
         )
 
         self.table = ConsoleTable()
         self.table_dock = dock_layout.add("table", "Table", self.table.host)
         self.tables = ConsoleTableManager(
-            self.dock_layout,
-            "Table",
-            self.table,
-            self.table_dock,
-            status_callback=self._explore_status_callback,
+            self.dock_layout, "Table", self.table, self.table_dock
         )
+        for manager in (self.views3d, self.plots, self.tables):
+            manager.status_message.connect(self.status_message)
 
         self.plots.set_table_manager(self.tables)
 
@@ -583,12 +571,6 @@ class JupyterConsolePanel(QtCore.QObject):
     def set_explore_visible(self, visible):
         for view in (*self.plots.views(), *self.views3d.views()):
             view.param_widget.setVisible(visible and view.explore.has_controls())
-
-    def set_explore_status_callback(self, callback):
-        self._explore_status_callback = callback
-        self.plots.set_status_callback(callback)
-        self.views3d.set_status_callback(callback)
-        self.tables.set_status_callback(callback)
 
     def apply_theme(self):
         self.plots.apply_theme()

@@ -235,8 +235,8 @@ class Window(QtWidgets.QMainWindow):
             lambda message: self.status_bar.set_temporary_app_message(message)
         )
 
-        self.jupyter_console_panel.set_explore_status_callback(
-            lambda message, error=False: self.status_bar.set_temporary_app_message(
+        self.jupyter_console_panel.status_message.connect(
+            lambda message, error: self.status_bar.set_temporary_app_message(
                 message, error=error
             )
         )

@@ -177,12 +177,12 @@ def control_key(name, kind):
 
 class ExplorerControls(QtCore.QObject):
     changed = QtCore.pyqtSignal()
+    status_message = QtCore.pyqtSignal(str, bool)
 
-    def __init__(self, param_widget, param_layout, status_callback=None, parent=None):
+    def __init__(self, param_widget, param_layout, parent=None):
         super().__init__(parent)
         self.param_widget = param_widget
         self.param_layout = param_layout
-        self.status_callback = status_callback
         self._params = {}
         self._animations = {}
         self._traces = {}
@@ -230,9 +230,9 @@ class ExplorerControls(QtCore.QObject):
             dt=dt,
             frames=frames,
             loop=loop,
-            status_callback=self.status_callback,
             parent=self,
         )
+        animation.status_message.connect(self.status_message)
         widget = ConsoleAnimationWidget(animation)
         animation.widget = widget
 
@@ -369,8 +369,7 @@ class ExplorerControls(QtCore.QObject):
         """Hook for explorers that list their traces in a menu"""
 
     def _set_status(self, message, *, error=False):
-        if self.status_callback is not None:
-            self.status_callback(message, error=error)
+        self.status_message.emit(message, error)
 
 
 class ConsoleTrace:
@@ -398,16 +397,8 @@ class ConsoleTrace:
 
 
 class PlotExplorer(ExplorerControls):
-    def __init__(
-        self,
-        plot,
-        param_widget,
-        param_layout,
-        trace_menu,
-        status_callback=None,
-        parent=None,
-    ):
-        super().__init__(param_widget, param_layout, status_callback, parent)
+    def __init__(self, plot, param_widget, param_layout, trace_menu, parent=None):
+        super().__init__(param_widget, param_layout, parent)
         self.plot = plot
         self.trace_menu = trace_menu
         self._sync_trace_menu()

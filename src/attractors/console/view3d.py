@@ -251,10 +251,9 @@ class ConsoleSurfaceTrace3D:
 
 
 class ConsoleView3D:
-    def __init__(self, status_callback=None):
+    def __init__(self):
         self._manager = None
         self._items = []
-        self._status_callback = status_callback
 
         self._point_sets = []
 
@@ -295,7 +294,6 @@ class ConsoleView3D:
             self,
             self.param_widget,
             self.param_controls_layout,
-            status_callback=status_callback,
             parent=self.host,
         )
 
@@ -505,11 +503,6 @@ class ConsoleView3DManager(DockedViewManager):
     dock_prefix = "view3d"
     active_kind = "view3d"
 
-    def set_status_callback(self, callback):
-        super().set_status_callback(callback)
-        for view in self._views.values():
-            view.explore.status_callback = callback
-
     # convenience so views3d.line3d/scatter3d works
     def line3d(self, *args, **kwargs):
         return self.current.line3d(*args, **kwargs)
@@ -550,14 +543,12 @@ class ConsoleView3DManager(DockedViewManager):
 
     def _connect_view(self, view):
         view._manager = self
-        view.explore.status_callback = self._status_callback
+        view.explore.status_message.connect(self.status_message)
 
 
 class View3DExplorer(ExplorerControls):
-    def __init__(
-        self, view, param_widget, param_layout, status_callback=None, parent=None
-    ):
-        super().__init__(param_widget, param_layout, status_callback, parent)
+    def __init__(self, view, param_widget, param_layout, parent=None):
+        super().__init__(param_widget, param_layout, parent)
         self.view = view
 
     def _begin_trace(self, name, mode):

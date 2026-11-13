@@ -1,13 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Aymen Hafeez
 # SPDX-License-Identifier: GPL-3.0-only
 
-"""Subclass for managing console plots, views and tables"""
+"""Base class for managing console plots, views and tables"""
 
 from pyqtgraph.Qt import QtCore
 
 
 class DockedViewManager(QtCore.QObject):
     views_changed = QtCore.pyqtSignal()
+    status_message = QtCore.pyqtSignal(str, bool)
     current_changed = QtCore.pyqtSignal(str)
     view_removed = QtCore.pyqtSignal(str, object)
     view_cleared = QtCore.pyqtSignal(str, object)
@@ -23,7 +24,6 @@ class DockedViewManager(QtCore.QObject):
         default_name,
         default_view,
         default_dock,
-        status_callback=None,
         active_callback=None,
     ):
         super().__init__(dock_layout)
@@ -32,7 +32,6 @@ class DockedViewManager(QtCore.QObject):
         self._docks = {default_name: default_dock}
         self._default_name = default_name
         self._current_name = default_name
-        self._status_callback = status_callback
         self._active_callback = active_callback
         self._connect_view(default_view)
 
@@ -161,9 +160,6 @@ class DockedViewManager(QtCore.QObject):
         for name, view in self._views.items():
             view.clear()
             self.view_cleared.emit(name, view)
-
-    def set_status_callback(self, callback):
-        self._status_callback = callback
 
     def _make_view(self):
         raise NotImplementedError

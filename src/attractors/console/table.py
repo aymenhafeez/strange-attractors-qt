@@ -234,9 +234,7 @@ class ConsoleTableManager(DockedViewManager):
             self._docks[self._current_name].reveal()
 
         table.set_data(data)
-
-        if self._status_callback is not None:
-            self._status_callback(f"Updated table {self._current_name}")
+        self.status_message.emit(f"Updated table {self._current_name}", False)
 
         return table
 
@@ -246,8 +244,7 @@ class ConsoleTableManager(DockedViewManager):
         table = self.current if name is None else self.get(table_name, activate=False)
         target = table.to_csv(path, index=index, **kwargs)
 
-        if self._status_callback is not None:
-            self._status_callback(f"Exported table {table_name} to {target}")
+        self.status_message.emit(f"Exported table {table_name} to {target}", False)
 
         return target
 
