@@ -35,7 +35,8 @@ class BifurcationZoom(QtWidgets.QWidget):
             [],
             pen=None,
             symbol="o",
-            symbolSize=0.25,
+            symbolSize=0.1,
+            symbolPen=plot_colours()["scatter_brush"],
             symbolBrush=plot_colours()["scatter_brush"],
         )
 
@@ -117,6 +118,7 @@ class BifurcationZoom(QtWidgets.QWidget):
         self.zoom_widget.setBackground(colours["plot_background"])
         self.zoom_widget.showGrid(x=True, y=True, alpha=colours["plot_grid_alpha"])
         self.zoom_data.setSymbolBrush(colours["scatter_brush"])
+        self.zoom_data.setSymbolPen(colours["scatter_brush"])
 
 
 class BifurcationPanel(QtWidgets.QWidget):
@@ -222,6 +224,15 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.transient_spin.setSingleStep(0.05)
         self.transient_spin.setValue(0.85)
         row2.addWidget(self.transient_spin)
+
+        self.size_spin = QtWidgets.QDoubleSpinBox()
+        self.size_spin.setRange(0, 10)
+        self.size_spin.setSingleStep(0.05)
+        self.size_spin.setValue(0.15)
+        self.size_spin.setKeyboardTracking(False)
+        row2.addWidget(QtWidgets.QLabel("Size:"))
+        row2.addWidget(self.size_spin)
+
         row2.addStretch()
         toolbar_layout1.addLayout(row2)
 
@@ -273,9 +284,11 @@ class BifurcationPanel(QtWidgets.QWidget):
             [],
             pen=None,
             symbol="o",
-            symbolSize=0.25,
+            symbolSize=self.size_spin.value(),
+            symbolPen=plot_colours()["scatter_brush"],
             symbolBrush=plot_colours()["scatter_brush"],
         )
+        self.size_spin.valueChanged.connect(self.plot_data.setSymbolSize)
 
         self.plot_layout = QtWidgets.QVBoxLayout()
         self.plot_layout.setContentsMargins(0, 0, 0, 0)
@@ -516,6 +529,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.plot_widget.setBackground(colours["plot_background"])
         self.plot_widget.showGrid(x=True, y=True, alpha=colours["plot_grid_alpha"])
         self.plot_data.setSymbolBrush(colours["scatter_brush"])
+        self.plot_data.setSymbolPen(colours["scatter_brush"])
 
         if self._zoom is not None:
             self._zoom.apply_theme()
