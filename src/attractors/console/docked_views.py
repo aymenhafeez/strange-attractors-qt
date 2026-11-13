@@ -54,6 +54,9 @@ class DockedViewManager(QtCore.QObject):
     def names(self):
         return list(self._views)
 
+    def views(self):
+        return list(self._views.values())
+
     def docks(self):
         return list(self._docks.values())
 
