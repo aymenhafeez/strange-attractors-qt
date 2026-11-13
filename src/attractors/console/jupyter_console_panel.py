@@ -581,11 +581,8 @@ class JupyterConsolePanel(QtCore.QObject):
         self._console.execute(code)
 
     def set_explore_visible(self, visible):
-        for plot in self.plots._plots.values():
-            plot.param_widget.setVisible(bool(visible) and plot.explore.has_controls())
-
-        for view in self.views3d._views.values():
-            view.param_widget.setVisible(bool(visible) and view.explore.has_controls())
+        for view in (*self.plots.views(), *self.views3d.views()):
+            view.param_widget.setVisible(visible and view.explore.has_controls())
 
     def set_explore_status_callback(self, callback):
         self._explore_status_callback = callback
@@ -695,7 +692,9 @@ class ConsolePlotZoom(QtWidgets.QWidget):
         self.updating = False
 
         self.zoom_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-        self.zoom_widget.showGrid(x=True, y=True, alpha=0.25)
+        self.zoom_widget.showGrid(
+            x=True, y=True, alpha=plot_colours()["plot_grid_alpha"]
+        )
         self.zoom_widget.setLabel("bottom", "x")
         self.zoom_widget.setLabel("left", "y")
 
@@ -711,6 +710,25 @@ class ConsolePlotZoom(QtWidgets.QWidget):
         self.region.sigRegionChanged.connect(self.region_changed)
         self.zoom_widget.sigXRangeChanged.connect(self.zoom_range_changed)
 
+    def _update_bounds(self, x):
+        if x is None or not len(x):
+            return
+
+        x_min = float(x[0])
+        x_max = float(x[-1])
+        if x_max <= x_min or self.x_bounds == (x_min, x_max):
+            return
+
+        first = self.x_bounds is None
+        self.x_bounds = (x_min, x_max)
+        region_min, region_max = self.region.getRegion()
+
+        self.region.setBounds((x_min, x_max))
+        if first or region_max <= x_min or region_min >= x_max:
+            self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
+        else:
+            self.region.setRegion((max(region_min, x_min), min(region_max, x_max)))
+
     def add_item(self, item):
         x, y = item.getData()
         clone_options = {
@@ -723,15 +741,7 @@ class ConsolePlotZoom(QtWidgets.QWidget):
         clone = self.zoom_widget.plot(x, y, **clone_options)
         self.items[item] = clone
 
-        if x is not None and len(x):
-            x_min = float(x[0])
-            x_max = float(x[-1])
-
-            if x_max > x_min:
-                self.x_bounds = (x_min, x_max)
-                self.region.setBounds((x_min, x_max))
-                self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
-
+        self._update_bounds(x)
         item.sigPlotChanged.connect(lambda: self.item_changed(item))
 
     def clear(self):
@@ -756,39 +766,27 @@ class ConsolePlotZoom(QtWidgets.QWidget):
 
         x, y = item.getData()
         clone.setData(x, y)
-        if x is not None and len(x):
-            x_min = float(x[0])
-            x_max = float(x[-1])
-
-            if x_max > x_min and self.x_bounds != (x_min, x_max):
-                self.x_bounds = (x_min, x_max)
-                region_min, region_max = self.region.getRegion()
-                self.region.setBounds((x_min, x_max))
-                # check if the old region is outside the new range and reset it to the first 10% of the new range
-                if region_max <= x_min or region_min >= x_max:
-                    self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
-                else:
-                    # keep the old region if it overlaps with the new range
-                    self.region.setRegion(
-                        (max(region_min, x_min), min(region_max, x_max))
-                    )
+        self._update_bounds(x)
 
     def region_changed(self):
         if self.updating:
             return
 
         self.updating = True
-        x_min, x_max = self.region.getRegion()
-        self.zoom_widget.setXRange(x_min, x_max, padding=0)
-        self.updating = False
+        try:
+            self.zoom_widget.setXRange(*self.region.getRegion(), padding=0)
+        finally:
+            self.updating = False
 
     def zoom_range_changed(self, *_args):
         if self.updating:
             return
 
         self.updating = True
-        self.region.setRegion(self.zoom_widget.getViewBox().viewRange()[0])
-        self.updating = False
+        try:
+            self.region.setRegion(self.zoom_widget.getViewBox().viewRange()[0])
+        finally:
+            self.updating = False
 
     def apply_theme(self):
         colours = plot_colours()
