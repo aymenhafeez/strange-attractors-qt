@@ -201,26 +201,22 @@ def _normalise_initial_conditions(initial_conditions, dimension=3):
     return array.tolist()
 
 
-def _console_n(value):
+def _int_in_range(value, label, lo=1, hi=None):
+    if hi is not None:
+        message = f"{label} must be between {lo} and {hi}"
+    elif lo == 1:
+        message = f"{label} must be a positive integer"
+    else:
+        message = f"{label} must be at least {lo}"
+
     try:
-        n = int(value)
+        number = int(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError("N must be a positive integer") from exc
-    if n < 1000 or n > 500000:
-        raise ValueError("N must be between 1000 and 500000")
+        raise ValueError(message) from exc
+    if number < lo or (hi is not None and number > hi):
+        raise ValueError(message)
 
-    return n
-
-
-def _console_t_max(value):
-    try:
-        t_max = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("t_max must be a positive integer") from exc
-    if t_max < 1 or t_max > 750:
-        raise ValueError("t_max must be between 1 and 750")
-
-    return t_max
+    return number
 
 
 def _parameter_updates(config, values):
@@ -525,8 +521,10 @@ class SystemInspector:
     def set_time(self, *, n=None, t_max=None, solve=False):
         commands = self._main_commands()
         settings = self._settings()
-        next_n = settings.n if n is None else _console_n(n)
-        next_t_max = settings.t_max if t_max is None else _console_t_max(t_max)
+        next_n = settings.n if n is None else _int_in_range(n, "N", 1000, 500000)
+        next_t_max = (
+            settings.t_max if t_max is None else _int_in_range(t_max, "t_max", 1, 750)
+        )
         commands.set_time(next_n, next_t_max)
         if solve:
             commands.solve()
@@ -610,7 +608,7 @@ class SystemInspector:
             raise ValueError("No attractor selected")
 
         variant_values = self._variant_values(values)
-        solve_n = self._positive_int(self.n if n is None else n, "n")
+        solve_n = _int_in_range(self.n if n is None else n, "n")
         solve_t_max = self.t_max if t_max is None else float(t_max)
         if solve_t_max <= self.t_min:
             raise ValueError("t_max must be greater than t_min")
@@ -726,12 +724,7 @@ class SystemInspector:
         return pd.concat(rows, ignore_index=True)
 
     def sample(self, n, trajectory=None):
-        try:
-            sample_size = int(n)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Sample size must be a positive integer") from exc
-        if sample_size <= 0:
-            raise ValueError("Sample size must be a positive integer")
+        sample_size = _int_in_range(n, "Sample size")
 
         rows = []
         solutions = self.solutions
@@ -1383,9 +1376,8 @@ class SystemInspector:
             raise ValueError("No attractor selected")
 
         x_name, y_name, fixed_name = self._slice_axes(x_axis, y_axis, fixed_axis)
-        density = self._positive_int(density, "Density")
-        if density < 2:
-            raise ValueError("Density must be at least 2")
+        density = _int_in_range(density, "Density", 2)
+
         x_range = self._vector_field_axis_range(x_name, x_range)
         y_range = self._vector_field_axis_range(y_name, y_range)
 
@@ -1593,16 +1585,6 @@ class SystemInspector:
 
         return float(low) - padding, float(high) + padding
 
-    def _positive_int(self, value, label):
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"{label} must be a positive integer") from exc
-        if parsed <= 0:
-            raise ValueError(f"{label} must be a positive integer")
-
-        return parsed
-
     def _plot_timeseries(
         self,
         times,
@@ -1712,12 +1694,10 @@ class SystemInspector:
         scale,
         speed_bands,
     ):
-        band_count = self._positive_int(speed_bands, "Speed band count")
-        if band_count < 2:
-            raise ValueError("Speed band count must be at least 2")
-
+        band_count = _int_in_range(speed_bands, "Speed band count", 2)
         speeds = frame["speed"].to_numpy(dtype=np.float64)
         finite_speeds = speeds[np.isfinite(speeds)]
+
         if len(finite_speeds) == 0:
             empty = (np.array([], dtype=np.float64), np.array([], dtype=np.float64))
             return [
@@ -1854,7 +1834,7 @@ class SystemInspector:
         if config is None:
             return rows
 
-        solve_n = self._positive_int(self.n if n is None else n, "n")
+        solve_n = _int_in_range(self.n if n is None else n, "n")
         solve_t_max = self.t_max if t_max is None else float(t_max)
         if solve_t_max <= self.t_min:
             raise ValueError("t_max must be greater than t_min")
