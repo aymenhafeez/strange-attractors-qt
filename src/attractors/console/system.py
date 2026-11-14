@@ -219,7 +219,7 @@ def _int_in_range(value, label, lo=1, hi=None):
     return number
 
 
-def _parameter_updates(config, values):
+def _parameter_updates(config, values, *, check_bounds=True):
     params = {param.name: param for param in config.params}
     updates = {}
     for name, value in values.items():
@@ -232,7 +232,7 @@ def _parameter_updates(config, values):
             raise ValueError(f"Parameter {key} must be numeric") from exc
 
         param = params[key]
-        if numeric < param.min_val or numeric > param.max_val:
+        if check_bounds and not param.min_val <= numeric <= param.max_val:
             raise ValueError(
                 f"Parameter {key} must be between {param.min_val} and {param.max_val}"
             )
@@ -607,7 +607,10 @@ class SystemInspector:
         if config is None:
             raise ValueError("No attractor selected")
 
-        variant_values = self._variant_values(values)
+        variant_values = {
+            **self.values,
+            **_parameter_updates(config, values or {}, check_bounds=False),
+        }
         solve_n = _int_in_range(self.n if n is None else n, "n")
         solve_t_max = self.t_max if t_max is None else float(t_max)
         if solve_t_max <= self.t_min:
@@ -1800,27 +1803,6 @@ class SystemInspector:
         self.solution(trajectory)
 
         return [trajectory]
-
-    def _variant_values(self, values):
-        variant_values = dict(self.values)
-        if values is None:
-            return variant_values
-        if not isinstance(values, dict):
-            raise TypeError("Parameter overrides must be a dictionary")
-
-        valid_names = {param.name for param in self.config.params}
-        unknown = sorted(set(values) - valid_names)
-        if unknown:
-            names = ", ".join(unknown)
-            raise ValueError(f"Unknown parameter override(s): {names}")
-
-        for name, value in values.items():
-            try:
-                variant_values[name] = float(value)
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f"Parameter {name} must be numeric") from exc
-
-        return variant_values
 
     def _crossing_trajectories(self, trajectory, *, t_max=None, n=None):
         rows = []
