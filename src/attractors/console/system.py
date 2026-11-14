@@ -169,6 +169,28 @@ EXAMPLE_ROWS = [
     ("Export manageable data", "df = system.sample(2000)"),
 ]
 
+SEPARATION_WINDOW = ("t_min", "t_max", "step_min", "step_max")
+
+SEPARATION_SUMMARY_KEYS = (
+    "trajectory_a",
+    "trajectory_b",
+    "points",
+    "finite_points",
+    "initial_distance",
+    "final_distance",
+    "min_distance",
+    "median_distance",
+    "max_distance",
+    "growth_ratio",
+    "log_slope",
+    "log_intercept",
+    "log_r2",
+    "t_min",
+    "t_max",
+    "step_min",
+    "step_max",
+)
+
 
 def _inspectable_config(config):
     if config is None:
@@ -793,18 +815,9 @@ class SystemInspector:
         step_min=None,
         step_max=None,
     ):
-        frame = self._separation_fit_frame(
-            a,
-            b,
-            t_min=t_min,
-            t_max=t_max,
-            step_min=step_min,
-            step_max=step_max,
+        frame, fit = self._separation_fit_result(
+            a, b, t_min=t_min, t_max=t_max, step_min=step_min, step_max=step_max
         )
-        if len(frame) < 2:
-            raise ValueError("At least two finite log-separation points are required")
-
-        fit = self._fit_log_separation(frame)
 
         return pd.Series(
             {
@@ -831,36 +844,18 @@ class SystemInspector:
         step_min=None,
         step_max=None,
     ):
-        frame = self._separation_frame(
-            a,
-            b,
-            t_min=t_min,
-            t_max=t_max,
-            step_min=step_min,
-            step_max=step_max,
-        )
+        window = {
+            "t_min": t_min,
+            "t_max": t_max,
+            "step_min": step_min,
+            "step_max": step_max,
+        }
+        frame = self._separation_frame(a, b, **window)
 
         if frame.empty:
             return pd.Series(
-                {
-                    "trajectory_a": a,
-                    "trajectory_b": b,
-                    "points": 0,
-                    "finite_points": 0,
-                    "initial_distance": np.nan,
-                    "final_distance": np.nan,
-                    "min_distance": np.nan,
-                    "median_distance": np.nan,
-                    "max_distance": np.nan,
-                    "growth_ratio": np.nan,
-                    "log_slope": np.nan,
-                    "log_intercept": np.nan,
-                    "log_r2": np.nan,
-                    "t_min": np.nan,
-                    "t_max": np.nan,
-                    "step_min": np.nan,
-                    "step_max": np.nan,
-                }
+                {"trajectory_a": a, "trajectory_b": b, "points": 0, "finite_points": 0},
+                index=SEPARATION_SUMMARY_KEYS,
             )
 
         distance = frame["distance"].to_numpy(dtype=np.float64)
@@ -884,14 +879,7 @@ class SystemInspector:
         else:
             growth_ratio = np.nan
 
-        fit = self._separation_summary_fit(
-            a,
-            b,
-            t_min=t_min,
-            t_max=t_max,
-            step_min=step_min,
-            step_max=step_max,
-        )
+        fit = self._separation_summary_fit(a, b, **window)
 
         return pd.Series(
             {
@@ -912,7 +900,8 @@ class SystemInspector:
                 "t_max": frame["t"].iloc[-1],
                 "step_min": int(frame["step"].iloc[0]),
                 "step_max": int(frame["step"].iloc[-1]),
-            }
+            },
+            index=SEPARATION_SUMMARY_KEYS,
         )
 
     def crossings(
@@ -1142,6 +1131,12 @@ class SystemInspector:
         label=None,
     ):
         plot_mode = parse_mode(mode)
+        window = {
+            "t_min": t_min,
+            "t_max": t_max,
+            "step_min": step_min,
+            "step_max": step_max,
+        }
         if live:
             return self._register_live_plot(
                 "separation_fit",
@@ -1149,24 +1144,15 @@ class SystemInspector:
                 mode=plot_mode,
                 a=int(a),
                 b=int(b),
-                t_min=t_min,
-                t_max=t_max,
-                step_min=step_min,
-                step_max=step_max,
+                **window,
                 pen=pen,
                 fit_pen=fit_pen,
                 label=label,
             )
 
-        fit = self.separation_fit(
-            a,
-            b,
-            t_min=t_min,
-            t_max=t_max,
-            step_min=step_min,
-            step_max=step_max,
-        )
+        frame, fit = self._separation_fit_result(a, b, **window)
         target = self._plot_target(plot)
+
         self.plot_separation(
             a,
             b,
@@ -1176,14 +1162,7 @@ class SystemInspector:
             pen=pen,
             label=label,
         )
-        frame = self._separation_fit_frame(
-            a,
-            b,
-            t_min=t_min,
-            t_max=t_max,
-            step_min=step_min,
-            step_max=step_max,
-        )
+
         fitted = fit["slope"] * frame["t"].to_numpy() + fit["intercept"]
         return target.line(
             frame["t"].to_numpy(),
@@ -1649,6 +1628,13 @@ class SystemInspector:
         finite = np.isfinite(frame["log_distance"].to_numpy())
 
         return frame.loc[finite].reset_index(drop=True)
+
+    def _separation_fit_result(self, a, b, **window):
+        frame = self._separation_fit_frame(a, b, **window)
+        if len(frame) < 2:
+            raise ValueError("At least two finite log-separation points are required")
+
+        return frame, self._fit_log_separation(frame)
 
     def _separation_summary_fit(self, a, b, **filters):
         frame = self._separation_fit_frame(a, b, **filters)
