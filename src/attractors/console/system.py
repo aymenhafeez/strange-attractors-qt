@@ -201,6 +201,27 @@ def _normalise_initial_conditions(initial_conditions, dimension=3):
     return array.tolist()
 
 
+def _radius(solution, _times):
+    return np.linalg.norm(solution, axis=1)
+
+
+def _displacement(solution, _times):
+    if len(solution) == 0:
+        return np.array([], dtype=np.float64)
+
+    return np.linalg.norm(solution - solution[0], axis=1)
+
+
+def _speed(solution, times):
+    if len(solution) < 2:
+        return np.zeros(len(solution), dtype=np.float64)
+
+    return np.linalg.norm(np.gradient(solution, times, axis=0), axis=1)
+
+
+DERIVED = {"radius": _radius, "speed": _speed, "displacement": _displacement}
+
+
 def _int_in_range(value, label, lo=1, hi=None):
     if hi is not None:
         message = f"{label} must be between {lo} and {hi}"
@@ -748,44 +769,13 @@ class SystemInspector:
         return pd.concat(rows, ignore_index=True)
 
     def radius(self, trajectory=None):
-        rows = []
-        for i in self._selected_trajectories(trajectory):
-            solution = self.solution(i)
-            radius = np.linalg.norm(solution, axis=1)
-            rows.append(self._series_frame(i, {"radius": radius}))
-
-        return self._concat_frames(rows, ["trajectory", "step", "t", "radius"])
+        return self._derived_frame("radius", trajectory)
 
     def displacement(self, trajectory=None):
-        rows = []
-        for i in self._selected_trajectories(trajectory):
-            solution = self.solution(i)
-            if len(solution) == 0:
-                displacement = np.array([], dtype=np.float64)
-            else:
-                displacement = np.linalg.norm(solution - solution[0], axis=1)
-
-            rows.append(self._series_frame(i, {"displacement": displacement}))
-
-        return self._concat_frames(
-            rows,
-            ["trajectory", "step", "t", "displacement"],
-        )
+        return self._derived_frame("displacement", trajectory)
 
     def speed(self, trajectory=None):
-        rows = []
-        for i in self._selected_trajectories(trajectory):
-            solution = self.solution(i)
-            times = self.time(i)
-            if len(solution) < 2:
-                speed = np.zeros(len(solution), dtype=np.float64)
-            else:
-                velocity = np.gradient(solution, times, axis=0)
-                speed = np.linalg.norm(velocity, axis=1)
-
-            rows.append(self._series_frame(i, {"speed": speed}))
-
-        return self._concat_frames(rows, ["trajectory", "step", "t", "speed"])
+        return self._derived_frame("speed", trajectory)
 
     def separation(self, a=0, b=1, *, log=False):
         times, distance = separation(
@@ -1099,113 +1089,14 @@ class SystemInspector:
             zoom_region=zoom_region,
         )
 
-    def plot_radius(
-        self,
-        *,
-        trajectory=0,
-        live=False,
-        plot=None,
-        mode=PLOT_MODE_REPLACE,
-        pen=None,
-        label=None,
-        zoom_region=False,
-    ):
-        plot_mode = parse_mode(mode)
-        if live:
-            return self._register_live_plot(
-                "radius",
-                plot=plot,
-                mode=plot_mode,
-                trajectory=int(trajectory),
-                pen=pen,
-                label=label,
-                zoom_region=zoom_region,
-            )
+    def plot_radius(self, **kwargs):
+        return self._plot_derived("radius", **kwargs)
 
-        frame = self.radius(trajectory=trajectory)
+    def plot_speed(self, **kwargs):
+        return self._plot_derived("speed", **kwargs)
 
-        return self._plot_timeseries(
-            frame["t"].to_numpy(),
-            frame["radius"].to_numpy(),
-            "radius",
-            plot=plot,
-            mode=plot_mode,
-            pen=pen,
-            label=label,
-            zoom_region=zoom_region,
-        )
-
-    def plot_speed(
-        self,
-        *,
-        trajectory=0,
-        live=False,
-        plot=None,
-        mode=PLOT_MODE_REPLACE,
-        pen=None,
-        label=None,
-        zoom_region=False,
-    ):
-        plot_mode = parse_mode(mode)
-        if live:
-            return self._register_live_plot(
-                "speed",
-                plot=plot,
-                mode=plot_mode,
-                trajectory=int(trajectory),
-                pen=pen,
-                label=label,
-                zoom_region=zoom_region,
-            )
-
-        frame = self.speed(trajectory=trajectory)
-
-        return self._plot_timeseries(
-            frame["t"].to_numpy(),
-            frame["speed"].to_numpy(),
-            "speed",
-            plot=plot,
-            mode=plot_mode,
-            pen=pen,
-            label=label,
-            zoom_region=zoom_region,
-        )
-
-    def plot_displacement(
-        self,
-        *,
-        trajectory=0,
-        live=False,
-        plot=None,
-        mode=PLOT_MODE_REPLACE,
-        pen=None,
-        label=None,
-        zoom_region=False,
-    ):
-        plot_mode = parse_mode(mode)
-        if live:
-            return self._register_live_plot(
-                "displacement",
-                plot=plot,
-                mode=plot_mode,
-                trajectory=int(trajectory),
-                pen=pen,
-                label=label,
-                zoom_region=zoom_region,
-            )
-
-        frame = self.displacement(trajectory=trajectory)
-
-        return self._plot_timeseries(
-            frame["t"].to_numpy(),
-            frame["displacement"].to_numpy(),
-            "displacement",
-            plot=plot,
-            mode=plot_mode,
-            pen=pen,
-            label=label,
-            zoom_region=zoom_region,
-        )
+    def plot_displacement(self, **kwargs):
+        return self._plot_derived("displacement", **kwargs)
 
     def plot_separation(
         self,
@@ -1742,12 +1633,9 @@ class SystemInspector:
         )
         return VECTOR_FIELD_SPEED_PENS[palette_index]
 
-    def _register_live_plot(self, kind, *, plot=None, **options):
+    def _register_live_plot(self, kind, **options):
         live = self._main_live()
-        mode = parse_mode(options.pop("mode", PLOT_MODE_REPLACE))
-        trace_id = live.register(kind, plot=plot, mode=mode, **options)
-
-        return LivePlotHandle(live, trace_id)
+        return LivePlotHandle(live, live.register(kind, **options))
 
     def _separation_frame(
         self,
@@ -1863,6 +1751,51 @@ class SystemInspector:
         frame.insert(0, "trajectory", trajectory)
 
         return frame
+
+    def _derived_frame(self, kind, trajectory):
+        rows = [
+            self._series_frame(i, {kind: DERIVED[kind](self.solution(i), self.time(i))})
+            for i in self._selected_trajectories(trajectory)
+        ]
+
+        return self._concat_frames(rows, ["trajectory", "step", "t", kind])
+
+    def _plot_derived(
+        self,
+        kind,
+        *,
+        trajectory=0,
+        live=False,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        label=None,
+        zoom_region=False,
+    ):
+        plot_mode = parse_mode(mode)
+        if live:
+            return self._register_live_plot(
+                kind,
+                plot=plot,
+                mode=plot_mode,
+                trajectory=int(trajectory),
+                pen=pen,
+                label=label,
+                zoom_region=zoom_region,
+            )
+
+        frame = self._derived_frame(kind, trajectory)
+
+        return self._plot_timeseries(
+            frame["t"].to_numpy(),
+            frame[kind].to_numpy(),
+            kind,
+            plot=plot,
+            mode=plot_mode,
+            pen=pen,
+            label=label,
+            zoom_region=zoom_region,
+        )
 
     def _concat_frames(self, rows, columns):
         if not rows:
