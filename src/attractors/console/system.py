@@ -730,43 +730,28 @@ class SystemInspector:
         )
 
     def to_dataframe(self, trajectory=None):
-        rows = []
-        solutions = self.solutions
-        selected = range(len(solutions)) if trajectory is None else [trajectory]
+        rows = [
+            self._series_frame(
+                i, dict(zip(self.variables, self.solution(i).T, strict=True))
+            )
+            for i in self._selected_trajectories(trajectory)
+        ]
 
-        for i in selected:
-            solution = self.solution(i)
-            frame = pd.DataFrame(solution, columns=self.variables)
-            frame.insert(0, "t", self.time(i))
-            frame.insert(0, "step", np.arange(len(solution)))
-            frame.insert(0, "trajectory", i)
-            rows.append(frame)
-
-        if not rows:
-            return pd.DataFrame(columns=["trajectory", "step", "t", *self.variables])
-
-        return pd.concat(rows, ignore_index=True)
+        return self._concat_frames(rows, ["trajectory", "step", "t", *self.variables])
 
     def sample(self, n, trajectory=None):
         sample_size = _int_in_range(n, "Sample size")
-
         rows = []
-        solutions = self.solutions
-        selected = range(len(solutions)) if trajectory is None else [trajectory]
-        for i in selected:
+        for i in self._selected_trajectories(trajectory):
             solution = self.solution(i)
-            indices = self._sample_indices(len(solution), sample_size)
-            frame = pd.DataFrame(solution[indices].copy(), columns=self.variables)
-            times = self.time(i)
-            frame.insert(0, "t", times[indices])
-            frame.insert(0, "step", indices)
-            frame.insert(0, "trajectory", i)
-            rows.append(frame)
+            steps = self._sample_indices(len(solution), sample_size)
+            rows.append(
+                self._series_frame(
+                    i, dict(zip(self.variables, solution[steps].T, strict=True)), steps
+                )
+            )
 
-        if not rows:
-            return pd.DataFrame(columns=["trajectory", "step", "t", *self.variables])
-
-        return pd.concat(rows, ignore_index=True)
+        return self._concat_frames(rows, ["trajectory", "step", "t", *self.variables])
 
     def radius(self, trajectory=None):
         return self._derived_frame("radius", trajectory)
@@ -1742,12 +1727,13 @@ class SystemInspector:
             raise IndexError(f"No trajectory at index {trajectory}")
         return index
 
-    def _series_frame(self, trajectory, columns):
-        first = next(iter(columns.values()))
-        length = len(first)
+    def _series_frame(self, trajectory, columns, steps=None):
+        if steps is None:
+            steps = np.arange(len(next(iter(columns.values()))))
+
         frame = pd.DataFrame(columns)
-        frame.insert(0, "t", self.time(trajectory)[:length])
-        frame.insert(0, "step", np.arange(length))
+        frame.insert(0, "t", self.time(trajectory)[steps])
+        frame.insert(0, "step", steps)
         frame.insert(0, "trajectory", trajectory)
 
         return frame
