@@ -354,7 +354,7 @@ class SystemInspector:
 
     @property
     def variables(self):
-        config = self.config
+        config = self._settings().config
         if config is None:
             return COORDINATE_COLUMNS
 
@@ -386,7 +386,7 @@ class SystemInspector:
 
     @property
     def t_min(self):
-        config = self.config
+        config = self._settings().config
         if config is None:
             return 0
         return config.time_defaults.t_min
@@ -456,7 +456,7 @@ class SystemInspector:
         return self._optional_help_table(data, table, "System status")
 
     def describe(self, table=False):
-        config = self.config
+        config = self._settings().config
         if config is None:
             return pd.Series({"name": self.name, "description": ""})
 
@@ -472,7 +472,7 @@ class SystemInspector:
         return self._optional_help_table(data, table, "System description")
 
     def parameters(self, table=False):
-        config = self.config
+        config = self._settings().config
         if config is None:
             return pd.DataFrame(
                 columns=["value", "default", "min", "max", "step"],
@@ -603,7 +603,7 @@ class SystemInspector:
         t_max=None,
         initial_conditions=None,
     ):
-        config = self.config
+        config = self._settings().config
         if config is None:
             raise ValueError("No attractor selected")
 
@@ -1374,7 +1374,7 @@ class SystemInspector:
         y_range=None,
         density=21,
     ):
-        config = self.config
+        config = self._settings().config
         if config is None:
             raise ValueError("No attractor selected")
 
@@ -1812,7 +1812,7 @@ class SystemInspector:
                 rows.append((i, self.solution(i), self.time(i)))
             return rows
 
-        config = self.config
+        config = self._settings().config
         if config is None:
             return rows
 
@@ -1875,7 +1875,7 @@ class SystemInspector:
         if trajectories:
             return [trajectory["ic"] for trajectory in trajectories]
 
-        config = self.config
+        config = self._settings().config
         if config is None:
             return []
 
