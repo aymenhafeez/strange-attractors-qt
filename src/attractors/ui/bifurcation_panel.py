@@ -144,19 +144,13 @@ class BifurcationPanel(QtWidgets.QWidget):
         toolbar = QtWidgets.QHBoxLayout()
 
         toolbar_layout1 = QtWidgets.QVBoxLayout()
-        row1 = QtWidgets.QHBoxLayout()
-        row1.addWidget(QtWidgets.QLabel("Sweep param:"))
         self.param_combo = QtWidgets.QComboBox()
         self.param_combo.currentTextChanged.connect(self._update_defaults)
-        row1.addWidget(self.param_combo)
 
-        row1.addWidget(QtWidgets.QLabel("  Variable:"))
         self.var_combo = QtWidgets.QComboBox()
         self.var_combo.addItems(["x", "y", "z"])
         self.var_combo.currentTextChanged.connect(self._update_axis_label)
-        row1.addWidget(self.var_combo)
 
-        row1.addWidget(QtWidgets.QLabel("Sampling:"))
         self.sampling_combo = QtWidgets.QComboBox()
         for label, mode in (
             ("Midplane crossings", "midplane"),
@@ -165,30 +159,38 @@ class BifurcationPanel(QtWidgets.QWidget):
             ("Stroboscopic", "stroboscopic"),
         ):
             self.sampling_combo.addItem(label, mode)
-        row1.addWidget(self.sampling_combo)
 
+        row1 = QtWidgets.QHBoxLayout()
+        for text, widget in (
+            ("Sweep param:", self.param_combo),
+            ("  Variable:", self.var_combo),
+            ("Sampling:", self.sampling_combo),
+        ):
+            row1.addWidget(QtWidgets.QLabel(text))
+            row1.addWidget(widget)
         row1.addStretch(1)
         toolbar_layout1.addLayout(row1)
 
-        self.period_controls = QtWidgets.QWidget()
-        period_layout = QtWidgets.QHBoxLayout(self.period_controls)
-        period_layout.setContentsMargins(0, 0, 0, 0)
-
         self.period_spin = QtWidgets.QDoubleSpinBox()
         self.period_spin.setDecimals(6)
-        self.period_spin.setRange(0.000001, 1000000)
+        self.period_spin.setRange(1e-6, 1e6)
         self.period_spin.setValue(2 * np.pi)
         self.period_spin.setKeyboardTracking(False)
 
         self.phase_spin = QtWidgets.QDoubleSpinBox()
         self.phase_spin.setDecimals(6)
-        self.phase_spin.setRange(-1000000, 1000000)
+        self.phase_spin.setRange(-1e6, 1e6)
         self.phase_spin.setKeyboardTracking(False)
 
-        period_layout.addWidget(QtWidgets.QLabel("Period:"))
-        period_layout.addWidget(self.period_spin)
-        period_layout.addWidget(QtWidgets.QLabel("Phase time:"))
-        period_layout.addWidget(self.phase_spin)
+        self.period_controls = QtWidgets.QWidget()
+        period_layout = QtWidgets.QHBoxLayout(self.period_controls)
+        period_layout.setContentsMargins(0, 0, 0, 0)
+        for text, widget in (
+            ("Period:", self.period_spin),
+            ("Phase time:", self.phase_spin),
+        ):
+            period_layout.addWidget(QtWidgets.QLabel(text))
+            period_layout.addWidget(widget)
 
         self.period_controls.hide()
         self.sampling_combo.currentIndexChanged.connect(
@@ -199,40 +201,41 @@ class BifurcationPanel(QtWidgets.QWidget):
         period_layout.addStretch()
         toolbar_layout1.addWidget(self.period_controls)
 
-        row2 = QtWidgets.QHBoxLayout()
-        row2.addWidget(QtWidgets.QLabel("From:"))
         self.min_spin = QtWidgets.QDoubleSpinBox()
+        self.min_spin.setDecimals(6)
         self.min_spin.setRange(-1e6, 1e6)
         self.min_spin.setSingleStep(0.01)
-        row2.addWidget(self.min_spin)
 
-        row2.addWidget(QtWidgets.QLabel("To:"))
         self.max_spin = QtWidgets.QDoubleSpinBox()
+        self.max_spin.setDecimals(6)
         self.max_spin.setRange(-1e6, 1e6)
         self.max_spin.setSingleStep(0.01)
-        row2.addWidget(self.max_spin)
 
-        row2.addWidget(QtWidgets.QLabel("Steps:"))
         self.steps_spin = QtWidgets.QSpinBox()
         self.steps_spin.setRange(10, 10000)
         self.steps_spin.setValue(500)
-        row2.addWidget(self.steps_spin)
 
-        row2.addWidget(QtWidgets.QLabel("Transient:"))
         self.transient_spin = QtWidgets.QDoubleSpinBox()
         self.transient_spin.setRange(0.0, 0.99)
         self.transient_spin.setSingleStep(0.05)
         self.transient_spin.setValue(0.85)
-        row2.addWidget(self.transient_spin)
 
         self.size_spin = QtWidgets.QDoubleSpinBox()
         self.size_spin.setRange(0, 10)
         self.size_spin.setSingleStep(0.05)
         self.size_spin.setValue(0.15)
         self.size_spin.setKeyboardTracking(False)
-        row2.addWidget(QtWidgets.QLabel("Size:"))
-        row2.addWidget(self.size_spin)
 
+        row2 = QtWidgets.QHBoxLayout()
+        for text, widget in (
+            ("From:", self.min_spin),
+            ("To:", self.max_spin),
+            ("Steps:", self.steps_spin),
+            ("Transient:", self.transient_spin),
+            ("Size:", self.size_spin),
+        ):
+            row2.addWidget(QtWidgets.QLabel(text))
+            row2.addWidget(widget)
         row2.addStretch()
         toolbar_layout1.addLayout(row2)
 
@@ -244,8 +247,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.run_btn.clicked.connect(self._run_sweep)
         row3_1.addWidget(self.run_btn)
 
-        self.cancel_btn = QtWidgets.QPushButton("Cancel")
-        self.cancel_btn.setEnabled(False)
+        self.cancel_btn = QtWidgets.QPushButton("Cancel", enabled=False)
         self.cancel_btn.clicked.connect(self.cancel_sweep)
         row3_1.addWidget(self.cancel_btn)
 
@@ -398,12 +400,15 @@ class BifurcationPanel(QtWidgets.QWidget):
             self._zoom.clear()
 
         has_params = bool(config.params)
-        self.run_btn.setEnabled(has_params)
-        self.param_combo.setEnabled(has_params)
-        self.min_spin.setEnabled(has_params)
-        self.max_spin.setEnabled(has_params)
-        self.steps_spin.setEnabled(has_params)
-        self.transient_spin.setEnabled(has_params)
+        for widget in (
+            self.run_btn,
+            self.param_combo,
+            self.min_spin,
+            self.max_spin,
+            self.steps_spin,
+            self.transient_spin,
+        ):
+            widget.setEnabled(has_params)
 
         if not has_params:
             self._error_label.setText("No parameters available to sweep")
