@@ -486,7 +486,7 @@ class SystemInspector:
 
         return self._show_table(data, table, "System summary")
 
-    def status(self, table=True):
+    def status(self, table=False):
         state = self._session.state
         result = {
             **state,
@@ -501,47 +501,36 @@ class SystemInspector:
     def describe(self, table=False):
         config = self._settings().config
         if config is None:
-            return pd.Series({"name": self.name, "description": ""})
-
-        data = pd.Series(
-            {
-                "name": self.name,
-                "config_name": config.name,
-                "description": config.description,
-                "equation": config.equation_text,
-            }
-        )
+            data = pd.Series({"name": self.name, "description": ""})
+        else:
+            data = pd.Series(
+                {
+                    "name": self.name,
+                    "config_name": config.name,
+                    "description": config.description,
+                    "equation": config.equation_text,
+                }
+            )
 
         return self._show_table(data, table, "System description")
 
     def parameters(self, table=False):
         config = self._settings().config
-        if config is None:
-            return pd.DataFrame(
-                columns=["value", "default", "min", "max", "step"],
-                index=pd.Index([], name="name"),
-            )
-
-        rows = []
         values = self.values
-        for param in config.params:
-            rows.append(
-                {
-                    "name": param.name,
-                    "value": values.get(param.name),
-                    "default": param.default,
-                    "min": param.min_val,
-                    "max": param.max_val,
-                    "step": param.step,
-                }
-            )
-        if not rows:
-            return pd.DataFrame(
-                columns=["value", "default", "min", "max", "step"],
-                index=pd.Index([], name="name"),
-            )
-
-        data = pd.DataFrame(rows).set_index("name")
+        rows = [
+            {
+                "name": param.name,
+                "value": values.get(param.name),
+                "default": param.default,
+                "min": param.min_val,
+                "max": param.max_val,
+                "step": param.step,
+            }
+            for param in ([] if config is None else config.params)
+        ]
+        data = pd.DataFrame(
+            rows, columns=["name", "value", "default", "min", "max", "step"]
+        ).set_index("name")
 
         return self._show_table(data, table, "System parameters")
 
