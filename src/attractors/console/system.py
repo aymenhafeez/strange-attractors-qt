@@ -447,7 +447,7 @@ class SystemInspector:
     def has_solutions(self):
         return bool(self.solutions)
 
-    def _optional_help_table(self, data, table, name):
+    def _show_table(self, data, table, name):
         if not table:
             return data
 
@@ -456,11 +456,11 @@ class SystemInspector:
 
     def help(self, table=False):
         data = pd.DataFrame(HELP_ROWS, columns=["category", "method", "description"])
-        return self._optional_help_table(data, table, "System help")
+        return self._show_table(data, table, "System help")
 
     def examples(self, table=False):
         data = pd.DataFrame(EXAMPLE_ROWS, columns=["task", "commands"])
-        return self._optional_help_table(data, table, "System examples")
+        return self._show_table(data, table, "System examples")
 
     def summary(self, table=False):
         bounds = self.bounds()
@@ -484,7 +484,7 @@ class SystemInspector:
 
         data = pd.Series(result)
 
-        return self._optional_help_table(data, table, "System summary")
+        return self._show_table(data, table, "System summary")
 
     def status(self, table=True):
         state = self._session.state
@@ -496,7 +496,7 @@ class SystemInspector:
         }
         data = pd.Series(result)
 
-        return self._optional_help_table(data, table, "System status")
+        return self._show_table(data, table, "System status")
 
     def describe(self, table=False):
         config = self._settings().config
@@ -512,7 +512,7 @@ class SystemInspector:
             }
         )
 
-        return self._optional_help_table(data, table, "System description")
+        return self._show_table(data, table, "System description")
 
     def parameters(self, table=False):
         config = self._settings().config
@@ -543,7 +543,7 @@ class SystemInspector:
 
         data = pd.DataFrame(rows).set_index("name")
 
-        return self._optional_help_table(data, table, "System parameters")
+        return self._show_table(data, table, "System parameters")
 
     # these three are controls for updating the main viewport plot from the console
     def set_parameters(self, values, *, solve=False):
@@ -1375,7 +1375,7 @@ class SystemInspector:
 
     def live_plots(self, table=False):
         data = self._main_live().frame()
-        return self._optional_help_table(data, table, "Live plots")
+        return self._show_table(data, table, "Live plots")
 
     def unfollow(self, plot=None):
         return self._main_live().unfollow(plot)
