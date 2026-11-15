@@ -4,24 +4,49 @@
 import itertools
 from dataclasses import dataclass
 
-import numpy as np
 import pandas as pd
 from pyqtgraph.Qt import QtCore
 
 from ..ui.style import plot_colours
-from .explorer import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE, line_kwargs, parse_mode
+from .explorer import PLOT_MODE_OVERLAY, PLOT_MODE_REPLACE, parse_mode
+from .system import SEPARATION_WINDOW
 
 PREVIEW_UPDATE_INTERVAL = 120  # ms
-PREVIEW = {
-    "axis",
-    "displacement",
-    "projection",
-    "radius",
-    "separation",
-    "separation_fit",
-    "speed",
-    "vector_field",
+TIMESERIES = {"displacement", "radius", "speed"}
+
+SERIES = {
+    "axis": lambda system, spec, solutions: system.axis_series(
+        spec["axis"], spec["trajectory"], solutions
+    ),
+    **{
+        kind: lambda system, spec, solutions, kind=kind: system.derived_series(
+            kind, spec["trajectory"], solutions
+        )
+        for kind in TIMESERIES
+    },
+    "projection": lambda system, spec, solutions: system.projection_series(
+        spec["x_axis"], spec["y_axis"], spec["trajectory"], solutions
+    ),
+    "separation": lambda system, spec, _solutions: system.separation_series(
+        spec["a"], spec["b"], spec["log"]
+    ),
+    "separation_fit": lambda system, spec, _solutions: system.separation_fit_series(
+        spec["a"], spec["b"], **{key: spec[key] for key in SEPARATION_WINDOW}
+    ),
+    "vector_field": lambda system, spec, _solutions: system.vector_field_series(
+        spec["x_axis"],
+        spec["y_axis"],
+        fixed_axis=spec["fixed_axis"],
+        fixed_value=spec["fixed_value"],
+        x_range=spec["x_range"],
+        y_range=spec["y_range"],
+        density=spec["density"],
+        scale=spec["scale"],
+        colour_by_speed=spec["colour_by_speed"],
+        speed_bands=spec["speed_bands"],
+    ),
 }
+PREVIEW = set(SERIES)
 TIMESERIES = {"displacement", "radius", "speed"}
 
 
@@ -79,12 +104,9 @@ class LivePlotController(QtCore.QObject):
 
     def tooltip(self, plot_name):
         count = len(self._named(plot_name))
-        if count == 0:
-            return f"{plot_name}: no live traces"
-        if count == 1:
-            return f"{plot_name}: 1 live trace"
+        traces = "trace" if count == 1 else "traces"
 
-        return f"{plot_name}: {count} live traces"
+        return f"{plot_name}: {count or 'no'} live {traces}"
 
     def sync_menu(self, plot_name):
         traces = [
@@ -103,38 +125,30 @@ class LivePlotController(QtCore.QObject):
         self._toolbar.set_live_traces(plot_name, traces)
 
     def _live_trace_label(self, spec):
-        label = spec.get("label")
-        if label:
-            return str(label)
+        if spec["label"]:
+            return str(spec["label"])
 
-        kind = spec.get("kind")
-        trajectory = spec.get("trajectory", 0)
-        trajectory_label = f"T{trajectory}"
-
+        kind = spec["kind"]
         if kind == "axis":
-            return f"{trajectory_label} {spec.get('axis', 'axis')}"
+            return f"T{spec['trajectory']} {spec['axis']}"
         if kind in TIMESERIES:
-            return f"{trajectory_label} {kind}"
+            return f"T{spec['trajectory']} {kind}"
         if kind == "projection":
-            return (
-                f"{trajectory_label} "
-                f"{spec.get('x_axis', 'x')}-{spec.get('y_axis', 'y')}"
-            )
+            return f"T{spec['trajectory']} {spec['x_axis']}-{spec['y_axis']}"
         if kind == "separation":
-            prefix = "log sep" if spec.get("log", False) else "sep"
-            return f"T{spec.get('a', 0)}-T{spec.get('b', 1)} {prefix}"
+            prefix = "log sep" if spec["log"] else "sep"
+            return f"T{spec['a']}-T{spec['b']} {prefix}"
         if kind == "separation_fit":
-            return f"T{spec.get('a', 0)}-T{spec.get('b', 1)} sep fit"
+            return f"T{spec['a']}-T{spec['b']} sep fit"
         if kind == "vector_field":
-            return (
-                f"{spec.get('x_axis', 'x')}-{spec.get('y_axis', 'y')} field "
-                f"{spec.get('fixed_axis', 'z')}={spec.get('fixed_value', 0.0):g}"
-            )
+            fixed = spec["fixed_axis"]
+            section = "" if fixed is None else f" {fixed}={spec['fixed_value']:g}"
+            return f"{spec['x_axis']}-{spec['y_axis']} field{section}"
 
-        return str(kind or "trace")
+        return kind
 
     def _live_trace_mode(self, spec):
-        if spec.get("kind") in PREVIEW:
+        if spec["kind"] in PREVIEW:
             return "live preview"
 
         return "full solve"
@@ -169,77 +183,41 @@ class LivePlotController(QtCore.QObject):
 
         return pen
 
-    def _run_console_plot_request(self, kind, *, plot=None, **options):
+    def _run_console_plot_request(
+        self,
+        kind,
+        *,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        label=None,
+        pen=None,
+        **options,
+    ):
         target = self._live_plot_target(self._plot_name(plot))
-        mode = parse_mode(options.pop("mode", PLOT_MODE_REPLACE))
-        label = options.pop("label", None)
-        pen = self._plot_pen(target, mode, options.pop("pen", None))
-
+        mode = parse_mode(mode)
+        pen = self._plot_pen(target, mode, pen)
         if mode == PLOT_MODE_REPLACE:
             self._drop(target)
 
-        plotter, args, kwargs, accepts_label = self._console_plot_call(kind, options)
-        if accepts_label:
-            kwargs["label"] = label
-        if pen is not None:
-            kwargs["pen"] = pen
-        plotter(*args, plot=target, mode=mode, **kwargs)
-        self.changed.emit()
-
-    def _console_plot_call(self, kind, options):
-        if kind == "axis":
-            return (
-                self._system.plot_axis,
-                (options.get("axis", "x"),),
-                {"trajectory": options.get("trajectory", 0)},
-                True,
-            )
-        if kind in TIMESERIES:
-            return (
-                self._plot_derived_timeseries,
-                (kind,),
-                {"trajectory": options.get("trajectory", 0)},
-                True,
-            )
-        if kind == "projection":
-            return (
-                self._system.plot_projection,
-                (options.get("x_axis", "x"), options.get("y_axis", "y")),
-                {"trajectory": options.get("trajectory", 0)},
-                True,
-            )
-        if kind == "separation":
-            return (
-                self._system.plot_separation,
-                (options.get("a", 0), options.get("b", 1)),
-                {"log": options.get("log", False)},
-                True,
-            )
-        if kind == "separation_fit":
-            return (
-                self._system.plot_separation_fit,
-                (options.get("a", 0), options.get("b", 1)),
-                {
-                    "t_min": options.get("t_min"),
-                    "t_max": options.get("t_max"),
-                    "step_min": options.get("step_min"),
-                    "step_max": options.get("step_max"),
-                },
-                True,
-            )
         if kind == "crossings":
-            return (
-                self._system.plot_crossings,
-                (options.get("axis", "z"),),
-                {
-                    "value": options.get("value"),
-                    "direction": options.get("direction", "both"),
-                    "trajectory": options.get("trajectory", 0),
-                },
-                False,
+            self._system.plot_crossings(
+                options["axis"],
+                options["value"],
+                direction=options["direction"],
+                trajectory=options["trajectory"],
+                plot=target,
+                mode=mode,
+                pen=pen,
             )
-
-        raise ValueError(f"Unknown console plot kind: {kind}")
+        else:
+            self._system.draw_series(
+                self._series({"kind": kind, **options}),
+                plot=target,
+                mode=mode,
+                pen=pen,
+                label=label,
+            )
+        self.changed.emit()
 
     def _on_plots_changed(self):
         names = {
@@ -428,7 +406,7 @@ class LivePlotController(QtCore.QObject):
 
         refreshed = False
         for trace in list(self._traces.values()):
-            if trace.spec.get("kind") not in preview_kinds:
+            if trace.spec["kind"] not in preview_kinds:
                 continue
             try:
                 updated = self._update_items(trace, solutions=solutions)
@@ -442,142 +420,25 @@ class LivePlotController(QtCore.QObject):
         if refreshed:
             self._last_preview_update = now_ms
 
+    def _series(self, spec, solutions=None):
+        return SERIES[spec["kind"]](self._system, spec, solutions)
+
     def _plot_trace(self, trace, *, replace):
         if self._update_items(trace):
             return
 
         spec = trace.spec
-        kind = spec["kind"]
-        target = trace.plot
-        mode = PLOT_MODE_REPLACE if replace else PLOT_MODE_OVERLAY
-        pen = spec.get("pen")
-        label = spec.get("label") or self._live_trace_label(spec)
-        if kind == "axis":
-            item = self._system.plot_axis(
-                spec["axis"],
-                trajectory=spec.get("trajectory", 0),
-                plot=target,
-                mode=mode,
-                pen=pen,
-                label=label,
+        trace.items = tuple(
+            self._system.draw_series(
+                self._series(spec),
+                plot=trace.plot,
+                mode=PLOT_MODE_REPLACE if replace else PLOT_MODE_OVERLAY,
+                pen=spec["pen"],
+                fit_pen=spec.get("fit_pen"),
+                label=spec["label"] or self._live_trace_label(spec),
                 zoom_region=spec.get("zoom_region", False),
             )
-        elif kind in TIMESERIES:
-            item = self._plot_derived_timeseries(
-                kind,
-                trajectory=spec.get("trajectory", 0),
-                plot=target,
-                mode=mode,
-                pen=pen,
-                label=label,
-                zoom_region=spec.get("zoom_region", False),
-            )
-        elif kind == "projection":
-            item = self._system.plot_projection(
-                spec.get("x_axis", "x"),
-                spec.get("y_axis", "y"),
-                trajectory=spec.get("trajectory", 0),
-                plot=target,
-                mode=mode,
-                pen=pen,
-                label=label,
-            )
-        elif kind == "separation":
-            item = self._system.plot_separation(
-                spec.get("a", 0),
-                spec.get("b", 1),
-                log=spec.get("log", False),
-                plot=target,
-                mode=mode,
-                pen=pen,
-                label=label,
-                zoom_region=spec.get("zoom_region", False),
-            )
-        elif kind == "separation_fit":
-            item = self._plot_live_separation_fit(
-                spec,
-                target,
-                mode=mode,
-                pen=pen,
-                label=label,
-            )
-        elif kind == "vector_field":
-            item = self._system.plot_vector_field(
-                spec.get("x_axis", "x"),
-                spec.get("y_axis", "y"),
-                fixed_axis=spec.get("fixed_axis"),
-                fixed_value=spec.get("fixed_value", 0.0),
-                x_range=spec.get("x_range"),
-                y_range=spec.get("y_range"),
-                density=spec.get("density", 21),
-                plot=target,
-                mode=mode,
-                pen=pen,
-                scale=spec.get("scale", 0.75),
-                colour_by_speed=spec.get("colour_by_speed", False),
-                speed_bands=spec.get("speed_bands", 5),
-            )
-        else:
-            raise ValueError(f"Unknown live plot kind: {kind}")
-
-        trace.items = item if isinstance(item, tuple) else (item,)
-
-    def _plot_derived_timeseries(
-        self,
-        kind,
-        *,
-        trajectory,
-        plot,
-        mode,
-        pen=None,
-        label=None,
-        zoom_region=False,
-    ):
-        kwargs = {
-            "trajectory": trajectory,
-            "plot": plot,
-            "mode": mode,
-            "label": label,
-            "zoom_region": zoom_region,
-        }
-        if pen is not None:
-            kwargs["pen"] = pen
-
-        if kind == "displacement":
-            return self._system.plot_displacement(**kwargs)
-        if kind == "radius":
-            return self._system.plot_radius(**kwargs)
-        if kind == "speed":
-            return self._system.plot_speed(**kwargs)
-
-        raise ValueError(f"Unknown derived plot kind: {kind}")
-
-    def _plot_live_separation_fit(self, spec, target, *, mode, pen, label):
-        data = self._live_separation_fit_data(spec)
-
-        separation_kwargs = line_kwargs(pen, label)
-        fit_kwargs = line_kwargs(
-            spec.get("fit_pen", pen), f"{label} fit" if label else None
         )
-
-        separation_item = target.line(
-            data["separation_t"],
-            data["log_distance"],
-            mode=mode,
-            bottom="t",
-            left=data["axis_label"],
-            **separation_kwargs,
-        )
-        fit_item = target.line(
-            data["fit_t"],
-            data["fit_y"],
-            mode=PLOT_MODE_OVERLAY,
-            bottom="t",
-            left=data["axis_label"],
-            **fit_kwargs,
-        )
-
-        return separation_item, fit_item
 
     def _update_items(self, trace, *, solutions=None):
         items = trace.items
@@ -585,174 +446,12 @@ class LivePlotController(QtCore.QObject):
         if not items or not all(target.has_item(item) for item in items):
             return False
 
-        spec = trace.spec
-        if spec.get("kind") == "separation_fit":
-            separation_item, fit_item = items
-            data = self._live_separation_fit_data(spec)
-            separation_item.setData(data["separation_t"], data["log_distance"])
-            fit_item.setData(data["fit_t"], data["fit_y"])
-            target.set_labels(bottom="t", left=data["axis_label"])
-        elif spec.get("kind") == "vector_field":
-            data = self._live_vector_field_data(spec)
-            segments = data.get("segments")
-            if segments is None:
-                items[0].setData(data["x"], data["y"])
-            elif len(items) != len(segments):
-                return False
-            else:
-                for item, (x_data, y_data, _pen) in zip(items, segments):
-                    item.setData(x_data, y_data)
-            target.set_labels(bottom=data["bottom"], left=data["left"])
-        else:
-            x_data, y_data, bottom, left = self._live_trace_data(
-                spec,
-                solutions=solutions,
-            )
-            items[0].setData(x_data, y_data)
-            target.set_labels(bottom=bottom, left=left)
+        series = self._series(trace.spec, solutions)
+        if len(series) != len(items):
+            return False
+
+        for item, line in zip(items, series, strict=True):
+            item.setData(line.x, line.y)
+        target.set_labels(bottom=series[-1].bottom, left=series[-1].left)
 
         return True
-
-    def _live_trace_data(self, spec, *, solutions=None):
-        kind = spec["kind"]
-        if kind == "axis":
-            axis = str(spec["axis"]).lower()
-            column = self._system._axis_column(axis)
-            trajectory = spec.get("trajectory", 0)
-            solution = self._live_solution(trajectory, solutions)
-            return (
-                self._system.time(trajectory),
-                solution[:, column],
-                "t",
-                axis,
-            )
-
-        if kind in TIMESERIES:
-            trajectory = spec.get("trajectory", 0)
-            solution = self._live_solution(trajectory, solutions)
-            times = self._system.time(trajectory)
-            return (
-                times,
-                self._live_derived_values(kind, solution, times),
-                "t",
-                kind,
-            )
-
-        if kind == "projection":
-            x_axis = str(spec.get("x_axis", "x")).lower()
-            y_axis = str(spec.get("y_axis", "y")).lower()
-            x_column = self._system._axis_column(x_axis)
-            y_column = self._system._axis_column(y_axis)
-            trajectory = spec.get("trajectory", 0)
-            solution = self._live_solution(trajectory, solutions)
-            return (
-                solution[:, x_column],
-                solution[:, y_column],
-                str(spec.get("x_axis", "x")),
-                str(spec.get("y_axis", "y")),
-            )
-
-        if kind == "separation":
-            a = spec.get("a", 0)
-            b = spec.get("b", 1)
-            log = spec.get("log", False)
-            value_column = "log_distance" if log else "distance"
-            axis_label = f"log separation {a}-{b}" if log else f"separation {a}-{b}"
-
-            # passed in solutions are accepted runs so system gets them as well
-            frame = self._system.separation(a, b, log=log)
-            return (
-                frame["t"].to_numpy(),
-                frame[value_column].to_numpy(),
-                "t",
-                axis_label,
-            )
-
-        raise ValueError(f"Unknown live plot kind: {kind}")
-
-    @staticmethod
-    def _live_derived_values(kind, solution, times):
-        if kind == "radius":
-            return np.linalg.norm(solution, axis=1)
-        if kind == "displacement":
-            if len(solution) == 0:
-                return np.array([], dtype=np.float64)
-            return np.linalg.norm(solution - solution[0], axis=1)
-        if kind == "speed":
-            if len(solution) < 2:
-                return np.zeros(len(solution), dtype=np.float64)
-
-            velocity = np.gradient(solution, times, axis=0)
-            return np.linalg.norm(velocity, axis=1)
-
-        raise ValueError(f"Unknown derived plot kind: {kind}")
-
-    def _live_vector_field_data(self, spec):
-        x_axis = str(spec.get("x_axis", "x")).lower()
-        y_axis = str(spec.get("y_axis", "y")).lower()
-        frame = self._system.vector_field_slice(
-            x_axis,
-            y_axis,
-            fixed_axis=spec.get("fixed_axis"),
-            fixed_value=spec.get("fixed_value", 0.0),
-            x_range=spec.get("x_range"),
-            y_range=spec.get("y_range"),
-            density=spec.get("density", 21),
-        )
-        if spec.get("colour_by_speed", False):
-            return {
-                "segments": self._system._vector_field_speed_bands(
-                    frame,
-                    x_axis,
-                    y_axis,
-                    spec.get("scale", 0.75),
-                    spec.get("speed_bands", 5),
-                ),
-                "bottom": x_axis,
-                "left": y_axis,
-            }
-
-        x_data, y_data = self._system.vector_field_lines(
-            frame,
-            x_axis,
-            y_axis,
-            spec.get("scale", 0.75),
-        )
-
-        return {"x": x_data, "y": y_data, "bottom": x_axis, "left": y_axis}
-
-    def _live_separation_fit_data(self, spec):
-        a = spec.get("a", 0)
-        b = spec.get("b", 1)
-        frame = self._system.separation(a, b, log=True)
-        fit_frame = self._system._separation_fit_frame(
-            a,
-            b,
-            t_min=spec.get("t_min"),
-            t_max=spec.get("t_max"),
-            step_min=spec.get("step_min"),
-            step_max=spec.get("step_max"),
-        )
-        if len(fit_frame) < 2:
-            raise ValueError("At least two finite log-separation points are required")
-
-        fit = self._system._fit_log_separation(fit_frame)
-        fit_t = fit_frame["t"].to_numpy()
-        fit_y = fit["slope"] * fit_t + fit["intercept"]
-        axis_label = f"log separation fit {a}-{b}"
-
-        return {
-            "separation_t": frame["t"].to_numpy(),
-            "log_distance": frame["log_distance"].to_numpy(),
-            "fit_t": fit_t,
-            "fit_y": fit_y,
-            "axis_label": axis_label,
-        }
-
-    def _live_solution(self, trajectory, solutions=None):
-        if solutions is None:
-            return self._system.solution(trajectory)
-        try:
-            return solutions[trajectory]
-        except IndexError as exc:
-            raise IndexError(f"No trajectory at index {trajectory}") from exc

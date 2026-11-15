@@ -210,11 +210,11 @@ class Window(QtWidgets.QMainWindow):
                 self._apply_console_time,
                 lambda: self._solve(True),
             ),
+            live=lambda: self.live_plot_controller,
         )
         self.live_plot_controller = LivePlotController(
             self.system, self.jupyter_console_panel.plots, self.system_toolbar, self
         )
-        self.system.live = self.live_plot_controller
         self.main_toolbar = MainToolbar(self.controls.dropdown, self)
         self.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, self.main_toolbar)
         self.viewport_toolbar = ViewportToolbar()
