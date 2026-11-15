@@ -15,7 +15,7 @@ from .console.live_plot_controller import LivePlotController
 from .console.system import SystemCommands, SystemInspector, SystemSettings
 from .console.workspace_controller import WorkspaceController
 from .console.workspace_inspector import WorkspaceInspector
-from .perf import PerfProfiler, perf_finish, perf_start, profiling_enabled
+from .perf import PerfProfiler, profiling_enabled
 from .presets import (
     PresetError,
     delete_named_preset,
@@ -936,8 +936,7 @@ class Window(QtWidgets.QMainWindow):
             self.current_n,
             self.current_t_max,
         )
-        token = perf_start(
-            self,
+        token = self._perf.start(
             "lyapunov",
             key=self._active_lyapunov_request_id,
             attractor=config.name,
@@ -1032,14 +1031,13 @@ class Window(QtWidgets.QMainWindow):
             return
 
         all_sol = np.concatenate(solutions, axis=0)
-        token = perf_start(
-            self,
+        token = self._perf.start(
             "projection_update",
             source="solve_result",
             points=len(all_sol),
         )
         self.projection_panel.update_projections(*all_sol.T)
-        perf_finish(self, token)
+        self._perf.finish(token)
         self._last_projection_update = QtCore.QDateTime.currentMSecsSinceEpoch()
 
     def _on_projections_data(self, x, y, z):
@@ -1054,14 +1052,13 @@ class Window(QtWidgets.QMainWindow):
             return
 
         self._last_projection_update = now_ms
-        token = perf_start(
-            self,
+        token = self._perf.start(
             "projection_update",
             source="animation",
             points=len(x),
         )
         self.projection_panel.update_projections(x, y, z)
-        perf_finish(self, token)
+        self._perf.finish(token)
 
     def _reset_camera(self):
         config, _ = self._get_current_config_and_values()
@@ -1109,7 +1106,7 @@ class Window(QtWidgets.QMainWindow):
             return
 
         token = self._lyapunov_perf_tokens.pop(request_id, None)
-        perf_finish(self, token)
+        self._perf.finish(token)
         self.lyapunov_panel.set_result(lyap, ky_dim, t_hist, lyap_hist)
         self.status_bar.clear_app_message()
 
@@ -1121,7 +1118,7 @@ class Window(QtWidgets.QMainWindow):
             return
 
         token = self._lyapunov_perf_tokens.pop(request_id, None)
-        perf_finish(self, token, status="failed")
+        self._perf.finish(token, status="failed")
         self.status_bar.set_app_message(f"Lyapunov failed: {message}", error=True)
 
     def _panel_visible(self, panel_name):
@@ -1225,7 +1222,7 @@ class Window(QtWidgets.QMainWindow):
         request_id = self._active_lyapunov_request_id
         if request_id is not None:
             token = self._lyapunov_perf_tokens.pop(request_id, None)
-            perf_finish(self, token, status="cancelled")
+            self._perf.finish(token, status="cancelled")
         self._active_lyapunov_request_id = None
         self.status_bar.clear_app_message()
 
