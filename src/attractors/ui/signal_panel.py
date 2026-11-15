@@ -1,14 +1,85 @@
 # SPDX-FileCopyrightText: 2026 Aymen Hafeez
 # SPDX-License-Identifier: GPL-3.0-only
 
+import functools
+
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from ..core.signal_analysis import select_interval, trajectory_signal
-from ..workers.spectrogram_worker import SpectrogramWorker
-from ..workers.spectrum_worker import SpectrumWorker
+from ..core.signal_analysis import (
+    power_spectral_density,
+    power_spectrogram,
+    select_interval,
+    trajectory_signal,
+)
+from ..workers.signal_worker import SignalWorker
 from .style import SIGNAL_PANEL, SIGNAL_PLOTS, plot_colours
+
+
+class _AnalysisJob(QtCore.QObject):
+    def __init__(self, make_worker, on_ready, on_failed, parent):
+        super().__init__(parent)
+        self._make_worker = make_worker
+        self._on_ready = on_ready
+        self._on_failed = on_failed
+        self._revision = 0
+        self._waiting = False
+        self._worker = None
+        self._timer = QtCore.QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._start)
+
+    def busy(self):
+        return self._waiting or self._worker is not None
+
+    def queue(self):
+        self._waiting = True
+        if self._worker is None and not self._timer.isActive():
+            self._timer.start()
+
+    def cancel(self):
+        self._revision += 1
+        self._waiting = False
+        self._timer.stop()
+
+    def _start(self):
+        # only run the timer when waiting with no worker is prcoess
+        self._waiting = False
+        self._worker = self._make_worker(self._revision)
+        self._worker.signals.finished.connect(
+            self._finished, QtCore.Qt.ConnectionType.QueuedConnection
+        )
+        QtCore.QThreadPool.globalInstance().start(self._worker)
+
+    @QtCore.pyqtSlot(int, object, str)
+    def _finished(self, revision, result, error):
+        worker, self._worker = self._worker, None
+        if self._waiting:
+            self._timer.start()
+        if revision != self._revision:
+            return
+
+        if result is None:
+            # failure gets renewed by a newer queue
+            if not self._waiting:
+                self._on_failed(error)
+        else:
+            self._on_ready(worker, result)
+
+
+def _plot_area(header, plot):
+    area = QtWidgets.QFrame()
+    area.setObjectName("panelSurface")
+    area.setStyleSheet(SIGNAL_PLOTS)
+    area.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+    layout = QtWidgets.QVBoxLayout(area)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(4)
+    layout.addWidget(header)
+    layout.addWidget(plot, 1)
+
+    return area
 
 
 class SignalPanel(QtWidgets.QWidget):
@@ -29,14 +100,8 @@ class SignalPanel(QtWidgets.QWidget):
         self._spectrum_dt = None
         self._spectrogram_dt = None
         self._spectrum = None
-        self._spectrum_worker = None
-        self._spectrum_revision = 0
-        self._spectrum_waiting = False
         self._syncing_time_range = False
         self._spectrogram = None
-        self._spectrogram_worker = None
-        self._spectrogram_revision = 0
-        self._spectrogram_waiting = False
         self._setting_spectrogram_frequency = False
 
         self.setObjectName("panelSurface")
@@ -154,12 +219,18 @@ class SignalPanel(QtWidgets.QWidget):
             insert_in=self.spectrogram_plot.getPlotItem(),
         )
 
-        self._spectrum_timer = QtCore.QTimer(self)
-        self._spectrum_timer.setSingleShot(True)
-        self._spectrum_timer.timeout.connect(self._start_spectrum)
-        self._spectrogram_timer = QtCore.QTimer(self)
-        self._spectrogram_timer.setSingleShot(True)
-        self._spectrogram_timer.timeout.connect(self._start_spectrogram)
+        self._spectrum_job = _AnalysisJob(
+            self._spectrum_worker,
+            self._on_spectrum_ready,
+            self._on_spectrum_failed,
+            self,
+        )
+        self._spectrogram_job = _AnalysisJob(
+            self._spectrogram_worker,
+            self._on_spectrogram_ready,
+            self._on_spectrogram_failed,
+            self,
+        )
 
         self.duration_spin.valueChanged.connect(self._queue_spectrogram)
         self.overlap_spin.valueChanged.connect(self._queue_spectrogram)
@@ -189,7 +260,9 @@ class SignalPanel(QtWidgets.QWidget):
         source_row.addWidget(self.mean_check)
         source_row.addStretch(1)
 
-        interval_row = QtWidgets.QHBoxLayout()
+        interval_header = QtWidgets.QWidget()
+        interval_row = QtWidgets.QHBoxLayout(interval_header)
+        interval_row.setContentsMargins(0, 0, 0, 0)
         interval_row.setSpacing(8)
         interval_row.addSpacing(8)
         interval_row.addWidget(QtWidgets.QLabel("Start"))
@@ -198,17 +271,6 @@ class SignalPanel(QtWidgets.QWidget):
         interval_row.addWidget(self.end_spin)
         interval_row.addWidget(self.full_button)
         interval_row.addStretch(1)
-
-        time_area = QtWidgets.QFrame()
-        time_area.setObjectName("panelSurface")
-        time_area.setStyleSheet(SIGNAL_PLOTS)
-        time_area.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
-        time_layout = QtWidgets.QVBoxLayout(time_area)
-        time_layout.setContentsMargins(0, 0, 0, 0)
-        time_layout.setSpacing(4)
-        time_layout.addLayout(interval_row)
-        time_layout.addWidget(self.trace, 1)
-        # time_layout.addWidget(self.selection_label)
 
         spectrum_header = QtWidgets.QWidget()
         spectrum_row = QtWidgets.QHBoxLayout(spectrum_header)
@@ -227,25 +289,9 @@ class SignalPanel(QtWidgets.QWidget):
         spectrogram_row.addWidget(self.frequency_view_combo)
         spectrogram_row.addWidget(self.colour_scale_combo)
 
-        spectrum_area = QtWidgets.QFrame()
-        spectrum_area.setObjectName("panelSurface")
-        spectrum_area.setStyleSheet(SIGNAL_PLOTS)
-        spectrum_area.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
-        spectrum_layout = QtWidgets.QVBoxLayout(spectrum_area)
-        spectrum_layout.setContentsMargins(0, 0, 0, 0)
-        spectrum_layout.setSpacing(4)
-        spectrum_layout.addWidget(spectrum_header)
-        spectrum_layout.addWidget(self.spectrum_plot, 1)
-
-        spectrogram_area = QtWidgets.QFrame()
-        spectrogram_area.setObjectName("panelSurface")
-        spectrogram_area.setStyleSheet(SIGNAL_PLOTS)
-        spectrogram_area.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
-        spectrogram_layout = QtWidgets.QVBoxLayout(spectrogram_area)
-        spectrogram_layout.setContentsMargins(0, 0, 0, 0)
-        spectrogram_layout.setSpacing(4)
-        spectrogram_layout.addWidget(spectrogram_header)
-        spectrogram_layout.addWidget(self.spectrogram_plot, 1)
+        time_area = _plot_area(interval_header, self.trace)
+        spectrum_area = _plot_area(spectrum_header, self.spectrum_plot)
+        spectrogram_area = _plot_area(spectrogram_header, self.spectrogram_plot)
 
         spectral_plots = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         spectral_plots.setChildrenCollapsible(False)
@@ -362,8 +408,8 @@ class SignalPanel(QtWidgets.QWidget):
         source = (self._run.attractor, index, coordinate)
         if source != self._analysis_source:
             self._analysis_source = source
-            self._spectrum_revision += 1
-            self._spectrogram_revision += 1
+            self._spectrum_job.cancel()
+            self._spectrogram_job.cancel()
 
         self.signal = trajectory_signal(
             self._run.solutions[index],
@@ -462,72 +508,36 @@ class SignalPanel(QtWidgets.QWidget):
 
     def _queue_spectrogram(self):
         if self.selected_signal is None:
-            self._spectrogram_revision += 1
-            self._spectrogram_waiting = False
-            self._spectrogram_timer.stop()
+            self._spectrogram_job.cancel()
             self._spectrogram = None
             self.spectrogram_image.clear()
             self.spectrogram_plot.setToolTip("")
             self._set_status("spectrogram")
             return
 
-        self._spectrogram_waiting = True
+        self._spectrogram_job.queue()
         self._set_status("spectrogram", "Updating")
-        if self._spectrogram_worker is None and not self._spectrogram_timer.isActive():
-            self._spectrogram_timer.start()
 
-    def _start_spectrogram(self):
-        if not self._spectrogram_waiting:
-            return
-
-        if self._spectrogram_worker is not None:
-            return
-        if self.selected_signal is None:
-            return
-
-        self._spectrogram_waiting = False
-
-        worker = SpectrogramWorker(
-            self._spectrogram_revision,
-            self.selected_signal,
+    def _spectrogram_worker(self, revision):
+        compute = functools.partial(
+            power_spectrogram,
             window_duration=self.duration_spin.value(),
             overlap=self.overlap_spin.value() / 100.0,
             remove_mean=self.mean_check.isChecked(),
             window=self.window_combo.currentData(),
         )
-        worker.signals.finished.connect(
-            self._on_spectrogram_finished,
-            QtCore.Qt.ConnectionType.QueuedConnection,
-        )
-        self._spectrogram_worker = worker
-        QtCore.QThreadPool.globalInstance().start(worker)
+        return SignalWorker(revision, self.selected_signal, compute)
 
-    @QtCore.pyqtSlot(int, object, str)
-    def _on_spectrogram_finished(self, revision, spectrogram, error):
-        worker = self._spectrogram_worker
-        self._spectrogram_worker = None
-
-        if self._spectrogram_waiting:
-            self._spectrogram_timer.start()
-
-        if revision != self._spectrogram_revision:
-            return
-
-        if spectrogram is None:
-            if not self._spectrogram_waiting:
-                self._spectrogram = None
-                self.spectrogram_image.clear()
-                self._set_status(
-                    "spectrogram",
-                    error or "Spectrogram calculation failed",
-                    error=True,
-                )
-            return
-
+    def _on_spectrogram_ready(self, worker, spectrogram):
         self._spectrogram_dt = worker.signal.dt
         self._spectrogram = spectrogram
         self._apply_spectrogram_frequency()
         self._draw_spectrogram()
+
+    def _on_spectrogram_failed(self, error):
+        self._spectrogram = None
+        self.spectrogram_image.clear()
+        self._set_status("spectrogram", error, error=True)
 
     def _apply_spectrogram_frequency(self):
         if self._spectrogram is None:
@@ -615,7 +625,7 @@ class SignalPanel(QtWidgets.QWidget):
         self.spectrogram_colour_bar.setLabel("left", label)
         self.spectrogram_colour_bar.setLevels((lower, upper))
 
-        if self._spectrogram_waiting or self._spectrogram_worker is not None:
+        if self._spectrogram_job.busy():
             self._set_status("spectrogram", "Updating")
         elif peak == 0.0:
             self._set_status("spectrogram", "All spectrogram power is zero.")
@@ -625,9 +635,7 @@ class SignalPanel(QtWidgets.QWidget):
     def _queue_spectrum(self):
         signal = self.selected_signal
         if signal is None or signal.values.size < 4:
-            self._spectrum_revision += 1
-            self._spectrum_waiting = False
-            self._spectrum_timer.stop()
+            self._spectrum_job.cancel()
             self._spectrum = None
             self.spectrum_curve.clear()
             self.spectrum_plot.setToolTip("")
@@ -641,60 +649,26 @@ class SignalPanel(QtWidgets.QWidget):
                 )
             return
 
-        self._spectrum_waiting = True
+        self._spectrum_job.queue()
         self._set_status("spectrum", "Updating")
-        if self._spectrum_worker is None and not self._spectrum_timer.isActive():
-            self._spectrum_timer.start()
 
-    def _start_spectrum(self):
-        if not self._spectrum_waiting:
-            return
-
-        if self._spectrum_worker is not None:
-            return
-        if self.selected_signal is None or self.selected_signal.values.size < 4:
-            return
-
-        self._spectrum_waiting = False
-
-        worker = SpectrumWorker(
-            self._spectrum_revision,
-            self.selected_signal,
+    def _spectrum_worker(self, revision):
+        compute = functools.partial(
+            power_spectral_density,
             remove_mean=self.mean_check.isChecked(),
             window=self.window_combo.currentData(),
         )
-        worker.signals.finished.connect(
-            self._on_spectrum_finished,
-            QtCore.Qt.ConnectionType.QueuedConnection,
-        )
-        self._spectrum_worker = worker
-        QtCore.QThreadPool.globalInstance().start(worker)
+        return SignalWorker(revision, self.selected_signal, compute)
 
-    @QtCore.pyqtSlot(int, object, str)
-    def _on_spectrum_finished(self, revision, spectrum, error):
-        worker = self._spectrum_worker
-        self._spectrum_worker = None
-
-        if self._spectrum_waiting:
-            self._spectrum_timer.start()
-
-        if revision != self._spectrum_revision:
-            return
-
-        if spectrum is None:
-            if not self._spectrum_waiting:
-                self._spectrum = None
-                self.spectrum_curve.clear()
-                self._set_status(
-                    "spectrum",
-                    error or "Spectrum calculation failed",
-                    error=True,
-                )
-            return
-
+    def _on_spectrum_ready(self, worker, spectrum):
         self._spectrum_dt = worker.signal.dt
         self._spectrum = spectrum
         self._draw_spectrum()
+
+    def _on_spectrum_failed(self, error):
+        self._spectrum = None
+        self.spectrum_curve.clear()
+        self._set_status("spectrum", error, error=True)
 
     def _draw_spectrum(self):
         logarithmic = self.log_check.isChecked()
@@ -719,7 +693,7 @@ class SignalPanel(QtWidgets.QWidget):
             f"Nyquist: {0.5 / self._spectrum_dt:.6g} cycles/unit time"
         )
         self.spectrum_plot.setToolTip(text)
-        if self._spectrum_waiting or self._spectrum_worker is not None:
+        if self._spectrum_job.busy():
             self._set_status("spectrum", "Updating")
         elif logarithmic and not (spectrum.density > 0).any():
             self._set_status(
