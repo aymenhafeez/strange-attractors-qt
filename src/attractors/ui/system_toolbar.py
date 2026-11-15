@@ -3,8 +3,6 @@
 
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .icons import icon
-
 CONSOLE_PLOT_KINDS = [
     "Axis",
     "Projection",
