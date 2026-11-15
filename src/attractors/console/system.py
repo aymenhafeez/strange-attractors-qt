@@ -15,7 +15,7 @@ from ..core.sections import (
     plane_crossings,
     section_axes,
 )
-from ..core.signal_analysis import sample_times, trajectory_signal
+from ..core.signal_analysis import sample_times
 from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
 from ..core.trajectory_analysis import separation
@@ -307,6 +307,16 @@ class _Snapshot:
     state: dict
 
 
+@dataclass(frozen=True)
+class Series:
+    x: np.ndarray
+    y: np.ndarray
+    bottom: str
+    left: str
+    role: str = "data"
+    pen: object = None
+
+
 class LivePlotHandle:
     def __init__(self, controller, trace_id):
         self._controller = controller
@@ -336,11 +346,7 @@ class LivePlotHandle:
 
     @property
     def item(self):
-        items = self.items
-        if len(items) == 1:
-            return items[0]
-
-        return items or None
+        return self.items[0]
 
     @property
     def items(self):
@@ -373,13 +379,13 @@ class LivePlotHandle:
 
 
 class SystemInspector:
-    def __init__(self, settings, session, console, camera, commands=None):
+    def __init__(self, settings, session, console, camera, commands=None, live=None):
         self._settings = settings
         self._session = session
         self._console = console
         self._camera = camera
         self._commands = commands
-        self.live = None
+        self._live = live
 
     def __repr__(self):
         return (
@@ -577,10 +583,10 @@ class SystemInspector:
         return self._commands
 
     def _main_live(self):
-        if self.live is None:
+        if self._live is None:
             raise RuntimeError("Variant systems have no live plots")
 
-        return self.live
+        return self._live()
 
     def trajectories(self):
         rows = []
@@ -960,6 +966,130 @@ class SystemInspector:
             return pd.DataFrame(columns=columns)
         return pd.DataFrame(rows, columns=columns)
 
+    def axis_series(self, axis, trajectory=0, solutions=None):
+        axis_name = str(axis).lower()
+        column = self._axis_column(axis_name)
+        solution = self._solution(trajectory, solutions)
+
+        return [Series(self.time(trajectory), solution[:, column], "t", axis_name)]
+
+    def derived_series(self, kind, trajectory=0, solutions=None):
+        solution = self._solution(trajectory, solutions)
+        times = self.time(trajectory)
+
+        return [Series(times, DERIVED[kind](solution, times), "t", kind)]
+
+    def projection_series(self, x_axis="x", y_axis="y", trajectory=0, solutions=None):
+        x_name = str(x_axis).lower()
+        y_name = str(y_axis).lower()
+        x_column = self._axis_column(x_name)
+        y_column = self._axis_column(y_name)
+        solution = self._solution(trajectory, solutions)
+
+        return [Series(solution[:, x_column], solution[:, y_column], x_name, y_name)]
+
+    def separation_series(self, a=0, b=1, log=False):
+        frame = self.separation(a, b, log=log)
+        if log:
+            column, left = "log_distance", f"log separation {a}-{b}"
+        else:
+            column, left = "distance", f"separation {a}-{b}"
+
+        return [Series(frame["t"].to_numpy(), frame[column].to_numpy(), "t", left)]
+
+    def separation_fit_series(self, a=0, b=1, **window):
+        fit_frame, fit = self._separation_fit_result(a, b, **window)
+        frame = self.separation(a, b, log=True)
+        fit_t = fit_frame["t"].to_numpy()
+        left = f"log separation fit {a}-{b}"
+
+        return [
+            Series(frame["t"].to_numpy(), frame["log_distance"].to_numpy(), "t", left),
+            Series(fit_t, fit["slope"] * fit_t + fit["intercept"], "t", left, "fit"),
+        ]
+
+    def vector_field_series(
+        self,
+        x_axis="x",
+        y_axis="y",
+        *,
+        fixed_axis=None,
+        fixed_value=0.0,
+        x_range=None,
+        y_range=None,
+        density=21,
+        scale=0.75,
+        colour_by_speed=False,
+        speed_bands=5,
+    ):
+        frame = self.vector_field_slice(
+            x_axis,
+            y_axis,
+            fixed_axis=fixed_axis,
+            fixed_value=fixed_value,
+            x_range=x_range,
+            y_range=y_range,
+            density=density,
+        )
+        x_name = str(x_axis).lower()
+        y_name = str(y_axis).lower()
+        if not colour_by_speed:
+            x, y = self.vector_field_lines(frame, x_name, y_name, scale)
+            return [Series(x, y, x_name, y_name)]
+
+        return [
+            Series(x, y, x_name, y_name, "band", pen)
+            for x, y, pen in self._vector_field_speed_bands(
+                frame, x_name, y_name, scale, speed_bands
+            )
+        ]
+
+    def _solution(self, trajectory, solutions=None):
+        if solutions is None:
+            return self.solution(trajectory)
+        try:
+            return solutions[trajectory]
+        except IndexError as exc:
+            raise IndexError(f"No trajectory at index {trajectory}") from exc
+
+    def draw_series(
+        self,
+        series,
+        *,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        fit_pen=None,
+        label=None,
+        zoom_region=False,
+    ):
+        target = self._plot_target(plot)
+        items = []
+        for index, line in enumerate(series):
+            if line.role == "band":
+                kwargs = {"pen": line.pen}
+            elif line.role == "fit":
+                kwargs = line_kwargs(
+                    pen if fit_pen is None else fit_pen,
+                    None if label is None else f"{label} fit",
+                )
+            else:
+                kwargs = line_kwargs(pen, label)
+
+            items.append(
+                target.line(
+                    line.x,
+                    line.y,
+                    mode=mode if index == 0 else PLOT_MODE_OVERLAY,
+                    bottom=line.bottom,
+                    left=line.left,
+                    zoom_region=zoom_region,
+                    **kwargs,
+                )
+            )
+
+        return items
+
     def plot_projection(
         self,
         x_axis="x",
@@ -989,15 +1119,10 @@ class SystemInspector:
                 label=label,
             )
 
-        solution = self.solution(trajectory)
-        return self._plot_target(plot).line(
-            solution[:, x_col],
-            solution[:, y_col],
-            mode=plot_mode,
-            bottom=x_name,
-            left=y_name,
-            **line_kwargs(pen, label),
-        )
+        series = self.projection_series(x_name, y_name, trajectory)
+        return self.draw_series(
+            series, plot=plot, mode=plot_mode, pen=pen, label=label
+        )[0]
 
     def plot_xy(self, **kwargs):
         return self.plot_projection("x", "y", **kwargs)
@@ -1035,22 +1160,15 @@ class SystemInspector:
                 zoom_region=zoom_region,
             )
 
-        solution = self.solution(trajectory)
-        spec = self._trajectory_solve_spec(trajectory)
-        signal = trajectory_signal(
-            solution, axis_col, t_min=self._session.run.t_min, t_max=spec["t_max"]
-        )
-
-        return self._plot_timeseries(
-            signal.times,
-            signal.values,
-            axis_name,
+        series = self.axis_series(axis_name, trajectory)
+        return self.draw_series(
+            series,
             plot=plot,
             mode=plot_mode,
             pen=pen,
             label=label,
             zoom_region=zoom_region,
-        )
+        )[0]
 
     def plot_radius(self, **kwargs):
         return self._plot_derived("radius", **kwargs)
@@ -1088,20 +1206,15 @@ class SystemInspector:
                 zoom_region=zoom_region,
             )
 
-        frame = self.separation(a, b, log=log)
-        value_column = "log_distance" if log else "distance"
-        axis_label = f"log separation {a}-{b}" if log else f"separation {a}-{b}"
-
-        return self._plot_timeseries(
-            frame["t"].to_numpy(),
-            frame[value_column].to_numpy(),
-            axis_label,
+        series = self.separation_series(a, b, log)
+        return self.draw_series(
+            series,
             plot=plot,
             mode=plot_mode,
             pen=pen,
             label=label,
             zoom_region=zoom_region,
-        )
+        )[0]
 
     def plot_separation_fit(
         self,
@@ -1139,30 +1252,11 @@ class SystemInspector:
                 label=label,
             )
 
-        frame, fit = self._separation_fit_result(a, b, **window)
-        target = self._plot_target(plot)
-
-        self.plot_separation(
-            a,
-            b,
-            log=True,
-            plot=target,
-            mode=plot_mode,
-            pen=pen,
-            label=label,
-        )
-
-        fitted = fit["slope"] * frame["t"].to_numpy() + fit["intercept"]
-        return target.line(
-            frame["t"].to_numpy(),
-            fitted,
-            mode=PLOT_MODE_OVERLAY,
-            bottom="t",
-            left=f"log separation fit {a}-{b}",
-            **line_kwargs(
-                pen if fit_pen is None else fit_pen,
-                None if label is None else f"{label} fit",
-            ),
+        series = self.separation_fit_series(a, b, **window)
+        return tuple(
+            self.draw_series(
+                series, plot=plot, mode=plot_mode, pen=pen, fit_pen=fit_pen, label=label
+            )
         )
 
     def plot_crossings(
@@ -1317,7 +1411,7 @@ class SystemInspector:
                 speed_bands=int(speed_bands),
             )
 
-        frame = self.vector_field_slice(
+        series = self.vector_field_series(
             x_axis,
             y_axis,
             fixed_axis=fixed_axis,
@@ -1325,42 +1419,15 @@ class SystemInspector:
             x_range=x_range,
             y_range=y_range,
             density=density,
+            scale=scale,
+            colour_by_speed=colour_by_speed,
+            speed_bands=speed_bands,
         )
-        x_name = str(x_axis).lower()
-        y_name = str(y_axis).lower()
-        target = self._plot_target(plot)
-        if colour_by_speed:
-            items = []
-            for index, (x_data, y_data, band_pen) in enumerate(
-                self._vector_field_speed_bands(
-                    frame,
-                    x_name,
-                    y_name,
-                    scale,
-                    speed_bands,
-                )
-            ):
-                items.append(
-                    target.line(
-                        x_data,
-                        y_data,
-                        mode=plot_mode if index == 0 else PLOT_MODE_OVERLAY,
-                        bottom=x_name,
-                        left=y_name,
-                        pen=band_pen,
-                    )
-                )
-            return tuple(items)
+        items = self.draw_series(
+            series, plot=plot, mode=plot_mode, pen=pen, label=label
+        )
 
-        x_data, y_data = self.vector_field_lines(frame, x_name, y_name, scale)
-        return target.line(
-            x_data,
-            y_data,
-            mode=plot_mode,
-            bottom=x_name,
-            left=y_name,
-            **line_kwargs(pen, label),
-        )
+        return tuple(items) if colour_by_speed else items[0]
 
     def live_plots(self, table=False):
         data = self._main_live().frame()
@@ -1431,28 +1498,6 @@ class SystemInspector:
             padding = (float(high) - float(low)) * 0.05
 
         return float(low) - padding, float(high) + padding
-
-    def _plot_timeseries(
-        self,
-        times,
-        values,
-        axis_label,
-        *,
-        plot,
-        mode,
-        pen,
-        label=None,
-        zoom_region=False,
-    ):
-        return self._plot_target(plot).line(
-            times,
-            values,
-            mode=mode,
-            bottom="t",
-            left=axis_label,
-            zoom_region=zoom_region,
-            **line_kwargs(pen, label),
-        )
 
     def _plot_target(self, plot):
         if plot is None:
@@ -1745,18 +1790,15 @@ class SystemInspector:
                 zoom_region=zoom_region,
             )
 
-        frame = self._derived_frame(kind, trajectory)
-
-        return self._plot_timeseries(
-            frame["t"].to_numpy(),
-            frame[kind].to_numpy(),
-            kind,
+        series = self.derived_series(kind, trajectory)
+        return self.draw_series(
+            series,
             plot=plot,
             mode=plot_mode,
             pen=pen,
             label=label,
             zoom_region=zoom_region,
-        )
+        )[0]
 
     def _concat_frames(self, rows, columns):
         if not rows:
