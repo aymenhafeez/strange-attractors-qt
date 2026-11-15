@@ -1104,8 +1104,6 @@ class SystemInspector:
     ):
         x_name = str(x_axis).lower()
         y_name = str(y_axis).lower()
-        x_col = self._axis_column(x_name)
-        y_col = self._axis_column(y_name)
         plot_mode = parse_mode(mode)
         if live:
             return self._register_live_plot(
@@ -1146,7 +1144,6 @@ class SystemInspector:
         zoom_region=False,
     ):
         axis_name = str(axis).lower()
-        axis_col = self._axis_column(axis_name)
         plot_mode = parse_mode(mode)
         if live:
             return self._register_live_plot(
