@@ -325,10 +325,12 @@ class BifurcationPanel(QtWidgets.QWidget):
         self._update_axis_label()
 
     def _update_axis_label(self):
-        label = self.var_combo.currentText()
-        self.plot_widget.setLabel("left", label)
+        left_label = self.var_combo.currentText()
+        bottom_label = self.param_combo.currentText()
+        self.plot_widget.setLabel("left", left_label)
+        self.plot_widget.setLabel("bottom", bottom_label)
         if self._zoom is not None:
-            self._zoom.set_label(label)
+            self._zoom.set_label(left_label)
 
     def _set_zoom_enabled(self, enabled):
         if enabled and self._zoom is None:
