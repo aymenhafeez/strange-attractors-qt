@@ -69,21 +69,15 @@ class PoincarePanel(QtWidgets.QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(4)
 
-        solve_row = QtWidgets.QHBoxLayout()
-        solve_row.setSpacing(8)
-
         self.solve_btn = QtWidgets.QPushButton("Run")
         self.solve_btn.clicked.connect(self._start_solve)
-        solve_row.addWidget(self.solve_btn)
 
         self.auto_check = QtWidgets.QCheckBox("Auto")
         self.auto_check.setChecked(True)
         self.auto_check.setToolTip("Auto solve when attractor parameters change")
-        solve_row.addWidget(self.auto_check)
 
         self.heatmap_check = QtWidgets.QCheckBox("Heatmap")
         self.heatmap_check.setChecked(True)
-        solve_row.addWidget(self.heatmap_check)
 
         self.dropdown = QtWidgets.QComboBox()
         colourmaps = pg.colormap.listMaps(source="matplotlib")
@@ -92,84 +86,47 @@ class PoincarePanel(QtWidgets.QWidget):
         self.dropdown.currentTextChanged.connect(self._update_colourmap)
         self.dropdown.setMaxVisibleItems(12)
         self.dropdown.setStyleSheet("QComboBox { combobox-popup: 0; }")
-        solve_row.addWidget(QtWidgets.QLabel("Map:"))
-        solve_row.addWidget(self.dropdown)
 
         self.planar_view_combo = QtWidgets.QComboBox()
         self.planar_view_combo.addItems(
             ["Crossing index", "Return map", "Return interval"]
         )
         self.planar_view_combo.currentTextChanged.connect(self.recompute)
-        self.planar_view_combo.hide()
-        solve_row.addWidget(self.planar_view_combo)
-
-        solve_row.addStretch(1)
-        layout.addLayout(solve_row)
-
-        ctrl_row = QtWidgets.QHBoxLayout()
-        ctrl_row.setSpacing(8)
 
         self.tmax_spin = QtWidgets.QDoubleSpinBox()
         self.tmax_spin.setRange(1, 100000)
         self.tmax_spin.setSingleStep(100)
         self.tmax_spin.setDecimals(0)
         self.tmax_spin.setValue(500)
-        self.tmax_spin.setFixedWidth(88)
-        ctrl_row.addWidget(QtWidgets.QLabel("t_max:"))
-        ctrl_row.addWidget(self.tmax_spin)
 
         self.n_spin = QtWidgets.QSpinBox()
         self.n_spin.setRange(1000, 10000000)
         self.n_spin.setSingleStep(1000)
         self.n_spin.setValue(100000)
-        self.n_spin.setFixedWidth(112)
-        ctrl_row.addWidget(QtWidgets.QLabel("n:"))
-        ctrl_row.addWidget(self.n_spin)
 
         self.plane_combo = QtWidgets.QComboBox()
         self.plane_combo.addItems(["x", "y", "z"])
-        self.plane_combo.setFixedWidth(58)
-        ctrl_row.addWidget(QtWidgets.QLabel("Plane:"))
-        ctrl_row.addWidget(self.plane_combo)
 
         self.dir_combo = QtWidgets.QComboBox()
         self.dir_combo.addItems(["both", "rising", "falling"])
-        self.dir_combo.setFixedWidth(92)
-        ctrl_row.addWidget(QtWidgets.QLabel("Dir:"))
-        ctrl_row.addWidget(self.dir_combo)
 
         self.value_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.value_slider.setRange(0, SLIDER_STEPS)
         self.value_slider.setEnabled(False)
         self.value_slider.setMinimumWidth(100)
         self.value_slider.valueChanged.connect(self._on_slider_changed)
-        ctrl_row.addWidget(self.value_slider)
 
         self.value_spin = QtWidgets.QDoubleSpinBox()
         self.value_spin.setRange(-1000, 1000)
         self.value_spin.setSingleStep(0.5)
         self.value_spin.setDecimals(3)
-        self.value_spin.setFixedWidth(88)
-        ctrl_row.addWidget(QtWidgets.QLabel("Value:"))
-        ctrl_row.addWidget(self.value_spin)
-
-        ctrl_row.addStretch(1)
-        layout.addLayout(ctrl_row)
-
-        self.sampling_controls = QtWidgets.QWidget()
-        sampling_layout = QtWidgets.QHBoxLayout(self.sampling_controls)
 
         self.transient_spin = QtWidgets.QDoubleSpinBox()
         self.transient_spin.setRange(0, 99)
         self.transient_spin.setSuffix("%")
         self.transient_spin.setValue(20)
         self.transient_spin.setKeyboardTracking(False)
-
-        sampling_layout.addWidget(QtWidgets.QLabel("Discard"))
-        sampling_layout.addWidget(self.transient_spin)
         self.transient_spin.valueChanged.connect(self.recompute)
-
-        sampling_layout.setContentsMargins(0, 0, 0, 0)
 
         self.section_mode_combo = QtWidgets.QComboBox()
         self.section_mode_combo.addItems(["Line", "Stroboscopic"])
@@ -186,18 +143,71 @@ class PoincarePanel(QtWidgets.QWidget):
         self.phase_spin.setRange(-1000000, 1000000)
         self.phase_spin.setKeyboardTracking(False)
 
-        sampling_layout.addWidget(self.section_mode_combo)
-        sampling_layout.addWidget(QtWidgets.QLabel("Period:"))
-        sampling_layout.addWidget(self.period_spin)
-        sampling_layout.addWidget(QtWidgets.QLabel("Phase time:"))
-        sampling_layout.addWidget(self.phase_spin)
-        layout.addWidget(self.sampling_controls)
-
         self.section_mode_combo.currentTextChanged.connect(
             self._on_section_mode_changed
         )
         self.period_spin.valueChanged.connect(self.recompute)
         self.phase_spin.valueChanged.connect(self.recompute)
+
+        right = QtCore.Qt.AlignmentFlag.AlignRight
+        grid = QtWidgets.QGridLayout()
+
+        section_label = QtWidgets.QLabel("Section:")
+        period_label = QtWidgets.QLabel("Period:")
+        phase_label = QtWidgets.QLabel("Phase time:")
+        view_label = QtWidgets.QLabel("View:")
+        grid.addWidget(section_label, 0, 0, right)
+        grid.addWidget(self.section_mode_combo, 0, 1)
+        grid.addWidget(period_label, 0, 2, right)
+        grid.addWidget(self.period_spin, 0, 3)
+        grid.addWidget(phase_label, 0, 4, right)
+        grid.addWidget(self.phase_spin, 0, 5)
+        grid.addWidget(view_label, 0, 6, right)
+        grid.addWidget(self.planar_view_combo, 0, 7)
+
+        grid.addWidget(QtWidgets.QLabel("Plane:"), 1, 0, right)
+        grid.addWidget(self.plane_combo, 1, 1)
+        grid.addWidget(QtWidgets.QLabel("Dir:"), 1, 2, right)
+        grid.addWidget(self.dir_combo, 1, 3)
+        grid.addWidget(QtWidgets.QLabel("Value:"), 1, 4, right)
+        grid.addWidget(self.value_spin, 1, 5)
+        grid.addWidget(self.value_slider, 1, 6, 1, 2)
+
+        discard_label = QtWidgets.QLabel("Discard:")
+        grid.addWidget(QtWidgets.QLabel("t_max:"), 2, 0, right)
+        grid.addWidget(self.tmax_spin, 2, 1)
+        grid.addWidget(QtWidgets.QLabel("n:"), 2, 2, right)
+        grid.addWidget(self.n_spin, 2, 3)
+        grid.addWidget(discard_label, 2, 4, right)
+        grid.addWidget(self.transient_spin, 2, 5)
+        grid.setColumnStretch(8, 1)
+
+        self.planar_controls = [
+            section_label,
+            self.section_mode_combo,
+            period_label,
+            self.period_spin,
+            phase_label,
+            self.phase_spin,
+            view_label,
+            self.planar_view_combo,
+            discard_label,
+            self.transient_spin,
+        ]
+        for widget in self.planar_controls:
+            widget.hide()
+
+        actions = QtWidgets.QGridLayout()
+        actions.addWidget(self.auto_check, 0, 0)
+        actions.addWidget(self.solve_btn, 0, 1, QtCore.Qt.AlignmentFlag.AlignLeft)
+        actions.addWidget(self.heatmap_check, 1, 0)
+        actions.addWidget(self.dropdown, 1, 1)
+        actions.setRowStretch(2, 1)
+
+        toolbar = QtWidgets.QHBoxLayout()
+        toolbar.addLayout(grid, 1)
+        toolbar.addLayout(actions)
+        layout.addLayout(toolbar)
 
         self._error_label = QtWidgets.QLabel("")
         self._error_label.setStyleSheet("color: #ff6b6b; font-size: 11px;")
@@ -259,8 +269,8 @@ class PoincarePanel(QtWidgets.QWidget):
             self.plane_combo.setCurrentText(axis)
 
         is_2d = config.dimension == 2
-        self.planar_view_combo.setVisible(is_2d)
-        self.sampling_controls.setVisible(is_2d)
+        for widget in self.planar_controls:
+            widget.setVisible(is_2d)
 
         if is_2d and old_dimension != 2:
             self.dir_combo.setCurrentText("rising")
