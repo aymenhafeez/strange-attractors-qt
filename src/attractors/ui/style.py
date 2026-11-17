@@ -221,8 +221,8 @@ PANEL_INPUTS = """
         border: 1px solid palette(accent);
     }
     QWidget#panelSurface QAbstractSpinBox {
-        min-width: 3.5em;
-        max-width: 3.5em;
+        min-width: 3.2em;
+        max-width: 3.2em;
     }
 """
 
