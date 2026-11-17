@@ -143,7 +143,7 @@ class BifurcationPanel(QtWidgets.QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         toolbar = QtWidgets.QHBoxLayout()
 
-        toolbar_layout1 = QtWidgets.QVBoxLayout()
+        grid = QtWidgets.QGridLayout()
         self.param_combo = QtWidgets.QComboBox()
         self.param_combo.currentTextChanged.connect(self._update_defaults)
 
@@ -160,17 +160,6 @@ class BifurcationPanel(QtWidgets.QWidget):
         ):
             self.sampling_combo.addItem(label, mode)
 
-        row1 = QtWidgets.QHBoxLayout()
-        for text, widget in (
-            ("Sweep param:", self.param_combo),
-            ("  Variable:", self.var_combo),
-            ("Sampling:", self.sampling_combo),
-        ):
-            row1.addWidget(QtWidgets.QLabel(text))
-            row1.addWidget(widget)
-        row1.addStretch(1)
-        toolbar_layout1.addLayout(row1)
-
         self.period_spin = QtWidgets.QDoubleSpinBox()
         self.period_spin.setDecimals(6)
         self.period_spin.setRange(1e-6, 1e6)
@@ -181,25 +170,6 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.phase_spin.setDecimals(6)
         self.phase_spin.setRange(-1e6, 1e6)
         self.phase_spin.setKeyboardTracking(False)
-
-        self.period_controls = QtWidgets.QWidget()
-        period_layout = QtWidgets.QHBoxLayout(self.period_controls)
-        period_layout.setContentsMargins(0, 0, 0, 0)
-        for text, widget in (
-            ("Period:", self.period_spin),
-            ("Phase time:", self.phase_spin),
-        ):
-            period_layout.addWidget(QtWidgets.QLabel(text))
-            period_layout.addWidget(widget)
-
-        self.period_controls.hide()
-        self.sampling_combo.currentIndexChanged.connect(
-            lambda _index: self.period_controls.setVisible(
-                self.sampling_combo.currentData() == "stroboscopic"
-            )
-        )
-        period_layout.addStretch()
-        toolbar_layout1.addWidget(self.period_controls)
 
         self.min_spin = QtWidgets.QDoubleSpinBox()
         self.min_spin.setDecimals(6)
@@ -226,18 +196,43 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.size_spin.setValue(0.15)
         self.size_spin.setKeyboardTracking(False)
 
-        row2 = QtWidgets.QHBoxLayout()
-        for text, widget in (
-            ("From:", self.min_spin),
-            ("To:", self.max_spin),
-            ("Steps:", self.steps_spin),
-            ("Transient:", self.transient_spin),
-            ("Size:", self.size_spin),
-        ):
-            row2.addWidget(QtWidgets.QLabel(text))
-            row2.addWidget(widget)
-        row2.addStretch()
-        toolbar_layout1.addLayout(row2)
+        right = QtCore.Qt.AlignmentFlag.AlignRight
+        grid.addWidget(QtWidgets.QLabel("Parameter:"), 0, 0, right)
+        grid.addWidget(self.param_combo, 0, 1)
+        grid.addWidget(QtWidgets.QLabel("Variable:"), 0, 2, right)
+        grid.addWidget(self.var_combo, 0, 3)
+        grid.addWidget(QtWidgets.QLabel("Sampling:"), 0, 4, right)
+        grid.addWidget(
+            self.sampling_combo, 0, 5, 1, 5, QtCore.Qt.AlignmentFlag.AlignLeft
+        )
+
+        grid.addWidget(QtWidgets.QLabel("From:"), 1, 0, right)
+        grid.addWidget(self.min_spin, 1, 1)
+        grid.addWidget(QtWidgets.QLabel("To:"), 1, 2, right)
+        grid.addWidget(self.max_spin, 1, 3)
+        grid.addWidget(QtWidgets.QLabel("Steps:"), 1, 4, right)
+        grid.addWidget(self.steps_spin, 1, 5)
+        grid.addWidget(QtWidgets.QLabel("Transient:"), 1, 6, right)
+        grid.addWidget(self.transient_spin, 1, 7)
+        grid.addWidget(QtWidgets.QLabel("Size:"), 1, 8, right)
+        grid.addWidget(self.size_spin, 1, 9)
+
+        period_label = QtWidgets.QLabel("Period:")
+        phase_label = QtWidgets.QLabel("Phase time:")
+        grid.addWidget(period_label, 2, 0, right)
+        grid.addWidget(self.period_spin, 2, 1)
+        grid.addWidget(phase_label, 2, 2, right)
+        grid.addWidget(self.phase_spin, 2, 3)
+        grid.setColumnStretch(10, 1)
+
+        self.period_controls = [
+            period_label,
+            self.period_spin,
+            phase_label,
+            self.phase_spin,
+        ]
+        self._set_period_visible()
+        self.sampling_combo.currentIndexChanged.connect(self._set_period_visible)
 
         toolbar_layout2 = QtWidgets.QVBoxLayout()
         row3 = QtWidgets.QHBoxLayout()
@@ -297,12 +292,17 @@ class BifurcationPanel(QtWidgets.QWidget):
         self.plot_layout.setSpacing(0)
         self.plot_layout.addWidget(self.plot_widget)
 
-        toolbar.addLayout(toolbar_layout1)
+        toolbar.addLayout(grid)
         toolbar.addLayout(toolbar_layout2)
         layout.addLayout(toolbar)
         layout.addWidget(self.progress)
         layout.addWidget(self._error_label)
         layout.addLayout(self.plot_layout, 1)
+
+    def _set_period_visible(self):
+        visible = self.sampling_combo.currentData() == "stroboscopic"
+        for widget in self.period_controls:
+            widget.setVisible(visible)
 
     def _update_defaults(self):
         if self.config is None:
