@@ -44,7 +44,7 @@ class SolveRun:
     request_id: int | None
     config: AttractorConfig
     parameters: dict
-    trajectory_specs: tuple  # ({"ic", "n", "t_max"}, ...)
+    trajectory_specs: tuple
     labels: tuple
     colours: tuple
     partial: bool
@@ -253,13 +253,12 @@ class SolveSession(QtCore.QObject):
             solution_points=[len(solution) for solution in solutions],
         )
 
-        if self._perf.enabled:
-            self._perf._logger.info(
-                "solve.ui completed in %.3f ms (request_id=%s partial=%s validation_ms=%.3f)",
-                (time.perf_counter() - ui_start) * 1000,
-                request_id,
-                is_partial,
-                validation_ms,
-            )
+        self._perf.log(
+            "solve.ui",
+            (time.perf_counter() - ui_start) * 1000,
+            request_id=request_id,
+            partial=is_partial,
+            validation_ms=round(validation_ms, 3),
+        )
 
         self._dispatch_queued()

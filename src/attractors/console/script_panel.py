@@ -223,7 +223,7 @@ class ScriptPanel(QtWidgets.QWidget):
 
         return sorted(examples_dir.glob("*.py"), key=lambda p: p.name.lower())
 
-    def _on_path_renamed(self, old_path, new_path):
+    def on_path_renamed(self, old_path, new_path):
         old_path = Path(old_path).resolve()
         new_path = Path(new_path).resolve()
         active_editor = self.editor
@@ -248,7 +248,7 @@ class ScriptPanel(QtWidgets.QWidget):
             self._update_status("Renamed")
             self.script_changed.emit(current_path)
 
-    def _on_path_deleted(self, path):
+    def on_path_deleted(self, path):
         for editor, editor_path in list(self._paths.items()):
             if self._check_match(path, editor_path):
                 self._remove_editor(editor)
@@ -468,7 +468,7 @@ class ScriptPanel(QtWidgets.QWidget):
             self._ensure_scratch()
             self.load_script(self.script_path)
 
-    def _confirm_delete(self, path):
+    def confirm_delete(self, path):
         affected = [
             editor
             for editor, editor_path in self._paths.items()

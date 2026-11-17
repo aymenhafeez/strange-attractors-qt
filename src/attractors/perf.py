@@ -4,7 +4,6 @@
 import logging
 import os
 import time
-from contextlib import contextmanager
 
 PROFILE_ENV = "ANALYSIS_PROFILE"
 LOGGER_NAME = "attractors.perf"
@@ -39,22 +38,14 @@ class PerfProfiler:
 
         start, start_fields = started
         elapsed_ms = (self._clock() - start) * 1000.0
-        payload = {**start_fields, **fields}
-        self._logger.info(
-            "%s completed in %.1f ms%s",
-            token[0],
-            elapsed_ms,
-            _format_fields(payload),
-        )
+        self.log(token[0], elapsed_ms, **{**start_fields, **fields})
         return elapsed_ms
 
-    @contextmanager
-    def measure(self, name, **fields):
-        token = self.start(name, **fields)
-        try:
-            yield
-        finally:
-            self.finish(token)
+    def log(self, name, elapsed_ms, **fields):
+        if self.enabled:
+            self._logger.info(
+                "%s completed in %.3f ms%s", name, elapsed_ms, _format_fields(fields)
+            )
 
 
 def _format_fields(fields):
@@ -75,17 +66,3 @@ def configure_perf_logging():
     )
     logging.getLogger(LOGGER_NAME).setLevel(logging.INFO)
     return True
-
-
-def perf_start(owner, name, key=None, **fields):
-    profiler = getattr(owner, "_perf", None)
-    if profiler is None:
-        return None
-    return profiler.start(name, key=key, **fields)
-
-
-def perf_finish(owner, token, **fields):
-    profiler = getattr(owner, "_perf", None)
-    if profiler is None:
-        return None
-    return profiler.finish(token, **fields)

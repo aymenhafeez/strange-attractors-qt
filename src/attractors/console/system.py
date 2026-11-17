@@ -15,7 +15,7 @@ from ..core.sections import (
     plane_crossings,
     section_axes,
 )
-from ..core.signal_analysis import sample_times, trajectory_signal
+from ..core.signal_analysis import sample_times
 from ..core.solution_validation import validate_solutions
 from ..core.solver import solve_attractor
 from ..core.trajectory_analysis import separation
@@ -169,6 +169,28 @@ EXAMPLE_ROWS = [
     ("Export manageable data", "df = system.sample(2000)"),
 ]
 
+SEPARATION_WINDOW = ("t_min", "t_max", "step_min", "step_max")
+
+SEPARATION_SUMMARY_KEYS = (
+    "trajectory_a",
+    "trajectory_b",
+    "points",
+    "finite_points",
+    "initial_distance",
+    "final_distance",
+    "min_distance",
+    "median_distance",
+    "max_distance",
+    "growth_ratio",
+    "log_slope",
+    "log_intercept",
+    "log_r2",
+    "t_min",
+    "t_max",
+    "step_min",
+    "step_max",
+)
+
 
 def _inspectable_config(config):
     if config is None:
@@ -201,29 +223,46 @@ def _normalise_initial_conditions(initial_conditions, dimension=3):
     return array.tolist()
 
 
-def _console_n(value):
+def _radius(solution, _times):
+    return np.linalg.norm(solution, axis=1)
+
+
+def _displacement(solution, _times):
+    if len(solution) == 0:
+        return np.array([], dtype=np.float64)
+
+    return np.linalg.norm(solution - solution[0], axis=1)
+
+
+def _speed(solution, times):
+    if len(solution) < 2:
+        return np.zeros(len(solution), dtype=np.float64)
+
+    return np.linalg.norm(np.gradient(solution, times, axis=0), axis=1)
+
+
+DERIVED = {"radius": _radius, "speed": _speed, "displacement": _displacement}
+
+
+def _int_in_range(value, label, lo=1, hi=None):
+    if hi is not None:
+        message = f"{label} must be between {lo} and {hi}"
+    elif lo == 1:
+        message = f"{label} must be a positive integer"
+    else:
+        message = f"{label} must be at least {lo}"
+
     try:
-        n = int(value)
+        number = int(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError("N must be a positive integer") from exc
-    if n < 1000 or n > 500000:
-        raise ValueError("N must be between 1000 and 500000")
+        raise ValueError(message) from exc
+    if number < lo or (hi is not None and number > hi):
+        raise ValueError(message)
 
-    return n
-
-
-def _console_t_max(value):
-    try:
-        t_max = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("t_max must be a positive integer") from exc
-    if t_max < 1 or t_max > 750:
-        raise ValueError("t_max must be between 1 and 750")
-
-    return t_max
+    return number
 
 
-def _parameter_updates(config, values):
+def _parameter_updates(config, values, *, check_bounds=True):
     params = {param.name: param for param in config.params}
     updates = {}
     for name, value in values.items():
@@ -236,7 +275,7 @@ def _parameter_updates(config, values):
             raise ValueError(f"Parameter {key} must be numeric") from exc
 
         param = params[key]
-        if numeric < param.min_val or numeric > param.max_val:
+        if check_bounds and not param.min_val <= numeric <= param.max_val:
             raise ValueError(
                 f"Parameter {key} must be between {param.min_val} and {param.max_val}"
             )
@@ -268,6 +307,16 @@ class _Snapshot:
     state: dict
 
 
+@dataclass(frozen=True)
+class Series:
+    x: np.ndarray
+    y: np.ndarray
+    bottom: str
+    left: str
+    role: str = "data"
+    pen: object = None
+
+
 class LivePlotHandle:
     def __init__(self, controller, trace_id):
         self._controller = controller
@@ -297,11 +346,7 @@ class LivePlotHandle:
 
     @property
     def item(self):
-        items = self.items
-        if len(items) == 1:
-            return items[0]
-
-        return items or None
+        return self.items[0]
 
     @property
     def items(self):
@@ -334,13 +379,13 @@ class LivePlotHandle:
 
 
 class SystemInspector:
-    def __init__(self, settings, session, console, camera, commands=None):
+    def __init__(self, settings, session, console, camera, commands=None, live=None):
         self._settings = settings
         self._session = session
         self._console = console
         self._camera = camera
         self._commands = commands
-        self.live = None
+        self._live = live
 
     def __repr__(self):
         return (
@@ -358,7 +403,7 @@ class SystemInspector:
 
     @property
     def variables(self):
-        config = self.config
+        config = self._settings().config
         if config is None:
             return COORDINATE_COLUMNS
 
@@ -390,7 +435,7 @@ class SystemInspector:
 
     @property
     def t_min(self):
-        config = self.config
+        config = self._settings().config
         if config is None:
             return 0
         return config.time_defaults.t_min
@@ -408,7 +453,7 @@ class SystemInspector:
     def has_solutions(self):
         return bool(self.solutions)
 
-    def _optional_help_table(self, data, table, name):
+    def _show_table(self, data, table, name):
         if not table:
             return data
 
@@ -417,11 +462,11 @@ class SystemInspector:
 
     def help(self, table=False):
         data = pd.DataFrame(HELP_ROWS, columns=["category", "method", "description"])
-        return self._optional_help_table(data, table, "System help")
+        return self._show_table(data, table, "System help")
 
     def examples(self, table=False):
         data = pd.DataFrame(EXAMPLE_ROWS, columns=["task", "commands"])
-        return self._optional_help_table(data, table, "System examples")
+        return self._show_table(data, table, "System examples")
 
     def summary(self, table=False):
         bounds = self.bounds()
@@ -445,9 +490,9 @@ class SystemInspector:
 
         data = pd.Series(result)
 
-        return self._optional_help_table(data, table, "System summary")
+        return self._show_table(data, table, "System summary")
 
-    def status(self, table=True):
+    def status(self, table=False):
         state = self._session.state
         result = {
             **state,
@@ -457,54 +502,43 @@ class SystemInspector:
         }
         data = pd.Series(result)
 
-        return self._optional_help_table(data, table, "System status")
+        return self._show_table(data, table, "System status")
 
     def describe(self, table=False):
-        config = self.config
+        config = self._settings().config
         if config is None:
-            return pd.Series({"name": self.name, "description": ""})
-
-        data = pd.Series(
-            {
-                "name": self.name,
-                "config_name": config.name,
-                "description": config.description,
-                "equation": config.equation_text,
-            }
-        )
-
-        return self._optional_help_table(data, table, "System description")
-
-    def parameters(self, table=False):
-        config = self.config
-        if config is None:
-            return pd.DataFrame(
-                columns=["value", "default", "min", "max", "step"],
-                index=pd.Index([], name="name"),
-            )
-
-        rows = []
-        values = self.values
-        for param in config.params:
-            rows.append(
+            data = pd.Series({"name": self.name, "description": ""})
+        else:
+            data = pd.Series(
                 {
-                    "name": param.name,
-                    "value": values.get(param.name),
-                    "default": param.default,
-                    "min": param.min_val,
-                    "max": param.max_val,
-                    "step": param.step,
+                    "name": self.name,
+                    "config_name": config.name,
+                    "description": config.description,
+                    "equation": config.equation_text,
                 }
             )
-        if not rows:
-            return pd.DataFrame(
-                columns=["value", "default", "min", "max", "step"],
-                index=pd.Index([], name="name"),
-            )
 
-        data = pd.DataFrame(rows).set_index("name")
+        return self._show_table(data, table, "System description")
 
-        return self._optional_help_table(data, table, "System parameters")
+    def parameters(self, table=False):
+        config = self._settings().config
+        values = self.values
+        rows = [
+            {
+                "name": param.name,
+                "value": values.get(param.name),
+                "default": param.default,
+                "min": param.min_val,
+                "max": param.max_val,
+                "step": param.step,
+            }
+            for param in ([] if config is None else config.params)
+        ]
+        data = pd.DataFrame(
+            rows, columns=["name", "value", "default", "min", "max", "step"]
+        ).set_index("name")
+
+        return self._show_table(data, table, "System parameters")
 
     # these three are controls for updating the main viewport plot from the console
     def set_parameters(self, values, *, solve=False):
@@ -525,8 +559,10 @@ class SystemInspector:
     def set_time(self, *, n=None, t_max=None, solve=False):
         commands = self._main_commands()
         settings = self._settings()
-        next_n = settings.n if n is None else _console_n(n)
-        next_t_max = settings.t_max if t_max is None else _console_t_max(t_max)
+        next_n = settings.n if n is None else _int_in_range(n, "N", 1000, 500000)
+        next_t_max = (
+            settings.t_max if t_max is None else _int_in_range(t_max, "t_max", 1, 750)
+        )
         commands.set_time(next_n, next_t_max)
         if solve:
             commands.solve()
@@ -547,10 +583,10 @@ class SystemInspector:
         return self._commands
 
     def _main_live(self):
-        if self.live is None:
+        if self._live is None:
             raise RuntimeError("Variant systems have no live plots")
 
-        return self.live
+        return self._live()
 
     def trajectories(self):
         rows = []
@@ -605,12 +641,15 @@ class SystemInspector:
         t_max=None,
         initial_conditions=None,
     ):
-        config = self.config
+        config = self._settings().config
         if config is None:
             raise ValueError("No attractor selected")
 
-        variant_values = self._variant_values(values)
-        solve_n = self._positive_int(self.n if n is None else n, "n")
+        variant_values = {
+            **self.values,
+            **_parameter_updates(config, values or {}, check_bounds=False),
+        }
+        solve_n = _int_in_range(self.n if n is None else n, "n")
         solve_t_max = self.t_max if t_max is None else float(t_max)
         if solve_t_max <= self.t_min:
             raise ValueError("t_max must be greater than t_min")
@@ -708,88 +747,37 @@ class SystemInspector:
         )
 
     def to_dataframe(self, trajectory=None):
-        rows = []
-        solutions = self.solutions
-        selected = range(len(solutions)) if trajectory is None else [trajectory]
+        rows = [
+            self._series_frame(
+                i, dict(zip(self.variables, self.solution(i).T, strict=True))
+            )
+            for i in self._selected_trajectories(trajectory)
+        ]
 
-        for i in selected:
-            solution = self.solution(i)
-            frame = pd.DataFrame(solution, columns=self.variables)
-            frame.insert(0, "t", self.time(i))
-            frame.insert(0, "step", np.arange(len(solution)))
-            frame.insert(0, "trajectory", i)
-            rows.append(frame)
-
-        if not rows:
-            return pd.DataFrame(columns=["trajectory", "step", "t", *self.variables])
-
-        return pd.concat(rows, ignore_index=True)
+        return self._concat_frames(rows, ["trajectory", "step", "t", *self.variables])
 
     def sample(self, n, trajectory=None):
-        try:
-            sample_size = int(n)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Sample size must be a positive integer") from exc
-        if sample_size <= 0:
-            raise ValueError("Sample size must be a positive integer")
-
+        sample_size = _int_in_range(n, "Sample size")
         rows = []
-        solutions = self.solutions
-        selected = range(len(solutions)) if trajectory is None else [trajectory]
-        for i in selected:
+        for i in self._selected_trajectories(trajectory):
             solution = self.solution(i)
-            indices = self._sample_indices(len(solution), sample_size)
-            frame = pd.DataFrame(solution[indices].copy(), columns=self.variables)
-            times = self.time(i)
-            frame.insert(0, "t", times[indices])
-            frame.insert(0, "step", indices)
-            frame.insert(0, "trajectory", i)
-            rows.append(frame)
+            steps = self._sample_indices(len(solution), sample_size)
+            rows.append(
+                self._series_frame(
+                    i, dict(zip(self.variables, solution[steps].T, strict=True)), steps
+                )
+            )
 
-        if not rows:
-            return pd.DataFrame(columns=["trajectory", "step", "t", *self.variables])
-
-        return pd.concat(rows, ignore_index=True)
+        return self._concat_frames(rows, ["trajectory", "step", "t", *self.variables])
 
     def radius(self, trajectory=None):
-        rows = []
-        for i in self._selected_trajectories(trajectory):
-            solution = self.solution(i)
-            radius = np.linalg.norm(solution, axis=1)
-            rows.append(self._series_frame(i, {"radius": radius}))
-
-        return self._concat_frames(rows, ["trajectory", "step", "t", "radius"])
+        return self._derived_frame("radius", trajectory)
 
     def displacement(self, trajectory=None):
-        rows = []
-        for i in self._selected_trajectories(trajectory):
-            solution = self.solution(i)
-            if len(solution) == 0:
-                displacement = np.array([], dtype=np.float64)
-            else:
-                displacement = np.linalg.norm(solution - solution[0], axis=1)
-
-            rows.append(self._series_frame(i, {"displacement": displacement}))
-
-        return self._concat_frames(
-            rows,
-            ["trajectory", "step", "t", "displacement"],
-        )
+        return self._derived_frame("displacement", trajectory)
 
     def speed(self, trajectory=None):
-        rows = []
-        for i in self._selected_trajectories(trajectory):
-            solution = self.solution(i)
-            times = self.time(i)
-            if len(solution) < 2:
-                speed = np.zeros(len(solution), dtype=np.float64)
-            else:
-                velocity = np.gradient(solution, times, axis=0)
-                speed = np.linalg.norm(velocity, axis=1)
-
-            rows.append(self._series_frame(i, {"speed": speed}))
-
-        return self._concat_frames(rows, ["trajectory", "step", "t", "speed"])
+        return self._derived_frame("speed", trajectory)
 
     def separation(self, a=0, b=1, *, log=False):
         times, distance = separation(
@@ -822,18 +810,9 @@ class SystemInspector:
         step_min=None,
         step_max=None,
     ):
-        frame = self._separation_fit_frame(
-            a,
-            b,
-            t_min=t_min,
-            t_max=t_max,
-            step_min=step_min,
-            step_max=step_max,
+        frame, fit = self._separation_fit_result(
+            a, b, t_min=t_min, t_max=t_max, step_min=step_min, step_max=step_max
         )
-        if len(frame) < 2:
-            raise ValueError("At least two finite log-separation points are required")
-
-        fit = self._fit_log_separation(frame)
 
         return pd.Series(
             {
@@ -860,36 +839,18 @@ class SystemInspector:
         step_min=None,
         step_max=None,
     ):
-        frame = self._separation_frame(
-            a,
-            b,
-            t_min=t_min,
-            t_max=t_max,
-            step_min=step_min,
-            step_max=step_max,
-        )
+        window = {
+            "t_min": t_min,
+            "t_max": t_max,
+            "step_min": step_min,
+            "step_max": step_max,
+        }
+        frame = self._separation_frame(a, b, **window)
 
         if frame.empty:
             return pd.Series(
-                {
-                    "trajectory_a": a,
-                    "trajectory_b": b,
-                    "points": 0,
-                    "finite_points": 0,
-                    "initial_distance": np.nan,
-                    "final_distance": np.nan,
-                    "min_distance": np.nan,
-                    "median_distance": np.nan,
-                    "max_distance": np.nan,
-                    "growth_ratio": np.nan,
-                    "log_slope": np.nan,
-                    "log_intercept": np.nan,
-                    "log_r2": np.nan,
-                    "t_min": np.nan,
-                    "t_max": np.nan,
-                    "step_min": np.nan,
-                    "step_max": np.nan,
-                }
+                {"trajectory_a": a, "trajectory_b": b, "points": 0, "finite_points": 0},
+                index=SEPARATION_SUMMARY_KEYS,
             )
 
         distance = frame["distance"].to_numpy(dtype=np.float64)
@@ -913,14 +874,7 @@ class SystemInspector:
         else:
             growth_ratio = np.nan
 
-        fit = self._separation_summary_fit(
-            a,
-            b,
-            t_min=t_min,
-            t_max=t_max,
-            step_min=step_min,
-            step_max=step_max,
-        )
+        fit = self._separation_summary_fit(a, b, **window)
 
         return pd.Series(
             {
@@ -941,7 +895,8 @@ class SystemInspector:
                 "t_max": frame["t"].iloc[-1],
                 "step_min": int(frame["step"].iloc[0]),
                 "step_max": int(frame["step"].iloc[-1]),
-            }
+            },
+            index=SEPARATION_SUMMARY_KEYS,
         )
 
     def crossings(
@@ -1011,6 +966,130 @@ class SystemInspector:
             return pd.DataFrame(columns=columns)
         return pd.DataFrame(rows, columns=columns)
 
+    def axis_series(self, axis, trajectory=0, solutions=None):
+        axis_name = str(axis).lower()
+        column = self._axis_column(axis_name)
+        solution = self._solution(trajectory, solutions)
+
+        return [Series(self.time(trajectory), solution[:, column], "t", axis_name)]
+
+    def derived_series(self, kind, trajectory=0, solutions=None):
+        solution = self._solution(trajectory, solutions)
+        times = self.time(trajectory)
+
+        return [Series(times, DERIVED[kind](solution, times), "t", kind)]
+
+    def projection_series(self, x_axis="x", y_axis="y", trajectory=0, solutions=None):
+        x_name = str(x_axis).lower()
+        y_name = str(y_axis).lower()
+        x_column = self._axis_column(x_name)
+        y_column = self._axis_column(y_name)
+        solution = self._solution(trajectory, solutions)
+
+        return [Series(solution[:, x_column], solution[:, y_column], x_name, y_name)]
+
+    def separation_series(self, a=0, b=1, log=False):
+        frame = self.separation(a, b, log=log)
+        if log:
+            column, left = "log_distance", f"log separation {a}-{b}"
+        else:
+            column, left = "distance", f"separation {a}-{b}"
+
+        return [Series(frame["t"].to_numpy(), frame[column].to_numpy(), "t", left)]
+
+    def separation_fit_series(self, a=0, b=1, **window):
+        fit_frame, fit = self._separation_fit_result(a, b, **window)
+        frame = self.separation(a, b, log=True)
+        fit_t = fit_frame["t"].to_numpy()
+        left = f"log separation fit {a}-{b}"
+
+        return [
+            Series(frame["t"].to_numpy(), frame["log_distance"].to_numpy(), "t", left),
+            Series(fit_t, fit["slope"] * fit_t + fit["intercept"], "t", left, "fit"),
+        ]
+
+    def vector_field_series(
+        self,
+        x_axis="x",
+        y_axis="y",
+        *,
+        fixed_axis=None,
+        fixed_value=0.0,
+        x_range=None,
+        y_range=None,
+        density=21,
+        scale=0.75,
+        colour_by_speed=False,
+        speed_bands=5,
+    ):
+        frame = self.vector_field_slice(
+            x_axis,
+            y_axis,
+            fixed_axis=fixed_axis,
+            fixed_value=fixed_value,
+            x_range=x_range,
+            y_range=y_range,
+            density=density,
+        )
+        x_name = str(x_axis).lower()
+        y_name = str(y_axis).lower()
+        if not colour_by_speed:
+            x, y = self.vector_field_lines(frame, x_name, y_name, scale)
+            return [Series(x, y, x_name, y_name)]
+
+        return [
+            Series(x, y, x_name, y_name, "band", pen)
+            for x, y, pen in self._vector_field_speed_bands(
+                frame, x_name, y_name, scale, speed_bands
+            )
+        ]
+
+    def _solution(self, trajectory, solutions=None):
+        if solutions is None:
+            return self.solution(trajectory)
+        try:
+            return solutions[trajectory]
+        except IndexError as exc:
+            raise IndexError(f"No trajectory at index {trajectory}") from exc
+
+    def draw_series(
+        self,
+        series,
+        *,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        fit_pen=None,
+        label=None,
+        zoom_region=False,
+    ):
+        target = self._plot_target(plot)
+        items = []
+        for index, line in enumerate(series):
+            if line.role == "band":
+                kwargs = {"pen": line.pen}
+            elif line.role == "fit":
+                kwargs = line_kwargs(
+                    pen if fit_pen is None else fit_pen,
+                    None if label is None else f"{label} fit",
+                )
+            else:
+                kwargs = line_kwargs(pen, label)
+
+            items.append(
+                target.line(
+                    line.x,
+                    line.y,
+                    mode=mode if index == 0 else PLOT_MODE_OVERLAY,
+                    bottom=line.bottom,
+                    left=line.left,
+                    zoom_region=zoom_region,
+                    **kwargs,
+                )
+            )
+
+        return items
+
     def plot_projection(
         self,
         x_axis="x",
@@ -1025,8 +1104,6 @@ class SystemInspector:
     ):
         x_name = str(x_axis).lower()
         y_name = str(y_axis).lower()
-        x_col = self._axis_column(x_name)
-        y_col = self._axis_column(y_name)
         plot_mode = parse_mode(mode)
         if live:
             return self._register_live_plot(
@@ -1040,15 +1117,10 @@ class SystemInspector:
                 label=label,
             )
 
-        solution = self.solution(trajectory)
-        return self._plot_target(plot).line(
-            solution[:, x_col],
-            solution[:, y_col],
-            mode=plot_mode,
-            bottom=x_name,
-            left=y_name,
-            **line_kwargs(pen, label),
-        )
+        series = self.projection_series(x_name, y_name, trajectory)
+        return self.draw_series(
+            series, plot=plot, mode=plot_mode, pen=pen, label=label
+        )[0]
 
     def plot_xy(self, **kwargs):
         return self.plot_projection("x", "y", **kwargs)
@@ -1072,7 +1144,6 @@ class SystemInspector:
         zoom_region=False,
     ):
         axis_name = str(axis).lower()
-        axis_col = self._axis_column(axis_name)
         plot_mode = parse_mode(mode)
         if live:
             return self._register_live_plot(
@@ -1086,130 +1157,24 @@ class SystemInspector:
                 zoom_region=zoom_region,
             )
 
-        solution = self.solution(trajectory)
-        spec = self._trajectory_solve_spec(trajectory)
-        signal = trajectory_signal(
-            solution, axis_col, t_min=self._session.run.t_min, t_max=spec["t_max"]
-        )
-
-        return self._plot_timeseries(
-            signal.times,
-            signal.values,
-            axis_name,
+        series = self.axis_series(axis_name, trajectory)
+        return self.draw_series(
+            series,
             plot=plot,
             mode=plot_mode,
             pen=pen,
             label=label,
             zoom_region=zoom_region,
-        )
+        )[0]
 
-    def plot_radius(
-        self,
-        *,
-        trajectory=0,
-        live=False,
-        plot=None,
-        mode=PLOT_MODE_REPLACE,
-        pen=None,
-        label=None,
-        zoom_region=False,
-    ):
-        plot_mode = parse_mode(mode)
-        if live:
-            return self._register_live_plot(
-                "radius",
-                plot=plot,
-                mode=plot_mode,
-                trajectory=int(trajectory),
-                pen=pen,
-                label=label,
-                zoom_region=zoom_region,
-            )
+    def plot_radius(self, **kwargs):
+        return self._plot_derived("radius", **kwargs)
 
-        frame = self.radius(trajectory=trajectory)
+    def plot_speed(self, **kwargs):
+        return self._plot_derived("speed", **kwargs)
 
-        return self._plot_timeseries(
-            frame["t"].to_numpy(),
-            frame["radius"].to_numpy(),
-            "radius",
-            plot=plot,
-            mode=plot_mode,
-            pen=pen,
-            label=label,
-            zoom_region=zoom_region,
-        )
-
-    def plot_speed(
-        self,
-        *,
-        trajectory=0,
-        live=False,
-        plot=None,
-        mode=PLOT_MODE_REPLACE,
-        pen=None,
-        label=None,
-        zoom_region=False,
-    ):
-        plot_mode = parse_mode(mode)
-        if live:
-            return self._register_live_plot(
-                "speed",
-                plot=plot,
-                mode=plot_mode,
-                trajectory=int(trajectory),
-                pen=pen,
-                label=label,
-                zoom_region=zoom_region,
-            )
-
-        frame = self.speed(trajectory=trajectory)
-
-        return self._plot_timeseries(
-            frame["t"].to_numpy(),
-            frame["speed"].to_numpy(),
-            "speed",
-            plot=plot,
-            mode=plot_mode,
-            pen=pen,
-            label=label,
-            zoom_region=zoom_region,
-        )
-
-    def plot_displacement(
-        self,
-        *,
-        trajectory=0,
-        live=False,
-        plot=None,
-        mode=PLOT_MODE_REPLACE,
-        pen=None,
-        label=None,
-        zoom_region=False,
-    ):
-        plot_mode = parse_mode(mode)
-        if live:
-            return self._register_live_plot(
-                "displacement",
-                plot=plot,
-                mode=plot_mode,
-                trajectory=int(trajectory),
-                pen=pen,
-                label=label,
-                zoom_region=zoom_region,
-            )
-
-        frame = self.displacement(trajectory=trajectory)
-
-        return self._plot_timeseries(
-            frame["t"].to_numpy(),
-            frame["displacement"].to_numpy(),
-            "displacement",
-            plot=plot,
-            mode=plot_mode,
-            pen=pen,
-            label=label,
-            zoom_region=zoom_region,
-        )
+    def plot_displacement(self, **kwargs):
+        return self._plot_derived("displacement", **kwargs)
 
     def plot_separation(
         self,
@@ -1238,20 +1203,15 @@ class SystemInspector:
                 zoom_region=zoom_region,
             )
 
-        frame = self.separation(a, b, log=log)
-        value_column = "log_distance" if log else "distance"
-        axis_label = f"log separation {a}-{b}" if log else f"separation {a}-{b}"
-
-        return self._plot_timeseries(
-            frame["t"].to_numpy(),
-            frame[value_column].to_numpy(),
-            axis_label,
+        series = self.separation_series(a, b, log)
+        return self.draw_series(
+            series,
             plot=plot,
             mode=plot_mode,
             pen=pen,
             label=label,
             zoom_region=zoom_region,
-        )
+        )[0]
 
     def plot_separation_fit(
         self,
@@ -1270,6 +1230,12 @@ class SystemInspector:
         label=None,
     ):
         plot_mode = parse_mode(mode)
+        window = {
+            "t_min": t_min,
+            "t_max": t_max,
+            "step_min": step_min,
+            "step_max": step_max,
+        }
         if live:
             return self._register_live_plot(
                 "separation_fit",
@@ -1277,52 +1243,17 @@ class SystemInspector:
                 mode=plot_mode,
                 a=int(a),
                 b=int(b),
-                t_min=t_min,
-                t_max=t_max,
-                step_min=step_min,
-                step_max=step_max,
+                **window,
                 pen=pen,
                 fit_pen=fit_pen,
                 label=label,
             )
 
-        fit = self.separation_fit(
-            a,
-            b,
-            t_min=t_min,
-            t_max=t_max,
-            step_min=step_min,
-            step_max=step_max,
-        )
-        target = self._plot_target(plot)
-        self.plot_separation(
-            a,
-            b,
-            log=True,
-            plot=target,
-            mode=plot_mode,
-            pen=pen,
-            label=label,
-        )
-        frame = self._separation_fit_frame(
-            a,
-            b,
-            t_min=t_min,
-            t_max=t_max,
-            step_min=step_min,
-            step_max=step_max,
-        )
-        fitted = fit["slope"] * frame["t"].to_numpy() + fit["intercept"]
-        return target.line(
-            frame["t"].to_numpy(),
-            fitted,
-            mode=PLOT_MODE_OVERLAY,
-            bottom="t",
-            left=f"log separation fit {a}-{b}",
-            **line_kwargs(
-                pen if fit_pen is None else fit_pen,
-                None if label is None else f"{label} fit",
-            ),
+        series = self.separation_fit_series(a, b, **window)
+        return tuple(
+            self.draw_series(
+                series, plot=plot, mode=plot_mode, pen=pen, fit_pen=fit_pen, label=label
+            )
         )
 
     def plot_crossings(
@@ -1378,14 +1309,13 @@ class SystemInspector:
         y_range=None,
         density=21,
     ):
-        config = self.config
+        config = self._settings().config
         if config is None:
             raise ValueError("No attractor selected")
 
         x_name, y_name, fixed_name = self._slice_axes(x_axis, y_axis, fixed_axis)
-        density = self._positive_int(density, "Density")
-        if density < 2:
-            raise ValueError("Density must be at least 2")
+        density = _int_in_range(density, "Density", 2)
+
         x_range = self._vector_field_axis_range(x_name, x_range)
         y_range = self._vector_field_axis_range(y_name, y_range)
 
@@ -1478,7 +1408,7 @@ class SystemInspector:
                 speed_bands=int(speed_bands),
             )
 
-        frame = self.vector_field_slice(
+        series = self.vector_field_series(
             x_axis,
             y_axis,
             fixed_axis=fixed_axis,
@@ -1486,46 +1416,19 @@ class SystemInspector:
             x_range=x_range,
             y_range=y_range,
             density=density,
+            scale=scale,
+            colour_by_speed=colour_by_speed,
+            speed_bands=speed_bands,
         )
-        x_name = str(x_axis).lower()
-        y_name = str(y_axis).lower()
-        target = self._plot_target(plot)
-        if colour_by_speed:
-            items = []
-            for index, (x_data, y_data, band_pen) in enumerate(
-                self._vector_field_speed_bands(
-                    frame,
-                    x_name,
-                    y_name,
-                    scale,
-                    speed_bands,
-                )
-            ):
-                items.append(
-                    target.line(
-                        x_data,
-                        y_data,
-                        mode=plot_mode if index == 0 else PLOT_MODE_OVERLAY,
-                        bottom=x_name,
-                        left=y_name,
-                        pen=band_pen,
-                    )
-                )
-            return tuple(items)
+        items = self.draw_series(
+            series, plot=plot, mode=plot_mode, pen=pen, label=label
+        )
 
-        x_data, y_data = self.vector_field_lines(frame, x_name, y_name, scale)
-        return target.line(
-            x_data,
-            y_data,
-            mode=plot_mode,
-            bottom=x_name,
-            left=y_name,
-            **line_kwargs(pen, label),
-        )
+        return tuple(items) if colour_by_speed else items[0]
 
     def live_plots(self, table=False):
         data = self._main_live().frame()
-        return self._optional_help_table(data, table, "Live plots")
+        return self._show_table(data, table, "Live plots")
 
     def unfollow(self, plot=None):
         return self._main_live().unfollow(plot)
@@ -1592,38 +1495,6 @@ class SystemInspector:
             padding = (float(high) - float(low)) * 0.05
 
         return float(low) - padding, float(high) + padding
-
-    def _positive_int(self, value, label):
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"{label} must be a positive integer") from exc
-        if parsed <= 0:
-            raise ValueError(f"{label} must be a positive integer")
-
-        return parsed
-
-    def _plot_timeseries(
-        self,
-        times,
-        values,
-        axis_label,
-        *,
-        plot,
-        mode,
-        pen,
-        label=None,
-        zoom_region=False,
-    ):
-        return self._plot_target(plot).line(
-            times,
-            values,
-            mode=mode,
-            bottom="t",
-            left=axis_label,
-            zoom_region=zoom_region,
-            **line_kwargs(pen, label),
-        )
 
     def _plot_target(self, plot):
         if plot is None:
@@ -1712,12 +1583,10 @@ class SystemInspector:
         scale,
         speed_bands,
     ):
-        band_count = self._positive_int(speed_bands, "Speed band count")
-        if band_count < 2:
-            raise ValueError("Speed band count must be at least 2")
-
+        band_count = _int_in_range(speed_bands, "Speed band count", 2)
         speeds = frame["speed"].to_numpy(dtype=np.float64)
         finite_speeds = speeds[np.isfinite(speeds)]
+
         if len(finite_speeds) == 0:
             empty = (np.array([], dtype=np.float64), np.array([], dtype=np.float64))
             return [
@@ -1759,12 +1628,9 @@ class SystemInspector:
         )
         return VECTOR_FIELD_SPEED_PENS[palette_index]
 
-    def _register_live_plot(self, kind, *, plot=None, **options):
+    def _register_live_plot(self, kind, **options):
         live = self._main_live()
-        mode = parse_mode(options.pop("mode", PLOT_MODE_REPLACE))
-        trace_id = live.register(kind, plot=plot, mode=mode, **options)
-
-        return LivePlotHandle(live, trace_id)
+        return LivePlotHandle(live, live.register(kind, **options))
 
     def _separation_frame(
         self,
@@ -1794,6 +1660,13 @@ class SystemInspector:
 
         return frame.loc[finite].reset_index(drop=True)
 
+    def _separation_fit_result(self, a, b, **window):
+        frame = self._separation_fit_frame(a, b, **window)
+        if len(frame) < 2:
+            raise ValueError("At least two finite log-separation points are required")
+
+        return frame, self._fit_log_separation(frame)
+
     def _separation_summary_fit(self, a, b, **filters):
         frame = self._separation_fit_frame(a, b, **filters)
         if len(frame) < 2:
@@ -1821,27 +1694,6 @@ class SystemInspector:
 
         return [trajectory]
 
-    def _variant_values(self, values):
-        variant_values = dict(self.values)
-        if values is None:
-            return variant_values
-        if not isinstance(values, dict):
-            raise TypeError("Parameter overrides must be a dictionary")
-
-        valid_names = {param.name for param in self.config.params}
-        unknown = sorted(set(values) - valid_names)
-        if unknown:
-            names = ", ".join(unknown)
-            raise ValueError(f"Unknown parameter override(s): {names}")
-
-        for name, value in values.items():
-            try:
-                variant_values[name] = float(value)
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f"Parameter {name} must be numeric") from exc
-
-        return variant_values
-
     def _crossing_trajectories(self, trajectory, *, t_max=None, n=None):
         rows = []
 
@@ -1850,11 +1702,11 @@ class SystemInspector:
                 rows.append((i, self.solution(i), self.time(i)))
             return rows
 
-        config = self.config
+        config = self._settings().config
         if config is None:
             return rows
 
-        solve_n = self._positive_int(self.n if n is None else n, "n")
+        solve_n = _int_in_range(self.n if n is None else n, "n")
         solve_t_max = self.t_max if t_max is None else float(t_max)
         if solve_t_max <= self.t_min:
             raise ValueError("t_max must be greater than t_min")
@@ -1892,15 +1744,58 @@ class SystemInspector:
             raise IndexError(f"No trajectory at index {trajectory}")
         return index
 
-    def _series_frame(self, trajectory, columns):
-        first = next(iter(columns.values()))
-        length = len(first)
+    def _series_frame(self, trajectory, columns, steps=None):
+        if steps is None:
+            steps = np.arange(len(next(iter(columns.values()))))
+
         frame = pd.DataFrame(columns)
-        frame.insert(0, "t", self.time(trajectory)[:length])
-        frame.insert(0, "step", np.arange(length))
+        frame.insert(0, "t", self.time(trajectory)[steps])
+        frame.insert(0, "step", steps)
         frame.insert(0, "trajectory", trajectory)
 
         return frame
+
+    def _derived_frame(self, kind, trajectory):
+        rows = [
+            self._series_frame(i, {kind: DERIVED[kind](self.solution(i), self.time(i))})
+            for i in self._selected_trajectories(trajectory)
+        ]
+
+        return self._concat_frames(rows, ["trajectory", "step", "t", kind])
+
+    def _plot_derived(
+        self,
+        kind,
+        *,
+        trajectory=0,
+        live=False,
+        plot=None,
+        mode=PLOT_MODE_REPLACE,
+        pen=None,
+        label=None,
+        zoom_region=False,
+    ):
+        plot_mode = parse_mode(mode)
+        if live:
+            return self._register_live_plot(
+                kind,
+                plot=plot,
+                mode=plot_mode,
+                trajectory=int(trajectory),
+                pen=pen,
+                label=label,
+                zoom_region=zoom_region,
+            )
+
+        series = self.derived_series(kind, trajectory)
+        return self.draw_series(
+            series,
+            plot=plot,
+            mode=plot_mode,
+            pen=pen,
+            label=label,
+            zoom_region=zoom_region,
+        )[0]
 
     def _concat_frames(self, rows, columns):
         if not rows:
@@ -1913,7 +1808,7 @@ class SystemInspector:
         if trajectories:
             return [trajectory["ic"] for trajectory in trajectories]
 
-        config = self.config
+        config = self._settings().config
         if config is None:
             return []
 

@@ -9,10 +9,9 @@ from pyqtgraph.Qt.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from ..core.lyapunov import compute_lyapunov
 from ..core.solver import solve_attractor
-from ..perf import profiling_enabled
+from ..perf import PerfProfiler
 
 logger = logging.getLogger(__name__)
-perf_logger = logging.getLogger("attractors.perf")
 
 
 class SolveWorker(QObject):
@@ -21,12 +20,12 @@ class SolveWorker(QObject):
     def __init__(self):
         super().__init__()
         self._cancel = False
+        self._perf = PerfProfiler()
 
     @pyqtSlot(int, object, dict, list, int, bool, float)
     def solve(self, request_id, config, values, specs, n, is_partial, t_max):
         self._cancel = False
         solutions = []
-        profile = profiling_enabled()
         worker_start = time.perf_counter()
 
         try:
@@ -38,39 +37,31 @@ class SolveWorker(QObject):
                 sol = solve_attractor(
                     config, values, spec["n"], t_max=spec["t_max"], ic=spec["ic"]
                 )
-                kernel_ms = (time.perf_counter() - kernel_start) * 1000
 
-                if profile:
-                    perf_logger.info(
-                        "solve.kernel completed in %.3f ms "
-                        "(request_id=%s attractor=%s partial=%s trajectory=%s "
-                        "n=%s t_max=%s points=%s)",
-                        kernel_ms,
-                        request_id,
-                        config.name,
-                        is_partial,
-                        index,
-                        spec["n"],
-                        spec["t_max"],
-                        len(sol),
-                    )
+                self._perf.log(
+                    "solve.kernel",
+                    (time.perf_counter() - kernel_start) * 1000,
+                    request_id=request_id,
+                    attractor=config.name,
+                    partial=is_partial,
+                    trajectory=index,
+                    n=spec["n"],
+                    t_max=spec["t_max"],
+                    points=len(sol),
+                )
 
                 solutions.append(sol)
 
-            worker_ms = (time.perf_counter() - worker_start) * 1000
-
-            if profile:
-                perf_logger.info(
-                    "solve.worker completed in %.3f ms "
-                    "(request_id=%s attractor=%s partial=%s trajectories=%s n=%s t_max=%s)",
-                    worker_ms,
-                    request_id,
-                    config.name,
-                    is_partial,
-                    len(solutions),
-                    n,
-                    t_max,
-                )
+            self._perf.log(
+                "solve.worker",
+                (time.perf_counter() - worker_start) * 1000,
+                request_id=request_id,
+                attractor=config.name,
+                partial=is_partial,
+                trajectories=len(solutions),
+                n=n,
+                t_max=t_max,
+            )
 
             if not self._cancel:
                 self.result_ready.emit(request_id, solutions, is_partial)

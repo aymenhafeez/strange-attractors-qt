@@ -3,8 +3,6 @@
 
 from pyqtgraph.Qt import QtCore, QtWidgets
 
-from .icons import icon
-
 CONSOLE_PLOT_KINDS = [
     "Axis",
     "Projection",
@@ -358,7 +356,7 @@ class SystemToolbar(QtWidgets.QWidget):
             "Use the current default section value"
         )
         self.crossing_value_spin = QtWidgets.QDoubleSpinBox()
-        self.crossing_value_spin.setRange(-1000000.0, 1000000.0)
+        self.crossing_value_spin.setRange(-1e6, 1e6)
         self.crossing_value_spin.setDecimals(4)
         self.crossing_value_spin.setSingleStep(0.5)
         self.crossing_value_spin.setEnabled(False)
@@ -373,11 +371,11 @@ class SystemToolbar(QtWidgets.QWidget):
         self.fit_time_range_check = QtWidgets.QCheckBox("Use t range")
         self.fit_time_range_check.setToolTip("Limit the fit by time")
         self.fit_t_min_spin = QtWidgets.QDoubleSpinBox()
-        self.fit_t_min_spin.setRange(-1000000.0, 1000000.0)
+        self.fit_t_min_spin.setRange(-1e6, 1e6)
         self.fit_t_min_spin.setDecimals(4)
         self.fit_t_min_spin.setToolTip("Fit start time")
         self.fit_t_max_spin = QtWidgets.QDoubleSpinBox()
-        self.fit_t_max_spin.setRange(-1000000.0, 1000000.0)
+        self.fit_t_max_spin.setRange(-1e6, 1e6)
         self.fit_t_max_spin.setDecimals(4)
         self.fit_t_max_spin.setValue(100.0)
         self.fit_t_max_spin.setToolTip("Fit end time")
@@ -404,16 +402,11 @@ class SystemToolbar(QtWidgets.QWidget):
         self.options_menu = self._build_options_menu()
         self.options_button.setMenu(self.options_menu)
         self.run_button = QtWidgets.QToolButton()
-        # self.run_button.setText("")
-        self.run_button.setIcon(icon("system-run"))
-        self.run_button.setToolTip("Run plot")
+        self.run_button.setText("Run")
+        self.run_button.setToolTip("Run plot settings")
         self.run_button.clicked.connect(self._emit_plot_request)
 
         toolbar_layout.addWidget(self.options_button)
         toolbar_layout.addWidget(self.run_button)
-
-        for button in self.live_button, self.options_button, self.run_button:
-            button.setAutoRaise(True)
-            button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
         return toolbar

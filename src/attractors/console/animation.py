@@ -10,6 +10,7 @@ from ..ui.icons import icon
 
 class ConsoleAnimation(QtCore.QObject):
     changed = QtCore.pyqtSignal()
+    status_message = QtCore.pyqtSignal(str, bool)
 
     def __init__(
         self,
@@ -20,7 +21,6 @@ class ConsoleAnimation(QtCore.QObject):
         dt=None,
         frames=None,
         loop=True,
-        status_callback=None,
         parent=None,
     ):
         super().__init__(parent)
@@ -45,7 +45,6 @@ class ConsoleAnimation(QtCore.QObject):
             raise ValueError("Animation frames must be at least 1")
 
         self.loop = loop
-        self.status_callback = status_callback
         self.frame = 0
         self.time = 0.0
 
@@ -162,8 +161,7 @@ class ConsoleAnimation(QtCore.QObject):
         return self
 
     def set_status(self, message, *, error=False):
-        if self.status_callback is not None:
-            self.status_callback(message, error=error)
+        self.status_message.emit(message, error)
 
     @staticmethod
     def accepts_animation(callback):

@@ -6,6 +6,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 from qtconsole import inprocess
 
 from ..ui.style import PANEL_SURFACE, plot_colours
+from .docked_views import DockedViewManager
 from .explorer import PLOT_MODE_REPLACE, PlotExplorer, parse_mode
 from .script_browser import ScriptBrowser
 from .script_panel import ScriptPanel
@@ -58,7 +59,7 @@ class _RichJupyterConsole(inprocess.QtInProcessRichJupyterWidget):
 
 
 class ConsolePlot:
-    def __init__(self, plot_widget, status_callback=None):
+    def __init__(self, plot_widget):
         self._plot_widget = plot_widget
 
         self._manager = None
@@ -116,7 +117,6 @@ class ConsolePlot:
             self.param_widget,
             self.param_controls_layout,
             self.trace_menu,
-            status_callback=status_callback,
             parent=self.host,
         )
 
@@ -316,176 +316,23 @@ class ConsolePlot:
         self._crosshair.apply_theme()
 
 
-class ConsolePlotManager(QtCore.QObject):
-    plots_changed = QtCore.pyqtSignal()
-    current_changed = QtCore.pyqtSignal(str)
-    plot_removed = QtCore.pyqtSignal(str, object)
-    plot_cleared = QtCore.pyqtSignal(str, object)
+class ConsolePlotManager(DockedViewManager):
+    kind = "plot"
+    name_prefix = "Plot"
+    dock_prefix = "plot"
+    active_kind = "plot"
 
-    def __init__(
-        self,
-        dock_layout,
-        default_name,
-        default_plot,
-        default_dock,
-        status_callback=None,
-        active_callback=None,
-    ):
-        super().__init__(dock_layout)
-        self._dock_layout = dock_layout
-        self._plots = {default_name: default_plot}
-        self._docks = {default_name: default_dock}
-        self._current_name = default_name
-        self._default_name = default_name
-        self._status_callback = status_callback
-        self._active_callback = active_callback
-        default_plot.explore.status_callback = status_callback
-        default_plot._manager = self
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._table_manager = None
-
-    def __repr__(self):
-        return f"ConsolePlotManager(current={self._current_name!r})"
 
     def __call__(self, x, y, **kwargs):
         return self.current(x, y, **kwargs)
 
-    @property
-    def current(self):
-        return self._plots[self._current_name]
-
-    @property
-    def current_name(self):
-        return self._current_name
-
-    def names(self):
-        return list(self._plots)
-
-    @property
-    def default_name(self):
-        return self._default_name
-
-    def docks(self):
-        return list(self._docks.values())
-
-    def set_status_callback(self, callback):
-        self._status_callback = callback
-        for plot in self._plots.values():
-            plot.explore.status_callback = callback
-
-    def get(self, name, *, activate=True):
-        key = self._plot_name(name)
-        try:
-            plot = self._plots[key]
-        except KeyError as exc:
-            raise KeyError(f"No console plot named {key!r}") from exc
-        if activate:
-            self._mark_active()
-            self._set_current_name(key)
-            dock = self._docks[key]
-            self._raise_dock(dock)
-
-        return plot
-
-    def rename(self, old_name, new_name):
-        old_key = self._plot_name(old_name)
-        new_key = self._plot_name(new_name)
-        if old_key not in self._plots:
-            raise KeyError(f"No console plot named {old_key!r}")
-        if new_key != old_key and new_key in self._plots:
-            raise ValueError(f"Console plot {new_key!r} already exists")
-
-        if new_key == old_key:
-            self._set_current_name(new_key)
-            return self._plots[new_key]
-
-        self._mark_active()
-
-        plot = self._plots.pop(old_key)
-        dock = self._docks.pop(old_key)
-        self._plots[new_key] = plot
-        self._docks[new_key] = dock
-        if old_key == self._default_name:
-            self._default_name = new_key
-        if old_key == self._current_name:
-            self._current_name = new_key
-        dock.setWindowTitle(new_key)
-        self.plots_changed.emit()
-        self.current_changed.emit(self._current_name)
-
-        return plot
-
-    def _set_current_name(self, key):
-        if self._current_name == key:
-            return
-
-        self._current_name = key
-        self.current_changed.emit(key)
-
-    def activate(self, name):
-        key = self._plot_name(name)
-        if key not in self._plots:
-            return
-
-        self._set_current_name(key)
-        self._mark_active()
-
-    def _mark_active(self):
-        if self._active_callback is not None:
-            self._active_callback("plot")
-
-    def new(self, name=None, *, activate=True):
-        key = self._next_name() if name is None else self._plot_name(name)
-        if key in self._plots:
-            return self.get(key, activate=activate)
-
-        plot_widget = _build_console_plot_widget()
-        plot = ConsolePlot(plot_widget, status_callback=self._status_callback)
-        plot.set_table_manager(self._table_manager)
-
-        plot._manager = self
-        dock = self._dock_layout.add(
-            f"plot/{key}",
-            key,
-            plot.host,
-            relative_to=self._docks[self._default_name],
-        )
-        dock.activated.connect(lambda: self.activate(dock.windowTitle()))
-        dock.closed.connect(lambda: self.close(dock.windowTitle()))
-
-        self._plots[key] = plot
-        self._docks[key] = dock
-
-        if activate:
-            self._mark_active()
-            self._set_current_name(key)
-            dock.reveal()
-        self.plots_changed.emit()
-
-        return plot
-
-    def close(self, name=None):
-        key = self._current_name if name is None else self._plot_name(name)
-        if key == self._default_name:
-            plot = self._plots[key]
-            plot.clear()
-            self.plot_cleared.emit(key, plot)
-            self._set_current_name(key)
-
-            return
-
-        dock = self._docks[key]
-        self._forget(key)
-        self._dock_layout.remove(dock)
-
-    def clear_all(self):
-        for name, plot in self._plots.items():
-            plot.clear()
-            self.plot_cleared.emit(name, plot)
-
-    def clear(self):
-        plot = self.current
-        plot.clear()
-        self.plot_cleared.emit(self._current_name, plot)
+    def set_table_manager(self, table_manager):
+        self._table_manager = table_manager
+        for plot in self._views.values():
+            plot.set_table_manager(table_manager)
 
     def auto_range(self):
         self.current.auto_range()
@@ -511,60 +358,34 @@ class ConsolePlotManager(QtCore.QObject):
     def scatter(self, *args, zoom_region=False, **kwargs):
         return self.current.scatter(*args, zoom_region=zoom_region, **kwargs)
 
-    def _raise_dock(self, dock):
-        dock.reveal()
-
-    def _forget(self, name):
-        if name == self._default_name:
-            return
-        if name not in self._plots:
-            return
-
-        plot = self._plots.pop(name)
-        self._docks.pop(name, None)
-        if self._current_name == name:
-            self._set_current_name(self._default_name)
-
-        self.plot_removed.emit(name, plot)
-        self.plots_changed.emit()
-
-    def _next_name(self):
-        index = 2
-        while True:
-            name = f"Plot {index}"
-            if name not in self._plots:
-                return name
-            index += 1
-
-    def _plot_name(self, name):
-        key = str(name).strip()
-        if not key:
-            raise ValueError("Plot name cannot be empty")
-        return key
-
-    def set_table_manager(self, table_manager):
-        self._table_manager = table_manager
-        for plot in self._plots.values():
-            plot.set_table_manager(table_manager)
-
     def apply_theme(self):
-        for plot in self._plots.values():
+        for plot in self._views.values():
             plot.apply_theme()
+
+    def _make_view(self):
+        plot = ConsolePlot(_build_console_plot_widget())
+        plot.set_table_manager(self._table_manager)
+        return plot
+
+    def _connect_view(self, plot):
+        plot._manager = self
+        plot.explore.status_message.connect(self.status_message)
 
 
 class JupyterConsolePanel(QtCore.QObject):
     active_view_changed = QtCore.pyqtSignal()
+    status_message = QtCore.pyqtSignal(str, bool)
 
     def __init__(self, dock_layout, namespace_factory, script_dir=None):
         super().__init__(dock_layout)
         self._namespace_factory = namespace_factory
         self._console = None
+        self._variable_defaults = {}
         self._script_dir = script_dir
-        self._explore_status_callback = None
         self._active_view = "plot"
         self.dock_layout = dock_layout
 
-        self.view3d = ConsoleView3D(status_callback=self._explore_status_callback)
+        self.view3d = ConsoleView3D()
         self.view3d_dock = dock_layout.add("view3d", "3D View", self.view3d.host)
 
         self.views3d = ConsoleView3DManager(
@@ -572,7 +393,6 @@ class JupyterConsolePanel(QtCore.QObject):
             "3D View",
             self.view3d,
             self.view3d_dock,
-            status_callback=self._explore_status_callback,
             active_callback=self.set_active_view,
         )
 
@@ -581,28 +401,23 @@ class JupyterConsolePanel(QtCore.QObject):
         )
 
         self.plot_widget = _build_console_plot_widget()
-        self.plot = ConsolePlot(
-            self.plot_widget, status_callback=self._explore_status_callback
-        )
+        self.plot = ConsolePlot(self.plot_widget)
         self.plot_dock = dock_layout.add("plot", "Plot", self.plot.host)
         self.plots = ConsolePlotManager(
             self.dock_layout,
             "Plot",
             self.plot,
             self.plot_dock,
-            status_callback=self._explore_status_callback,
             active_callback=self.set_active_view,
         )
 
         self.table = ConsoleTable()
         self.table_dock = dock_layout.add("table", "Table", self.table.host)
         self.tables = ConsoleTableManager(
-            self.dock_layout,
-            "Table",
-            self.table,
-            self.table_dock,
-            status_callback=self._explore_status_callback,
+            self.dock_layout, "Table", self.table, self.table_dock
         )
+        for manager in (self.views3d, self.plots, self.tables):
+            manager.status_message.connect(self.status_message)
 
         self.plots.set_table_manager(self.tables)
 
@@ -627,10 +442,10 @@ class JupyterConsolePanel(QtCore.QObject):
         self.script_dock = dock_layout.add("script", "Script", self.script_panel)
 
         self.script_browser = ScriptBrowser(self.script_panel.scripts_dir)
-        self.script_browser.confirm_delete = self.script_panel._confirm_delete
+        self.script_browser.confirm_delete = self.script_panel.confirm_delete
         self.script_browser.script_selected.connect(self._open_browser_script)
-        self.script_browser.path_renamed.connect(self.script_panel._on_path_renamed)
-        self.script_browser.path_deleted.connect(self.script_panel._on_path_deleted)
+        self.script_browser.path_renamed.connect(self.script_panel.on_path_renamed)
+        self.script_browser.path_deleted.connect(self.script_panel.on_path_deleted)
         self.script_panel.script_changed.connect(self.script_browser.select_path)
         self.script_browser.select_path(self.script_panel.current_script_path())
 
@@ -729,7 +544,7 @@ class JupyterConsolePanel(QtCore.QObject):
         self._console_layout.addWidget(self._console)
 
         shell = self._console.kernel_manager.kernel.shell
-        shell._variable_defaults = dict(shell.user_ns)
+        self._variable_defaults = dict(shell.user_ns)
         shell.events.register("post_run_cell", self._refresh_variables)
         self._refresh_variables()
 
@@ -738,7 +553,7 @@ class JupyterConsolePanel(QtCore.QObject):
             return
 
         shell = self._console.kernel_manager.kernel.shell
-        self.variable_panel.set_namespace(shell.user_ns, shell._variable_defaults)
+        self.variable_panel.set_namespace(shell.user_ns, self._variable_defaults)
 
     def shutdown_kernel(self):
         if self._console is not None:
@@ -755,17 +570,8 @@ class JupyterConsolePanel(QtCore.QObject):
         self._console.execute(code)
 
     def set_explore_visible(self, visible):
-        for plot in self.plots._plots.values():
-            plot.param_widget.setVisible(bool(visible) and plot.explore.has_controls())
-
-        for view in self.views3d._views.values():
-            view.param_widget.setVisible(bool(visible) and view.explore.has_controls())
-
-    def set_explore_status_callback(self, callback):
-        self._explore_status_callback = callback
-        self.plots.set_status_callback(callback)
-        self.views3d.set_status_callback(callback)
-        self.tables.set_status_callback(callback)
+        for view in (*self.plots.views(), *self.views3d.views()):
+            view.param_widget.setVisible(visible and view.explore.has_controls())
 
     def apply_theme(self):
         self.plots.apply_theme()
@@ -869,7 +675,9 @@ class ConsolePlotZoom(QtWidgets.QWidget):
         self.updating = False
 
         self.zoom_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-        self.zoom_widget.showGrid(x=True, y=True, alpha=0.25)
+        self.zoom_widget.showGrid(
+            x=True, y=True, alpha=plot_colours()["plot_grid_alpha"]
+        )
         self.zoom_widget.setLabel("bottom", "x")
         self.zoom_widget.setLabel("left", "y")
 
@@ -885,6 +693,25 @@ class ConsolePlotZoom(QtWidgets.QWidget):
         self.region.sigRegionChanged.connect(self.region_changed)
         self.zoom_widget.sigXRangeChanged.connect(self.zoom_range_changed)
 
+    def _update_bounds(self, x):
+        if x is None or not len(x):
+            return
+
+        x_min = float(x[0])
+        x_max = float(x[-1])
+        if x_max <= x_min or self.x_bounds == (x_min, x_max):
+            return
+
+        first = self.x_bounds is None
+        self.x_bounds = (x_min, x_max)
+        region_min, region_max = self.region.getRegion()
+
+        self.region.setBounds((x_min, x_max))
+        if first or region_max <= x_min or region_min >= x_max:
+            self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
+        else:
+            self.region.setRegion((max(region_min, x_min), min(region_max, x_max)))
+
     def add_item(self, item):
         x, y = item.getData()
         clone_options = {
@@ -897,15 +724,7 @@ class ConsolePlotZoom(QtWidgets.QWidget):
         clone = self.zoom_widget.plot(x, y, **clone_options)
         self.items[item] = clone
 
-        if x is not None and len(x):
-            x_min = float(x[0])
-            x_max = float(x[-1])
-
-            if x_max > x_min:
-                self.x_bounds = (x_min, x_max)
-                self.region.setBounds((x_min, x_max))
-                self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
-
+        self._update_bounds(x)
         item.sigPlotChanged.connect(lambda: self.item_changed(item))
 
     def clear(self):
@@ -930,39 +749,27 @@ class ConsolePlotZoom(QtWidgets.QWidget):
 
         x, y = item.getData()
         clone.setData(x, y)
-        if x is not None and len(x):
-            x_min = float(x[0])
-            x_max = float(x[-1])
-
-            if x_max > x_min and self.x_bounds != (x_min, x_max):
-                self.x_bounds = (x_min, x_max)
-                region_min, region_max = self.region.getRegion()
-                self.region.setBounds((x_min, x_max))
-                # check if the old region is outside the new range and reset it to the first 10% of the new range
-                if region_max <= x_min or region_min >= x_max:
-                    self.region.setRegion((x_min, x_min + (x_max - x_min) * 0.1))
-                else:
-                    # keep the old region if it overlaps with the new range
-                    self.region.setRegion(
-                        (max(region_min, x_min), min(region_max, x_max))
-                    )
+        self._update_bounds(x)
 
     def region_changed(self):
         if self.updating:
             return
 
         self.updating = True
-        x_min, x_max = self.region.getRegion()
-        self.zoom_widget.setXRange(x_min, x_max, padding=0)
-        self.updating = False
+        try:
+            self.zoom_widget.setXRange(*self.region.getRegion(), padding=0)
+        finally:
+            self.updating = False
 
     def zoom_range_changed(self, *_args):
         if self.updating:
             return
 
         self.updating = True
-        self.region.setRegion(self.zoom_widget.getViewBox().viewRange()[0])
-        self.updating = False
+        try:
+            self.region.setRegion(self.zoom_widget.getViewBox().viewRange()[0])
+        finally:
+            self.updating = False
 
     def apply_theme(self):
         colours = plot_colours()
