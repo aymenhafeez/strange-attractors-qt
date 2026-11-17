@@ -158,7 +158,8 @@ class TrajectoryPanel(QtWidgets.QWidget):
         content_layout.setContentsMargins(0, 0, 0, 0)
 
         controls = QtWidgets.QHBoxLayout()
-        self._enable_check = QtWidgets.QCheckBox("Enable multi-trajectory")
+        controls.setContentsMargins(5, 5, 5, 0)
+        self._enable_check = QtWidgets.QCheckBox("Multi-trajectory")
         self._enable_check.toggled.connect(self._on_enable_toggled)
         self._add_button = QtWidgets.QPushButton("Add trajectory")
         self._add_button.clicked.connect(lambda: self._add_row())
