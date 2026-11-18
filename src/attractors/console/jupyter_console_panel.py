@@ -327,6 +327,11 @@ class ConsolePlot:
         self._colour_bar = None
         self._colour_bar_item = None
 
+    def sync_colour_bar(self, item):
+        # pretty sure ImageItem doesn't have a levels changed signal so bar can't follow auto levels
+        if item is self._colour_bar_item:
+            self._colour_bar.setLevels(item.getLevels())
+
     def ensure_legend(self):
         if self._legend is None:
             colours = plot_colours()
