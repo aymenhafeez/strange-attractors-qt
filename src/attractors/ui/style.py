@@ -286,10 +286,14 @@ SIGNAL_PANEL = (
         border: 0px;
     }
     QSplitter::handle {
-        background: palette(window);
+        background: palette(base);
     }
     QSplitter::handle:hover {
         background: palette(accent);
+    }
+    QWidget#panelSurface QComboBox {
+        min-width: 4em;
+        max-width: 6em;
     }
 """
     + PANEL_INPUTS
