@@ -6,6 +6,7 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 from qtconsole import inprocess
 
 from ..ui.style import PANEL_SURFACE, plot_colours
+from .density import check_extent, check_image
 from .docked_views import DockedViewManager
 from .explorer import PLOT_MODE_REPLACE, PlotExplorer, parse_mode
 from .script_browser import ScriptBrowser
@@ -66,6 +67,9 @@ class ConsolePlot:
         self._legend = None
         self._zoom = None
         self._table_manager = None
+
+        self._colour_bar = None
+        self._colour_bar_item = None
 
         self.host = QtWidgets.QWidget()
         self.host.setObjectName("panelSurface")
@@ -128,6 +132,7 @@ class ConsolePlot:
 
     def clear(self):
         self._plot_widget.clear()
+        self.release_colour_bar()
         self.explore.clear_traces()
 
         if self._zoom is not None:
@@ -261,6 +266,67 @@ class ConsolePlot:
             **kwargs,
         )
 
+    def image(
+        self,
+        data,
+        *,
+        extent=None,
+        cmap="viridis",
+        levels=None,
+        colour_bar=True,
+        mode=PLOT_MODE_REPLACE,
+        bottom=None,
+        left=None,
+    ):
+        data = check_image(data)
+        mode = parse_mode(mode)
+
+        if extent is not None:
+            extent = check_extent(extent)
+
+        colour_map = pg.colormap.get(cmap, source="matplotlib")
+
+        if mode == PLOT_MODE_REPLACE:
+            self.clear()
+            self.zoom_region(False)
+
+        item = pg.ImageItem(axisOrder="row-major")
+        item.setZValue(-1)
+        item.setColorMap(colour_map)
+
+        # setImage(levels=None) disables autoLevels instead of enabling
+        if levels is None:
+            item.setImage(data, autoLevels=True)
+        else:
+            item.setImage(data, levels=levels)
+
+        if extent is not None:
+            x0, x1, y0, y1 = extent
+            item.setRect(x0, y0, x1 - x0, y1 - y0)
+
+        self._plot_widget.addItem(item)
+
+        if colour_bar:
+            self.release_colour_bar()
+            self._colour_bar = self._plot_widget.getPlotItem().addColorBar(
+                item, colorMap=colour_map
+            )
+            self._colour_bar_item = item
+
+        self.set_labels(bottom=bottom, left=left)
+
+        return item
+
+    def release_colour_bar(self, item=None):
+        bar = self._colour_bar
+        if bar is None or (item is not None and item is not self._colour_bar_item):
+            return
+
+        self._plot_widget.getPlotItem().layout().removeItem(bar)
+        bar.scene().removeItem(bar)
+        self._colour_bar = None
+        self._colour_bar_item = None
+
     def ensure_legend(self):
         if self._legend is None:
             colours = plot_colours()
@@ -357,6 +423,9 @@ class ConsolePlotManager(DockedViewManager):
 
     def scatter(self, *args, zoom_region=False, **kwargs):
         return self.current.scatter(*args, zoom_region=zoom_region, **kwargs)
+
+    def image(self, *args, **kwargs):
+        return self.current.image(*args, **kwargs)
 
     def apply_theme(self):
         for plot in self._views.values():
