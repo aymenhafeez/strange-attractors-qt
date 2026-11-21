@@ -592,7 +592,7 @@ class PlotExplorer(ExplorerControls):
         values,
         *,
         extent=None,
-        cmap="viridis",
+        cmap=None,
         levels=None,
         colour_bar=True,
         mode=PLOT_MODE_REPLACE,
@@ -627,7 +627,7 @@ class PlotExplorer(ExplorerControls):
         extent=None,
         scale="log",
         gamma=1.0,
-        cmap="inferno",
+        cmap=None,
         colour_bar=True,
         mode=PLOT_MODE_REPLACE,
     ):

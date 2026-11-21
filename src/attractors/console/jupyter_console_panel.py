@@ -271,7 +271,7 @@ class ConsolePlot:
         data,
         *,
         extent=None,
-        cmap="viridis",
+        cmap=None,
         levels=None,
         colour_bar=True,
         mode=PLOT_MODE_REPLACE,
@@ -283,6 +283,9 @@ class ConsolePlot:
 
         if extent is not None:
             extent = check_extent(extent)
+
+        if cmap is None:
+            cmap = plot_colours()["cmap"]
 
         colour_map = pg.colormap.get(cmap, source="matplotlib")
 
