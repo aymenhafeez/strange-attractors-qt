@@ -7,6 +7,7 @@ import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .accumulation import Accumulation, AccumulationWidget
 from .animation import ConsoleAnimation, ConsoleAnimationWidget
 from .density import (
     auto_extent,
@@ -428,7 +429,22 @@ class PlotExplorer(ExplorerControls):
         super().__init__(param_widget, param_layout, parent)
         self.plot = plot
         self.trace_menu = trace_menu
+        self._accumulations = {}
         self._sync_trace_menu()
+
+    def has_controls(self):
+        return super().has_controls() or bool(self._accumulations)
+
+    def stop_accumulations(self):
+        for accumulation in self._accumulations.values():
+            accumulation.stop()
+
+    def _remove_accumulation(self, accumulation):
+        accumulation.stop()
+        del self._accumulations[accumulation.name]
+        dispose(accumulation, self.param_layout)
+        self.plot.release_colour_bar(accumulation.item)
+        self.param_widget.setVisible(self.has_controls())
 
     def _sync_trace_menu(self):
         self.trace_menu.clear()
@@ -653,6 +669,77 @@ class PlotExplorer(ExplorerControls):
         )
 
         return self._store_trace(key, trace)
+
+    def accumulate(
+        self,
+        name,
+        chunks,
+        *,
+        bins=512,
+        extent=None,
+        scale="log",
+        gamma=1.0,
+        cmap=None,
+        colour_bar=True,
+        max_points=None,
+        interval=100,
+        start=True,
+        mode=PLOT_MODE_REPLACE,
+    ):
+        if not callable(chunks):
+            raise TypeError("chunks must be a function that returns (x, y) chunks")
+
+        if extent is not None:
+            extent = check_extent(extent)
+
+        bins = check_bins2d(bins)
+        nx, ny = bins
+
+        image = tone_map(np.zeros((ny, nx), dtype=np.int64), scale, gamma)
+
+        key = self._new_trace_key(name)
+        item = self.plot.image(
+            image,
+            # use as a placeholder until the first chunk fixes an auto extent
+            extent=(0, 1, 0, 1) if extent is None else extent,
+            cmap=cmap,
+            levels=(0, 1),
+            colour_bar=colour_bar,
+            mode=mode,
+        )
+        accumulation = Accumulation(
+            key,
+            chunks,
+            item,
+            bins=bins,
+            extent=extent,
+            scale=scale,
+            gamma=gamma,
+            max_points=max_points,
+            interval=interval,
+            parent=self,
+        )
+
+        accumulation.status_message.connect(self.status_message)
+        accumulation.widget = AccumulationWidget(accumulation)
+        self._accumulations[key] = accumulation
+        self.param_layout.addWidget(accumulation.widget)
+        self.param_widget.setVisible(True)
+
+        trace = ConsoleTrace(
+            key,
+            item,
+            self.plot,
+            # slider change restarts the accumulation so the items reused
+            lambda _item: accumulation.restart(),
+            cleanup=functools.partial(self._remove_accumulation, accumulation),
+        )
+        self._store_trace(key, trace)
+
+        if start:
+            accumulation.restart()
+
+        return accumulation
 
     def vline(self, name, x, *, pen=None, label=None, movable=False, **kwargs):
         return self.line(

@@ -498,6 +498,10 @@ class JupyterConsolePanel(QtCore.QObject):
 
         self.plots.set_table_manager(self.tables)
 
+        self.plots.view_removed.connect(
+            lambda _name, plot: plot.explore.stop_accumulations()
+        )
+
         self.plot_dock.activated.connect(
             lambda: self.plots.activate(self.plot_dock.windowTitle())
         )
@@ -637,6 +641,10 @@ class JupyterConsolePanel(QtCore.QObject):
             shell = self._console.kernel_manager.kernel.shell
             shell.events.unregister("post_run_cell", self._refresh_variables)
             self._console.shutdown_kernel()
+
+    def stop_background_work(self):
+        for plot in self.plots.views():
+            plot.explore.stop_accumulations()
 
     def run_script_text(self, code):
         self.ensure_console()
