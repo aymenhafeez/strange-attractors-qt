@@ -20,6 +20,11 @@ HELP_ROWS = [
     ),
     (
         "2D plotting",
+        "plot.image(data, extent=(x0, x1, y0, y1), cmap=None)",
+        "Draw a 2D array as an image in the default plot",
+    ),
+    (
+        "2D plotting",
         "p.explore.slider(name, value, start, end, step)",
         "Add a plot-local slider",
     ),
@@ -34,6 +39,21 @@ HELP_ROWS = [
         "2D plotting",
         "p.explore.hist(name, values, bins=50)",
         "Add a reactive histogram",
+    ),
+    (
+        "2D plotting",
+        "p.explore.image(name, values, extent=None, cmap=None)",
+        "Add a reactive image of a 2D array",
+    ),
+    (
+        "2D plotting",
+        "p.explore.density(name, x, y, bins=256, scale='log')",
+        "Add a reactive 2D density of points",
+    ),
+    (
+        "2D plotting",
+        "p.explore.accumulate(name, chunks, bins=512, extent=None, max_points=None)",
+        "Accumulate (x, y) chunks from a generator into a density in the background",
     ),
     (
         "2D plotting",

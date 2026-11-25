@@ -7,7 +7,16 @@ import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from .accumulation import Accumulation, AccumulationWidget
 from .animation import ConsoleAnimation, ConsoleAnimationWidget
+from .density import (
+    auto_extent,
+    bin_points,
+    check_bins2d,
+    check_extent,
+    check_image,
+    tone_map,
+)
 
 PLOT_MODE_REPLACE = "replace"
 PLOT_MODE_OVERLAY = "overlay"
@@ -93,6 +102,19 @@ def hist_step(values, bins, *, density=False):
     y = np.repeat(counts, 2)
 
     return x, y
+
+
+def set_image_rect(item, extent):
+    x0, x1, y0, y1 = check_extent(extent)
+    item.setRect(x0, y0, x1 - x0, y1 - y0)
+
+
+def density_image(x, y, bins, extent, scale, gamma):
+    x_array, y_array = check_xy(x, y)
+    if extent is None:
+        extent = auto_extent(x_array, y_array)
+
+    return tone_map(bin_points(x_array, y_array, bins, extent), scale, gamma), extent
 
 
 class ConsoleParam(QtCore.QObject):
@@ -373,17 +395,23 @@ class ExplorerControls(QtCore.QObject):
 
 
 class ConsoleTrace:
-    def __init__(self, name, item, plot, update_callback, data_provider=None):
+    def __init__(
+        self, name, item, plot, update_callback, data_provider=None, cleanup=None
+    ):
         self.name = name
         self.item = item
         self.plot = plot
         self.update_callback = update_callback
         self.data_provider = data_provider
+        self.cleanup = cleanup
 
     def update(self):
         self.update_callback(self.item)
 
     def remove(self):
+        # run cleanup to remove item even if clear() has taken it off the plot
+        if self.cleanup is not None:
+            self.cleanup()
         if self.item.scene() is None:
             return
 
@@ -401,7 +429,22 @@ class PlotExplorer(ExplorerControls):
         super().__init__(param_widget, param_layout, parent)
         self.plot = plot
         self.trace_menu = trace_menu
+        self._accumulations = {}
         self._sync_trace_menu()
+
+    def has_controls(self):
+        return super().has_controls() or bool(self._accumulations)
+
+    def stop_accumulations(self):
+        for accumulation in self._accumulations.values():
+            accumulation.stop()
+
+    def _remove_accumulation(self, accumulation):
+        accumulation.stop()
+        del self._accumulations[accumulation.name]
+        dispose(accumulation, self.param_layout)
+        self.plot.release_colour_bar(accumulation.item)
+        self.param_widget.setVisible(self.has_controls())
 
     def _sync_trace_menu(self):
         self.trace_menu.clear()
@@ -431,6 +474,23 @@ class PlotExplorer(ExplorerControls):
     def _update_hist_data(self, values, bins, density, item):
         x_array, y_array = hist_step(resolve(values), bins, density=density)
         item.setData(x=x_array, y=y_array)
+
+    def _update_image(self, values, extent, levels, item):
+        data = check_image(resolve(values))
+        if levels is None:
+            item.setImage(data, autoLevels=True)
+            self.plot.sync_colour_bar(item)
+        else:
+            # keep the levels as they've been set on the colour bar
+            item.setImage(data, autoLevels=False)
+
+        if extent is not None:
+            set_image_rect(item, resolve(extent))
+
+    def _update_density(self, x, y, bins, extent, scale, gamma, item):
+        image, rect = density_image(x, y, bins, extent, scale, gamma)
+        item.setImage(image, autoLevels=False)
+        set_image_rect(item, rect)
 
     def _trace_data(self, name, item):
         x_array, y_array = check_xy(*item.getData())
@@ -541,6 +601,145 @@ class PlotExplorer(ExplorerControls):
             item,
             functools.partial(self._update_hist_data, values, bins, density),
         )
+
+    def image(
+        self,
+        name,
+        values,
+        *,
+        extent=None,
+        cmap=None,
+        levels=None,
+        colour_bar=True,
+        mode=PLOT_MODE_REPLACE,
+    ):
+        data = check_image(resolve(values))
+        key = self._new_trace_key(name)
+        item = self.plot.image(
+            data,
+            extent=resolve(extent),
+            cmap=cmap,
+            levels=levels,
+            colour_bar=colour_bar,
+            mode=mode,
+        )
+        trace = ConsoleTrace(
+            key,
+            item,
+            self.plot,
+            functools.partial(self._update_image, values, extent, levels),
+            cleanup=functools.partial(self.plot.release_colour_bar, item),
+        )
+
+        return self._store_trace(key, trace)
+
+    def density(
+        self,
+        name,
+        x,
+        y,
+        *,
+        bins=256,
+        extent=None,
+        scale="log",
+        gamma=1.0,
+        cmap=None,
+        colour_bar=True,
+        mode=PLOT_MODE_REPLACE,
+    ):
+        bins = check_bins2d(bins)
+        if extent is not None:
+            extent = check_extent(extent)
+        image, rect = density_image(x, y, bins, extent, scale, gamma)
+        key = self._new_trace_key(name)
+        item = self.plot.image(
+            image,
+            extent=rect,
+            cmap=cmap,
+            levels=(0, 1),
+            colour_bar=colour_bar,
+            mode=mode,
+        )
+        trace = ConsoleTrace(
+            key,
+            item,
+            self.plot,
+            functools.partial(self._update_density, x, y, bins, extent, scale, gamma),
+            cleanup=functools.partial(self.plot.release_colour_bar, item),
+        )
+
+        return self._store_trace(key, trace)
+
+    def accumulate(
+        self,
+        name,
+        chunks,
+        *,
+        bins=512,
+        extent=None,
+        scale="log",
+        gamma=1.0,
+        cmap=None,
+        colour_bar=True,
+        max_points=None,
+        interval=100,
+        start=True,
+        mode=PLOT_MODE_REPLACE,
+    ):
+        if not callable(chunks):
+            raise TypeError("chunks must be a function that returns (x, y) chunks")
+
+        if extent is not None:
+            extent = check_extent(extent)
+
+        bins = check_bins2d(bins)
+        nx, ny = bins
+
+        image = tone_map(np.zeros((ny, nx), dtype=np.int64), scale, gamma)
+
+        key = self._new_trace_key(name)
+        item = self.plot.image(
+            image,
+            # use as a placeholder until the first chunk fixes an auto extent
+            extent=(0, 1, 0, 1) if extent is None else extent,
+            cmap=cmap,
+            levels=(0, 1),
+            colour_bar=colour_bar,
+            mode=mode,
+        )
+        accumulation = Accumulation(
+            key,
+            chunks,
+            item,
+            bins=bins,
+            extent=extent,
+            scale=scale,
+            gamma=gamma,
+            max_points=max_points,
+            interval=interval,
+            parent=self,
+        )
+
+        accumulation.status_message.connect(self.status_message)
+        accumulation.widget = AccumulationWidget(accumulation)
+        self._accumulations[key] = accumulation
+        self.param_layout.addWidget(accumulation.widget)
+        self.param_widget.setVisible(True)
+
+        trace = ConsoleTrace(
+            key,
+            item,
+            self.plot,
+            # slider change restarts the accumulation so the items reused
+            lambda _item: accumulation.restart(),
+            cleanup=functools.partial(self._remove_accumulation, accumulation),
+        )
+        self._store_trace(key, trace)
+
+        if start:
+            accumulation.restart()
+
+        return accumulation
 
     def vline(self, name, x, *, pen=None, label=None, movable=False, **kwargs):
         return self.line(

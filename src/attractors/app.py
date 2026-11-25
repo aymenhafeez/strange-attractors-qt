@@ -1314,6 +1314,7 @@ class Window(QtWidgets.QMainWindow):
             a0.ignore()
             return
 
+        self.jupyter_console_panel.stop_background_work()
         self.jupyter_console_panel.shutdown_kernel()
         self._set_orbit_mode(False)
         self.scene.animation_controller.stop()
