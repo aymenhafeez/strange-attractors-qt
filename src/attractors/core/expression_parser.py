@@ -170,6 +170,26 @@ def compile_system(equations: tuple[str, ...]) -> tuple[Callable, list[str]]:
     return func, params
 
 
+def compile_function(
+    expr: str, variables: tuple[str, ...]
+) -> tuple[Callable, list[str]]:
+    node = parse_expression(expr)
+    names = [child for child in ast.walk(node) if isinstance(child, ast.Name)]
+    params: dict[str, None] = {}
+
+    # keep params in reading order
+    for child in sorted(names, key=error_position):
+        if child.id == "np":
+            raise ParseError("'np' is a reserved for NumPy", error_position(child))
+        if child.id not in variables and child.id not in CONSTANTS | FUNCTIONS:
+            params[child.id] = None
+
+    source = f"lambda {', '.join([*variables, *params])}: {_emit(node)}"
+    func = eval(source, {"np": np, "__builtins__": {}})
+
+    return func, list(params)
+
+
 def format_equations(equations: tuple[str, ...]) -> str:
     variables = _variables_for_equations(equations)
     return "\n".join(
