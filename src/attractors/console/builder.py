@@ -180,6 +180,107 @@ def spin_box(value, *, decimals=4, minimum=-1e6):
     return spin
 
 
+class ItemEditor(QtWidgets.QWidget):
+    apply_requested = QtCore.pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.form = QtWidgets.QFormLayout(self)
+        self.form.setContentsMargins(0, 0, 0, 0)
+        self.form.setFieldGrowthPolicy(
+            QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
+        self._item = None
+        self._fields = {}
+
+    def load(self, item):
+        while self.form.rowCount():
+            self.form.removeRow(0)
+
+        self._item = item
+        self._fields = {}
+        if item is None:
+            return
+
+        self._add_line("Name", "name", item.name)
+        if isinstance(item, SliderItem):
+            for label, attr in (
+                ("Value", "value"),
+                ("Minimum", "start"),
+                ("Maximum", "end"),
+            ):
+                self._add_field(label, attr, spin_box(getattr(item, attr)))
+            self._add_field("Step", "step", spin_box(item.step, minimum=1e-4))
+
+            return
+
+        for output, expr in item.expressions.items():
+            self._add_line(f"{output} =", ("expr", output), expr)
+
+        for variable, (lo, hi) in item.ranges.items():
+            self._add_field(f"{variable} from", ("range", variable, "lo"), spin_box(lo))
+            self._add_field(f"{variable} to", ("range", variable, "hi"), spin_box(hi))
+
+        samples = QtWidgets.QSpinBox()
+        samples.setRange(2, 1_000_000)
+        samples.setValue(item.samples)
+        per_axis = " per axis" if len(item.ranges) > 1 else ""
+        self._add_field(f"Samples{per_axis}", "samples", samples)
+
+        if item.kind == "heatmap":
+            combo = QtWidgets.QComboBox()
+            combo.addItems(COLOUR_MAPS)
+            combo.setCurrentText(item.style)
+            combo.setMaxVisibleItems(12)
+            combo.setStyleSheet("QComboBox { combobox-popup: 0; }")
+            self._add_field("Colour map", "style", combo)
+        else:
+            self._add_field("Colour", "style", ColourButton(item.style))
+
+    def _add_field(self, label, key, widget):
+        self._fields[key] = widget
+        self.form.addRow(label, widget)
+
+    def _add_line(self, label, key, text):
+        edit = QtWidgets.QLineEdit(text)
+        edit.returnPressed.connect(self.apply_requested)
+        self._add_field(label, key, edit)
+
+    def item(self):
+        """The loaded item with the form's current values"""
+        fields = self._fields
+        name = fields["name"].text().strip()
+        if isinstance(self._item, SliderItem):
+            return SliderItem(
+                name,
+                fields["value"].value(),
+                fields["start"].value(),
+                fields["end"].value(),
+                fields["step"].value(),
+            )
+
+        style = fields["style"]
+        return TraceItem(
+            self._item.kind,
+            name,
+            {
+                output: fields[("expr", output)].text()
+                for output in self._item.expressions
+            },
+            {
+                variable: (
+                    fields[("range", variable, "lo")].value(),
+                    fields[("range", variable, "hi")].value(),
+                )
+                for variable in self._item.ranges
+            },
+            fields["samples"].value(),
+            style.currentText()
+            if isinstance(style, QtWidgets.QComboBox)
+            else style.colour,
+        )
+
+
 class BuilderPanel(QtWidgets.QWidget):
     def __init__(self, console_panel, parent=None):
         super().__init__(parent)
