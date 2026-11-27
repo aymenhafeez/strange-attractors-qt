@@ -6,6 +6,11 @@ from dataclasses import dataclass
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from ..ui.style import plot_colours
+from .explorer import PLOT_MODE_OVERLAY
+
+COLOUR_MAPS = pg.colormap.listMaps(source="matplotlib")
+
 
 @dataclass(frozen=True)
 class Kind:
@@ -14,6 +19,15 @@ class Kind:
     expressions: dict[str, str]
     ranges: dict[str, tuple[float, float]]
     samples: int
+
+
+# use a and b params so there's sliders to use by default
+# TODO: add presets like 3d curve, surface, heatmaps etc.
+KINDS = {
+    "function": Kind(
+        "Function y = f(x)", "plot", {"y": "a * sin(b * x)"}, {"x": (-10.0, 10.0)}, 1000
+    ),
+}
 
 
 @dataclass
@@ -34,6 +48,105 @@ class TraceItem:
     samples: int
     # colour or cmap name
     style: str
+
+
+def new_trace_item(kind, name, colour_index=0):
+    spec = KINDS[kind]
+    if kind == "heatmap":
+        style = COLOUR_MAPS[0]
+    else:
+        pens = plot_colours()["plot_auto_pens"]
+        style = pg.mkColor(pens[colour_index % len(pens)]).name()
+
+    return TraceItem(
+        kind, name, dict(spec.expressions), dict(spec.ranges), spec.samples, style
+    )
+
+
+def evaluate(explorer, func, params, domain):
+    values = explorer.params()
+    for name in params:
+        if name not in values:
+            raise ValueError(f"No slider named {name!r}")
+
+    # numpy scalars give inf/nan rather instead of raising so allows the plot checks to report them
+    with np.errstate(all="ignore"):
+        result = func(**domain, **{name: np.float64(values[name]) for name in params})
+
+    return np.broadcast_to(result, next(iter(domain.values())).shape)
+
+
+def apply_slider(explorer, item):
+    if not item.name.isidentifier():
+        raise ValueError("Slider names must be a single word to use in expressions")
+    if item.end <= item.start:
+        raise ValueError("Slider maximum must be greater than its minimum")
+
+    explorer.slider(item.name, item.value, item.start, item.end, item.step)
+    explorer.refresh()
+
+
+def apply_trace(explorer, item):
+    variables = tuple(item.ranges)
+    compiled = {
+        output: compile_function(expr, variables)
+        for output, expr in item.expressions.items()
+    }
+
+    existing = set(explorer.slider_names())
+    names = [name for _func, params in compiled.values() for name in params]
+    sliders = [
+        SliderItem(name) for name in dict.fromkeys(names) if name not in existing
+    ]
+    for slider in sliders:
+        explorer.slider(
+            slider.name, slider.value, slider.start, slider.end, slider.step
+        )
+
+    axes = [np.linspace(lo, hi, item.samples) for lo, hi in item.ranges.values()]
+    domain = dict(zip(variables, np.meshgrid(*axes), strict=True))
+    f = {
+        output: functools.partial(evaluate, explorer, func, params, domain)
+        for output, (func, params) in compiled.items()
+    }
+
+    name = item.name
+    mode = PLOT_MODE_OVERLAY
+    match item.kind:
+        case "function":
+            explorer.curve(name, domain["x"], f["y"], mode=mode, pen=item.style)
+        case "parametric":
+            explorer.curve(name, f["x"], f["y"], mode=mode, pen=item.style)
+        case "points":
+            explorer.scatter(
+                name,
+                f["x"],
+                f["y"],
+                mode=mode,
+                pen=None,
+                symbol_size=6,
+                symbolBrush=item.style,
+                symbolPen=None,
+            )
+        case "heatmap":
+            (x0, x1), (y0, y1) = item.ranges.values()
+            explorer.image(
+                name, f["z"], extent=(x0, x1, y0, y1), cmap=item.style, mode=mode
+            )
+        case "curve3d":
+            explorer.line3d(
+                name, f["x"], f["y"], f["z"], mode=mode, colour=item.style, width=2
+            )
+        case "points3d":
+            explorer.scatter3d(
+                name, f["x"], f["y"], f["z"], mode=mode, colour=item.style, size=6
+            )
+        case "surface":
+            explorer.surface3d(
+                name, domain["x"], domain["y"], f["z"], mode=mode, colour=item.style
+            )
+
+    return sliders
 
 
 def item_key(item):
