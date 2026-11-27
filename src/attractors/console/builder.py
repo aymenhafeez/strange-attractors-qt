@@ -1,11 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Aymen Hafeez
 # SPDX-License-Identifier: GPL-3.0-only
 
+import functools
 from dataclasses import dataclass
 
+import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
+from ..core.expression_parser import CONSTANTS, FUNCTIONS, ParseError, compile_function
 from ..ui.style import plot_colours
 from .explorer import PLOT_MODE_OVERLAY
 
@@ -153,6 +156,30 @@ def item_key(item):
     return ("slider" if isinstance(item, SliderItem) else "trace", item.name)
 
 
+class ColourButton(QtWidgets.QPushButton):
+    def __init__(self, colour, parent=None):
+        super().__init__(parent)
+        self.setFixedWidth(60)
+        self.clicked.connect(self._choose)
+        self.colour = colour
+        self.setStyleSheet(f"ColourButton {{background-color: {colour}}};")
+
+    def _choose(self):
+        dialog = QtWidgets.QColorDialog()
+        colour = dialog.getColor(pg.mkColor(self.colour), self, "Choose colour")
+        if colour.isValid():
+            self.colour = colour.name()
+
+
+def spin_box(value, *, decimals=4, minimum=-1e6):
+    spin = QtWidgets.QDoubleSpinBox()
+    spin.setRange(minimum, 1e6)
+    spin.setDecimals(decimals)
+    spin.setValue(value)
+
+    return spin
+
+
 class BuilderPanel(QtWidgets.QWidget):
     def __init__(self, console_panel, parent=None):
         super().__init__(parent)
@@ -233,3 +260,42 @@ class BuilderPanel(QtWidgets.QWidget):
             manager.view_removed.connect(
                 lambda _name, view: self._items.pop(view.explore, None)
             )
+        self.sync()
+
+    def items(self):
+        return self._items.setdefault(self._explorer, {})
+
+    def sync(self):
+        explorer = self._console_panel.active_explorer()
+        if explorer is not self._explorer:
+            if self._explorer is not None:
+                self._explorer.changed.disconnect(self._prune)
+            self._explorer = explorer
+            explorer.changed.connect(self._prune)
+
+        kind, name = self._console_panel.active_view_key()
+        self.target_label.setText(
+            f"Adding to: {'3D view' if kind == 'view3d' else 'plot'} {name!r}"
+        )
+
+        self.add_menu.clear()
+        self.add_menu.addAction("Slider").setData("slider")
+        self.add_menu.addSeparator()
+        for key, spec in KINDS.items():
+            if spec.view == kind:
+                self.add_menu.addAction(spec.label).setData(key)
+
+        self._prune()
+
+    def add(self, kind):
+        explorer = self._explorer
+        if kind == "slider":
+            item = SliderItem(self._unique_name("s", explorer.slider_names(), sep=""))
+        else:
+            traces = sum(isinstance(item, TraceItem) for item in self.items().values())
+            item = new_trace_item(
+                kind, self._unique_name(kind, explorer.trace_names(), sep=" "), traces
+            )
+
+        if self._apply(item):
+            self._select(item)
